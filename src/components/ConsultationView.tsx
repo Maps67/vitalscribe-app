@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Mic, Square, RefreshCw, Send, FileText, Activity, MessageCircle, ShieldCheck, Lock, AlertCircle, Sparkles, Bot, Key } from 'lucide-react';
-import { GeminiMedicalService } from '../services/GeminiMedicalService'; // Ajuste de mayúsculas en el import
-import { MedicalRecord, ViewState } from '../types';
+import { GeminiMedicalService } from '../services/GeminiMedicalService';
+import { MedicalRecord } from '../types';
 
 // --- Interfaces para Web Speech API (Nativa del Navegador) ---
 interface IWindow extends Window {
@@ -10,7 +10,7 @@ interface IWindow extends Window {
 }
 const { webkitSpeechRecognition, SpeechRecognition } = window as unknown as IWindow;
 
-// --- Crypto Helpers (Mantenidos igual para seguridad) ---
+// --- Crypto Helpers ---
 function arrayBufferToBase64(buffer: ArrayBuffer): string {
   let binary = '';
   const bytes = new Uint8Array(buffer);
@@ -130,9 +130,9 @@ const ConsultationView: React.FC = () => {
     
     if (BrowserSpeechRecognition) {
       recognitionRef.current = new BrowserSpeechRecognition();
-      recognitionRef.current.continuous = true;      // Seguir escuchando aunque haya pausas
-      recognitionRef.current.interimResults = true;  // Mostrar resultados parciales
-      recognitionRef.current.lang = 'es-ES';         // Español
+      recognitionRef.current.continuous = true;
+      recognitionRef.current.interimResults = true;
+      recognitionRef.current.lang = 'es-ES';
 
       recognitionRef.current.onstart = () => {
         setStatus('connected');
@@ -140,7 +140,6 @@ const ConsultationView: React.FC = () => {
 
       recognitionRef.current.onend = () => {
         if (isRecording) {
-            // Si se detuvo pero el estado sigue "grabando", reiniciamos (para sesiones largas)
             try { recognitionRef.current.start(); } catch (e) {}
         } else {
             setStatus('idle');
@@ -152,7 +151,6 @@ const ConsultationView: React.FC = () => {
         for (let i = event.resultIndex; i < event.results.length; i++) {
           currentTranscript += event.results[i][0].transcript;
         }
-        // Concatenamos de forma inteligente o reemplazamos según lógica (aquí simple append)
         if (event.results[event.resultIndex].isFinal) {
             setTranscript(prev => prev + " " + currentTranscript);
         }
@@ -180,13 +178,11 @@ const ConsultationView: React.FC = () => {
     }
 
     if (isRecording) {
-      // DETENER
       setIsRecording(false);
       recognitionRef.current.stop();
     } else {
-      // INICIAR
       setIsRecording(true);
-      setTranscript(''); // Limpiar anterior (opcional)
+      setTranscript('');
       setSummary('');
       setGeneratedRecord(null);
       try {
@@ -204,12 +200,9 @@ const ConsultationView: React.FC = () => {
     setActiveTab('record');
     
     try {
-      // Llamamos a nuestro servicio real
       const rawSummary = await GeminiMedicalService.generateSummary(transcript);
       setSummary(rawSummary);
 
-      // Parseo simple para llenar la estructura SOAP visualmente
-      // (En una versión futura, pediremos JSON a Gemini directamente)
       const mockRecord: MedicalRecord = {
         id: 'temp-id',
         created_at: new Date().toISOString(),
@@ -218,7 +211,6 @@ const ConsultationView: React.FC = () => {
         transcript: transcript,
         summary: rawSummary,
         status: 'completed',
-        // Distribuimos el texto para que no se vea vacío, ya que Gemini devuelve texto plano por ahora
         subjective: rawSummary.slice(0, rawSummary.length / 3) + "...",
         objective: "Extraído del análisis de transcripción...",
         assessment: "Diagnóstico sugerido basado en síntomas mencionados.",
@@ -226,8 +218,6 @@ const ConsultationView: React.FC = () => {
       };
       
       setGeneratedRecord(mockRecord);
-
-      // Pre-generar mensaje de WhatsApp
       setGeneratedMessage(`Hola, le comparto el resumen de su consulta:\n\n${rawSummary}\n\nAtte. Dr. Martínez`);
 
     } catch (e) {
@@ -253,17 +243,14 @@ const ConsultationView: React.FC = () => {
     const userQuestion = chatInput;
     setChatInput('');
 
-    // 1. Encriptar pregunta usuario
     const encryptedUserMsg = await encryptMessage(userQuestion, sessionKey);
     setChatMessages(prev => [...prev, { role: 'user', text: encryptedUserMsg }]);
 
     setIsChatLoading(true);
 
     try {
-       // Simulamos respuesta de chat por ahora usando el mismo servicio de resumen
-       // idealmente GeminiMedicalService tendría un método .chat(context, question)
        const context = `Contexto Médico: ${transcript}. Pregunta: ${userQuestion}`;
-       const answer = await GeminiMedicalService.generateSummary(context); // Reutilizamos el endpoint por simplicidad
+       const answer = await GeminiMedicalService.generateSummary(context);
        
        const encryptedAnswer = await encryptMessage(answer, sessionKey);
        setChatMessages(prev => [...prev, { role: 'ai', text: encryptedAnswer }]);
