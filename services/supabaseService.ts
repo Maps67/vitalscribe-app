@@ -6,8 +6,9 @@ import { DatabaseRecord, Patient } from '../types';
  * The database ensures via SQL Policies that 'auth.uid()' matches the 'user_id' column.
  */
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+// CORRECCIÓN: Usamos las variables VITE para que Netlify las lea bien
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
 export class MedicalDataService {
   public supabase: SupabaseClient | null = null;
