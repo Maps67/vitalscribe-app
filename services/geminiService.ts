@@ -1,119 +1,109 @@
-import { GoogleGenAI, LiveServerMessage, Modality, Type } from '@google/genai';
+import { createClient, SupabaseClient, User } from '@supabase/supabase-js';
+import { DatabaseRecord, Patient } from '../types';
 
-// Helper for audio encoding
-function encode(bytes: Uint8Array) {
-  let binary = '';
-  const len = bytes.byteLength;
-  for (let i = 0; i < len; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  return btoa(binary);
-}
+// 1. Conexión con VITE (Correcto)
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
-function createBlob(data: Float32Array) {
-  const l = data.length;
-  const int16 = new Int16Array(l);
-  for (let i = 0; i < l; i++) {
-    const s = Math.max(-1, Math.min(1, data[i]));
-    int16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
-  }
-  return {
-    data: encode(new Uint8Array(int16.buffer)),
-    mimeType: 'audio/pcm;rate=16000',
-  };
-}
-
-function sanitizeContent(text: string): string {
-  let clean = text;
-  clean = clean.replace(/\b\d{10}\b/g, '[TELÉFONO]');
-  clean = clean.replace(/\b[\w\.-]+@[\w\.-]+\.\w{2,4}\b/g, '[EMAIL]');
-  return clean;
-}
-
-// --- AQUÍ ESTÁ LA CORRECCIÓN DEL NOMBRE ---
-export class GeminiMedicalService { 
-  private ai: GoogleGenAI;
-  private session: any = null;
-  private inputAudioContext: AudioContext | null = null;
-  private processor: ScriptProcessorNode | null = null;
-  private stream: MediaStream | null = null;
+export class MedicalDataService {
+  public supabase: SupabaseClient | null = null;
 
   constructor() {
-    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-    if (!apiKey) {
-      console.error("CRITICAL: VITE_GEMINI_API_KEY is missing.");
-      throw new Error("API Key missing");
+    if (supabaseUrl && supabaseAnonKey) {
+      this.supabase = createClient(supabaseUrl, supabaseAnonKey);
     }
-    this.ai = new GoogleGenAI({ apiKey });
   }
 
-  async generateMedicalRecord(transcript: string) {
-    try {
-      const safeTranscript = sanitizeContent(transcript);
-      const response = await this.ai.models.generateContent({
-        model: 'gemini-1.5-flash',
-        contents: `Act as an expert medical scribe. Generate a SOAP note (Subjective, Objective, Assessment, Plan) from this transcript: ${safeTranscript}. Return JSON.`,
-        config: {
-          responseMimeType: 'application/json',
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              subjective: { type: Type.STRING },
-              objective: { type: Type.STRING },
-              assessment: { type: Type.STRING },
-              plan: { type: Type.STRING },
-              prescriptions: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    name: { type: Type.STRING },
-                    dosage: { type: Type.STRING },
-                    frequency: { type: Type.STRING },
-                    duration: { type: Type.STRING },
-                  }
-                }
-              }
-            }
-          }
-        }
+  // --- AUTENTICACIÓN ---
+  async signUp(email: string, pass: string) {
+    if (!this.supabase) return { error: { message: 'Sin conexión DB' } };
+    return await this.supabase.auth.signUp({ email, password: pass });
+  }
+
+  async signIn(email: string, pass: string) {
+    if (!this.supabase) return { error: { message: 'Sin conexión DB' } };
+    return await this.supabase.auth.signInWithPassword({ email, password: pass });
+  }
+
+  async signOut() {
+    if (!this.supabase) return;
+    return await this.supabase.auth.signOut();
+  }
+
+  async getCurrentUser() {
+    if (!this.supabase) return null;
+    const { data } = await this.supabase.auth.getUser();
+    return data.user;
+  }
+
+  // --- PACIENTES (Ajustado a la nueva tabla simple) ---
+  async getPatients(): Promise<Patient[]> {
+    if (!this.supabase) return [];
+    
+    const { data, error } = await this.supabase
+      .from('patients')
+      .select('*')
+      .order('created_at', { ascending: false });
+      
+    if (error) {
+      console.error("Error cargando pacientes:", error);
+      return [];
+    }
+    
+    return data.map((p: any) => ({
+      id: p.id,
+      name: p.name,           // Coincide con la tabla nueva
+      phone: p.phone || '',   // Coincide con la tabla nueva
+      condition: p.condition || 'Sin diagnóstico', // Coincide con la tabla nueva
+      lastVisit: new Date(p.created_at).toLocaleDateString(),
+      avatarUrl: p.avatar_url || `https://ui-avatars.com/api/?name=${p.name}&background=random`
+    }));
+  }
+
+  async createPatient(patientData: Omit<Patient, 'id' | 'lastVisit'>) {
+    if (!this.supabase) return { error: 'No DB' };
+    
+    const { data: { user } } = await this.supabase.auth.getUser();
+    if (!user) return { error: 'No autenticado' };
+
+    // AQUÍ ESTÁ LA MAGIA: Nombres simples que coinciden con el SQL del Paso 1
+    const { data, error } = await this.supabase
+      .from('patients')
+      .insert({
+        doctor_id: user.id,
+        name: patientData.name,
+        phone: patientData.phone,
+        condition: patientData.condition,
+        avatar_url: patientData.avatarUrl
+      })
+      .select()
+      .single();
+
+    if (error) console.error("Error creando paciente:", error);
+    return { data, error };
+  }
+
+  // --- CONSULTAS ---
+  async saveConsultation(record: DatabaseRecord) {
+    if (!this.supabase) return { success: false, error: "Sin DB" };
+
+    const { data: { user } } = await this.supabase.auth.getUser();
+    if (!user) return { success: false };
+
+    const { error } = await this.supabase
+      .from('consultations')
+      .insert({
+        doctor_id: user.id,
+        patient_id: record.patientId,
+        transcript: record.soapData,
+        summary: record.summary
       });
-      const text = response.text ? response.text() : '{}';
-      return JSON.parse(text);
-    } catch (error) {
-      console.error(error);
-      throw error;
+
+    if (error) {
+      console.error("Error guardando consulta:", error);
+      return { success: false, error: error.message };
     }
-  }
 
-  async generatePatientMessage(record: any, patientName: string) {
-    const response = await this.ai.models.generateContent({
-      model: 'gemini-1.5-flash',
-      contents: `Write a friendly WhatsApp message for the patient with this plan: ${record.plan}`,
-    });
-    return response.text ? response.text() : "";
+    return { success: true };
   }
-
-  async askClinicalQuestion(transcript: string, question: string) {
-    const response = await this.ai.models.generateContent({
-      model: 'gemini-1.5-flash',
-      contents: `Answer this question based on the transcript: ${transcript}. Question: ${question}`,
-    });
-    return response.text ? response.text() : "";
-  }
-
-  async generateConsultationSummary(transcript: string) {
-    const response = await this.ai.models.generateContent({
-      model: 'gemini-1.5-flash',
-      contents: `Summarize this medical transcript in 3 sentences: ${transcript}`,
-    });
-    return response.text ? response.text() : "";
-  }
-
-  async connectLiveSession(onTranscript: (text: string) => void, onStatusChange: (status: string) => void) {
-     // (Lógica simplificada para que compile, el original también funciona si copiaste el largo)
-     // Si usas el código largo anterior, SOLO cambia el nombre de la clase.
-  }
-
-  async disconnect() {}
 }
