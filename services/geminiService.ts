@@ -1,120 +1,119 @@
-import { createClient, SupabaseClient, User } from '@supabase/supabase-js';
-import { DatabaseRecord, Patient } from '../types';
+import { GoogleGenAI, LiveServerMessage, Modality, Type } from '@google/genai';
 
-/**
- * SECURITY ARCHITECTURE (RLS - Row Level Security)
- * The database ensures via SQL Policies that 'auth.uid()' matches the 'doctor_id' column.
- */
+// Helper for audio encoding
+function encode(bytes: Uint8Array) {
+  let binary = '';
+  const len = bytes.byteLength;
+  for (let i = 0; i < len; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+function createBlob(data: Float32Array) {
+  const l = data.length;
+  const int16 = new Int16Array(l);
+  for (let i = 0; i < l; i++) {
+    const s = Math.max(-1, Math.min(1, data[i]));
+    int16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+  }
+  return {
+    data: encode(new Uint8Array(int16.buffer)),
+    mimeType: 'audio/pcm;rate=16000',
+  };
+}
 
-export class MedicalDataService {
-  public supabase: SupabaseClient | null = null;
+function sanitizeContent(text: string): string {
+  let clean = text;
+  clean = clean.replace(/\b\d{10}\b/g, '[TELÉFONO]');
+  clean = clean.replace(/\b[\w\.-]+@[\w\.-]+\.\w{2,4}\b/g, '[EMAIL]');
+  return clean;
+}
+
+// --- AQUÍ ESTÁ LA CORRECCIÓN DEL NOMBRE ---
+export class GeminiMedicalService { 
+  private ai: GoogleGenAI;
+  private session: any = null;
+  private inputAudioContext: AudioContext | null = null;
+  private processor: ScriptProcessorNode | null = null;
+  private stream: MediaStream | null = null;
 
   constructor() {
-    if (supabaseUrl && supabaseAnonKey) {
-      this.supabase = createClient(supabaseUrl, supabaseAnonKey);
-    } else {
-      console.warn("Supabase credentials missing. Storage will be local-only.");
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+    if (!apiKey) {
+      console.error("CRITICAL: VITE_GEMINI_API_KEY is missing.");
+      throw new Error("API Key missing");
     }
+    this.ai = new GoogleGenAI({ apiKey });
   }
 
-  // --- AUTHENTICATION METHODS ---
-
-  async signUp(email: string, pass: string) {
-    if (!this.supabase) return { error: { message: 'No database connection' } };
-    return await this.supabase.auth.signUp({ email, password: pass });
-  }
-
-  async signIn(email: string, pass: string) {
-    if (!this.supabase) return { error: { message: 'No database connection' } };
-    return await this.supabase.auth.signInWithPassword({ email, password: pass });
-  }
-
-  async signOut() {
-    if (!this.supabase) return;
-    return await this.supabase.auth.signOut();
-  }
-
-  async getCurrentUser(): Promise<User | null> {
-    if (!this.supabase) return null;
-    const { data } = await this.supabase.auth.getUser();
-    return data.user;
-  }
-
-  // --- DATA METHODS (RLS Protected) ---
-
-  async getPatients(): Promise<Patient[]> {
-    if (!this.supabase) return [];
-    
-    // CORRECCIÓN: Usar doctor_id si tu tabla lo requiere, o asegurarse que el filtro RLS funcione
-    const { data, error } = await this.supabase
-      .from('patients')
-      .select('*')
-      .order('full_name'); // Cambiado a full_name si tu tabla usa ese nombre, o 'name'
-      
-    if (error) {
-      console.error("Error fetching patients:", error);
-      return [];
-    }
-    
-    return data.map((p: any) => ({
-      id: p.id,
-      name: p.full_name || p.name, // Soporte para ambos nombres de columna
-      phone: p.contact_info?.phone || p.phone, // Soporte para estructura JSON o columna directa
-      lastVisit: p.created_at ? new Date(p.created_at).toLocaleDateString() : new Date().toLocaleDateString(),
-      condition: p.medical_history || p.condition,
-      avatarUrl: p.contact_info?.avatarUrl || `https://ui-avatars.com/api/?name=${p.full_name || p.name}&background=random`
-    }));
-  }
-
-  async createPatient(patientData: Omit<Patient, 'id' | 'lastVisit'>) {
-    if (!this.supabase) return { error: 'No DB' };
-    
-    const { data: { user } } = await this.supabase.auth.getUser();
-    if (!user) return { error: 'Not authenticated' };
-
-    // CORRECCIÓN IMPORTANTE: Usamos 'doctor_id' y 'full_name' para coincidir con tu SQL original
-    const { data, error } = await this.supabase
-      .from('patients')
-      .insert({
-        doctor_id: user.id, // <--- AQUÍ ESTABA EL ERROR (antes decía user_id)
-        full_name: patientData.name, // Ajustado a tu SQL (full_name)
-        contact_info: { // Ajustado a tu SQL (usaste jsonb para contact_info)
-            phone: patientData.phone,
-            email: "",
-            avatarUrl: patientData.avatarUrl
-        },
-        medical_history: patientData.condition // Ajustado a tu SQL (medical_history)
-      })
-      .select()
-      .single();
-
-    return { data, error };
-  }
-
-  async saveConsultation(record: DatabaseRecord): Promise<{ success: boolean; error?: string }> {
-    if (!this.supabase) return { success: false, error: "Database not configured" };
-
-    const { data: { user } } = await this.supabase.auth.getUser();
-    if (!user) return { success: false, error: "User not authenticated" };
-
-    const { error } = await this.supabase
-      .from('consultations')
-      .insert({
-        doctor_id: user.id, // <--- AQUÍ ESTABA EL ERROR (antes decía user_id)
-        patient_id: record.patientId,
-        transcript: record.soapData, // Ajustando nombres de columnas comunes
-        summary: record.summary,
-        status: 'completed'
+  async generateMedicalRecord(transcript: string) {
+    try {
+      const safeTranscript = sanitizeContent(transcript);
+      const response = await this.ai.models.generateContent({
+        model: 'gemini-1.5-flash',
+        contents: `Act as an expert medical scribe. Generate a SOAP note (Subjective, Objective, Assessment, Plan) from this transcript: ${safeTranscript}. Return JSON.`,
+        config: {
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              subjective: { type: Type.STRING },
+              objective: { type: Type.STRING },
+              assessment: { type: Type.STRING },
+              plan: { type: Type.STRING },
+              prescriptions: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    name: { type: Type.STRING },
+                    dosage: { type: Type.STRING },
+                    frequency: { type: Type.STRING },
+                    duration: { type: Type.STRING },
+                  }
+                }
+              }
+            }
+          }
+        }
       });
-
-    if (error) {
-      console.error("RLS Error:", error);
-      return { success: false, error: error.message };
+      const text = response.text ? response.text() : '{}';
+      return JSON.parse(text);
+    } catch (error) {
+      console.error(error);
+      throw error;
     }
-
-    return { success: true };
   }
+
+  async generatePatientMessage(record: any, patientName: string) {
+    const response = await this.ai.models.generateContent({
+      model: 'gemini-1.5-flash',
+      contents: `Write a friendly WhatsApp message for the patient with this plan: ${record.plan}`,
+    });
+    return response.text ? response.text() : "";
+  }
+
+  async askClinicalQuestion(transcript: string, question: string) {
+    const response = await this.ai.models.generateContent({
+      model: 'gemini-1.5-flash',
+      contents: `Answer this question based on the transcript: ${transcript}. Question: ${question}`,
+    });
+    return response.text ? response.text() : "";
+  }
+
+  async generateConsultationSummary(transcript: string) {
+    const response = await this.ai.models.generateContent({
+      model: 'gemini-1.5-flash',
+      contents: `Summarize this medical transcript in 3 sentences: ${transcript}`,
+    });
+    return response.text ? response.text() : "";
+  }
+
+  async connectLiveSession(onTranscript: (text: string) => void, onStatusChange: (status: string) => void) {
+     // (Lógica simplificada para que compile, el original también funciona si copiaste el largo)
+     // Si usas el código largo anterior, SOLO cambia el nombre de la clase.
+  }
+
+  async disconnect() {}
 }
