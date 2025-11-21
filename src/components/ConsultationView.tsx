@@ -22,8 +22,17 @@ const ConsultationView: React.FC = () => {
   const [hasConsent, setHasConsent] = useState(false);
   const [specialty, setSpecialty] = useState("Medicina General");
   
-  // Perfil del Doctor
-  const [doctorProfile, setDoctorProfile] = useState({ full_name: 'Doctor', specialty: 'Medicina', license_number: '', phone: '' });
+  // ESTADO DEL PERFIL (Actualizado con campos NOM-004)
+  const [doctorProfile, setDoctorProfile] = useState({ 
+    full_name: 'Doctor', 
+    specialty: 'Medicina', 
+    license_number: '', 
+    phone: '',
+    university: '',
+    address: '',
+    logo_url: '',
+    signature_url: ''
+  });
 
   // CRM State
   const [searchTerm, setSearchTerm] = useState('');
@@ -115,7 +124,6 @@ const ConsultationView: React.FC = () => {
       setPatientInstructions(patientInstructions);
       setActionItems(actionItems);
       
-      // CAMBIO: Al generar, vamos directo a la pestaña de instrucciones para ver el PDF
       setActiveTab('instructions'); 
 
     } catch (e) {
@@ -161,7 +169,7 @@ const ConsultationView: React.FC = () => {
             </div>
         </div>
         <div className="flex flex-col md:flex-row gap-4">
-            {/* Buscador CRM */}
+            {/* Buscador */}
             <div className="relative flex-1">
                 <div className={`flex items-center bg-white border rounded-lg px-3 py-2 shadow-sm ${selectedPatient ? 'border-green-500 bg-green-50' : 'border-slate-200'}`}>
                     {selectedPatient ? <User className="text-green-600 mr-2" size={20} /> : <Search className="text-slate-400 mr-2" size={20} />}
@@ -188,7 +196,7 @@ const ConsultationView: React.FC = () => {
         </div>
       </div>
 
-      {/* Contenido Principal */}
+      {/* Contenido */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 flex-1 min-h-0">
         {/* Izquierda */}
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col overflow-hidden h-full">
@@ -228,7 +236,7 @@ const ConsultationView: React.FC = () => {
           )}
 
           <div className="flex-1 relative bg-white">
-             {/* TAB EXPEDIENTE */}
+             {/* TAB 1 */}
              {activeTab === 'record' && (
                 <div className="absolute inset-0 flex flex-col">
                    {generatedRecord ? (
@@ -242,7 +250,7 @@ const ConsultationView: React.FC = () => {
                 </div>
              )}
 
-             {/* TAB PACIENTE / RECETA */}
+             {/* TAB 2: RECETA */}
              {activeTab === 'instructions' && (
                <div className="absolute inset-0 flex flex-col">
                    {generatedRecord ? (
@@ -254,7 +262,7 @@ const ConsultationView: React.FC = () => {
                             <div className="flex-1 text-xs text-slate-500 truncate hidden md:block">Para: <strong>{selectedPatient?.name || "Paciente"}</strong></div>
                             <button onClick={sendToWhatsApp} className="bg-[#25D366] text-white px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-2 hover:bg-green-600 transition-colors"><Send size={14}/> <span className="hidden sm:inline">WhatsApp</span></button>
                             
-                            {/* BOTÓN PDF */}
+                            {/* BOTÓN PDF CON DATOS NOM-004 */}
                             <PDFDownloadLink
                                 document={
                                     <PrescriptionPDF 
@@ -262,6 +270,10 @@ const ConsultationView: React.FC = () => {
                                         specialty={doctorProfile.specialty}
                                         license={doctorProfile.license_number}
                                         phone={doctorProfile.phone}
+                                        university={doctorProfile.university} // Nuevo
+                                        address={doctorProfile.address}       // Nuevo
+                                        logoUrl={doctorProfile.logo_url}      // Nuevo
+                                        signatureUrl={doctorProfile.signature_url} // Nuevo
                                         patientName={selectedPatient?.name || "Paciente"}
                                         date={new Date().toLocaleDateString()}
                                         content={patientInstructions}
@@ -285,7 +297,7 @@ const ConsultationView: React.FC = () => {
                </div>
              )}
 
-             {/* TAB CHAT */}
+             {/* TAB 3 */}
              {activeTab === 'chat' && (
                <div className="absolute inset-0 flex flex-col bg-slate-50">
                   <div className="flex-1 p-4 overflow-y-auto space-y-3">

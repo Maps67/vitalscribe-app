@@ -3,24 +3,31 @@ import { Search, Plus, Phone, Calendar, User, X, Save, FileText, ChevronLeft, Cl
 import { supabase } from '../lib/supabase';
 import { Patient, Consultation } from '../types';
 import FormattedText from './FormattedText';
-import { PDFDownloadLink } from '@react-pdf/renderer'; // Motor PDF
-import PrescriptionPDF from './PrescriptionPDF'; // Diseño Receta
+import { PDFDownloadLink } from '@react-pdf/renderer';
+import PrescriptionPDF from './PrescriptionPDF';
 
 const PatientsView: React.FC = () => {
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   
-  // Perfil del Doctor (Necesario para reimprimir recetas pasadas)
-  const [doctorProfile, setDoctorProfile] = useState({ full_name: 'Doctor', specialty: 'Medicina', license_number: '', phone: '' });
+  // ESTADO PERFIL ACTUALIZADO (NOM-004)
+  const [doctorProfile, setDoctorProfile] = useState({ 
+    full_name: 'Doctor', 
+    specialty: 'Medicina', 
+    license_number: '', 
+    phone: '',
+    university: '',
+    address: '',
+    logo_url: '',
+    signature_url: ''
+  });
 
-  // Estados para Modal
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newPatientName, setNewPatientName] = useState('');
   const [newPatientPhone, setNewPatientPhone] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
-  // Estados para Historial
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [history, setHistory] = useState<Consultation[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
@@ -112,7 +119,6 @@ const PatientsView: React.FC = () => {
 
   const filteredPatients = patients.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()));
 
-  // --- VISTA DETALLE (HISTORIAL) ---
   if (selectedPatient) {
     return (
       <div className="p-6 max-w-6xl mx-auto animate-fade-in-up">
@@ -120,7 +126,6 @@ const PatientsView: React.FC = () => {
           <ChevronLeft size={20} /> Volver al Directorio
         </button>
 
-        {/* Encabezado Paciente */}
         <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 mb-6 flex flex-col md:flex-row justify-between items-center gap-4">
            <div className="flex items-center gap-4">
               <div className="w-16 h-16 bg-brand-teal/10 text-brand-teal rounded-full flex items-center justify-center font-bold text-2xl border border-brand-teal/20">
@@ -149,7 +154,6 @@ const PatientsView: React.FC = () => {
             <div className="space-y-6">
                 {history.map((consultation) => (
                     <div key={consultation.id} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden group">
-                        {/* Header Consulta */}
                         <div className="bg-slate-50 p-4 border-b border-slate-100 flex justify-between items-center">
                             <div className="flex items-center gap-2 font-bold text-slate-700">
                                 <Calendar size={16} className="text-brand-teal" />
@@ -163,14 +167,11 @@ const PatientsView: React.FC = () => {
                             </span>
                         </div>
                         
-                        {/* Contenido Nota */}
                         <div className="p-6 bg-white">
                             <FormattedText content={consultation.summary || "Sin notas."} />
                         </div>
 
-                        {/* BARRA DE ACCIONES (PDF & WHATSAPP) - ¡AQUI ESTÁ LO NUEVO! */}
                         <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/50 flex justify-end gap-3">
-                            {/* Botón WhatsApp */}
                             {selectedPatient.phone && (
                                 <a 
                                   href={`https://wa.me/${selectedPatient.phone}?text=${encodeURIComponent(consultation.summary || '')}`}
@@ -182,7 +183,7 @@ const PatientsView: React.FC = () => {
                                 </a>
                             )}
 
-                            {/* Botón PDF */}
+                            {/* PDF CON DATOS COMPLETOS */}
                             <PDFDownloadLink
                                 document={
                                     <PrescriptionPDF 
@@ -190,6 +191,10 @@ const PatientsView: React.FC = () => {
                                         specialty={doctorProfile.specialty}
                                         license={doctorProfile.license_number}
                                         phone={doctorProfile.phone}
+                                        university={doctorProfile.university} // Nuevo
+                                        address={doctorProfile.address}       // Nuevo
+                                        logoUrl={doctorProfile.logo_url}      // Nuevo
+                                        signatureUrl={doctorProfile.signature_url} // Nuevo
                                         patientName={selectedPatient.name}
                                         date={new Date(consultation.created_at).toLocaleDateString()}
                                         content={consultation.summary || "Sin contenido."}
@@ -214,10 +219,8 @@ const PatientsView: React.FC = () => {
     );
   }
 
-  // --- VISTA LISTA ---
   return (
     <div className="p-6 max-w-6xl mx-auto">
-      {/* ... (Sin cambios en la vista de lista, se mantiene igual) ... */}
       <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
         <div><h2 className="text-2xl font-bold text-slate-800">Directorio de Pacientes</h2><p className="text-slate-500 text-sm">Gestione sus expedientes y contactos.</p></div>
         <button onClick={() => setIsModalOpen(true)} className="bg-brand-teal text-white px-6 py-3 rounded-lg font-bold shadow-lg shadow-teal-500/20 hover:bg-teal-600 transition-all flex items-center gap-2"><Plus size={20} /> Nuevo Paciente</button>
