@@ -8,14 +8,16 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       injectRegister: 'auto',
-      // ESTRATEGIA DE LIMPIEZA DE CACHÉ
       workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
         cleanupOutdatedCaches: true,
         skipWaiting: true,
         clientsClaim: true,
+        // ESTO ES NUEVO: Forzamos nombres únicos para romper la caché
+        globPatterns: ['**/*.{js,css,html,ico,png,svg}']
       },
-      includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
+      devOptions: {
+        enabled: true
+      },
       manifest: {
         name: 'MediScribe AI',
         short_name: 'MediScribe',
