@@ -1,4 +1,3 @@
-// IMPORTANTE: Esta ruta '../lib/supabase' ahora sí existirá
 import { supabase } from '../lib/supabase';
 import { Patient, Consultation } from '../types';
 
@@ -9,13 +8,9 @@ export class MedicalDataService {
   static async createConsultation(
     consultation: Omit<Consultation, 'id' | 'created_at' | 'doctor_id'>
   ): Promise<Consultation> {
-    // 1. Verificamos sesión actual
     const { data: { session } } = await supabase.auth.getSession();
-    
-    // Si no hay sesión (ej. recargaste página y se perdió), lanzamos error
-    if (!session) throw new Error("No hay sesión activa. Usuario no autenticado.");
+    if (!session) throw new Error("No hay sesión activa.");
 
-    // 2. Insertamos asegurando el doctor_id
     const { data, error } = await supabase
       .from('consultations')
       .insert([{
@@ -60,14 +55,18 @@ export class MedicalDataService {
     if (error) throw error;
     return data;
   }
-  
-  // Método auxiliar para cerrar sesión
-  async signOut() {
-    await supabase.auth.signOut();
+
+  // NUEVO: Método para borrar pacientes
+  static async deletePatient(id: string): Promise<void> {
+    const { error } = await supabase
+      .from('patients')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
   }
   
-  // Getter para acceder al cliente directamente si hace falta
-  get supabase() {
-    return supabase;
+  async signOut() {
+    await supabase.auth.signOut();
   }
 }
