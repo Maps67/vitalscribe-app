@@ -3,12 +3,10 @@ import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig({
-  // --- SOLUCIÓN PANTALLA BLANCA ---
-  // Definimos 'global' como 'window' para que la librería de PDF no rompa la app
+  // Solución para librería PDF
   define: {
     global: 'window',
   },
-  // -------------------------------
   plugins: [
     react(),
     VitePWA({
@@ -18,7 +16,7 @@ export default defineConfig({
         cleanupOutdatedCaches: true,
         skipWaiting: true,
         clientsClaim: true,
-        maximumFileSizeToCacheInBytes: 4000000, // 4MB
+        maximumFileSizeToCacheInBytes: 4000000, // 4MB para PDF
         globPatterns: ['**/*.{js,css,html,ico,png,svg}']
       },
       devOptions: {
@@ -26,7 +24,7 @@ export default defineConfig({
       },
       manifest: {
         name: 'MediScribe AI',
-        short_name: 'MediScribe',
+        short_name: 'MediScribe', // Android requiere nombre corto
         description: 'Asistente Médico Inteligente',
         theme_color: '#0d9488',
         background_color: '#ffffff',
@@ -34,18 +32,22 @@ export default defineConfig({
         orientation: 'portrait',
         scope: '/',
         start_url: '/',
+        // --- SOLUCIÓN ANDROID ---
         icons: [
           {
             src: 'pwa-192x192.png',
             sizes: '192x192',
-            type: 'image/png'
+            type: 'image/png',
+            purpose: 'any maskable' // <--- ESTA LÍNEA ES LA CLAVE
           },
           {
             src: 'pwa-512x512.png',
             sizes: '512x512',
-            type: 'image/png'
+            type: 'image/png',
+            purpose: 'any maskable' // <--- ESTA TAMBIÉN
           }
         ]
+        // ------------------------
       }
     })
   ],
