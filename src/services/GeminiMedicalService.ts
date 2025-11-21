@@ -1,91 +1,62 @@
-import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from "@google/generative-ai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 
-// LISTA DE PRIORIDAD DE MODELOS
-// El sistema intentará usarlos en este orden. Si el primero falla, salta al segundo.
-const MODELS_TO_TRY = ["gemini-1.5-flash", "gemini-1.0-pro", "gemini-pro"];
-
 export class GeminiMedicalService {
   private static genAI = API_KEY ? new GoogleGenerativeAI(API_KEY) : null;
+  
+  // USAMOS EXCLUSIVAMENTE 'gemini-1.5-flash'
+  // Es el modelo más rápido, económico y capaz para cuentas nuevas.
+  private static model = GeminiMedicalService.genAI 
+    ? GeminiMedicalService.genAI.getGenerativeModel({ model: "gemini-1.5-flash" }) 
+    : null;
 
   static async generateSummary(transcript: string, specialty: string = "Medicina General"): Promise<string> {
-    // 1. Validación estricta de credenciales
-    if (!API_KEY) {
-      throw new Error("CRÍTICO: Falta la API Key. Configure VITE_GEMINI_API_KEY en Netlify.");
-    }
+    // 1. Validación inicial
+    if (!API_KEY) throw new Error("Falta la API Key. Revisa la configuración en Netlify.");
+    if (!this.model) throw new Error("Error al iniciar el servicio de IA.");
 
-    if (!this.genAI) {
-      throw new Error("Error interno: No se pudo inicializar el cliente de Google AI.");
-    }
-
-    // 2. Definición del Prompt (Instrucciones)
-    let focusInstruction = "";
-    switch (specialty) {
-      case "Cardiología": focusInstruction = "Enfócate en síntomas cardiovasculares, factores de riesgo y hemodinamia."; break;
-      case "Pediatría": focusInstruction = "Enfócate en desarrollo, alimentación y menciona a los padres/tutores."; break;
-      case "Psicología/Psiquiatría": focusInstruction = "Realiza un examen mental, enfócate en estado de ánimo y afecto."; break;
-      default: focusInstruction = "Realiza un abordaje integral clínico (SOAP).";
-    }
-
-    const prompt = `
-      Actúa como un Médico Especialista en ${specialty}.
-      ${focusInstruction}
-      
-      Analiza la siguiente transcripción y genera una Nota Clínica formal y estructurada.
-      Importante: Identifica quién es el médico y quién el paciente por el contexto de lo que dicen.
-
-      ### 🗣️ Análisis del Diálogo
-      * **Médico:** [Resumen de intervenciones]
-      * **Paciente:** [Resumen de síntomas/respuestas]
-
-      ### 📋 Nota Clínica (${specialty})
-      * **S (Subjetivo):** ...
-      * **O (Objetivo):** ...
-      * **A (Análisis):** ...
-      * **P (Plan):** ...
-
-      Transcripción:
-      "${transcript}"
-    `;
-
-    // 3. ESTRATEGIA DE CASCADA (Definitiva)
-    let lastError = null;
-
-    for (const modelName of MODELS_TO_TRY) {
-      try {
-        // Intentamos conectar con el modelo actual del ciclo
-        const model = this.genAI.getGenerativeModel({ 
-          model: modelName,
-          safetySettings: [
-            { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
-            { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
-            { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
-            { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
-          ]
-        });
-
-        const result = await model.generateContent(prompt);
-        const response = await result.response;
-        const text = response.text();
-
-        // Si llegamos aquí, funcionó. Retornamos y rompemos el ciclo.
-        return text;
-
-      } catch (error: any) {
-        console.warn(`Fallo con el modelo ${modelName}:`, error.message);
-        lastError = error;
+    try {
+      // 2. Prompt de Ingeniería para Diarización (Doctor vs Paciente)
+      const prompt = `
+        Actúa como un Médico Especialista en ${specialty}.
         
-        // Si el error es de CUOTA o API KEY, no sirve de nada intentar otro modelo, fallará igual.
-        if (error.message?.includes('API key') || error.message?.includes('quota')) {
-           throw new Error(error.message.includes('API key') ? "API Key inválida." : "Cuota gratuita excedida.");
-        }
-        // Si es un 404 (Modelo no encontrado), el ciclo continuará automáticamente al siguiente modelo.
-      }
-    }
+        Tu tarea: Analizar la siguiente transcripción de audio y generar una Nota Clínica formal.
+        
+        IMPORTANTE: El audio no distingue voces. Tú debes inferir quién habla basándote en el contexto (quién pregunta/examina vs quién responde/se queja).
 
-    // Si termina el ciclo y ninguno funcionó
-    console.error("Todos los modelos fallaron.");
-    throw new Error(`No se pudo generar la nota. Detalle técnico: ${lastError?.message || "Error de conexión Google."}`);
+        Estructura de Salida Requerida:
+        
+        ### 🗣️ Análisis del Diálogo
+        * **Médico:** [Resumen de lo que dijo/preguntó el doctor]
+        * **Paciente:** [Resumen de lo que respondió el paciente]
+
+        ### 📋 Nota Clínica (${specialty})
+        * **S (Subjetivo):** Motivo de consulta y padecimiento actual.
+        * **O (Objetivo):** Signos vitales o hallazgos físicos mencionados.
+        * **A (Análisis):** Impresión diagnóstica.
+        * **P (Plan):** Tratamiento y recomendaciones.
+
+        Transcripción:
+        "${transcript}"
+      `;
+
+      const result = await this.model.generateContent(prompt);
+      const response = await result.response;
+      return response.text();
+      
+    } catch (error: any) {
+      console.error("Error Gemini:", error);
+      const msg = error.toString();
+
+      if (msg.includes('404') || msg.includes('not found')) {
+        return "Error 404: El modelo no responde. Asegúrate de haber actualizado la librería npm.";
+      }
+      if (msg.includes('403') || msg.includes('API key')) {
+        return "Error 403: Tu API Key nueva aún no se propaga o no tiene permisos. Espera 2 min y recarga.";
+      }
+      
+      throw new Error(`Fallo técnico: ${msg}`);
+    }
   }
 }
