@@ -12,7 +12,11 @@ export default defineConfig({
         cleanupOutdatedCaches: true,
         skipWaiting: true,
         clientsClaim: true,
-        // ESTO ES NUEVO: Forzamos nombres únicos para romper la caché
+        // --- SOLUCIÓN DEL ERROR ---
+        // Aumentamos el límite de caché a 4MB (Default es 2MB)
+        // Esto permite que el motor de PDF se descargue y funcione offline
+        maximumFileSizeToCacheInBytes: 4000000, 
+        // --------------------------
         globPatterns: ['**/*.{js,css,html,ico,png,svg}']
       },
       devOptions: {
@@ -46,4 +50,8 @@ export default defineConfig({
   optimizeDeps: {
     exclude: ['lucide-react'],
   },
+  build: {
+    // Opcional: Ayuda a dividir el código en pedazos más pequeños si crece mucho más
+    chunkSizeWarningLimit: 4000,
+  }
 });
