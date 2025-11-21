@@ -25,6 +25,8 @@ const ConsultationView: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [searchResults, setSearchResults] = useState<Patient[]>([]);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
+  
+  // ESTADO DE CONTEXTO: Aquí vive la "memoria" del paciente
   const [patientContext, setPatientContext] = useState<string>(''); 
 
   const [generatedRecord, setGeneratedRecord] = useState<MedicalRecord | null>(null);
@@ -80,6 +82,7 @@ const ConsultationView: React.FC = () => {
     setSearchTerm(patient.name);
     setSearchResults([]);
     
+    // Cargar última consulta para contexto
     const { data } = await supabase
         .from('consultations')
         .select('summary')
@@ -112,7 +115,8 @@ const ConsultationView: React.FC = () => {
     setIsLoadingRecord(true);
     
     try {
-      const { clinicalNote, patientInstructions, actionItems } = await GeminiMedicalService.generateSummary(transcript, specialty);
+      // CAMBIO CLAVE: Enviamos 'patientContext' como tercer argumento
+      const { clinicalNote, patientInstructions, actionItems } = await GeminiMedicalService.generateSummary(transcript, specialty, patientContext);
       
       const patientId = selectedPatient ? selectedPatient.id : '00000000-0000-0000-0000-000000000000';
       const newConsultation = await MedicalDataService.createConsultation({
@@ -172,6 +176,13 @@ const ConsultationView: React.FC = () => {
     } finally {
       setIsSharing(false);
     }
+  };
+
+  const sendToWhatsApp = () => {
+    const phone = selectedPatient?.phone || prompt("Ingrese el teléfono del paciente:");
+    if (!phone) return;
+    const url = `https://wa.me/${phone}?text=${encodeURIComponent(patientInstructions)}`;
+    window.open(url, '_blank');
   };
 
   const handleAskAI = async (e: React.FormEvent) => {
@@ -240,7 +251,7 @@ const ConsultationView: React.FC = () => {
       {/* Contenido Principal */}
       <div className="flex flex-col lg:grid lg:grid-cols-2 gap-6 flex-1 min-h-0 overflow-hidden">
         
-        {/* COLUMNA 1: Grabación (Arriba en móvil) */}
+        {/* COLUMNA 1 */}
         <div className={`bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col overflow-hidden lg:h-full transition-all duration-300 ${generatedRecord ? 'h-[30vh]' : 'flex-1'}`}>
           <div className="p-3 bg-orange-50 border-b border-orange-100 flex items-center gap-2 shrink-0">
              <input type="checkbox" checked={hasConsent} onChange={(e) => setHasConsent(e.target.checked)} disabled={isListening} className="rounded text-brand-teal cursor-pointer w-5 h-5" />
@@ -276,7 +287,7 @@ const ConsultationView: React.FC = () => {
           </div>
         </div>
 
-        {/* COLUMNA 2: Resultados (Abajo en móvil, aparece al generar) */}
+        {/* COLUMNA 2 */}
         <div className={`bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col overflow-hidden lg:h-full relative ${generatedRecord ? 'flex-1' : 'hidden lg:flex'}`}>
            <div className="flex border-b bg-slate-50 shrink-0 overflow-x-auto">
             <button onClick={() => setActiveTab('record')} className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider transition-colors whitespace-nowrap px-4 ${activeTab === 'record' ? 'bg-white text-brand-teal border-t-2 border-brand-teal' : 'text-slate-400 hover:text-slate-600'}`}>Expediente</button>

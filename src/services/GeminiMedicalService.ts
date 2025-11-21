@@ -4,74 +4,80 @@ const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 
 export class GeminiMedicalService {
   
-  // Función auxiliar para preguntar a Google qué modelos están activos
+  // Auto-descubrimiento de modelos para evitar errores 404
   private static async getBestAvailableModel(): Promise<string> {
     try {
       const listUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${API_KEY}`;
       const response = await fetch(listUrl);
       
-      if (!response.ok) {
-        // Si falla el listado, lanzamos el error crudo para ver si la API Key es inválida
-        const err = await response.json();
-        throw new Error(err.error?.message || "Error validando API Key");
-      }
+      if (!response.ok) throw new Error("Error validando API Key");
 
       const data = await response.json();
-      
-      // Buscamos el mejor modelo disponible (Prioridad: Flash > Pro)
-      // Filtramos solo los que sirven para "generateContent"
-      const validModels = data.models?.filter((m: any) => 
-        m.supportedGenerationMethods?.includes("generateContent")
-      );
+      const validModels = data.models?.filter((m: any) => m.supportedGenerationMethods?.includes("generateContent"));
 
-      // Buscamos "flash" primero
+      // Prioridad: Flash > Pro
       const flashModel = validModels.find((m: any) => m.name.includes("flash"));
-      if (flashModel) return flashModel.name; // Ej: "models/gemini-1.5-flash-001"
+      if (flashModel) return flashModel.name;
 
-      // Si no hay flash, buscamos "pro"
       const proModel = validModels.find((m: any) => m.name.includes("pro"));
       if (proModel) return proModel.name;
 
-      // Si no, el primero que haya
       if (validModels.length > 0) return validModels[0].name;
+      throw new Error("Sin modelos disponibles.");
 
-      throw new Error("Tu API Key es válida, pero no tienes acceso a ningún modelo de texto.");
-
-    } catch (error: any) {
-      console.error("Error Auto-Descubrimiento:", error);
-      // Fallback de emergencia si todo falla
+    } catch (error) {
+      console.warn("Fallo auto-discovery, usando default.");
       return "models/gemini-1.5-flash"; 
     }
   }
 
-  static async generateSummary(transcript: string, specialty: string = "Medicina General"): Promise<GeminiResponse> {
+  // CAMBIO AQUÍ: Agregamos el parámetro 'historyContext'
+  static async generateSummary(transcript: string, specialty: string = "Medicina General", historyContext: string = ""): Promise<GeminiResponse> {
     if (!API_KEY) throw new Error("Falta API Key en Netlify.");
 
-    // 1. PREGUNTAMOS A GOOGLE EL MODELO CORRECTO
     const activeModelName = await this.getBestAvailableModel();
-    console.log(`🤖 Usando modelo detectado: ${activeModelName}`);
-
-    // 2. Construimos la URL dinámica
-    // Nota: activeModelName ya viene con el prefijo "models/" (ej: models/gemini-1.5-flash)
     const URL = `https://generativelanguage.googleapis.com/v1beta/${activeModelName}:generateContent?key=${API_KEY}`;
 
     try {
+      // PROMPT EVOLUCIONADO CON MEMORIA
       const prompt = `
         Actúa como un Médico Especialista en ${specialty}.
-        Analiza la transcripción, identifica médico/paciente y genera:
-        1. Nota SOAP.
-        2. Instrucciones al paciente.
-        3. Action Items en JSON.
+        
+        TIENES ACCESO AL HISTORIAL PREVIO DEL PACIENTE:
+        "${historyContext || 'Es la primera consulta registrada o no hay datos relevantes.'}"
 
-        FORMATO DE SALIDA (Estricto con separadores):
+        TU TAREA:
+        Analiza la TRANSCRIPCIÓN ACTUAL de la consulta de hoy.
+        Genera la documentación clínica (SOAP), relacionando los síntomas actuales con el historial previo SI aplica (ej. "refiere mejoría del cuadro anterior", "el dolor persiste", etc.).
+
+        Genera 3 salidas:
+        1. Nota SOAP Técnica.
+        2. Instrucciones al paciente (Lenguaje sencillo).
+        3. Action Items (JSON).
+
+        FORMATO DE SALIDA OBLIGATORIO (Respeta los separadores):
+
         ### Resumen Clínico (${specialty})
-        ... (Nota técnica)
-        --- SEPARADOR_INSTRUCCIONES ---
-        ... (Indicaciones sencillas)
-        --- SEPARADOR_JSON ---
-        { "next_appointment": null, "urgent_referral": false, "lab_tests_required": [] }
+        **S (Subjetivo):** ...
+        **O (Objetivo):** ...
+        **A (Análisis):** ... (Menciona evolución si hay historial)
+        **P (Plan):** ...
 
-        Transcripción: "${transcript}"
+        --- SEPARADOR_INSTRUCCIONES ---
+
+        Hola! Aquí tienes tus indicaciones:
+        ...
+
+        --- SEPARADOR_JSON ---
+        
+        {
+          "next_appointment": "Texto fecha o null",
+          "urgent_referral": false,
+          "lab_tests_required": ["Lista", "de", "estudios"]
+        }
+
+        TRANSCRIPCIÓN ACTUAL (LO QUE SE HABLÓ HOY):
+        "${transcript}"
       `;
 
       const response = await fetch(URL, {
@@ -82,7 +88,7 @@ export class GeminiMedicalService {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(`Google Error (${activeModelName}): ${errorData.error?.message}`);
+        throw new Error(`Google Error: ${errorData.error?.message}`);
       }
 
       const data = await response.json();
