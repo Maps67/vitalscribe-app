@@ -9,7 +9,6 @@ import { MedicalDataService } from '../services/MedicalDataService';
 import { MedicalRecord, Patient, ActionItems } from '../types';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
 
-// --- Helpers ---
 async function generateSessionKey(): Promise<CryptoKey> {
   return window.crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, true, ["encrypt", "decrypt"]);
 }
@@ -26,9 +25,6 @@ const ConsultationView: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [searchResults, setSearchResults] = useState<Patient[]>([]);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
-  const [isSearching, setIsSearching] = useState(false);
-  
-  // ESTADO NUEVO: Contexto del Paciente (Historial)
   const [patientContext, setPatientContext] = useState<string>(''); 
 
   const [generatedRecord, setGeneratedRecord] = useState<MedicalRecord | null>(null);
@@ -45,7 +41,6 @@ const ConsultationView: React.FC = () => {
   const [isChatLoading, setIsChatLoading] = useState(false);
   const [sessionKey, setSessionKey] = useState<CryptoKey | null>(null);
 
-  // CAMBIO: Referencia al CONTENEDOR, no al final
   const textContainerRef = useRef<HTMLDivElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
@@ -62,10 +57,8 @@ const ConsultationView: React.FC = () => {
     }
   };
 
-  // LOGICA DE SCROLL QUIRÚRGICO
   useEffect(() => { 
     if (textContainerRef.current) {
-        // Movemos solo el scroll interno, sin afectar la ventana principal
         textContainerRef.current.scrollTop = textContainerRef.current.scrollHeight;
     }
   }, [transcript, interimTranscript]);
@@ -75,22 +68,18 @@ const ConsultationView: React.FC = () => {
   useEffect(() => {
     const delayDebounceFn = setTimeout(async () => {
       if (searchTerm.length >= 2 && !selectedPatient) {
-        setIsSearching(true);
         const results = await MedicalDataService.searchPatients(searchTerm);
         setSearchResults(results);
-        setIsSearching(false);
       } else { setSearchResults([]); }
     }, 300);
     return () => clearTimeout(delayDebounceFn);
   }, [searchTerm, selectedPatient]);
 
-  // AL SELECCIONAR PACIENTE: Buscamos su última consulta para dar contexto
   const handleSelectPatient = async (patient: Patient) => {
     setSelectedPatient(patient);
     setSearchTerm(patient.name);
     setSearchResults([]);
     
-    // Buscamos historial previo
     const { data } = await supabase
         .from('consultations')
         .select('summary')
@@ -100,7 +89,7 @@ const ConsultationView: React.FC = () => {
         .single();
 
     if (data && data.summary) {
-        setPatientContext(data.summary); // Guardamos el contexto para la IA
+        setPatientContext(data.summary);
     } else {
         setPatientContext('');
     }
@@ -123,8 +112,6 @@ const ConsultationView: React.FC = () => {
     setIsLoadingRecord(true);
     
     try {
-      // AQUI ENVIAREMOS EL CONTEXTO EN EL FUTURO
-      // Por ahora mantenemos la llamada igual para no romper nada en este paso
       const { clinicalNote, patientInstructions, actionItems } = await GeminiMedicalService.generateSummary(transcript, specialty);
       
       const patientId = selectedPatient ? selectedPatient.id : '00000000-0000-0000-0000-000000000000';
@@ -187,13 +174,6 @@ const ConsultationView: React.FC = () => {
     }
   };
 
-  const sendToWhatsApp = () => {
-    const phone = selectedPatient?.phone || prompt("Ingrese el teléfono del paciente:");
-    if (!phone) return;
-    const url = `https://wa.me/${phone}?text=${encodeURIComponent(patientInstructions)}`;
-    window.open(url, '_blank');
-  };
-
   const handleAskAI = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!chatInput.trim() || !sessionKey) return;
@@ -213,7 +193,7 @@ const ConsultationView: React.FC = () => {
   };
 
   return (
-    <div className="p-4 lg:p-6 max-w-6xl mx-auto space-y-4 flex flex-col h-[calc(100vh-4rem)]">
+    <div className="p-4 lg:p-6 max-w-6xl mx-auto space-y-4 flex flex-col h-[calc(100vh-4rem)] overflow-hidden">
       
       {/* Header */}
       <div className="flex flex-col gap-4 shrink-0">
@@ -231,7 +211,7 @@ const ConsultationView: React.FC = () => {
                     {selectedPatient && <button onClick={handleClearPatient} className="text-slate-400 hover:text-red-500"><span className="text-xs font-bold">X</span></button>}
                 </div>
                 {searchResults.length > 0 && (
-                    <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-xl z-50 max-h-60 overflow-y-auto">
+                    <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-xl z-50 max-h-60 overflow-y-auto z-50">
                         {searchResults.map(p => (
                             <div key={p.id} onClick={() => handleSelectPatient(p)} className="p-3 hover:bg-slate-50 cursor-pointer border-b border-slate-50 flex justify-between items-center">
                                 <div className="font-bold text-sm text-slate-700">{p.name}</div>
@@ -249,26 +229,24 @@ const ConsultationView: React.FC = () => {
             </div>
         </div>
         
-        {/* INDICADOR VISUAL DE CONTEXTO (PREPARATIVO PARA PASO 2) */}
         {patientContext && (
             <div className="bg-blue-50 border border-blue-100 p-2 rounded text-xs text-blue-700 flex items-center gap-2 animate-fade-in-up">
                 <History size={14} />
-                <span><strong>Contexto Activo:</strong> La IA considerará el historial previo de {selectedPatient?.name}.</span>
+                <span><strong>Contexto Activo:</strong> La IA considerará el historial previo.</span>
             </div>
         )}
       </div>
 
       {/* Contenido Principal */}
-      <div className="flex flex-col lg:grid lg:grid-cols-2 gap-6 flex-1 min-h-0">
+      <div className="flex flex-col lg:grid lg:grid-cols-2 gap-6 flex-1 min-h-0 overflow-hidden">
         
-        {/* COLUMNA 1: Grabación */}
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col overflow-hidden flex-1 order-1">
+        {/* COLUMNA 1: Grabación (Arriba en móvil) */}
+        <div className={`bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col overflow-hidden lg:h-full transition-all duration-300 ${generatedRecord ? 'h-[30vh]' : 'flex-1'}`}>
           <div className="p-3 bg-orange-50 border-b border-orange-100 flex items-center gap-2 shrink-0">
              <input type="checkbox" checked={hasConsent} onChange={(e) => setHasConsent(e.target.checked)} disabled={isListening} className="rounded text-brand-teal cursor-pointer w-5 h-5" />
              <span className="text-xs font-medium text-orange-800">Confirmo consentimiento.</span>
           </div>
           
-          {/* AQUI ESTA EL FIX: ref={textContainerRef} en el DIV contenedor */}
           <div 
             ref={textContainerRef} 
             className="flex-1 min-h-0 p-4 bg-slate-50 overflow-y-auto font-mono text-sm leading-relaxed relative"
@@ -298,8 +276,8 @@ const ConsultationView: React.FC = () => {
           </div>
         </div>
 
-        {/* COLUMNA 2: Resultados */}
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col overflow-hidden flex-1 order-2 hidden lg:flex">
+        {/* COLUMNA 2: Resultados (Abajo en móvil, aparece al generar) */}
+        <div className={`bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col overflow-hidden lg:h-full relative ${generatedRecord ? 'flex-1' : 'hidden lg:flex'}`}>
            <div className="flex border-b bg-slate-50 shrink-0 overflow-x-auto">
             <button onClick={() => setActiveTab('record')} className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider transition-colors whitespace-nowrap px-4 ${activeTab === 'record' ? 'bg-white text-brand-teal border-t-2 border-brand-teal' : 'text-slate-400 hover:text-slate-600'}`}>Expediente</button>
             <button onClick={() => setActiveTab('instructions')} className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider transition-colors whitespace-nowrap px-4 ${activeTab === 'instructions' ? 'bg-white text-brand-teal border-t-2 border-brand-teal' : 'text-slate-400 hover:text-slate-600'}`}>Paciente</button>
@@ -315,12 +293,76 @@ const ConsultationView: React.FC = () => {
           )}
 
           <div className="flex-1 relative bg-white overflow-hidden">
-             {activeTab === 'record' && generatedRecord && (
+             {activeTab === 'record' && (
                <div className="absolute inset-0 flex flex-col">
-                  <textarea className="flex-1 p-4 text-sm text-slate-700 outline-none resize-none font-mono leading-relaxed" value={editableSummary} onChange={(e) => setEditableSummary(e.target.value)} />
+                  {generatedRecord ? (
+                    <textarea className="flex-1 p-4 text-sm text-slate-700 outline-none resize-none font-mono leading-relaxed" value={editableSummary} onChange={(e) => setEditableSummary(e.target.value)} />
+                  ) : (
+                    <div className="flex-1 flex flex-col items-center justify-center text-slate-400"><FileText size={32} className="mb-2 opacity-20"/><p className="text-sm">Sin nota generada.</p></div>
+                  )}
                </div>
              )}
-             {/* Resto de tabs... */}
+
+             {activeTab === 'instructions' && (
+               <div className="absolute inset-0 flex flex-col">
+                   {generatedRecord ? (
+                       <>
+                          <div className="flex-1 p-4 bg-green-50/30">
+                            <textarea className="w-full h-full bg-transparent outline-none resize-none text-sm text-slate-700 font-medium" value={patientInstructions} onChange={(e) => setPatientInstructions(e.target.value)} />
+                          </div>
+                          <div className="p-3 border-t border-slate-100 flex flex-wrap justify-end items-center gap-2 bg-white shrink-0">
+                            <button onClick={handleSharePDF} disabled={isSharing} className="bg-brand-teal text-white px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-2 hover:bg-teal-600 transition-colors shadow-sm flex-1 justify-center md:flex-none">
+                                {isSharing ? <RefreshCw size={14} className="animate-spin"/> : <Share2 size={14}/>} <span>Compartir</span>
+                            </button>
+                            {!isSharing && (
+                                <PDFDownloadLink
+                                    document={
+                                        <PrescriptionPDF 
+                                            doctorName={doctorProfile.full_name}
+                                            specialty={doctorProfile.specialty}
+                                            license={doctorProfile.license_number}
+                                            phone={doctorProfile.phone}
+                                            university={doctorProfile.university}
+                                            address={doctorProfile.address}
+                                            logoUrl={doctorProfile.logo_url}
+                                            signatureUrl={doctorProfile.signature_url}
+                                            patientName={selectedPatient?.name || "Paciente"}
+                                            date={new Date().toLocaleDateString()}
+                                            content={patientInstructions}
+                                        />
+                                    }
+                                    fileName={`Receta.pdf`}
+                                    className="bg-slate-800 text-white px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-2 hover:bg-slate-700 transition-colors shadow-sm flex-1 justify-center md:flex-none"
+                                >
+                                    {({ loading }) => (loading ? '...' : <><Printer size={14}/> <span className="hidden sm:inline">PDF</span></>)}
+                                </PDFDownloadLink>
+                            )}
+                          </div>
+                       </>
+                   ) : (
+                     <div className="flex-1 flex flex-col items-center justify-center text-slate-400"><User size={32} className="mb-2 opacity-20"/><p className="text-sm">Sin instrucciones.</p></div>
+                   )}
+               </div>
+             )}
+
+             {activeTab === 'chat' && (
+               <div className="absolute inset-0 flex flex-col bg-slate-50">
+                  <div className="flex-1 p-4 overflow-y-auto space-y-3">
+                    {chatMessages.map((m, i) => (
+                      <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                        <div className={`p-3 rounded-lg text-sm max-w-[85%] shadow-sm ${m.role === 'user' ? 'bg-brand-teal text-white rounded-br-none' : 'bg-white text-slate-700 rounded-bl-none'}`}>{m.text}</div>
+                      </div>
+                    ))}
+                    <div ref={chatEndRef} />
+                  </div>
+                  <div className="p-3 bg-white border-t border-slate-200 shrink-0">
+                      <form onSubmit={handleAskAI} className="flex gap-2">
+                        <input value={chatInput} onChange={e => setChatInput(e.target.value)} placeholder="Preguntar..." className="flex-1 p-2 border border-slate-200 rounded-lg text-sm outline-none" />
+                        <button type="submit" disabled={!chatInput.trim()} className="bg-slate-900 text-white p-2.5 rounded-lg hover:bg-slate-800"><Send size={18}/></button>
+                      </form>
+                  </div>
+               </div>
+             )}
           </div>
         </div>
       </div>
