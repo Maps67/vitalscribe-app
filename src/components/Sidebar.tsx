@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Stethoscope, Users, Smartphone, LogOut, X, Settings, Download } from 'lucide-react';
+import { LayoutDashboard, Stethoscope, Users, Smartphone, LogOut, X, Settings, Download, Share } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 interface SidebarProps {
@@ -11,21 +11,30 @@ interface SidebarProps {
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
-  // Estado para guardar los datos del doctor
   const [profile, setProfile] = useState({ name: 'Cargando...', specialty: '' });
   
-  // Estado para el evento de instalación PWA
+  // Estados para instalación
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [isIOS, setIsIOS] = useState(false);
+  const [isStandalone, setIsStandalone] = useState(false);
+  const [showIOSInstructions, setShowIOSInstructions] = useState(false);
 
   useEffect(() => {
     fetchProfile();
 
-    // 1. Escuchar si el navegador permite instalar
-    const handler = (e: any) => {
-      e.preventDefault(); // Evitar que Chrome muestre su barrita fea automática
-      setDeferredPrompt(e); // Guardar el evento para usarlo en NUESTRO botón
-    };
+    // 1. Detectar si es iOS (iPhone/iPad)
+    const isDeviceIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+    setIsIOS(isDeviceIOS);
 
+    // 2. Detectar si YA está instalada (Modo Standalone)
+    const isApp = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone;
+    setIsStandalone(isApp);
+
+    // 3. Capturar evento de instalación (Android/PC)
+    const handler = (e: any) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
     window.addEventListener('beforeinstallprompt', handler);
 
     return () => window.removeEventListener('beforeinstallprompt', handler);
@@ -34,38 +43,30 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   const fetchProfile = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
-      const { data } = await supabase
-        .from('profiles')
-        .select('full_name, specialty')
-        .eq('id', user.id)
-        .single();
-      
-      if (data) {
-        setProfile({ 
-            name: data.full_name || 'Doctor(a)', 
-            specialty: data.specialty || 'Medicina General' 
-        });
-      } else {
-        setProfile({ name: 'Bienvenido', specialty: 'Configure su perfil' });
-      }
+      const { data } = await supabase.from('profiles').select('full_name, specialty').eq('id', user.id).single();
+      if (data) setProfile({ name: data.full_name || 'Doctor(a)', specialty: data.specialty || 'Medicina General' });
     }
   };
   
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-  };
+  const handleLogout = async () => { await supabase.auth.signOut(); };
 
-  const handleInstallClick = async () => {
-    if (!deferredPrompt) return;
-    
-    // 2. Mostrar el prompt nativo del celular/PC
-    deferredPrompt.prompt();
-    
-    // 3. Esperar a ver si el usuario aceptó
-    const { outcome } = await deferredPrompt.userChoice;
-    
-    if (outcome === 'accepted') {
-      setDeferredPrompt(null); // Ocultar botón si ya instaló
+  const handleInstallClick = () => {
+    // CASO A: Android/PC con evento capturado
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      deferredPrompt.userChoice.then((choiceResult: any) => {
+        if (choiceResult.outcome === 'accepted') {
+          setDeferredPrompt(null);
+        }
+      });
+    } 
+    // CASO B: Es iPhone (iOS)
+    else if (isIOS) {
+      setShowIOSInstructions(!showIOSInstructions);
+    } 
+    // CASO C: Android/PC sin evento (Manual)
+    else {
+      alert("Para instalar: Abre el menú de tu navegador (3 puntos) y selecciona 'Instalar aplicación' o 'Agregar a pantalla de inicio'.");
     }
   };
 
@@ -122,15 +123,29 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
             </NavLink>
           ))}
 
-          {/* BOTÓN DE INSTALACIÓN (Solo aparece si es instalable) */}
-          {deferredPrompt && (
-            <button
-              onClick={handleInstallClick}
-              className="w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-colors duration-200 bg-slate-900 text-white shadow-lg shadow-slate-900/20 mt-4 animate-fade-in-up"
-            >
-              <Download size={20} />
-              <span className="font-bold">Instalar App</span>
-            </button>
+          {/* BOTÓN INTELIGENTE DE INSTALACIÓN */}
+          {/* Solo se muestra si NO estamos ya en modo App */}
+          {!isStandalone && (
+            <div className="mt-4">
+                <button
+                  onClick={handleInstallClick}
+                  className="w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-colors duration-200 bg-slate-900 text-white shadow-lg shadow-slate-900/20 active:scale-95"
+                >
+                  <Download size={20} />
+                  <span className="font-bold">Instalar App</span>
+                </button>
+
+                {/* Instrucciones especiales para iOS */}
+                {showIOSInstructions && (
+                    <div className="mt-3 p-3 bg-slate-100 rounded-lg text-xs text-slate-600 border border-slate-200 animate-fade-in-up">
+                        <p className="font-bold mb-2 text-slate-800">Para instalar en iPhone:</p>
+                        <div className="flex items-center gap-2 mb-1">
+                            1. Toca el botón <Share size={12} className="text-blue-500"/> Compartir.
+                        </div>
+                        <div>2. Selecciona <strong>"Agregar a Inicio"</strong>.</div>
+                    </div>
+                )}
+            </div>
           )}
         </nav>
 
@@ -144,10 +159,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                   <p className="text-[10px] text-slate-500 truncate uppercase tracking-wide">{profile.specialty}</p>
               </div>
           </div>
-          <button
-            onClick={handleLogout}
-            className="flex items-center justify-center space-x-2 px-4 py-2 w-full text-red-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors text-sm font-medium"
-          >
+          <button onClick={handleLogout} className="flex items-center justify-center space-x-2 px-4 py-2 w-full text-red-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors text-sm font-medium">
             <LogOut size={18} />
             <span>Cerrar Sesión</span>
           </button>
