@@ -1,20 +1,19 @@
 import React from 'react';
-import { Document, Page, Text, View, StyleSheet, Font } from '@react-pdf/renderer';
+import { Document, Page, Text, View, StyleSheet, Font, Image } from '@react-pdf/renderer';
 
-// Registramos fuente estándar
+// Fuentes
 Font.register({ family: 'Helvetica', fonts: [{ src: 'https://fonts.gstatic.com/s/helvetica/v1/Helvetica.ttf' }] });
 Font.register({ family: 'Helvetica-Bold', fonts: [{ src: 'https://fonts.gstatic.com/s/helvetica/v1/Helvetica-Bold.ttf' }] });
 
-// --- UTILIDAD DE LIMPIEZA ---
-// Esta función elimina los asteriscos y hashes del Markdown para que el PDF se vea limpio
+// Limpieza de Markdown
 const cleanMarkdown = (text: string) => {
   if (!text) return "";
   return text
-    .replace(/\*\*/g, '')   // Eliminar negritas markdown (**)
-    .replace(/###/g, '')    // Eliminar titulos markdown (###)
-    .replace(/\*/g, '•')    // Cambiar viñetas (*) por puntos reales (•)
-    .replace(/_/g, '')      // Eliminar guiones bajos
-    .trim();                // Quitar espacios extra al inicio/final
+    .replace(/\*\*/g, '')
+    .replace(/###/g, '')
+    .replace(/\*/g, '•')
+    .replace(/_/g, '')
+    .trim();
 };
 
 const styles = StyleSheet.create({
@@ -23,18 +22,22 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     padding: 40,
     fontFamily: 'Helvetica',
-    fontSize: 11,
+    fontSize: 10, // Ligeramente más pequeño para que quepa todo
     color: '#334155',
   },
   // ENCABEZADO
   header: {
-    marginBottom: 20,
+    marginBottom: 15,
     borderBottomWidth: 2,
-    borderBottomColor: '#0d9488', // Brand Teal
+    borderBottomColor: '#0d9488',
     paddingBottom: 15,
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
+    minHeight: 80,
+  },
+  doctorInfo: {
+    width: '70%',
   },
   doctorName: {
     fontSize: 16,
@@ -48,16 +51,29 @@ const styles = StyleSheet.create({
     color: '#0d9488',
     fontFamily: 'Helvetica-Bold',
     textTransform: 'uppercase',
-    marginBottom: 2,
+    marginBottom: 4,
   },
   metaData: {
-    fontSize: 9,
+    fontSize: 8,
     color: '#64748b',
+    marginBottom: 1,
+  },
+  // LOGO
+  logoContainer: {
+    width: 80,
+    height: 80,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  logoImage: {
+    width: '100%',
+    height: '100%',
+    objectFit: 'contain',
   },
   rxBox: {
-    width: 40,
-    height: 40,
-    backgroundColor: '#f0fdfa', // Teal muy claro
+    width: 50,
+    height: 50,
+    backgroundColor: '#f0fdfa',
     borderRadius: 4,
     justifyContent: 'center',
     alignItems: 'center',
@@ -65,68 +81,85 @@ const styles = StyleSheet.create({
     borderColor: '#ccfbf1',
   },
   rxText: {
-    fontSize: 18,
+    fontSize: 24,
     fontFamily: 'Helvetica-Bold',
     color: '#0d9488',
   },
-  // DATOS PACIENTE
+  // BARRA PACIENTE
   patientBar: {
     flexDirection: 'row',
     backgroundColor: '#f8fafc',
-    padding: 10,
+    padding: 8,
     borderRadius: 4,
-    marginBottom: 20,
+    marginBottom: 15,
     justifyContent: 'space-between',
     borderLeftWidth: 4,
     borderLeftColor: '#cbd5e1',
   },
   label: {
-    fontSize: 8,
+    fontSize: 7,
     color: '#94a3b8',
     textTransform: 'uppercase',
     marginBottom: 2,
     fontFamily: 'Helvetica-Bold',
   },
   value: {
-    fontSize: 11,
+    fontSize: 10,
     fontFamily: 'Helvetica-Bold',
     color: '#0f172a',
   },
   // CUERPO
   sectionTitle: {
-    fontSize: 12,
+    fontSize: 11,
     fontFamily: 'Helvetica-Bold',
     color: '#0f172a',
-    marginTop: 10,
-    marginBottom: 8,
+    marginTop: 5,
+    marginBottom: 5,
     textDecoration: 'underline',
   },
   content: {
-    lineHeight: 1.6,
+    lineHeight: 1.5,
     textAlign: 'justify',
-    fontSize: 11,
+    fontSize: 10,
+    paddingBottom: 20,
   },
-  // PIE DE PAGINA
+  // PIE DE PAGINA Y FIRMA
   footer: {
     position: 'absolute',
-    bottom: 40,
+    bottom: 30,
     left: 40,
     right: 40,
     textAlign: 'center',
-    borderTopWidth: 1,
-    borderTopColor: '#e2e8f0',
-    paddingTop: 10,
+  },
+  signatureArea: {
+    alignItems: 'center',
+    marginBottom: 10,
+    height: 60, // Espacio reservado para la imagen de firma
+    justifyContent: 'flex-end',
+  },
+  signatureImage: {
+    width: 120,
+    height: 50,
+    objectFit: 'contain',
+    marginBottom: -10, // Para que "pise" la línea
   },
   signatureLine: {
-    width: 180,
+    width: 200,
     borderBottomWidth: 1,
     borderBottomColor: '#0f172a',
-    marginBottom: 8,
-    alignSelf: 'center',
+    marginBottom: 4,
   },
-  footerText: {
-    fontSize: 8,
+  addressText: {
+    fontSize: 7,
     color: '#94a3b8',
+    marginTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
+    paddingTop: 4,
+  },
+  legalText: {
+    fontSize: 6,
+    color: '#cbd5e1',
     marginTop: 2,
   }
 });
@@ -136,57 +169,84 @@ interface PrescriptionProps {
   specialty: string;
   license: string;
   phone: string;
+  university?: string; // Nuevo
+  address?: string;    // Nuevo
+  logoUrl?: string;    // Nuevo
+  signatureUrl?: string; // Nuevo
   patientName: string;
   date: string;
   content: string;
 }
 
 const PrescriptionPDF: React.FC<PrescriptionProps> = ({ 
-  doctorName, specialty, license, phone, patientName, date, content 
+  doctorName, specialty, license, phone, university, address, logoUrl, signatureUrl, patientName, date, content 
 }) => (
   <Document>
     <Page size="A4" style={styles.page}>
       
-      {/* Header Premium */}
+      {/* ENCABEZADO PERSONALIZADO */}
       <View style={styles.header}>
-        <View>
+        <View style={styles.doctorInfo}>
           <Text style={styles.doctorName}>Dr. {doctorName}</Text>
           <Text style={styles.specialty}>{specialty}</Text>
-          <Text style={styles.metaData}>Céd. Prof: {license}</Text>
+          
+          {/* Universidad (NOM-004) */}
+          {university && <Text style={styles.metaData}>{university}</Text>}
+          
+          <Text style={styles.metaData}>Cédula Profesional: {license}</Text>
           <Text style={styles.metaData}>Tel: {phone}</Text>
         </View>
-        <View style={styles.rxBox}>
-            <Text style={styles.rxText}>Rx</Text>
+
+        {/* Logo o Rx */}
+        <View style={styles.logoContainer}>
+            {logoUrl ? (
+                /* IMPORTANTE: React-PDF requiere habilitar CORS en Supabase (ya lo hicimos) */
+                <Image style={styles.logoImage} src={logoUrl} />
+            ) : (
+                <View style={styles.rxBox}><Text style={styles.rxText}>Rx</Text></View>
+            )}
         </View>
       </View>
 
-      {/* Barra de Paciente */}
+      {/* Info Paciente */}
       <View style={styles.patientBar}>
         <View>
             <Text style={styles.label}>PACIENTE</Text>
             <Text style={styles.value}>{patientName}</Text>
         </View>
         <View>
-            <Text style={styles.label}>FECHA DE CONSULTA</Text>
+            <Text style={styles.label}>FECHA</Text>
             <Text style={styles.value}>{date}</Text>
         </View>
       </View>
 
-      {/* Cuerpo del Documento (Limpiado) */}
-      <View>
+      {/* Receta */}
+      <View style={{ flexGrow: 1 }}>
         <Text style={styles.sectionTitle}>INDICACIONES Y TRATAMIENTO</Text>
-        {/* APLICAMOS LA LIMPIEZA AQUÍ */}
         <Text style={styles.content}>
           {cleanMarkdown(content)}
         </Text>
       </View>
 
-      {/* Footer */}
+      {/* Pie de Página (NOM-004) */}
       <View style={styles.footer}>
-        <View style={styles.signatureLine} />
-        <Text style={{ fontSize: 9, fontFamily: 'Helvetica-Bold' }}>Firma del Médico</Text>
-        <Text style={styles.footerText}>
-            Este documento es una receta digital generada vía MediScribe AI.
+        
+        {/* Área de Firma */}
+        <View style={styles.signatureArea}>
+            {signatureUrl && <Image style={styles.signatureImage} src={signatureUrl} />}
+            <View style={styles.signatureLine} />
+            <Text style={{ fontSize: 9, fontFamily: 'Helvetica-Bold' }}>Firma del Médico</Text>
+        </View>
+
+        {/* Dirección del Establecimiento (NOM-004) */}
+        {address && (
+            <Text style={styles.addressText}>
+                Dirección Consultorio: {address}
+            </Text>
+        )}
+        
+        <Text style={styles.legalText}>
+            Receta generada digitalmente vía MediScribe AI. Cumple con NOM-004-SSA3-2012.
         </Text>
       </View>
 
