@@ -1,86 +1,123 @@
-import React from 'react';
-import { Share2, Globe, MapPin, Phone, Copy } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import QRCode from 'react-qr-code';
+import { supabase } from '../lib/supabase';
+import { Share2, Copy, Phone, Mail, ShieldCheck } from 'lucide-react';
 
 const DigitalCard: React.FC = () => {
+  const [profile, setProfile] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadProfile();
+  }, []);
+
+  const loadProfile = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      const { data } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+      setProfile(data || { full_name: 'Doctor', specialty: 'Medicina', phone: '' });
+    }
+    setLoading(false);
+  };
+
+  // Generar formato vCard (Estándar universal de contactos)
+  const generateVCard = () => {
+    if (!profile) return '';
+    return `BEGIN:VCARD
+VERSION:3.0
+FN:Dr. ${profile.full_name}
+ORG:MediScribe Specialist
+TEL:${profile.phone || ''}
+TITLE:${profile.specialty}
+NOTE:Generado con MediScribe AI
+END:VCARD`;
+  };
+
+  const handleShare = async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `Tarjeta Digital - Dr. ${profile?.full_name}`,
+          text: `Hola, soy el Dr. ${profile?.full_name}. Aquí tienes mi contacto digital.`,
+          url: window.location.href,
+        });
+      } catch (error) {
+        console.log('Error compartiendo', error);
+      }
+    } else {
+      alert("Tu navegador no soporta compartir nativamente. Haz captura de pantalla.");
+    }
+  };
+
+  if (loading) return <div className="flex justify-center items-center h-full text-slate-400">Cargando tarjeta...</div>;
+
   return (
-    <div className="p-8 max-w-5xl mx-auto flex flex-col items-center">
-      <h2 className="text-2xl font-bold text-slate-800 mb-8">Tu Tarjeta Digital (MediPin)</h2>
+    <div className="p-6 max-w-md mx-auto h-[calc(100vh-4rem)] flex flex-col justify-center">
       
-      <div className="flex flex-col md:flex-row gap-8 w-full max-w-4xl">
-        {/* Card Preview */}
-        <div className="w-full md:w-1/2">
-            <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-slate-100 relative transform transition-all duration-300 hover:-translate-y-2 hover:shadow-2xl group cursor-default">
-                <div className="h-32 bg-gradient-to-r from-brand-teal to-blue-600 transition-all duration-500 group-hover:brightness-110"></div>
-                <div className="px-8 pb-8">
-                    <div className="relative -top-12 mb-[-30px] flex justify-center">
-                        <img 
-                          src="https://picsum.photos/150/150" 
-                          alt="Doctor Profile" 
-                          className="w-24 h-24 rounded-full border-4 border-white shadow-md object-cover transition-transform duration-300 group-hover:scale-105"
-                        />
-                    </div>
-                    <div className="mt-4 text-center">
-                        <h1 className="text-xl font-bold text-slate-800">Dr. Alejandro Martínez</h1>
-                        <p className="text-brand-teal font-medium">Cardiología Clínica</p>
-                        <p className="text-slate-500 text-sm mt-2">Ced. Prof. 12345678 | SSA 98765</p>
-                        
-                        <div className="mt-6 space-y-3 text-left">
-                            <div className="flex items-center gap-3 text-slate-600 p-2 rounded-lg hover:bg-slate-50 transition-colors">
-                                <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-brand-teal shrink-0">
-                                    <Phone size={16} />
-                                </div>
-                                <span className="text-sm">+52 55 5555 5555</span>
-                            </div>
-                            <div className="flex items-center gap-3 text-slate-600 p-2 rounded-lg hover:bg-slate-50 transition-colors">
-                                <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-brand-teal shrink-0">
-                                    <Globe size={16} />
-                                </div>
-                                <span className="text-sm">www.drmartinez-cardio.com</span>
-                            </div>
-                            <div className="flex items-center gap-3 text-slate-600 p-2 rounded-lg hover:bg-slate-50 transition-colors">
-                                <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-brand-teal shrink-0">
-                                    <MapPin size={16} />
-                                </div>
-                                <span className="text-sm">Hospital Ángeles, Consultorio 404</span>
-                            </div>
-                        </div>
+      <div className="text-center mb-6">
+        <h2 className="text-2xl font-bold text-slate-800">Tarjeta Digital</h2>
+        <p className="text-slate-500 text-sm">Escanea para guardar contacto</p>
+      </div>
 
-                        <div className="mt-8 pt-6 border-t border-slate-100 flex items-center justify-center">
-                            <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=https://medipin.app/dr-martinez" alt="QR Code" className="w-32 h-32" />
-                        </div>
-                        <p className="text-center text-xs text-slate-400 mt-2">Escanea para agendar o ver perfil</p>
-                    </div>
-                </div>
-            </div>
-        </div>
+      {/* TARJETA VISUAL (Diseño Premium) */}
+      <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl shadow-2xl overflow-hidden text-white relative">
+        {/* Decoración de fondo */}
+        <div className="absolute top-0 right-0 -mt-10 -mr-10 w-40 h-40 bg-brand-teal rounded-full opacity-20 blur-3xl"></div>
+        <div className="absolute bottom-0 left-0 -mb-10 -ml-10 w-40 h-40 bg-blue-500 rounded-full opacity-20 blur-3xl"></div>
 
-        {/* Actions */}
-        <div className="w-full md:w-1/2 space-y-6">
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                <h3 className="font-semibold text-slate-800 mb-4">Compartir Perfil</h3>
-                <div className="grid grid-cols-2 gap-4">
-                    <button className="flex flex-col items-center justify-center p-4 rounded-xl border border-slate-200 hover:border-brand-teal hover:bg-teal-50 transition-colors group">
-                        <Share2 size={24} className="text-brand-teal mb-2 group-hover:scale-110 transition-transform" />
-                        <span className="text-sm font-medium">Compartir Link</span>
-                    </button>
-                    <button className="flex flex-col items-center justify-center p-4 rounded-xl border border-slate-200 hover:border-brand-teal hover:bg-teal-50 transition-colors group">
-                        <Copy size={24} className="text-brand-teal mb-2 group-hover:scale-110 transition-transform" />
-                        <span className="text-sm font-medium">Copiar URL</span>
-                    </button>
-                </div>
-            </div>
+        <div className="p-8 flex flex-col items-center relative z-10">
+          {/* Avatar / Inicial */}
+          <div className="w-20 h-20 bg-white/10 backdrop-blur-md rounded-full flex items-center justify-center text-3xl font-bold border border-white/20 mb-4 shadow-lg">
+            {profile?.full_name?.charAt(0) || 'D'}
+          </div>
 
-            <div className="bg-blue-50 p-6 rounded-xl border border-blue-100">
-                <h3 className="font-semibold text-blue-900 mb-2">Integración Web</h3>
-                <p className="text-sm text-blue-800 mb-4">
-                    Pega este código en tu sitio web para añadir el botón de "Agendar con IA".
-                </p>
-                <div className="bg-white p-3 rounded border border-blue-200 font-mono text-xs text-slate-600 overflow-x-auto">
-                    {`<script src="https://mediscribe.ai/widget.js" data-id="dr-martinez"></script>`}
-                </div>
+          <h3 className="text-xl font-bold mb-1 text-center">{profile?.full_name || "Su Nombre Aquí"}</h3>
+          <p className="text-brand-teal font-medium text-sm uppercase tracking-wider mb-6">{profile?.specialty || "Especialidad"}</p>
+
+          {/* CÓDIGO QR */}
+          <div className="bg-white p-4 rounded-xl shadow-lg mb-6">
+            <QRCode 
+              value={generateVCard()} 
+              size={160} 
+              level="M" // Nivel de corrección de error
+              fgColor="#0f172a"
+            />
+          </div>
+
+          {/* Datos de Contacto Rápidos */}
+          <div className="w-full space-y-3 text-sm">
+            <div className="flex items-center gap-3 bg-white/5 p-3 rounded-lg border border-white/10">
+                <Phone size={16} className="text-brand-teal"/>
+                <span className="font-mono">{profile?.phone || "Sin teléfono"}</span>
             </div>
+            <div className="flex items-center gap-3 bg-white/5 p-3 rounded-lg border border-white/10">
+                <ShieldCheck size={16} className="text-brand-teal"/>
+                <span className="text-xs opacity-80">Cédula: {profile?.license_number || "Pendiente"}</span>
+            </div>
+          </div>
         </div>
       </div>
+
+      {/* ACCIONES */}
+      <div className="mt-8 flex gap-4">
+        <button 
+          onClick={handleShare}
+          className="flex-1 bg-brand-teal text-white py-4 rounded-xl font-bold shadow-lg shadow-teal-500/30 flex items-center justify-center gap-2 active:scale-95 transition-transform"
+        >
+          <Share2 size={20} /> Compartir
+        </button>
+        <button 
+          onClick={() => alert("Funcionalidad próxima: Copiar Link")}
+          className="bg-white text-slate-600 border border-slate-200 p-4 rounded-xl shadow-sm active:bg-slate-50 transition-colors"
+        >
+          <Copy size={20} />
+        </button>
+      </div>
+
     </div>
   );
 };
