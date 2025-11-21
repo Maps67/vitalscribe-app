@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { Search, Plus, Phone, Calendar, User, X, Save, FileText, ChevronLeft, Clock, ChevronRight } from 'lucide-react';
+import { Search, Plus, Phone, Calendar, User, X, Save, FileText, ChevronLeft, Clock, ChevronRight, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Patient, Consultation } from '../types';
+import FormattedText from './FormattedText'; // IMPORT NUEVO
 
 const PatientsView: React.FC = () => {
   const [patients, setPatients] = useState<Patient[]>([]);
@@ -67,6 +68,20 @@ const PatientsView: React.FC = () => {
     setHistory([]);
   };
 
+  // Función para borrar (Bonus de Gestión)
+  const handleDeletePatient = async (id: string) => {
+      if(!confirm("¿Está seguro de eliminar este paciente y todo su historial? Esta acción no se puede deshacer.")) return;
+      try {
+          const { error } = await supabase.from('patients').delete().eq('id', id);
+          if (error) throw error;
+          // Si estamos viendo el detalle, volver a la lista
+          if (selectedPatient?.id === id) handleBackToList();
+          fetchPatients();
+      } catch (e) {
+          alert("Error al eliminar");
+      }
+  };
+
   const handleCreatePatient = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newPatientName.trim()) return;
@@ -115,14 +130,14 @@ const PatientsView: React.FC = () => {
         {/* Header del Paciente */}
         <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
            <div className="flex items-center gap-4">
-              <div className="w-16 h-16 bg-brand-teal/10 text-brand-teal rounded-full flex items-center justify-center font-bold text-2xl">
+              <div className="w-16 h-16 bg-brand-teal/10 text-brand-teal rounded-full flex items-center justify-center font-bold text-2xl border border-brand-teal/20">
                   {selectedPatient.name.charAt(0).toUpperCase()}
               </div>
               <div>
                   <h2 className="text-2xl font-bold text-slate-800">{selectedPatient.name}</h2>
-                  <div className="flex items-center gap-4 mt-1 text-slate-500 text-sm">
-                      <span className="flex items-center gap-1"><Phone size={14}/> {selectedPatient.phone || 'Sin teléfono'}</span>
-                      <span className="flex items-center gap-1"><Calendar size={14}/> Reg: {new Date(selectedPatient.created_at).toLocaleDateString()}</span>
+                  <div className="flex items-center gap-4 mt-2 text-slate-500 text-sm">
+                      <span className="flex items-center gap-1 bg-slate-50 px-2 py-1 rounded"><Phone size={14}/> {selectedPatient.phone || 'Sin teléfono'}</span>
+                      <span className="flex items-center gap-1 bg-slate-50 px-2 py-1 rounded"><Calendar size={14}/> Reg: {new Date(selectedPatient.created_at).toLocaleDateString()}</span>
                   </div>
               </div>
            </div>
@@ -137,6 +152,12 @@ const PatientsView: React.FC = () => {
                     <Phone size={16} /> WhatsApp
                   </a>
               )}
+              <button 
+                onClick={() => handleDeletePatient(selectedPatient.id)}
+                className="px-4 py-2 border border-red-100 text-red-500 font-bold rounded-lg hover:bg-red-50 transition-colors text-sm flex items-center gap-2"
+              >
+                <Trash2 size={16} /> Eliminar
+              </button>
            </div>
         </div>
 
@@ -154,23 +175,22 @@ const PatientsView: React.FC = () => {
         ) : (
             <div className="space-y-6">
                 {history.map((consultation) => (
-                    <div key={consultation.id} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div key={consultation.id} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden group hover:shadow-md transition-shadow">
                         <div className="bg-slate-50 p-4 border-b border-slate-100 flex justify-between items-center">
                             <div className="flex items-center gap-2 font-bold text-slate-700">
                                 <Calendar size={16} className="text-brand-teal" />
                                 {new Date(consultation.created_at).toLocaleDateString()} 
-                                <span className="text-xs font-normal text-slate-400 ml-1">
+                                <span className="text-xs font-normal text-slate-400 ml-1 border-l border-slate-300 pl-2">
                                     {new Date(consultation.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                                 </span>
                             </div>
-                            <span className="px-2 py-1 bg-green-100 text-green-700 text-xs font-bold uppercase rounded">
-                                Completada
+                            <span className="px-2 py-1 bg-green-100 text-green-700 text-xs font-bold uppercase rounded flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span> Completada
                             </span>
                         </div>
-                        <div className="p-6">
-                            <div className="prose prose-sm max-w-none text-slate-600 font-mono whitespace-pre-wrap leading-relaxed">
-                                {consultation.summary || "Sin notas registradas."}
-                            </div>
+                        <div className="p-6 bg-white">
+                            {/* AQUI ESTA LA MAGIA DEL FORMATO */}
+                            <FormattedText content={consultation.summary || "Sin notas."} />
                         </div>
                     </div>
                 ))}
