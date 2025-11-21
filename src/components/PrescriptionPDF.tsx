@@ -5,14 +5,19 @@ import { Document, Page, Text, View, StyleSheet, Font, Image } from '@react-pdf/
 Font.register({ family: 'Helvetica', fonts: [{ src: 'https://fonts.gstatic.com/s/helvetica/v1/Helvetica.ttf' }] });
 Font.register({ family: 'Helvetica-Bold', fonts: [{ src: 'https://fonts.gstatic.com/s/helvetica/v1/Helvetica-Bold.ttf' }] });
 
-// Limpieza de Markdown
+// --- LIMPIEZA MEJORADA (ADIÓS EMOJIS) ---
 const cleanMarkdown = (text: string) => {
   if (!text) return "";
   return text
-    .replace(/\*\*/g, '')
-    .replace(/###/g, '')
-    .replace(/\*/g, '•')
-    .replace(/_/g, '')
+    // 1. Eliminar Emojis (Rangos Unicode comunes)
+    .replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F900}-\u{1F9FF}\u{1F018}-\u{1F270}]/gu, '')
+    // 2. Limpiar Markdown
+    .replace(/\*\*/g, '')   // Negritas
+    .replace(/###/g, '')    // Títulos
+    .replace(/\*/g, '•')    // Viñetas
+    .replace(/_/g, '')      // Guiones bajos
+    // 3. Limpieza final de espacios
+    .replace(/  +/g, ' ')   // Dobles espacios
     .trim();
 };
 
@@ -22,7 +27,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     padding: 40,
     fontFamily: 'Helvetica',
-    fontSize: 10, // Ligeramente más pequeño para que quepa todo
+    fontSize: 10, 
     color: '#334155',
   },
   // ENCABEZADO
@@ -113,12 +118,12 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontFamily: 'Helvetica-Bold',
     color: '#0f172a',
-    marginTop: 5,
+    marginTop: 10, // Un poco más de aire
     marginBottom: 5,
     textDecoration: 'underline',
   },
   content: {
-    lineHeight: 1.5,
+    lineHeight: 1.6, // Mejor lectura
     textAlign: 'justify',
     fontSize: 10,
     paddingBottom: 20,
@@ -134,14 +139,14 @@ const styles = StyleSheet.create({
   signatureArea: {
     alignItems: 'center',
     marginBottom: 10,
-    height: 60, // Espacio reservado para la imagen de firma
+    height: 60, 
     justifyContent: 'flex-end',
   },
   signatureImage: {
     width: 120,
     height: 50,
     objectFit: 'contain',
-    marginBottom: -10, // Para que "pise" la línea
+    marginBottom: -10, 
   },
   signatureLine: {
     width: 200,
@@ -169,10 +174,10 @@ interface PrescriptionProps {
   specialty: string;
   license: string;
   phone: string;
-  university?: string; // Nuevo
-  address?: string;    // Nuevo
-  logoUrl?: string;    // Nuevo
-  signatureUrl?: string; // Nuevo
+  university?: string; 
+  address?: string;    
+  logoUrl?: string;    
+  signatureUrl?: string; 
   patientName: string;
   date: string;
   content: string;
@@ -184,23 +189,18 @@ const PrescriptionPDF: React.FC<PrescriptionProps> = ({
   <Document>
     <Page size="A4" style={styles.page}>
       
-      {/* ENCABEZADO PERSONALIZADO */}
+      {/* ENCABEZADO */}
       <View style={styles.header}>
         <View style={styles.doctorInfo}>
           <Text style={styles.doctorName}>Dr. {doctorName}</Text>
           <Text style={styles.specialty}>{specialty}</Text>
-          
-          {/* Universidad (NOM-004) */}
           {university && <Text style={styles.metaData}>{university}</Text>}
-          
           <Text style={styles.metaData}>Cédula Profesional: {license}</Text>
           <Text style={styles.metaData}>Tel: {phone}</Text>
         </View>
 
-        {/* Logo o Rx */}
         <View style={styles.logoContainer}>
             {logoUrl ? (
-                /* IMPORTANTE: React-PDF requiere habilitar CORS en Supabase (ya lo hicimos) */
                 <Image style={styles.logoImage} src={logoUrl} />
             ) : (
                 <View style={styles.rxBox}><Text style={styles.rxText}>Rx</Text></View>
@@ -220,25 +220,23 @@ const PrescriptionPDF: React.FC<PrescriptionProps> = ({
         </View>
       </View>
 
-      {/* Receta */}
+      {/* Receta Limpia */}
       <View style={{ flexGrow: 1 }}>
         <Text style={styles.sectionTitle}>INDICACIONES Y TRATAMIENTO</Text>
+        {/* AQUÍ SE APLICA LA LIMPIEZA DE EMOJIS */}
         <Text style={styles.content}>
           {cleanMarkdown(content)}
         </Text>
       </View>
 
-      {/* Pie de Página (NOM-004) */}
+      {/* Pie de Página */}
       <View style={styles.footer}>
-        
-        {/* Área de Firma */}
         <View style={styles.signatureArea}>
             {signatureUrl && <Image style={styles.signatureImage} src={signatureUrl} />}
             <View style={styles.signatureLine} />
             <Text style={{ fontSize: 9, fontFamily: 'Helvetica-Bold' }}>Firma del Médico</Text>
         </View>
 
-        {/* Dirección del Establecimiento (NOM-004) */}
         {address && (
             <Text style={styles.addressText}>
                 Dirección Consultorio: {address}
