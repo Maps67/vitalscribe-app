@@ -31,7 +31,7 @@ const DigitalCard: React.FC = () => {
     return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
   };
 
-  // LÓGICA DEL QR: Prioriza la web si existe
+  // Lógica del destino del QR
   const getQRTarget = () => {
     if (profile?.website_url && profile.website_url.trim() !== '') {
         return profile.website_url;
@@ -79,6 +79,7 @@ const DigitalCard: React.FC = () => {
         <div className="absolute bottom-0 left-0 -mb-10 -ml-10 w-40 h-40 bg-blue-500 rounded-full opacity-20 blur-3xl"></div>
 
         <div className="p-8 flex flex-col items-center relative z-10">
+          {/* Avatar Superior */}
           <div className="w-20 h-20 bg-white/10 backdrop-blur-md rounded-full flex items-center justify-center text-3xl font-bold border border-white/20 mb-4 shadow-lg ring-4 ring-white/5 overflow-hidden">
             {profile?.logo_url ? (
                 <img src={profile.logo_url} alt="Logo" className="w-full h-full object-cover" />
@@ -92,23 +93,26 @@ const DigitalCard: React.FC = () => {
             {profile?.specialty || "Especialidad"}
           </p>
 
+          {/* CÓDIGO QR CON LOGO CENTRAL */}
           <div className="bg-white p-4 rounded-xl shadow-lg mb-6 transform hover:scale-105 transition-transform duration-300 relative">
             {(profile?.phone || profile?.website_url) ? (
-                <QRCode value={getQRTarget()} size={160} level="M" fgColor="#0f172a" />
+                <QRCode value={getQRTarget()} size={160} level="H" fgColor="#0f172a" /> // Level H para soportar el logo en medio
             ) : (
                 <div className="w-[160px] h-[160px] flex items-center justify-center text-slate-400 text-xs text-center p-2">
                     Configure su teléfono o web en ajustes.
                 </div>
             )}
             
-            {/* ICONO CENTRAL (Visual Feedback) */}
+            {/* EL CENTRO DEL QR (Logo o Icono) */}
             {(profile?.phone || profile?.website_url) && (
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    <div className="bg-white p-1.5 rounded-full shadow-sm border border-slate-100">
-                        {isWebTarget ? (
-                            <Globe className="text-blue-600 fill-current" size={20} />
+                    <div className="bg-white p-1 rounded-full shadow-sm border-2 border-white overflow-hidden w-10 h-10 flex items-center justify-center">
+                        {profile?.logo_url ? (
+                            <img src={profile.logo_url} alt="Brand" className="w-full h-full object-cover" />
+                        ) : isWebTarget ? (
+                            <Globe className="text-blue-600 fill-current" size={24} />
                         ) : (
-                            <MessageCircle className="text-[#25D366] fill-current" size={20} />
+                            <MessageCircle className="text-[#25D366] fill-current" size={24} />
                         )}
                     </div>
                 </div>
@@ -134,7 +138,7 @@ const DigitalCard: React.FC = () => {
 
       <div className="mt-8 flex gap-4 shrink-0">
         <button onClick={handleShare} className="flex-1 bg-brand-teal text-white py-4 rounded-xl font-bold shadow-lg shadow-teal-500/30 flex items-center justify-center gap-2 active:scale-95 transition-transform hover:bg-teal-600">
-          <Share2 size={20} /> Compartir
+          <Share2 size={20} /> Compartir Enlace
         </button>
         <button onClick={copyToClipboard} className="bg-white text-slate-600 border border-slate-200 p-4 rounded-xl shadow-sm active:bg-slate-50 transition-colors hover:border-brand-teal hover:text-brand-teal">
           <Copy size={20} />
