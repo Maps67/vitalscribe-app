@@ -22,12 +22,10 @@ const ConsultationView: React.FC = () => {
   const [hasConsent, setHasConsent] = useState(false);
   const [specialty, setSpecialty] = useState("Medicina General");
   
-  // PERFIL CON PLAN
   const [doctorProfile, setDoctorProfile] = useState<DoctorProfile>({ 
     full_name: 'Doctor', specialty: 'Medicina', license_number: '', phone: '', university: '', address: '', logo_url: '', signature_url: '', subscription_tier: 'basic' 
   });
 
-  // CHECK DE PLAN
   const isPro = doctorProfile.subscription_tier === 'pro' || doctorProfile.subscription_tier === 'enterprise';
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -51,7 +49,6 @@ const ConsultationView: React.FC = () => {
   const [isChatLoading, setIsChatLoading] = useState(false);
   const [sessionKey, setSessionKey] = useState<CryptoKey | null>(null);
 
-  // Modales
   const [isRxModalOpen, setIsRxModalOpen] = useState(false);
   const [rxText, setRxText] = useState('');
   const [isProcessingRx, setIsProcessingRx] = useState(false);
@@ -191,7 +188,6 @@ const ConsultationView: React.FC = () => {
     window.open(url, '_blank');
   };
 
-  // RECETA RAPIDA
   const handleGenerateRx = async () => {
       if(!transcript) return;
       setIsProcessingRx(true);
@@ -234,17 +230,9 @@ const ConsultationView: React.FC = () => {
   return (
     <div className="p-4 lg:p-6 max-w-6xl mx-auto space-y-4 flex flex-col h-[calc(100vh-4rem)] overflow-hidden">
       
-      {/* --- BARRA DE DIAGNÓSTICO (TEMPORAL) --- */}
-      <div className="bg-yellow-300 text-black font-bold text-center p-2 rounded-lg border-2 border-yellow-500 animate-pulse">
-        🔍 DEBUG MODE: Mi Plan es "{doctorProfile.subscription_tier}"
-      </div>
-      {/* --------------------------------------- */}
-
-      {/* Header */}
       <div className="flex flex-col gap-4 shrink-0">
         <div className="flex justify-between items-center">
             <h2 className="text-xl lg:text-2xl font-bold text-slate-800">Consulta Inteligente</h2>
-            {/* BADGE DE PLAN */}
             <div className="flex items-center gap-2">
                 {!isPro && <span className="text-[10px] bg-slate-200 text-slate-500 px-2 py-1 rounded font-bold border border-slate-300">PLAN BÁSICO</span>}
                 {isPro && <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-1 rounded font-bold flex items-center gap-1 border border-amber-200"><Crown size={10}/> PRO</span>}
@@ -253,7 +241,6 @@ const ConsultationView: React.FC = () => {
                 </div>
             </div>
         </div>
-        {/* ... resto del header ... */}
         <div className="flex flex-col lg:flex-row gap-3 lg:gap-4">
             <div className="relative flex-1">
                 <div className={`flex items-center bg-white border rounded-lg px-3 py-2 shadow-sm ${selectedPatient ? 'border-green-500 bg-green-50' : 'border-slate-200'}`}>
@@ -282,7 +269,6 @@ const ConsultationView: React.FC = () => {
         {patientContext && <div className="bg-blue-50 border border-blue-100 p-2 rounded text-xs text-blue-700 flex items-center gap-2 animate-fade-in-up"><History size={14} /><span><strong>Contexto Activo:</strong> La IA considerará el historial previo.</span></div>}
       </div>
 
-      {/* Contenido Principal */}
       <div className="flex flex-col lg:grid lg:grid-cols-2 gap-6 flex-1 min-h-0 overflow-hidden">
         <div className={`bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col overflow-hidden lg:h-full transition-all duration-300 ${generatedRecord ? 'h-[30vh]' : 'flex-1'}`}>
           <div className="p-3 bg-orange-50 border-b border-orange-100 flex items-center gap-2 shrink-0">
@@ -345,9 +331,7 @@ const ConsultationView: React.FC = () => {
                           <div className="flex-1 p-4 bg-green-50/30 overflow-y-auto">
                             <textarea className="w-full h-full bg-transparent outline-none resize-none text-sm text-slate-700 font-medium" value={patientInstructions} onChange={(e) => setPatientInstructions(e.target.value)} />
                           </div>
-                          
                           <div className="p-3 border-t border-slate-100 flex flex-wrap justify-end items-center gap-2 bg-white shrink-0">
-                            {/* BOTONES CON CANDADO */}
                             <button onClick={sendToWhatsApp} className={`px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-colors shadow-sm flex-1 justify-center md:flex-none ${isPro ? 'bg-[#25D366] text-white hover:bg-green-600' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}>
                                 {!isPro && <Lock size={12}/>} <Send size={14}/> WhatsApp
                             </button>
@@ -390,8 +374,6 @@ const ConsultationView: React.FC = () => {
           </div>
         </div>
       </div>
-
-      {/* MODAL RECETA RÁPIDA */}
       {isRxModalOpen && (
             <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
                 <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
