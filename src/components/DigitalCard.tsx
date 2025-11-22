@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import QRCode from 'react-qr-code';
 import { supabase } from '../lib/supabase';
-import { Share2, Copy, Phone, Globe, MapPin, Check } from 'lucide-react';
+import { Share2, Copy, Phone, Hash, ShieldCheck, Activity, MessageCircle } from 'lucide-react';
 
 const DigitalCard: React.FC = () => {
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     loadProfile();
@@ -20,140 +19,135 @@ const DigitalCard: React.FC = () => {
         .select('*')
         .eq('id', user.id)
         .single();
-      // Usamos datos del perfil o fallbacks elegantes si están vacíos
-      setProfile(data || { full_name: 'Doctor', specialty: 'Medicina General', phone: '' });
+      setProfile(data || { full_name: 'Doctor', specialty: 'Medicina', phone: '', license_number: '' });
     }
     setLoading(false);
   };
 
-  // Generar formato vCard para guardar contacto al escanear
-  const generateVCard = () => {
-    if (!profile) return '';
-    return `BEGIN:VCARD
-VERSION:3.0
-FN:Dr. ${profile.full_name}
-ORG:MediScribe Specialist
-TEL:${profile.phone || ''}
-TITLE:${profile.specialty}
-NOTE:Generado con MediScribe AI
-END:VCARD`;
+  // LÓGICA INTELIGENTE: Convertir cualquier formato de teléfono a formato WhatsApp
+  const getWhatsAppLink = () => {
+    if (!profile?.phone) return '';
+    
+    // 1. Limpiar el número (quitar espacios, guiones, paréntesis)
+    const cleanPhone = profile.phone.replace(/\D/g, ''); 
+    
+    // 2. Crear mensaje personalizado
+    const message = `Hola Dr. ${profile.full_name}, quisiera agendar una cita o solicitar información.`;
+    
+    // 3. Generar Link Universal
+    return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
   };
 
   const handleShare = async () => {
+    const waLink = getWhatsAppLink();
     if (navigator.share) {
       try {
         await navigator.share({
-          title: `Tarjeta Digital - Dr. ${profile?.full_name}`,
-          text: `Agenda una cita con el Dr. ${profile?.full_name}`,
-          url: window.location.href,
+          title: `Contacto Dr. ${profile?.full_name}`,
+          text: `Agenda una cita conmigo aquí:`,
+          url: waLink || window.location.href,
         });
       } catch (error) {
         console.log('Error compartiendo', error);
       }
     } else {
-      handleCopyLink();
+      alert("Copia el enlace manualmente.");
     }
   };
 
-  const handleCopyLink = () => {
-    navigator.clipboard.writeText(window.location.href);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const copyToClipboard = () => {
+      const waLink = getWhatsAppLink();
+      navigator.clipboard.writeText(waLink);
+      alert("Enlace de WhatsApp copiado al portapapeles.");
   };
 
-  if (loading) return <div className="flex justify-center items-center h-full text-slate-400">Cargando perfil...</div>;
+  if (loading) return (
+    <div className="flex justify-center items-center h-[calc(100vh-4rem)] text-slate-400 gap-2">
+        <Activity className="animate-spin" /> Cargando tarjeta...
+    </div>
+  );
 
   return (
-    <div className="p-4 max-w-md mx-auto min-h-[calc(100vh-4rem)] flex flex-col justify-center bg-slate-50">
+    <div className="p-4 md:p-6 max-w-md mx-auto h-[calc(100vh-4rem)] flex flex-col justify-center overflow-y-auto">
       
-      {/* Título Superior */}
-      <div className="text-center mb-6">
-        <h2 className="text-xl font-bold text-slate-800">Tu Tarjeta Digital</h2>
-        <p className="text-slate-500 text-xs">Comparte tu perfil profesional</p>
+      <div className="text-center mb-6 shrink-0">
+        <h2 className="text-2xl font-bold text-slate-800">Tarjeta Digital</h2>
+        <p className="text-slate-500 text-sm">Muestre este código para que sus pacientes le escriban.</p>
       </div>
 
-      {/* TARJETA PRINCIPAL (Estilo Reference) */}
-      <div className="bg-white rounded-3xl shadow-xl overflow-hidden w-full relative">
+      {/* TARJETA VISUAL */}
+      <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl shadow-2xl overflow-hidden text-white relative shrink-0">
         
-        {/* 1. Encabezado Degradado (Azul a Verde Clínico) */}
-        <div className="h-32 bg-gradient-to-r from-blue-600 to-teal-400 w-full"></div>
+        {/* Decoración */}
+        <div className="absolute top-0 right-0 -mt-10 -mr-10 w-40 h-40 bg-brand-teal rounded-full opacity-20 blur-3xl"></div>
+        <div className="absolute bottom-0 left-0 -mb-10 -ml-10 w-40 h-40 bg-blue-500 rounded-full opacity-20 blur-3xl"></div>
 
-        {/* 2. Contenido de la Tarjeta */}
-        <div className="px-6 pb-8 relative">
-          
-          {/* Foto de Perfil (Superpuesta) */}
-          <div className="flex justify-center -mt-16 mb-4">
-            <div className="w-28 h-28 bg-white rounded-full p-1 shadow-md">
-                <div className="w-full h-full bg-slate-100 rounded-full flex items-center justify-center overflow-hidden border border-slate-100">
-                    {/* Aquí iría una etiqueta <img /> si tuvieran foto, por ahora usamos inicial */}
-                    <span className="text-4xl font-bold text-slate-400">
-                        {profile?.full_name?.charAt(0) || 'D'}
-                    </span>
-                </div>
-            </div>
+        <div className="p-8 flex flex-col items-center relative z-10">
+          {/* Avatar */}
+          <div className="w-20 h-20 bg-white/10 backdrop-blur-md rounded-full flex items-center justify-center text-3xl font-bold border border-white/20 mb-4 shadow-lg ring-4 ring-white/5 overflow-hidden">
+            {profile?.logo_url ? (
+                <img src={profile.logo_url} alt="Logo" className="w-full h-full object-cover" />
+            ) : (
+                <span>{profile?.full_name?.charAt(0) || 'D'}</span>
+            )}
           </div>
 
-          {/* Nombre y Especialidad */}
-          <div className="text-center mb-6">
-            <h3 className="text-2xl font-bold text-slate-800">Dr. {profile?.full_name}</h3>
-            <p className="text-teal-600 font-medium text-sm mt-1">{profile?.specialty || "Especialidad Médica"}</p>
-            <p className="text-slate-400 text-xs mt-1">Ced. Prof. {profile?.license_number || "En trámite"}</p>
+          <h3 className="text-xl font-bold mb-1 text-center">Dr. {profile?.full_name || "Su Nombre"}</h3>
+          <p className="text-brand-teal font-medium text-sm uppercase tracking-wider mb-6 bg-brand-teal/10 px-3 py-1 rounded-full border border-brand-teal/20">
+            {profile?.specialty || "Especialidad"}
+          </p>
+
+          {/* CÓDIGO QR (APUNTA A WHATSAPP) */}
+          <div className="bg-white p-4 rounded-xl shadow-lg mb-6 transform hover:scale-105 transition-transform duration-300 relative">
+            {profile?.phone ? (
+                <QRCode 
+                value={getWhatsAppLink()} 
+                size={160} 
+                level="M" 
+                fgColor="#0f172a" 
+                />
+            ) : (
+                <div className="w-[160px] h-[160px] flex items-center justify-center text-slate-400 text-xs text-center">
+                    Configure su teléfono en Ajustes para ver el QR
+                </div>
+            )}
+            {/* Icono de WA en el centro (Overlay visual) */}
+            {profile?.phone && (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <div className="bg-white p-1 rounded-full">
+                        <MessageCircle className="text-[#25D366] fill-current" size={24} />
+                    </div>
+                </div>
+            )}
           </div>
 
-          {/* Lista de Contacto (Estilo Reference) */}
-          <div className="space-y-4 mb-8 px-2">
-            <div className="flex items-center gap-4 text-slate-600">
-                <div className="w-8 h-8 rounded-full bg-teal-50 flex items-center justify-center text-teal-600 shrink-0">
-                    <Phone size={16} />
-                </div>
-                <span className="text-sm font-medium">{profile?.phone || "+52 (55) 0000 0000"}</span>
+          {/* Datos */}
+          <div className="w-full space-y-3 text-sm">
+            <div className="flex items-center gap-3 bg-white/5 p-3 rounded-lg border border-white/10 hover:bg-white/10 transition-colors">
+                <Phone size={16} className="text-brand-teal"/>
+                <span className="font-mono">{profile?.phone || "Sin teléfono"}</span>
             </div>
-            
-            <div className="flex items-center gap-4 text-slate-600">
-                <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center text-blue-600 shrink-0">
-                    <Globe size={16} />
-                </div>
-                <span className="text-sm font-medium">www.mediscribe-demo.com</span>
-            </div>
-
-            <div className="flex items-center gap-4 text-slate-600">
-                <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 shrink-0">
-                    <MapPin size={16} />
-                </div>
-                <span className="text-sm font-medium">Hospital Ángeles, Consultorio 404</span>
+            <div className="flex items-center gap-3 bg-white/5 p-3 rounded-lg border border-white/10 hover:bg-white/10 transition-colors">
+                <ShieldCheck size={16} className="text-brand-teal"/>
+                <span className="text-xs opacity-80">Cédula: {profile?.license_number || "Pendiente"}</span>
             </div>
           </div>
-
-          {/* Código QR */}
-          <div className="flex flex-col items-center justify-center">
-             <QRCode 
-              value={generateVCard()} 
-              size={140} 
-              level="M" 
-              fgColor="#1e293b"
-            />
-            <p className="text-xs text-slate-400 mt-2">Escanea para guardar o ver perfil</p>
-          </div>
-
         </div>
       </div>
 
-      {/* SECCIÓN COMPARTIR (Botones Externos como la referencia) */}
-      <div className="mt-6 grid grid-cols-2 gap-4">
+      {/* ACCIONES */}
+      <div className="mt-8 flex gap-4 shrink-0">
         <button 
           onClick={handleShare}
-          className="flex items-center justify-center gap-2 bg-white border border-slate-200 text-slate-700 py-3 px-4 rounded-xl shadow-sm font-semibold text-sm active:bg-slate-50 transition-colors"
+          className="flex-1 bg-brand-teal text-white py-4 rounded-xl font-bold shadow-lg shadow-teal-500/30 flex items-center justify-center gap-2 active:scale-95 transition-transform hover:bg-teal-600"
         >
-          <Share2 size={18} className="text-teal-600"/>
-          Compartir Link
+          <Share2 size={20} /> Compartir Enlace
         </button>
-
         <button 
-          onClick={handleCopyLink}
-          className="flex items-center justify-center gap-2 bg-white border border-slate-200 text-slate-700 py-3 px-4 rounded-xl shadow-sm font-semibold text-sm active:bg-slate-50 transition-colors"
+          className="bg-white text-slate-600 border border-slate-200 p-4 rounded-xl shadow-sm active:bg-slate-50 transition-colors hover:border-brand-teal hover:text-brand-teal"
+          onClick={copyToClipboard}
         >
-          {copied ? <Check size={18} className="text-green-600"/> : <Copy size={18} className="text-blue-600"/>}
-          {copied ? "¡Copiado!" : "Copiar URL"}
+          <Copy size={20} />
         </button>
       </div>
 
