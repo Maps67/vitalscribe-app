@@ -22,3 +22,18 @@ body {
   background: #cbd5e1;
   border-radius: 4px;
 }
+
+/* Agrega esto al final: */
+html {
+  scroll-behavior: smooth;
+  -webkit-tap-highlight-color: transparent; /* Quita el brillo azul al tocar botones en móvil */
+}
+
+/* Ocultar barra de scroll en contenedores horizontales (Action Board) */
+.scrollbar-hide::-webkit-scrollbar {
+    display: none;
+}
+.scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}

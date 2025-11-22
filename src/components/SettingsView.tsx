@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Save, User, Stethoscope, Hash, Phone, MapPin, BookOpen, Image as ImageIcon, PenTool } from 'lucide-react';
+import { Save, User, Stethoscope, Hash, Phone, MapPin, BookOpen, Upload, Image as ImageIcon, PenTool, Globe } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 const SettingsView: React.FC = () => {
@@ -18,6 +18,9 @@ const SettingsView: React.FC = () => {
   const [address, setAddress] = useState('');
   const [logoUrl, setLogoUrl] = useState('');
   const [signatureUrl, setSignatureUrl] = useState('');
+  
+  // Nuevo campo: Web Externa
+  const [websiteUrl, setWebsiteUrl] = useState('');
 
   useEffect(() => {
     getProfile();
@@ -43,6 +46,7 @@ const SettingsView: React.FC = () => {
         setAddress(data.address || '');
         setLogoUrl(data.logo_url || '');
         setSignatureUrl(data.signature_url || '');
+        setWebsiteUrl(data.website_url || '');
       }
     } catch (error) {
       console.error('Error cargando perfil:', error);
@@ -51,7 +55,6 @@ const SettingsView: React.FC = () => {
     }
   };
 
-  // Función para subir imágenes al bucket 'clinic-assets'
   const uploadImage = async (event: React.ChangeEvent<HTMLInputElement>, type: 'logo' | 'signature') => {
     try {
       setUploading(true);
@@ -61,29 +64,24 @@ const SettingsView: React.FC = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("No usuario");
 
-      // Crear nombre único para evitar caché: uid/tipo-timestamp.ext
       const fileExt = file.name.split('.').pop();
       const fileName = `${user.id}/${type}-${Date.now()}.${fileExt}`;
 
-      // 1. Subir archivo
       const { error: uploadError } = await supabase.storage
         .from('clinic-assets')
         .upload(fileName, file, { upsert: true });
 
       if (uploadError) throw uploadError;
 
-      // 2. Obtener URL pública
       const { data: { publicUrl } } = supabase.storage
         .from('clinic-assets')
         .getPublicUrl(fileName);
 
-      // 3. Actualizar estado visual
       if (type === 'logo') setLogoUrl(publicUrl);
       else setSignatureUrl(publicUrl);
 
     } catch (error) {
-      alert("Error al subir imagen. Intente con un archivo más pequeño.");
-      console.error(error);
+      alert("Error subiendo imagen.");
     } finally {
       setUploading(false);
     }
@@ -102,10 +100,11 @@ const SettingsView: React.FC = () => {
         specialty,
         license_number: license,
         phone,
-        university,      // Nuevo
-        address,         // Nuevo
-        logo_url: logoUrl,           // Nuevo
-        signature_url: signatureUrl, // Nuevo
+        university,
+        address,
+        logo_url: logoUrl,
+        signature_url: signatureUrl,
+        website_url: websiteUrl, // Guardamos el link
         updated_at: new Date(),
       };
 
@@ -113,7 +112,6 @@ const SettingsView: React.FC = () => {
       if (error) throw error;
       
       alert("Perfil actualizado correctamente");
-      // Recargar para que los cambios se reflejen en toda la app
       window.location.reload();
     } catch (error) {
       alert("Error al guardar.");
@@ -122,7 +120,7 @@ const SettingsView: React.FC = () => {
     }
   };
 
-  if (loading) return <div className="p-10 text-center text-slate-400">Cargando configuración...</div>;
+  if (loading) return <div className="p-10 text-center text-slate-400">Cargando perfil...</div>;
 
   return (
     <div className="p-6 max-w-5xl mx-auto pb-20">
@@ -131,9 +129,8 @@ const SettingsView: React.FC = () => {
       
       <form onSubmit={updateProfile} className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        {/* COLUMNA IZQUIERDA: DATOS TEXTO */}
+        {/* COLUMNA 1 */}
         <div className="lg:col-span-2 space-y-6">
-            {/* Identidad */}
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                 <div className="p-4 bg-slate-50 border-b border-slate-100 font-bold text-slate-700 flex items-center gap-2">
                     <User size={18} className="text-brand-teal"/> Identidad Profesional
@@ -161,36 +158,46 @@ const SettingsView: React.FC = () => {
                         <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Universidad / Institución</label>
                         <div className="flex items-center border border-slate-200 rounded-lg px-3 bg-white focus-within:ring-2 focus-within:ring-brand-teal">
                             <BookOpen size={16} className="text-slate-400 mr-2"/>
-                            <input type="text" required value={university} onChange={e => setUniversity(e.target.value)} className="w-full py-3 outline-none" placeholder="Ej. UNAM, U. de Guadalajara..." />
+                            <input type="text" required value={university} onChange={e => setUniversity(e.target.value)} className="w-full py-3 outline-none" placeholder="Ej. UNAM" />
                         </div>
                     </div>
                 </div>
             </div>
 
-            {/* Ubicación */}
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                 <div className="p-4 bg-slate-50 border-b border-slate-100 font-bold text-slate-700 flex items-center gap-2">
-                    <MapPin size={18} className="text-brand-teal"/> Contacto y Ubicación
+                    <MapPin size={18} className="text-brand-teal"/> Contacto y Web
                 </div>
                 <div className="p-6 space-y-4">
-                    <div>
-                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Teléfono Consultorio</label>
-                        <div className="flex items-center border border-slate-200 rounded-lg px-3 bg-white focus-within:ring-2 focus-within:ring-brand-teal">
-                            <Phone size={16} className="text-slate-400 mr-2"/>
-                            <input type="text" value={phone} onChange={e => setPhone(e.target.value)} className="w-full py-3 outline-none" placeholder="55 1234 5678" />
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Teléfono Consultorio</label>
+                            <div className="flex items-center border border-slate-200 rounded-lg px-3 bg-white focus-within:ring-2 focus-within:ring-brand-teal">
+                                <Phone size={16} className="text-slate-400 mr-2"/>
+                                <input type="text" value={phone} onChange={e => setPhone(e.target.value)} className="w-full py-3 outline-none" placeholder="55 1234 5678" />
+                            </div>
+                        </div>
+                        
+                        {/* CAMPO NUEVO WEB */}
+                        <div>
+                            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Tarjeta Digital / Web</label>
+                            <div className="flex items-center border border-slate-200 rounded-lg px-3 bg-white focus-within:ring-2 focus-within:ring-brand-teal">
+                                <Globe size={16} className="text-slate-400 mr-2"/>
+                                <input type="url" value={websiteUrl} onChange={e => setWebsiteUrl(e.target.value)} className="w-full py-3 outline-none" placeholder="https://misitio.com" />
+                            </div>
                         </div>
                     </div>
+
                     <div>
-                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Dirección Completa (Consultorio)</label>
-                        <textarea rows={3} value={address} onChange={e => setAddress(e.target.value)} className="w-full p-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-brand-teal outline-none resize-none" placeholder="Calle, Número, Colonia, Ciudad, Estado, CP." />
+                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Dirección Completa</label>
+                        <textarea rows={3} value={address} onChange={e => setAddress(e.target.value)} className="w-full p-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-brand-teal outline-none resize-none" placeholder="Calle, Número, Colonia..." />
                     </div>
                 </div>
             </div>
         </div>
 
-        {/* COLUMNA DERECHA: IMÁGENES */}
+        {/* COLUMNA 2: IMÁGENES */}
         <div className="space-y-6">
-            {/* Logo */}
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                 <div className="p-4 bg-slate-50 border-b border-slate-100 font-bold text-slate-700 flex items-center gap-2">
                     <ImageIcon size={18} className="text-brand-teal"/> Logo Clínica
@@ -213,11 +220,10 @@ const SettingsView: React.FC = () => {
                             className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" 
                         />
                     </div>
-                    <p className="text-xs text-slate-500">Sube tu logo (PNG transparente).</p>
+                    <p className="text-xs text-slate-500">PNG Transparente recomendado.</p>
                 </div>
             </div>
 
-            {/* Firma */}
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                 <div className="p-4 bg-slate-50 border-b border-slate-100 font-bold text-slate-700 flex items-center gap-2">
                     <PenTool size={18} className="text-brand-teal"/> Firma Digital
@@ -227,7 +233,7 @@ const SettingsView: React.FC = () => {
                         {signatureUrl ? (
                             <img src={signatureUrl} alt="Firma" className="w-full h-full object-contain" />
                         ) : (
-                            <span className="text-slate-400 text-xs italic">Sin firma</span>
+                            <span className="text-slate-400 text-xs italic">Subir firma</span>
                         )}
                         <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
                             <span className="text-white text-xs font-bold">Subir</span>
@@ -240,7 +246,7 @@ const SettingsView: React.FC = () => {
                             className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" 
                         />
                     </div>
-                    <p className="text-xs text-slate-500">Firma en papel blanco y toma foto.</p>
+                    <p className="text-xs text-slate-500">Foto de firma en hoja blanca.</p>
                 </div>
             </div>
 
