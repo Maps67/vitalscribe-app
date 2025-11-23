@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Mic, Square, Save, RefreshCw, FileText, Share2, Printer, Search, Calendar as CalendarIcon, X, Clock, MessageSquare, User, Send } from 'lucide-react';
+import { Mic, Square, Save, RefreshCw, FileText, Share2, Printer, Search, Calendar as CalendarIcon, X, Clock, MessageSquare, User, Send, AlertCircle } from 'lucide-react';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
 import { GeminiMedicalService } from '../services/GeminiMedicalService';
 import { supabase } from '../lib/supabase';
@@ -31,7 +31,7 @@ const ConsultationView: React.FC = () => {
   const [isAppointmentModalOpen, setIsAppointmentModalOpen] = useState(false);
   const [nextApptDate, setNextApptDate] = useState('');
 
-  // CHAT IA STATES (NUEVO)
+  // Chat IA
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [isChatting, setIsChatting] = useState(false);
@@ -42,7 +42,6 @@ const ConsultationView: React.FC = () => {
     fetchDoctorProfile();
   }, []);
 
-  // Scroll automático del chat
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages, activeTab]);
@@ -61,20 +60,21 @@ const ConsultationView: React.FC = () => {
   };
 
   const handleGenerate = async () => {
+    console.log("Botón Generar Presionado");
     if (!transcript) { toast.error("No hay audio."); return; }
     if (!consentGiven) { toast.warning("Confirme consentimiento."); return; }
 
     setIsProcessing(true);
-    toast.info("Analizando consulta...");
+    toast.info("Generando...");
     try {
       const response = await GeminiMedicalService.generateClinicalNote(transcript);
       setGeneratedNote(response);
       setActiveTab('record');
-      // Mensaje de bienvenida del chat con contexto
-      setChatMessages([{ role: 'ai', text: 'He analizado la consulta. ¿Tienes alguna pregunta sobre el diagnóstico o el tratamiento?' }]);
-      toast.success("Nota generada");
+      setChatMessages([{ role: 'ai', text: 'Nota generada. ¿Alguna pregunta sobre este caso?' }]);
+      toast.success("Éxito al generar");
     } catch (error) {
-      toast.error("Error al generar.");
+      console.error(error);
+      toast.error("Error al conectar con la IA.");
     } finally {
       setIsProcessing(false);
     }
@@ -85,29 +85,41 @@ const ConsultationView: React.FC = () => {
     setIsSaving(true);
     try {
         const { data: { user } } = await supabase.auth.getUser();
-        if(!user) return;
+        if(!user) {
+            toast.error("Sesión expirada. Recargue.");
+            return;
+        }
 
-        // Intentar guardar asegurando campos opcionales
-        const { error } = await supabase.from('consultations').insert({
+        console.log("Intentando guardar para:", selectedPatient.name);
+
+        const payload = {
             doctor_id: user.id,
             patient_id: selectedPatient.id,
-            transcript: transcript || '', // Fallback string vacío
-            summary: generatedNote.clinicalNote, // Usamos la nota como resumen principal
+            transcript: transcript || '', 
+            summary: generatedNote.clinicalNote, 
             status: 'completed'
-        });
+        };
+
+        const { error } = await supabase.from('consultations').insert(payload);
 
         if (error) {
+            // AQUÍ ESTÁ EL CAMBIO CLAVE: Mostramos el error real en pantalla
             console.error("Error Supabase:", error);
+            toast.error(`Error BD: ${error.message || error.details}`);
             throw error;
         }
-        toast.success("Guardado en historial");
+
+        toast.success("Guardado en historial correctamente");
         resetTranscript();
         setGeneratedNote(null);
         setSelectedPatient(null);
         setConsentGiven(false);
         setChatMessages([]);
-    } catch (error) {
-        toast.error("Error al guardar en base de datos.");
+    } catch (error: any) {
+        // Fallback si el error no vino de Supabase
+        if (!error.message?.includes("BD:")) {
+            toast.error("Error desconocido al guardar.");
+        }
     } finally {
         setIsSaving(false);
     }
@@ -123,7 +135,6 @@ const ConsultationView: React.FC = () => {
       setIsChatting(true);
 
       try {
-          // Crear contexto uniendo la nota y las instrucciones
           const context = `NOTA: ${generatedNote.clinicalNote}\n\nINSTRUCCIONES: ${generatedNote.patientInstructions}`;
           const reply = await GeminiMedicalService.chatWithContext(context, userMsg);
           setChatMessages(prev => [...prev, { role: 'ai', text: reply }]);
