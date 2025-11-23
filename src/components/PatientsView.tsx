@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Search, Plus, Phone, Calendar, User, X, Save, FileText, ChevronLeft, Clock, Trash2, Printer, Send, RefreshCw, Mic, Square, PenTool, Share2 } from 'lucide-react';
+import { Search, Plus, Phone, Calendar, User, X, Save, FileText, ChevronLeft, Trash2, Printer, Send, RefreshCw, Mic, Square, PenTool, Share2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Patient, Consultation } from '../types';
 import FormattedText from './FormattedText';
@@ -7,6 +7,8 @@ import { pdf } from '@react-pdf/renderer';
 import PrescriptionPDF from './PrescriptionPDF';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
 import { GeminiMedicalService } from '../services/GeminiMedicalService';
+// Importación del nuevo módulo
+import { PatientAttachments } from './PatientAttachments';
 
 const PatientsView: React.FC = () => {
   // --- ESTADOS ---
@@ -208,7 +210,7 @@ const PatientsView: React.FC = () => {
   const filteredPatients = patients.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()));
 
   // =================================================
-  // VISTA 1: DETALLE DEL PACIENTE (HISTORIAL)
+  // VISTA 1: DETALLE DEL PACIENTE (HISTORIAL + ADJUNTOS)
   // =================================================
   if (selectedPatient) {
     return (
@@ -222,6 +224,7 @@ const PatientsView: React.FC = () => {
             </button>
         </div>
 
+        {/* Tarjeta de Información del Paciente */}
         <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 mb-6 flex flex-col md:flex-row justify-between items-center gap-4">
            <div className="flex items-center gap-4">
               <div className="w-16 h-16 bg-brand-teal/10 text-brand-teal rounded-full flex items-center justify-center font-bold text-2xl border border-brand-teal/20">
@@ -239,6 +242,11 @@ const PatientsView: React.FC = () => {
              <Trash2 size={16} /> Eliminar Paciente
            </button>
         </div>
+
+        {/* --- NUEVO MÓDULO DE ADJUNTOS --- */}
+        <PatientAttachments patientId={selectedPatient.id} />
+        <div className="mb-8"></div>
+        {/* ------------------------------- */}
 
         <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2"><FileText className="text-brand-teal" size={20} /> Historial ({history.length})</h3>
 
@@ -300,10 +308,10 @@ const PatientsView: React.FC = () => {
                                 )}
                                 <div className="flex gap-4 w-full max-w-xs">
                                     <button onClick={isListening ? stopListening : startListening} className={`flex-1 py-3 rounded-xl font-bold flex justify-center items-center gap-2 transition-all ${isListening ? 'bg-white border-2 border-red-100 text-red-500 hover:bg-red-50' : 'bg-slate-900 text-white hover:bg-slate-800 shadow-lg'}`}>
-                                        {isListening ? <><Square size={18}/> Detener</> : <><Mic size={18}/> Iniciar Dictado</>}
+                                            {isListening ? <><Square size={18}/> Detener</> : <><Mic size={18}/> Iniciar Dictado</>}
                                     </button>
                                     <button onClick={handleGenerateRx} disabled={!transcript || isListening} className="flex-1 bg-brand-teal text-white py-3 rounded-xl font-bold shadow-lg hover:bg-teal-600 disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2">
-                                        {isProcessingRx ? <RefreshCw className="animate-spin" size={18}/> : <RefreshCw size={18}/>} Generar
+                                            {isProcessingRx ? <RefreshCw className="animate-spin" size={18}/> : <RefreshCw size={18}/>} Generar
                                     </button>
                                 </div>
                             </div>
