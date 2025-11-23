@@ -1,36 +1,17 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import { GeminiResponse } from "../types";
 
 const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
+
 if (!API_KEY) {
   console.error("Falta la VITE_GEMINI_API_KEY en el archivo .env");
 }
 
-const genAI = new GoogleGenerativeAI(API_KEY);
-
-// Configuración de reintento inteligente
-async function generateWithFallback(prompt: string, isJson: boolean = true) {
-  // Intento 1: Usar el modelo FLASH (Rápido y económico)
-  try {
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-    const result = await model.generateContent(prompt);
-    return result.response;
-  } catch (error: any) {
-    console.warn("Fallo el modelo Flash, intentando con Pro...", error);
-    
-    // Intento 2: Si falla (Error 404/503), usar el modelo PRO (Estándar robusto)
-    if (error.message?.includes('404') || error.message?.includes('not found')) {
-       const fallbackModel = genAI.getGenerativeModel({ model: "gemini-pro" });
-       const result = await fallbackModel.generateContent(prompt);
-       return result.response;
-    }
-    throw error; // Si es otro error (ej. sin internet), lanzarlo.
-  }
-}
+// URL directa a la API REST de Google (Bypasseando la librería para evitar errores de versión)
+const BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
 
 export const GeminiMedicalService = {
   
-  // 1. Generar Nota SOAP
+  // 1. Generar Nota SOAP (Modo Fetch Directo)
   async generateClinicalNote(transcript: string): Promise<GeminiResponse> {
     try {
       const prompt = `
@@ -49,19 +30,43 @@ export const GeminiMedicalService = {
         Responde SOLO con el JSON válido, sin bloques de código markdown.
       `;
 
-      // Usamos la función con fallback
-      const response = await generateWithFallback(prompt);
-      const text = response.text();
-      
+      // PETICIÓN DIRECTA SIN SDK
+      const response = await fetch(`${BASE_URL}?key=${API_KEY}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          contents: [{
+            parts: [{ text: prompt }]
+          }]
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error("Error API Google:", errorData);
+        throw new Error(`Error ${response.status}: ${errorData.error?.message || 'Fallo en la petición'}`);
+      }
+
+      const data = await response.json();
+      // La estructura de respuesta REST es: data.candidates[0].content.parts[0].text
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+
+      if (!text) throw new Error("La IA respondió vacío.");
+
+      // Limpieza de JSON
       const cleanJson = text.replace(/```json/g, '').replace(/```/g, '').trim();
+      
       return JSON.parse(cleanJson) as GeminiResponse;
+
     } catch (error) {
-      console.error("Error FATAL en Gemini Service:", error);
+      console.error("Error FATAL en Gemini Service (Fetch):", error);
       throw error;
     }
   },
 
-  // 2. Generar solo Receta
+  // 2. Generar solo Receta (Modo Fetch Directo)
   async generatePrescriptionOnly(transcript: string): Promise<string> {
     try {
       const prompt = `
@@ -70,8 +75,19 @@ export const GeminiMedicalService = {
         Formato texto plano.
       `;
 
-      const response = await generateWithFallback(prompt, false);
-      return response.text();
+      const response = await fetch(`${BASE_URL}?key=${API_KEY}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }]
+        })
+      });
+
+      if (!response.ok) throw new Error("Error al generar receta");
+
+      const data = await response.json();
+      return data.candidates?.[0]?.content?.parts?.[0]?.text || "No se pudo generar receta.";
+
     } catch (error) {
       console.error("Error generando receta:", error);
       throw error;
