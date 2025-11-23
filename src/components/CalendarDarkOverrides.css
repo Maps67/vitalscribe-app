@@ -1,0 +1,20 @@
+/* Ajustes para React Big Calendar en Modo Oscuro */
+.dark .rbc-btn-group button {
+    color: #e2e8f0; /* Texto claro */
+    background-color: #1e293b; /* Fondo oscuro */
+    border-color: #334155;
+}
+.dark .rbc-btn-group button:hover {
+    background-color: #334155;
+}
+.dark .rbc-btn-group button.rbc-active {
+    background-color: #0d9488; /* Brand Teal */
+    color: white;
+    border-color: #0d9488;
+}
+.dark .rbc-header {
+    color: #cbd5e1; /* Texto cabecera */
+}
+.dark .rbc-off-range-bg {
+    background-color: #0f172a; /* Días fuera de rango */
+}

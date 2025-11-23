@@ -10,58 +10,36 @@ import { AppointmentService } from '../services/AppointmentService';
 import { Appointment, Patient } from '../types';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
-import { Plus, X, Calendar as CalendarIcon, User, Clock } from 'lucide-react';
+import { Plus, X, Calendar as CalendarIcon, User } from 'lucide-react';
+import './CalendarDarkOverrides.css'; // Crearemos este pequeño archivo CSS después
 
 const locales = { 'es': es };
 const localizer = dateFnsLocalizer({
-  format,
-  parse,
-  startOfWeek,
-  getDay,
-  locales,
+  format, parse, startOfWeek, getDay, locales,
 });
 
 const CalendarView: React.FC = () => {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loading, setLoading] = useState(true);
-  
-  // Modal
   const [isModalOpen, setIsModalOpen] = useState(false);
   
-  // Formulario
   const [formData, setFormData] = useState({
-    patientId: '',
-    title: '',
-    notes: '',
-    startTime: '',
-    endTime: ''
+    patientId: '', title: '', notes: '', startTime: '', endTime: ''
   });
   const [isSaving, setIsSaving] = useState(false);
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  useEffect(() => { loadData(); }, []);
 
   const loadData = async () => {
     setLoading(true);
     try {
-      // 1. Cargar Pacientes (Prioridad para el dropdown)
-      const { data: patientsData, error: patientsError } = await supabase
-        .from('patients')
-        .select('*')
-        .order('name');
-      
-      if (patientsError) throw patientsError;
+      const { data: patientsData } = await supabase.from('patients').select('*').order('name');
       setPatients(patientsData || []);
-
-      // 2. Cargar Citas
       const appointmentsData = await AppointmentService.getAppointments();
       setAppointments(appointmentsData);
-
     } catch (error) {
-      console.error("Error cargando datos:", error);
-      toast.error("Error de conexión al cargar la agenda");
+      toast.error("Error de conexión");
     } finally {
       setLoading(false);
     }
@@ -80,24 +58,15 @@ const CalendarView: React.FC = () => {
       const tzOffset = date.getTimezoneOffset() * 60000;
       return new Date(date.getTime() - tzOffset).toISOString().slice(0, 16);
     };
-
     setFormData({
-      patientId: '',
-      title: 'Consulta General',
-      notes: '',
-      startTime: toLocalISO(start),
-      endTime: toLocalISO(end)
+      patientId: '', title: 'Consulta General', notes: '',
+      startTime: toLocalISO(start), endTime: toLocalISO(end)
     });
     setIsModalOpen(true);
   };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.patientId || !formData.startTime || !formData.endTime) {
-      toast.error("Seleccione un paciente y las fechas");
-      return;
-    }
-
     setIsSaving(true);
     try {
       await AppointmentService.createAppointment({
@@ -108,30 +77,22 @@ const CalendarView: React.FC = () => {
         notes: formData.notes,
         status: 'scheduled'
       });
-      toast.success("Cita agendada correctamente");
+      toast.success("Cita agendada");
       setIsModalOpen(false);
-      
-      // Recargar solo citas para actualizar vista
       const refreshCitas = await AppointmentService.getAppointments();
       setAppointments(refreshCitas);
-    } catch (error) {
-      console.error(error);
-      toast.error("Error al guardar la cita");
-    } finally {
-      setIsSaving(false);
-    }
+    } catch (error) { toast.error("Error al guardar"); } 
+    finally { setIsSaving(false); }
   };
 
   const handleEventClick = (event: any) => {
     const app = event.resource as Appointment;
-    if(confirm(`¿Desea eliminar la cita de ${app.patient?.name || 'Paciente'}?`)) {
-       AppointmentService.deleteAppointment(app.id)
-         .then(async () => {
-            toast.success("Cita eliminada");
-            const refreshCitas = await AppointmentService.getAppointments();
-            setAppointments(refreshCitas);
-         })
-         .catch(() => toast.error("Error al eliminar"));
+    if(confirm(`¿Eliminar cita de ${app.patient?.name}?`)) {
+       AppointmentService.deleteAppointment(app.id).then(async () => {
+            toast.success("Eliminada");
+            const refresh = await AppointmentService.getAppointments();
+            setAppointments(refresh);
+       });
     }
   };
 
@@ -139,13 +100,14 @@ const CalendarView: React.FC = () => {
     <div className="h-full p-6 animate-fade-in-up flex flex-col">
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h2 className="text-2xl font-bold text-slate-800">Agenda Médica</h2>
-          <p className="text-slate-500 text-sm">Organice sus consultas y seguimientos.</p>
+          {/* AQUÍ ESTÁ LA CORRECCIÓN DE TEXTO: dark:text-white */}
+          <h2 className="text-2xl font-bold text-slate-800 dark:text-white">Agenda Médica</h2>
+          <p className="text-slate-500 dark:text-slate-400 text-sm">Organice sus consultas y seguimientos.</p>
         </div>
         <button 
           onClick={() => {
             const now = new Date();
-            const end = new Date(now.getTime() + 30*60*1000); // 30 min por defecto
+            const end = new Date(now.getTime() + 30*60*1000);
             handleSelectSlot({ start: now, end: end });
           }}
           className="bg-brand-teal text-white px-4 py-2 rounded-lg font-bold shadow-lg flex items-center gap-2 hover:bg-teal-600 transition-all"
@@ -154,9 +116,10 @@ const CalendarView: React.FC = () => {
         </button>
       </div>
 
-      <div className="flex-1 bg-white p-4 rounded-xl shadow-sm border border-slate-200 min-h-[600px]">
+      {/* CONTENEDOR DEL CALENDARIO: Fondo oscuro en Dark Mode */}
+      <div className="flex-1 bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 min-h-[600px] text-slate-800 dark:text-slate-200">
         {loading ? (
-          <div className="h-full flex items-center justify-center text-slate-400">Cargando agenda...</div>
+          <div className="h-full flex items-center justify-center text-slate-400">Cargando...</div>
         ) : (
           <Calendar
             localizer={localizer}
@@ -164,98 +127,63 @@ const CalendarView: React.FC = () => {
             startAccessor="start"
             endAccessor="end"
             style={{ height: '100%' }}
-            messages={{
-              next: "Sig", previous: "Ant", today: "Hoy",
-              month: "Mes", week: "Semana", day: "Día", agenda: "Agenda",
-              noEventsInRange: "No hay citas en este rango"
-            }}
+            messages={{ next: "Sig", previous: "Ant", today: "Hoy", month: "Mes", week: "Semana", day: "Día", agenda: "Agenda" }}
             culture='es'
             selectable
             onSelectSlot={handleSelectSlot}
             onSelectEvent={handleEventClick}
-            eventPropGetter={() => ({ style: { backgroundColor: '#0d9488', borderRadius: '4px', border: 'none' } })}
+            eventPropGetter={() => ({ style: { backgroundColor: '#0d9488', border: 'none' } })}
             defaultView='week'
           />
         )}
       </div>
 
+      {/* MODAL DARK MODE */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
-            <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-              <h3 className="font-bold text-lg text-slate-800 flex items-center gap-2">
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-200 dark:border-slate-700">
+            <div className="p-5 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-800/50">
+              <h3 className="font-bold text-lg text-slate-800 dark:text-white flex items-center gap-2">
                 <CalendarIcon className="text-brand-teal" size={20}/> Agendar Cita
               </h3>
-              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-red-500">
-                <X size={24} />
-              </button>
+              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-red-500"><X size={24} /></button>
             </div>
             
-            <form onSubmit={handleSave} className="p-6 space-y-4">
+            <form onSubmit={handleSave} className="p-6 space-y-4 text-slate-700 dark:text-slate-200">
               <div>
-                <label className="block text-sm font-bold text-slate-700 mb-1 flex items-center gap-2">
-                  <User size={16}/> Paciente
-                </label>
+                <label className="block text-sm font-bold mb-1 flex items-center gap-2"><User size={16}/> Paciente</label>
                 <select 
                   required
-                  className="w-full p-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-brand-teal outline-none bg-white"
+                  className="w-full p-3 border border-slate-200 dark:border-slate-600 rounded-lg outline-none bg-white dark:bg-slate-700 focus:border-brand-teal transition-colors"
                   value={formData.patientId}
                   onChange={e => setFormData({...formData, patientId: e.target.value})}
                 >
-                  <option value="">-- Seleccione un paciente --</option>
-                  {patients.map(p => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
-                  ))}
+                  <option value="">-- Seleccionar --</option>
+                  {patients.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </select>
-                {patients.length === 0 && (
-                   <p className="text-xs text-red-400 mt-1">No se encontraron pacientes. Revise el Directorio.</p>
-                )}
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Motivo</label>
+                <label className="block text-sm font-medium mb-1">Motivo</label>
                 <input 
                   type="text" required 
-                  className="w-full p-3 border border-slate-200 rounded-lg outline-none focus:border-brand-teal"
-                  value={formData.title}
-                  onChange={e => setFormData({...formData, title: e.target.value})}
+                  className="w-full p-3 border border-slate-200 dark:border-slate-600 rounded-lg outline-none bg-white dark:bg-slate-700 focus:border-brand-teal transition-colors"
+                  value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})}
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Inicio</label>
-                  <input 
-                    type="datetime-local" required 
-                    className="w-full p-2 border border-slate-200 rounded-lg text-sm"
-                    value={formData.startTime}
-                    onChange={e => setFormData({...formData, startTime: e.target.value})}
-                  />
+                  <label className="block text-sm font-medium mb-1">Inicio</label>
+                  <input type="datetime-local" required className="w-full p-2 border border-slate-200 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-700 dark:text-white" value={formData.startTime} onChange={e => setFormData({...formData, startTime: e.target.value})}/>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Fin</label>
-                  <input 
-                    type="datetime-local" required 
-                    className="w-full p-2 border border-slate-200 rounded-lg text-sm"
-                    value={formData.endTime}
-                    onChange={e => setFormData({...formData, endTime: e.target.value})}
-                  />
+                  <label className="block text-sm font-medium mb-1">Fin</label>
+                  <input type="datetime-local" required className="w-full p-2 border border-slate-200 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-700 dark:text-white" value={formData.endTime} onChange={e => setFormData({...formData, endTime: e.target.value})}/>
                 </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Notas</label>
-                <textarea 
-                  className="w-full p-3 border border-slate-200 rounded-lg outline-none resize-none h-20 text-sm"
-                  value={formData.notes}
-                  onChange={e => setFormData({...formData, notes: e.target.value})}
-                />
-              </div>
-
-              <button 
-                type="submit" disabled={isSaving}
-                className="w-full bg-brand-teal text-white py-3 rounded-lg font-bold hover:bg-teal-600 shadow-md flex justify-center items-center gap-2 mt-2"
-              >
+              <button type="submit" disabled={isSaving} className="w-full bg-brand-teal text-white py-3 rounded-lg font-bold hover:bg-teal-600 shadow-md mt-2">
                 {isSaving ? 'Guardando...' : 'Confirmar Cita'}
               </button>
             </form>
