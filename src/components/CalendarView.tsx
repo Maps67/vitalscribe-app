@@ -12,24 +12,18 @@ import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
 import { Plus, X, Calendar as CalendarIcon, User, Smartphone, Trash2 } from 'lucide-react';
 import './CalendarDarkOverrides.css';
+// IMPORTACIÓN NUEVA: Lógica modular
+import { generateGoogleCalendarUrl, downloadIcsFile } from '../utils/calendarUtils';
 
 const locales = { 'es': es };
 const localizer = dateFnsLocalizer({
   format, parse, startOfWeek, getDay, locales,
 });
 
-// --- PALETA DE COLORES DISTINTIVOS ---
+// --- PALETA DE COLORES (Intacta) ---
 const PRESET_COLORS = [
-  '#2563eb', // Azul Real
-  '#db2777', // Rosa Fuerte
-  '#d97706', // Ámbar
-  '#7c3aed', // Violeta
-  '#059669', // Esmeralda
-  '#dc2626', // Rojo
-  '#0891b2', // Cyan
-  '#4f46e5', // Índigo
-  '#be185d', // Magenta
-  '#ea580c'  // Naranja
+  '#2563eb', '#db2777', '#d97706', '#7c3aed', '#059669', 
+  '#dc2626', '#0891b2', '#4f46e5', '#be185d', '#ea580c'
 ];
 
 const CalendarView: React.FC = () => {
@@ -56,12 +50,10 @@ const CalendarView: React.FC = () => {
     finally { setLoading(false); }
   };
 
-  // --- LÓGICA DE COLORES INTELIGENTE ---
   const getPatientColor = (name: string) => {
-    if (!name) return '#64748b'; // Gris si no hay nombre
+    if (!name) return '#64748b';
     let hash = 0;
     for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
-    // Usar el hash para elegir uno de la lista predefinida
     const index = Math.abs(hash % PRESET_COLORS.length);
     return PRESET_COLORS[index];
   };
@@ -69,7 +61,6 @@ const CalendarView: React.FC = () => {
   const eventStyleGetter = (event: any) => {
     const patientName = event.resource.patient?.name || '';
     const bgColor = getPatientColor(patientName);
-    
     return {
       style: {
         backgroundColor: bgColor,
@@ -86,7 +77,7 @@ const CalendarView: React.FC = () => {
 
   const calendarEvents = appointments.map(app => ({
     id: app.id,
-    title: `${app.patient?.name || 'Sin nombre'} - ${app.title}`, // Nombre primero para identificar rápido
+    title: `${app.patient?.name || 'Sin nombre'} - ${app.title}`,
     start: new Date(app.start_time),
     end: new Date(app.end_time),
     resource: app
@@ -163,27 +154,27 @@ const CalendarView: React.FC = () => {
       } catch (e) { toast.error("Error al eliminar"); }
   };
 
-  // --- FUNCIÓN DE SINCRONIZACIÓN ---
-  const handleExportToCalendar = () => {
-    const start = new Date(formData.startTime).toISOString().replace(/-|:|\.\d\d\d/g, "");
-    const end = new Date(formData.endTime).toISOString().replace(/-|:|\.\d\d\d/g, "");
-    
-    const icsContent = [
-        "BEGIN:VCALENDAR", "VERSION:2.0", "BEGIN:VEVENT",
-        `DTSTART:${start}`, `DTEND:${end}`,
-        `SUMMARY:Cita con ${formData.patientName}`,
-        `DESCRIPTION:${formData.notes || 'Consulta médica'}`,
-        "END:VEVENT", "END:VCALENDAR"
-    ].join("\n");
+  // --- NUEVOS MANEJADORES MODULARES ---
+  const handleGoogleSync = () => {
+      if (!formData.startTime || !formData.endTime) return;
+      const url = generateGoogleCalendarUrl({
+          title: `Cita: ${formData.patientName}`,
+          description: formData.notes || 'Consulta médica',
+          startTime: formData.startTime,
+          endTime: formData.endTime
+      });
+      window.open(url, '_blank');
+  };
 
-    const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
-    const link = document.createElement('a');
-    link.href = window.URL.createObjectURL(blob);
-    link.setAttribute('download', `cita-${formData.patientName}.ics`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    toast.success("📅 Abriendo calendario externo...");
+  const handleAppleSync = () => {
+      if (!formData.startTime || !formData.endTime) return;
+      downloadIcsFile({
+          title: `Cita: ${formData.patientName}`,
+          description: formData.notes || 'Consulta médica',
+          startTime: formData.startTime,
+          endTime: formData.endTime
+      }, `cita-${formData.patientName}`);
+      toast.success("Archivo de calendario generado");
   };
 
   return (
@@ -226,7 +217,7 @@ const CalendarView: React.FC = () => {
         )}
       </div>
 
-      {/* MODAL INTELIGENTE */}
+      {/* MODAL */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
           <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-200 dark:border-slate-700 animate-fade-in-up">
@@ -238,12 +229,10 @@ const CalendarView: React.FC = () => {
             </div>
             
             <form onSubmit={handleSave} className="p-6 space-y-4 text-slate-700 dark:text-slate-200">
-              {/* SECCIÓN 1: DATOS */}
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Paciente</label>
                 <select 
-                  required
-                  disabled={!!formData.id}
+                  required disabled={!!formData.id}
                   className="w-full p-3 border border-slate-200 dark:border-slate-700 rounded-lg outline-none bg-slate-50 dark:bg-slate-800 focus:ring-2 focus:ring-brand-teal transition-colors disabled:opacity-60"
                   value={formData.patientId}
                   onChange={e => {
@@ -254,6 +243,11 @@ const CalendarView: React.FC = () => {
                   <option value="">-- Seleccionar --</option>
                   {patients.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Motivo</label>
+                <input type="text" required className="w-full p-3 border border-slate-200 dark:border-slate-700 rounded-lg outline-none bg-white dark:bg-slate-800 focus:ring-2 focus:ring-brand-teal" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})}/>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -267,32 +261,31 @@ const CalendarView: React.FC = () => {
                 </div>
               </div>
 
-              {/* SECCIÓN 2: SINCRONIZACIÓN (Solo visible si la cita ya existe) */}
+              {/* SECCIÓN SINCRONIZACIÓN (MODULARIZADA) */}
               {formData.id && (
                   <div className="mt-4 p-4 bg-indigo-50 dark:bg-indigo-900/20 rounded-xl border border-indigo-100 dark:border-indigo-800/50">
-                      <div className="flex justify-between items-center">
-                          <div>
-                              <p className="text-sm font-bold text-indigo-700 dark:text-indigo-300">Sincronizar Agenda</p>
-                              <p className="text-xs text-indigo-500 dark:text-indigo-400">Guardar en Google/iOS Calendar</p>
-                          </div>
+                      <p className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-3 uppercase tracking-wider">Sincronizar con:</p>
+                      <div className="grid grid-cols-2 gap-3">
                           <button 
-                            type="button" 
-                            onClick={handleExportToCalendar}
-                            className="bg-indigo-600 hover:bg-indigo-700 text-white p-2 rounded-lg shadow-sm transition-colors"
-                            title="Descargar evento"
+                            type="button" onClick={handleGoogleSync}
+                            className="flex items-center justify-center gap-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 p-2 rounded-lg text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
                           >
-                              <Smartphone size={20} />
+                              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none"><path d="M22 12.84c0-.86-.07-1.72-.21-2.56H12v4.61h5.75c-.21 1.29-.96 2.64-2.14 3.48l-.02.13 3.08 2.34.21.02c1.96-1.77 3.12-4.43 3.12-7.02z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.97 7.28-2.62l-3.29-2.51c-.92.63-2.21 1.09-3.99 1.09-2.97 0-5.55-1.96-6.46-4.71l-.13.01-3.21 2.44-.04.13C4.03 20.66 7.76 23 12 23z" fill="#34A853"/><path d="M5.54 14.25c-.23-.68-.36-1.41-.36-2.25s.13-1.57.36-2.25l-.01-.15-3.22-2.45-.1.05C1.32 8.82 1 10.38 1 12c0 1.62.32 3.18 1.21 4.81l3.33-2.56z" fill="#FBBC05"/><path d="M12 5.25c1.43 0 2.93.52 4.07 1.57l3.13-3.07C17.3 1.94 14.82 1 12 1 7.76 1 4.03 3.34 2.21 7.19l3.32 2.46c.91-2.75 3.49-4.4 6.47-4.4z" fill="#EA4335"/></svg>
+                              Google
+                          </button>
+                          <button 
+                            type="button" onClick={handleAppleSync}
+                            className="flex items-center justify-center gap-2 bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 p-2 rounded-lg text-xs font-bold hover:bg-indigo-200 dark:hover:bg-indigo-900/60 transition-colors"
+                          >
+                              <Smartphone size={16} /> Apple/Otros
                           </button>
                       </div>
                   </div>
               )}
 
-              {/* BOTONES DE ACCIÓN */}
               <div className="flex gap-3 pt-4 border-t border-slate-100 dark:border-slate-800">
                   {formData.id && (
-                      <button type="button" onClick={handleDelete} className="p-3 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors" title="Borrar">
-                        <Trash2 size={20}/>
-                      </button>
+                      <button type="button" onClick={handleDelete} className="p-3 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors" title="Borrar"><Trash2 size={20}/></button>
                   )}
                   <button type="submit" disabled={isSaving} className="flex-1 bg-brand-teal text-white py-3 rounded-lg font-bold hover:bg-teal-600 shadow-md flex justify-center items-center gap-2">
                     {isSaving ? 'Guardando...' : formData.id ? 'Guardar Cambios' : 'Agendar'}
