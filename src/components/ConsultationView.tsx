@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Mic, Square, Save, RefreshCw, FileText, Share2, Printer, Search, Calendar as CalendarIcon, X, Clock, MessageSquare, User, Send, Edit2, Check, ArrowLeft } from 'lucide-react';
+import { Mic, Square, Save, RefreshCw, FileText, Share2, Printer, Search, Calendar as CalendarIcon, X, Clock, MessageSquare, User, Send, Edit2, Check, ArrowLeft, AlertTriangle } from 'lucide-react';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
 import { GeminiMedicalService } from '../services/GeminiMedicalService';
 import { supabase } from '../lib/supabase';
@@ -47,7 +47,6 @@ const ConsultationView: React.FC = () => {
     fetchDoctorProfile();
   }, []);
 
-  // Auto-scrolls
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [chatMessages, activeTab]);
   useEffect(() => { 
       if (isListening && transcriptEndRef.current) {
@@ -68,7 +67,6 @@ const ConsultationView: React.FC = () => {
     }
   };
 
-  // --- FUNCIÓN CANDADO DE SEGURIDAD ---
   const handleToggleRecording = () => {
       if (isListening) {
           stopListening();
@@ -229,8 +227,7 @@ const ConsultationView: React.FC = () => {
   return (
     <div className="flex flex-col md:flex-row h-[calc(100vh-64px)] overflow-hidden bg-slate-50 dark:bg-slate-900 animate-fade-in-up transition-colors duration-300">
       
-      {/* --- COLUMNA IZQUIERDA: GRABACIÓN --- */}
-      {/* CLASE CLAVE: 'hidden md:flex' si hay nota, para ocultarlo en móvil */}
+      {/* IZQUIERDA: GRABACIÓN */}
       <div className={`
           w-full md:w-1/3 p-4 flex flex-col gap-4 border-r border-slate-200 dark:border-slate-800 
           bg-white dark:bg-slate-900 overflow-y-auto shrink-0 z-20 shadow-sm transition-all duration-300
@@ -238,7 +235,6 @@ const ConsultationView: React.FC = () => {
       `}>
         <h2 className="text-2xl font-bold text-slate-800 dark:text-white">Consulta Inteligente</h2>
         
-        {/* Selector Paciente */}
         <div className="relative z-30">
             <div className="flex items-center border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 bg-slate-50 dark:bg-slate-800 focus-within:ring-2 focus-within:ring-brand-teal transition-all">
                 <Search className="text-slate-400 mr-2" size={18} />
@@ -254,13 +250,11 @@ const ConsultationView: React.FC = () => {
             )}
         </div>
         
-        {/* Checkbox Consentimiento */}
         <div className={`flex items-center gap-2 p-3 rounded-lg border transition-colors ${consentGiven ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800' : 'bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800'}`}>
             <input type="checkbox" id="consent" checked={consentGiven} onChange={(e) => setConsentGiven(e.target.checked)} className="w-5 h-5 text-brand-teal rounded focus:ring-brand-teal cursor-pointer"/>
             <label htmlFor="consent" className="text-sm text-slate-700 dark:text-slate-300 leading-tight cursor-pointer select-none">Confirmo consentimiento verbal.</label>
         </div>
 
-        {/* Micrófono */}
         <div className={`flex-1 border-2 border-dashed rounded-2xl flex flex-col items-center justify-center p-4 transition-all relative overflow-hidden ${isListening ? 'border-red-400 bg-red-50 dark:bg-red-900/10' : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50'}`}>
             <div className={`w-24 h-24 rounded-full flex items-center justify-center mb-4 transition-all z-10 ${isListening ? 'bg-red-500 text-white animate-pulse shadow-xl shadow-red-500/30 scale-110' : 'bg-white dark:bg-slate-700 text-slate-300 dark:text-slate-500 shadow-sm'}`}>
                 <Mic size={40} />
@@ -279,21 +273,13 @@ const ConsultationView: React.FC = () => {
         </div>
       </div>
 
-      {/* --- COLUMNA DERECHA: RESULTADOS --- */}
-      {/* CLASE CLAVE: 'hidden' si NO hay nota, 'flex h-full' si la hay (en móvil) */}
+      {/* DERECHA: RESULTADOS */}
       <div className={`
           w-full md:w-2/3 bg-slate-100 dark:bg-slate-950 flex flex-col overflow-hidden border-l border-slate-200 dark:border-slate-800
           ${!generatedNote ? 'hidden md:flex' : 'flex h-full'}
       `}>
          <div className="flex border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0 shadow-sm z-10 items-center">
-            {/* BOTÓN ATRÁS SOLO MÓVIL */}
-            <button 
-                onClick={() => setGeneratedNote(null)} // Volver a grabar
-                className="md:hidden p-4 text-slate-500 hover:text-brand-teal border-r border-slate-100 dark:border-slate-800"
-            >
-                <ArrowLeft size={20} />
-            </button>
-
+            <button onClick={() => setGeneratedNote(null)} className="md:hidden p-4 text-slate-500 hover:text-brand-teal border-r border-slate-100 dark:border-slate-800"><ArrowLeft size={20} /></button>
             {[ {id: 'record', icon: FileText, label: 'EXPEDIENTE'}, {id: 'patient', icon: User, label: 'PACIENTE'}, {id: 'chat', icon: MessageSquare, label: 'CHAT'} ].map(tab => (
                 <button key={tab.id} onClick={() => setActiveTab(tab.id as TabType)} className={`flex-1 py-4 px-2 flex items-center justify-center gap-2 text-sm font-bold transition-all border-b-4 ${activeTab === tab.id ? 'text-brand-teal border-brand-teal bg-teal-50/30 dark:bg-teal-900/20' : 'text-slate-500 dark:text-slate-400 border-transparent hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
                     <tab.icon size={18}/> <span className="hidden sm:inline">{tab.label}</span>
@@ -310,6 +296,19 @@ const ConsultationView: React.FC = () => {
                 </div>
             ) : (
                 <div className="animate-fade-in-up h-full flex flex-col">
+                    
+                    {/* --- NUEVO: BANNER DE SEGURIDAD LEGAL --- */}
+                    <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50 p-3 rounded-lg flex items-start gap-3 mb-4 shrink-0">
+                        <AlertTriangle className="text-amber-500 dark:text-amber-400 shrink-0 mt-0.5" size={18} />
+                        <div>
+                            <p className="text-xs font-bold text-amber-800 dark:text-amber-200">IA de Asistencia Clínica</p>
+                            <p className="text-[10px] text-amber-700 dark:text-amber-300/80 mt-0.5 leading-snug">
+                                La información generada es un soporte. La validación de diagnósticos y dosis es responsabilidad exclusiva del médico tratante.
+                            </p>
+                        </div>
+                    </div>
+                    {/* ---------------------------------------- */}
+
                     {/* EXPEDIENTE */}
                     {activeTab === 'record' && (
                         <div className="bg-white dark:bg-slate-900 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800">

@@ -1,171 +1,117 @@
 import React from 'react';
-import { Document, Page, Text, View, StyleSheet, Font, Image } from '@react-pdf/renderer';
+import { Page, Text, View, Document, StyleSheet, Image, Font } from '@react-pdf/renderer';
 
-// Fuentes
-Font.register({ family: 'Helvetica', fonts: [{ src: 'https://fonts.gstatic.com/s/helvetica/v1/Helvetica.ttf' }] });
-Font.register({ family: 'Helvetica-Bold', fonts: [{ src: 'https://fonts.gstatic.com/s/helvetica/v1/Helvetica-Bold.ttf' }] });
-
-// --- LIMPIEZA MEJORADA (ADIÓS EMOJIS) ---
-const cleanMarkdown = (text: string) => {
-  if (!text) return "";
-  return text
-    // 1. Eliminar Emojis (Rangos Unicode comunes)
-    .replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F900}-\u{1F9FF}\u{1F018}-\u{1F270}]/gu, '')
-    // 2. Limpiar Markdown
-    .replace(/\*\*/g, '')   // Negritas
-    .replace(/###/g, '')    // Títulos
-    .replace(/\*/g, '•')    // Viñetas
-    .replace(/_/g, '')      // Guiones bajos
-    // 3. Limpieza final de espacios
-    .replace(/  +/g, ' ')   // Dobles espacios
-    .trim();
-};
-
+// Estilos del PDF
 const styles = StyleSheet.create({
   page: {
-    flexDirection: 'column',
-    backgroundColor: '#ffffff',
     padding: 40,
     fontFamily: 'Helvetica',
-    fontSize: 10, 
-    color: '#334155',
+    backgroundColor: '#ffffff',
+    position: 'relative', // Necesario para el footer absoluto
   },
-  // ENCABEZADO
   header: {
-    marginBottom: 15,
+    flexDirection: 'row',
+    marginBottom: 20,
     borderBottomWidth: 2,
     borderBottomColor: '#0d9488',
-    paddingBottom: 15,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    paddingBottom: 10,
     alignItems: 'center',
-    minHeight: 80,
+  },
+  logo: {
+    width: 60,
+    height: 60,
+    marginRight: 15,
+    objectFit: 'contain',
   },
   doctorInfo: {
-    width: '70%',
+    flex: 1,
   },
   doctorName: {
     fontSize: 16,
-    fontFamily: 'Helvetica-Bold',
-    color: '#0f172a',
+    fontWeight: 'bold',
+    color: '#111827',
     textTransform: 'uppercase',
-    marginBottom: 4,
   },
   specialty: {
     fontSize: 10,
     color: '#0d9488',
-    fontFamily: 'Helvetica-Bold',
-    textTransform: 'uppercase',
     marginBottom: 4,
+    textTransform: 'uppercase',
+    fontWeight: 'bold',
   },
-  metaData: {
-    fontSize: 8,
-    color: '#64748b',
-    marginBottom: 1,
+  metaInfo: {
+    fontSize: 9,
+    color: '#6b7280',
+    marginTop: 1,
   },
-  // LOGO
-  logoContainer: {
-    width: 80,
-    height: 80,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  logoImage: {
-    width: '100%',
-    height: '100%',
-    objectFit: 'contain',
-  },
-  rxBox: {
-    width: 50,
-    height: 50,
-    backgroundColor: '#f0fdfa',
+  patientSection: {
+    marginBottom: 20,
+    padding: 10,
+    backgroundColor: '#f3f4f6',
     borderRadius: 4,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#ccfbf1',
-  },
-  rxText: {
-    fontSize: 24,
-    fontFamily: 'Helvetica-Bold',
-    color: '#0d9488',
-  },
-  // BARRA PACIENTE
-  patientBar: {
     flexDirection: 'row',
-    backgroundColor: '#f8fafc',
-    padding: 8,
-    borderRadius: 4,
-    marginBottom: 15,
     justifyContent: 'space-between',
-    borderLeftWidth: 4,
-    borderLeftColor: '#cbd5e1',
   },
   label: {
-    fontSize: 7,
-    color: '#94a3b8',
-    textTransform: 'uppercase',
+    fontSize: 8,
+    color: '#6b7280',
     marginBottom: 2,
-    fontFamily: 'Helvetica-Bold',
+    textTransform: 'uppercase',
   },
   value: {
-    fontSize: 10,
-    fontFamily: 'Helvetica-Bold',
-    color: '#0f172a',
-  },
-  // CUERPO
-  sectionTitle: {
     fontSize: 11,
-    fontFamily: 'Helvetica-Bold',
-    color: '#0f172a',
-    marginTop: 10, // Un poco más de aire
-    marginBottom: 5,
-    textDecoration: 'underline',
+    fontWeight: 'bold',
+    color: '#374151',
   },
-  content: {
-    lineHeight: 1.6, // Mejor lectura
+  body: {
+    marginTop: 10,
+    marginBottom: 80, // Espacio para la firma
+    fontSize: 11,
+    lineHeight: 1.6,
+    color: '#374151',
     textAlign: 'justify',
-    fontSize: 10,
-    paddingBottom: 20,
   },
-  // PIE DE PAGINA Y FIRMA
-  footer: {
-    position: 'absolute',
-    bottom: 30,
-    left: 40,
-    right: 40,
-    textAlign: 'center',
-  },
-  signatureArea: {
+  signatureSection: {
+    marginTop: 'auto',
     alignItems: 'center',
-    marginBottom: 10,
-    height: 60, 
-    justifyContent: 'flex-end',
+    marginBottom: 40,
   },
   signatureImage: {
     width: 120,
-    height: 50,
+    height: 60,
     objectFit: 'contain',
-    marginBottom: -10, 
+    marginBottom: 5,
   },
   signatureLine: {
     width: 200,
-    borderBottomWidth: 1,
-    borderBottomColor: '#0f172a',
-    marginBottom: 4,
-  },
-  addressText: {
-    fontSize: 7,
-    color: '#94a3b8',
-    marginTop: 8,
     borderTopWidth: 1,
-    borderTopColor: '#e2e8f0',
-    paddingTop: 4,
+    borderTopColor: '#374151',
+    marginBottom: 5,
+  },
+  signatureText: {
+    fontSize: 10,
+    color: '#374151',
+    fontWeight: 'bold',
+  },
+  licenseText: {
+    fontSize: 8,
+    color: '#6b7280',
+  },
+  // --- NUEVO: FOOTER LEGAL ---
+  legalFooter: {
+    position: 'absolute',
+    bottom: 20,
+    left: 40,
+    right: 40,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+    paddingTop: 8,
+    textAlign: 'center',
   },
   legalText: {
-    fontSize: 6,
-    color: '#cbd5e1',
-    marginTop: 2,
+    fontSize: 7,
+    color: '#9ca3af',
+    fontStyle: 'italic',
   }
 });
 
@@ -174,42 +120,36 @@ interface PrescriptionProps {
   specialty: string;
   license: string;
   phone: string;
-  university?: string; 
-  address?: string;    
-  logoUrl?: string;    
-  signatureUrl?: string; 
+  university: string;
+  address: string;
+  logoUrl?: string;
+  signatureUrl?: string;
   patientName: string;
   date: string;
   content: string;
 }
 
 const PrescriptionPDF: React.FC<PrescriptionProps> = ({ 
-  doctorName, specialty, license, phone, university, address, logoUrl, signatureUrl, patientName, date, content 
+  doctorName, specialty, license, phone, university, address, 
+  logoUrl, signatureUrl, patientName, date, content 
 }) => (
   <Document>
-    <Page size="A4" style={styles.page}>
+    <Page size="LETTER" style={styles.page}>
       
       {/* ENCABEZADO */}
       <View style={styles.header}>
+        {logoUrl && <Image src={logoUrl} style={styles.logo} />}
         <View style={styles.doctorInfo}>
-          <Text style={styles.doctorName}>Dr. {doctorName}</Text>
+          <Text style={styles.doctorName}>{doctorName}</Text>
           <Text style={styles.specialty}>{specialty}</Text>
-          {university && <Text style={styles.metaData}>{university}</Text>}
-          <Text style={styles.metaData}>Cédula Profesional: {license}</Text>
-          <Text style={styles.metaData}>Tel: {phone}</Text>
-        </View>
-
-        <View style={styles.logoContainer}>
-            {logoUrl ? (
-                <Image style={styles.logoImage} src={logoUrl} />
-            ) : (
-                <View style={styles.rxBox}><Text style={styles.rxText}>Rx</Text></View>
-            )}
+          <Text style={styles.metaInfo}>{university}</Text>
+          <Text style={styles.metaInfo}>Céd. Prof: {license}</Text>
+          <Text style={styles.metaInfo}>{address} • Tel: {phone}</Text>
         </View>
       </View>
 
-      {/* Info Paciente */}
-      <View style={styles.patientBar}>
+      {/* DATOS DEL PACIENTE */}
+      <View style={styles.patientSection}>
         <View>
             <Text style={styles.label}>PACIENTE</Text>
             <Text style={styles.value}>{patientName}</Text>
@@ -220,31 +160,27 @@ const PrescriptionPDF: React.FC<PrescriptionProps> = ({
         </View>
       </View>
 
-      {/* Receta Limpia */}
-      <View style={{ flexGrow: 1 }}>
-        <Text style={styles.sectionTitle}>INDICACIONES Y TRATAMIENTO</Text>
-        {/* AQUÍ SE APLICA LA LIMPIEZA DE EMOJIS */}
-        <Text style={styles.content}>
-          {cleanMarkdown(content)}
-        </Text>
+      {/* CONTENIDO DE LA RECETA */}
+      <View style={styles.body}>
+        <Text>{content}</Text>
       </View>
 
-      {/* Pie de Página */}
-      <View style={styles.footer}>
-        <View style={styles.signatureArea}>
-            {signatureUrl && <Image style={styles.signatureImage} src={signatureUrl} />}
-            <View style={styles.signatureLine} />
-            <Text style={{ fontSize: 9, fontFamily: 'Helvetica-Bold' }}>Firma del Médico</Text>
-        </View>
+      {/* FIRMA */}
+      <View style={styles.signatureSection}>
+        {signatureUrl && <Image src={signatureUrl} style={styles.signatureImage} />}
+        <View style={styles.signatureLine} />
+        <Text style={styles.signatureText}>{doctorName}</Text>
+        <Text style={styles.licenseText}>{specialty} • CP {license}</Text>
+      </View>
 
-        {address && (
-            <Text style={styles.addressText}>
-                Dirección Consultorio: {address}
-            </Text>
-        )}
-        
+      {/* NUEVO: FOOTER DE DESCARGO DE RESPONSABILIDAD */}
+      <View style={styles.legalFooter}>
         <Text style={styles.legalText}>
-            Receta generada digitalmente vía MediScribe AI. Cumple con NOM-004-SSA3-2012.
+          Documento generado con asistencia de inteligencia artificial (MediScribe AI). 
+          La verificación, validación clínica y prescripción final es responsabilidad exclusiva del médico tratante firmante.
+        </Text>
+        <Text style={styles.legalText}>
+          Generado el {new Date().toLocaleDateString()} - Uso exclusivo médico.
         </Text>
       </View>
 
