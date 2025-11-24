@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Calendar, MapPin, ChevronRight, Sun, Moon, Bell, CloudRain, Cloud, Stethoscope } from 'lucide-react';
+import { Calendar, MapPin, ChevronRight, Sun, Moon, Bell, CloudRain, Cloud, ShieldCheck } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Appointment } from '../types';
 import { getTimeOfDayGreeting } from '../utils/greetingUtils';
@@ -16,9 +16,11 @@ const Dashboard: React.FC = () => {
   const hour = now.getHours();
   const isNight = hour >= 19 || hour < 6;
   const dateStr = now.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' });
+  
+  // Usamos useMemo para que el saludo no cambie en cada render, pero sí al recargar
   const dynamicGreeting = useMemo(() => getTimeOfDayGreeting(doctorName), [doctorName]);
 
-  // 1. Lógica de Clima
+  // Lógica de Clima
   useEffect(() => {
     if ("geolocation" in navigator) {
         navigator.geolocation.getCurrentPosition(async (position) => {
@@ -36,25 +38,31 @@ const Dashboard: React.FC = () => {
   }, []);
 
   const getWeatherIcon = () => {
-      if (weather.code >= 51 && weather.code <= 67) return <CloudRain size={56} className="text-blue-200 opacity-90"/>;
-      if (weather.code >= 1 && weather.code <= 3) return <Cloud size={56} className="text-slate-200 opacity-90"/>;
+      // Agregamos clases de animación 'animate-pulse' o una personalizada 'animate-float' si la definimos en CSS
+      // Usaremos 'animate-bounce' muy suave o 'animate-pulse' para movimiento.
+      const animClass = "animate-pulse duration-[3000ms]"; 
+      
+      if (weather.code >= 51 && weather.code <= 67) return <CloudRain size={56} className={`text-blue-200 opacity-90 ${animClass}`}/>;
+      if (weather.code >= 1 && weather.code <= 3) return <Cloud size={56} className={`text-slate-200 opacity-90 ${animClass}`}/>;
       return isNight 
-        ? <Moon size={56} className="text-indigo-200 opacity-90"/> 
-        : <Sun size={56} className="text-yellow-300 opacity-90"/>;
+        ? <Moon size={56} className={`text-indigo-200 opacity-90 ${animClass}`}/> 
+        : <Sun size={56} className={`text-yellow-300 opacity-90 ${animClass}`}/>;
   };
 
   const heroStyle = isNight 
     ? { bg: "bg-gradient-to-br from-slate-900 to-indigo-950", text: "text-indigo-100" }
     : { bg: "bg-gradient-to-br from-teal-500 to-teal-700", text: "text-teal-50" };
 
-  // 2. Lógica de Datos
+  // Lógica de Datos
   useEffect(() => {
     const fetchData = async () => {
         try {
             const { data: { user } } = await supabase.auth.getUser();
             if (user) {
                 const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', user.id).single();
-                setDoctorName(profile?.full_name?.split(' ')[0] || 'Doctor');
+                // Extraer primer nombre y agregar "Dr."
+                const rawName = profile?.full_name?.split(' ')[0] || 'Colega';
+                setDoctorName(`Dr. ${rawName}`);
 
                 const today = new Date().toISOString().split('T')[0];
                 const { data: appointments } = await supabase
@@ -71,7 +79,6 @@ const Dashboard: React.FC = () => {
   }, []);
 
   return (
-    // CORRECCIÓN CLAVE: min-h-screen y overflow-x-hidden para evitar espacios blancos y scroll lateral
     <div className="min-h-screen bg-gray-50 dark:bg-slate-950 font-sans w-full overflow-x-hidden flex flex-col">
       
       {/* HEADER MÓVIL */}
@@ -86,35 +93,57 @@ const Dashboard: React.FC = () => {
         <div className="flex items-center gap-3">
             <button className="text-slate-400 hover:text-brand-teal relative transition-colors">
                 <Bell size={22} />
-                {/* Punto rojo decorativo */}
                 <span className="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full border-2 border-white dark:border-slate-900"></span>
             </button>
             <div onClick={() => navigate('/settings')} className="h-9 w-9 rounded-full bg-gradient-to-tr from-teal-400 to-teal-600 flex items-center justify-center text-white font-bold text-xs shadow-md cursor-pointer border-2 border-white dark:border-slate-800">
-                {doctorName.charAt(0) || 'D'}
+                {doctorName.charAt(4) || 'D'} {/* Ajuste para tomar la inicial del nombre, saltando el "Dr. " */}
             </div>
         </div>
       </div>
 
       {/* HEADER ESCRITORIO */}
       <div className="hidden md:block px-8 pt-8 pb-4 w-full max-w-7xl mx-auto">
-         <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Tablero Principal</h1>
+         <div className="flex justify-between items-center">
+            <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Tablero Principal</h1>
+            {/* INSIGNIA DE SEGURIDAD ESCRITORIO */}
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 dark:bg-green-900/20 rounded-full border border-green-100 dark:border-green-800/30">
+                <ShieldCheck size={16} className="text-green-600 dark:text-green-400" />
+                <span className="text-xs font-bold text-green-700 dark:text-green-300">PixelArte Privacy Shield™</span>
+            </div>
+         </div>
       </div>
 
       {/* CONTENIDO PRINCIPAL */}
-      {/* CORRECCIÓN CLAVE: pb-32 asegura que el último elemento no quede tapado por el menú */}
       <div className="flex-1 p-4 md:p-8 space-y-6 animate-fade-in-up w-full max-w-5xl mx-auto pb-32 md:pb-8">
         
-        {/* Saludo */}
-        <div className="mt-1">
-            <h1 className="text-2xl font-bold text-slate-800 dark:text-white leading-tight">
-                {dynamicGreeting.greeting}
-            </h1>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
-                {dynamicGreeting.message}
-            </p>
+        {/* SECCIÓN DE SALUDO + ESCUDO MÓVIL */}
+        <div className="flex justify-between items-start">
+            <div className="mt-1">
+                {/* SALUDO CORREGIDO CON "Dr." */}
+                <h1 className="text-2xl font-bold text-slate-800 dark:text-white leading-tight">
+                    {/* Forzamos "Dr." aquí si no viniera en el estado, pero ya lo procesamos en fetch */}
+                    {dynamicGreeting.greeting.replace("Hola, ", "Hola, ")} 
+                </h1>
+                {/* MENSAJE ANIMADO (Fade In lento) */}
+                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 leading-relaxed animate-[fadeIn_2s_ease-in-out]">
+                    {dynamicGreeting.message}
+                </p>
+            </div>
+            
+            {/* INSIGNIA DE SEGURIDAD MÓVIL (Solo icono y punto para no saturar) */}
+            <div className="md:hidden flex flex-col items-center justify-center bg-white dark:bg-slate-800 p-2 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700">
+                <ShieldCheck size={20} className="text-green-500 mb-1" />
+                <div className="flex items-center gap-1">
+                    <span className="relative flex h-1.5 w-1.5">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-green-500"></span>
+                    </span>
+                    <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Seguro</span>
+                </div>
+            </div>
         </div>
 
-        {/* TARJETA HERO (CLIMA REAL) */}
+        {/* TARJETA HERO (CLIMA REAL ANIMADO) */}
         <div className={`${heroStyle.bg} rounded-3xl p-6 text-white shadow-lg relative overflow-hidden flex justify-between items-center transition-all duration-500 w-full`}>
             <div className="relative z-10 flex-1">
                 <div className="flex items-center gap-2 mb-2">
@@ -133,12 +162,13 @@ const Dashboard: React.FC = () => {
                 </div>
             </div>
 
-            <div className="relative z-10 transform translate-x-2 drop-shadow-lg">
+            {/* ICONO CLIMA ANIMADO */}
+            <div className="relative z-10 transform translate-x-2 drop-shadow-lg transition-transform duration-1000 hover:scale-110">
                 {getWeatherIcon()}
             </div>
 
             {/* Decoración */}
-            <div className="absolute -right-10 -top-10 w-40 h-40 bg-white/10 rounded-full blur-3xl"></div>
+            <div className="absolute -right-10 -top-10 w-40 h-40 bg-white/10 rounded-full blur-3xl animate-pulse"></div>
             <div className="absolute -left-10 -bottom-10 w-32 h-32 bg-black/20 rounded-full blur-2xl"></div>
         </div>
 
@@ -163,7 +193,7 @@ const Dashboard: React.FC = () => {
                     <p className="text-slate-600 dark:text-slate-300 font-medium text-sm">Tu agenda está libre.</p>
                     <p className="text-slate-400 text-xs mt-1 mb-4">Buen momento para revisar pendientes o descansar.</p>
                     <button onClick={() => navigate('/consultation')} className="w-full bg-slate-800 dark:bg-slate-700 text-white py-3 rounded-xl font-bold text-sm shadow-sm hover:bg-slate-700 transition-colors flex items-center justify-center gap-2">
-                        <Stethoscope size={16}/> Iniciar Consulta
+                        Iniciar Consulta
                     </button>
                 </div>
             ) : (
