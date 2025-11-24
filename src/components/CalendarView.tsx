@@ -10,7 +10,7 @@ import { AppointmentService } from '../services/AppointmentService';
 import { Appointment, Patient } from '../types';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
-import { Plus, X, Calendar as CalendarIcon, User, Smartphone, Trash2, ChevronLeft, ChevronRight, Clock, MapPin } from 'lucide-react';
+import { Plus, X, Calendar as CalendarIcon, User, Smartphone, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 import './CalendarDarkOverrides.css';
 import { generateGoogleCalendarUrl, downloadIcsFile } from '../utils/calendarUtils';
 
@@ -24,9 +24,7 @@ const PRESET_COLORS = [
   '#ef4444', '#06b6d4', '#6366f1', '#d946ef', '#f97316'
 ];
 
-// --- COMPONENTES DE UI PERSONALIZADOS (ESTILO SAMSUNG/IOS) ---
-
-// 1. Barra de Herramientas Moderna
+// --- COMPONENTES DE UI PERSONALIZADOS ---
 const CustomToolbar: React.FC<ToolbarProps> = (props) => {
     const goToBack = () => { props.onNavigate('PREV'); };
     const goToNext = () => { props.onNavigate('NEXT'); };
@@ -45,7 +43,6 @@ const CustomToolbar: React.FC<ToolbarProps> = (props) => {
             </div>
             <span className="text-lg font-bold text-slate-800 dark:text-white tracking-tight">{label()}</span>
         </div>
-        
         <div className="flex bg-slate-100 dark:bg-slate-700 p-1 rounded-xl">
             {['month', 'week', 'day', 'agenda'].map(view => (
                 <button
@@ -57,7 +54,6 @@ const CustomToolbar: React.FC<ToolbarProps> = (props) => {
                 </button>
             ))}
         </div>
-  
         <div className="flex gap-1">
             <button onClick={goToBack} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full text-slate-600 dark:text-slate-300 transition-colors"><ChevronLeft size={20}/></button>
             <button onClick={goToToday} className="px-3 py-1 text-xs font-bold text-brand-teal hover:bg-teal-50 dark:hover:bg-teal-900/20 rounded-lg transition-colors">Hoy</button>
@@ -67,22 +63,16 @@ const CustomToolbar: React.FC<ToolbarProps> = (props) => {
     );
 };
 
-// 2. Evento Personalizado (La "Tarjeta" en el calendario)
 const CustomEvent = ({ event }: EventProps<any>) => {
     return (
         <div className="flex flex-col h-full justify-center px-1">
-            <div className="text-xs font-bold truncate flex items-center gap-1">
-                {event.title}
-            </div>
-            {/* Solo mostrar hora en vistas grandes */}
+            <div className="text-xs font-bold truncate flex items-center gap-1">{event.title}</div>
             <div className="text-[9px] opacity-80 truncate hidden sm:block">
-                 {format(event.start, 'h:mm a')} - {event.resource.notes ? 'Con notas' : 'Consulta'}
+                 {format(event.start, 'h:mm a')}
             </div>
         </div>
     );
 };
-
-// --- COMPONENTE PRINCIPAL ---
 
 const CalendarView: React.FC = () => {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -126,7 +116,7 @@ const CalendarView: React.FC = () => {
         opacity: 1,
         color: 'white',
         border: '0px',
-        borderLeft: `4px solid rgba(0,0,0,0.2)`, // Borde izquierdo estilo moderno
+        borderLeft: `4px solid rgba(0,0,0,0.2)`,
         display: 'block',
         fontSize: '0.8rem',
         padding: '2px 4px',
@@ -137,20 +127,39 @@ const CalendarView: React.FC = () => {
 
   const calendarEvents = appointments.map(app => ({
     id: app.id,
-    title: `${app.patient?.name || 'Paciente'}`, // Solo nombre para limpieza
+    title: `${app.patient?.name || 'Paciente'}`,
     start: new Date(app.start_time),
     end: new Date(app.end_time),
     resource: app
   }));
 
-  const handleSelectSlot = ({ start, end }: { start: Date; end: Date }) => {
+  // --- LÓGICA DE CLIC EN ESPACIO VACÍO ---
+  const handleSelectSlot = ({ start, end, action }: { start: Date; end: Date; action: string }) => {
+    // Ajuste de Zona Horaria Local
     const toLocalISO = (date: Date) => {
       const offset = date.getTimezoneOffset() * 60000;
       return new Date(date.getTime() - offset).toISOString().slice(0, 16);
     };
+
+    let finalStart = start;
+    let finalEnd = end;
+
+    // Si estamos en vista mensual y seleccionan un día, suele venir a las 00:00
+    // Vamos a poner una hora decente por defecto (ej: 9:00 AM) si es click de día completo
+    if (action === 'click' || action === 'select') {
+        const isMidnight = start.getHours() === 0 && start.getMinutes() === 0;
+        if (isMidnight) {
+            finalStart = new Date(start);
+            finalStart.setHours(9, 0, 0); // 9:00 AM
+            finalEnd = new Date(finalStart);
+            finalEnd.setMinutes(30); // 9:30 AM
+        }
+    }
+
     setFormData({
       id: '', patientId: '', patientName: '', title: 'Consulta General', notes: '',
-      startTime: toLocalISO(start), endTime: toLocalISO(end)
+      startTime: toLocalISO(finalStart), 
+      endTime: toLocalISO(finalEnd)
     });
     setIsModalOpen(true);
   };
@@ -230,28 +239,31 @@ const CalendarView: React.FC = () => {
           startTime: formData.startTime,
           endTime: formData.endTime
       }, `cita-${formData.patientName}`);
-      toast.success("Archivo de calendario generado");
+      toast.success("Archivo generado");
   };
 
   return (
     <div className="h-full p-2 md:p-6 animate-fade-in-up flex flex-col font-sans">
       
-      {/* Header simplificado porque ya tenemos el Toolbar personalizado */}
-      <div className="md:hidden mb-2 flex justify-between items-center">
-          <h2 className="text-lg font-bold text-slate-800 dark:text-white">Agenda</h2>
-          <button 
-            onClick={() => {
-                const now = new Date();
-                const end = new Date(now.getTime() + 30*60*1000);
-                handleSelectSlot({ start: now, end: end });
-            }}
-            className="bg-brand-teal text-white px-3 py-1.5 rounded-lg font-bold text-xs shadow-md"
-          >
-            + Nueva
-          </button>
+      <div className="flex justify-between items-center mb-2 md:mb-6 shrink-0">
+        <div>
+          <h2 className="text-xl md:text-2xl font-bold text-slate-800 dark:text-white">Agenda Médica</h2>
+          <p className="text-slate-500 dark:text-slate-400 text-sm hidden md:block">Gestión visual de pacientes.</p>
+        </div>
+        {/* El botón superior sigue existiendo como alternativa */}
+        <button 
+          onClick={() => {
+            const now = new Date();
+            const end = new Date(now.getTime() + 30*60*1000);
+            handleSelectSlot({ start: now, end: end, action: 'click' });
+          }}
+          className="bg-brand-teal text-white px-3 py-2 rounded-lg font-bold shadow-lg flex items-center gap-2 text-sm hover:bg-teal-600 transition-all"
+        >
+          <Plus size={18} /> <span className="hidden sm:inline">Nueva Cita</span> <span className="sm:hidden">Nueva</span>
+        </button>
       </div>
 
-      <div className="flex-1 bg-white dark:bg-slate-900 p-1 md:p-4 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-200 overflow-hidden flex flex-col">
+      <div className="flex-1 bg-white dark:bg-slate-900 p-1 md:p-4 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 overflow-hidden flex flex-col">
         {loading ? (
           <div className="h-full flex items-center justify-center text-slate-400">Cargando...</div>
         ) : (
@@ -263,15 +275,13 @@ const CalendarView: React.FC = () => {
             style={{ height: '100%' }}
             messages={{ next: "Sig", previous: "Ant", today: "Hoy", month: "Mes", week: "Semana", day: "Día", agenda: "Agenda" }}
             culture='es'
-            selectable
-            onSelectSlot={handleSelectSlot}
+            selectable={true} // CLAVE: Permite seleccionar espacios vacíos
+            onSelectSlot={handleSelectSlot} // CLAVE: La función que abre el modal
             onSelectEvent={handleSelectEvent}
             eventPropGetter={eventStyleGetter}
-            defaultView='month' // Vista por defecto más amigable
-            components={{
-                toolbar: CustomToolbar,
-                event: CustomEvent
-            }}
+            defaultView='month'
+            components={{ toolbar: CustomToolbar, event: CustomEvent }}
+            longPressThreshold={10} // Optimización táctil
           />
         )}
       </div>
@@ -328,7 +338,7 @@ const CalendarView: React.FC = () => {
                               <span className="text-blue-500 font-black">G</span> Google
                           </button>
                           <button type="button" onClick={handleAppleSync} className="flex items-center justify-center gap-2 bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 p-2 rounded-lg text-xs font-bold hover:bg-indigo-200 dark:hover:bg-indigo-900/60 transition-colors">
-                              <Smartphone size={16} /> Apple/Otros
+                              <Smartphone size={16} /> Otros
                           </button>
                       </div>
                   </div>
