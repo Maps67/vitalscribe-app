@@ -7,7 +7,7 @@ const styles = StyleSheet.create({
     padding: 40,
     fontFamily: 'Helvetica',
     backgroundColor: '#ffffff',
-    position: 'relative', // Necesario para el footer absoluto
+    position: 'relative',
   },
   header: {
     flexDirection: 'row',
@@ -72,7 +72,7 @@ const styles = StyleSheet.create({
     textAlign: 'justify',
   },
   signatureSection: {
-    marginTop: 'auto',
+    marginTop: 'auto', // Empuja la firma hacia abajo si hay espacio
     alignItems: 'center',
     marginBottom: 40,
   },
@@ -97,7 +97,7 @@ const styles = StyleSheet.create({
     fontSize: 8,
     color: '#6b7280',
   },
-  // --- NUEVO: FOOTER LEGAL ---
+  // --- FOOTER LIMPIO (SOLO FECHA Y USO MÉDICO) ---
   legalFooter: {
     position: 'absolute',
     bottom: 20,
@@ -109,7 +109,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   legalText: {
-    fontSize: 7,
+    fontSize: 8,
     color: '#9ca3af',
     fontStyle: 'italic',
   }
@@ -155,7 +155,7 @@ const PrescriptionPDF: React.FC<PrescriptionProps> = ({
             <Text style={styles.value}>{patientName}</Text>
         </View>
         <View>
-            <Text style={styles.label}>FECHA</Text>
+            <Text style={styles.label}>FECHA DE EMISIÓN</Text>
             <Text style={styles.value}>{date}</Text>
         </View>
       </View>
@@ -173,14 +173,10 @@ const PrescriptionPDF: React.FC<PrescriptionProps> = ({
         <Text style={styles.licenseText}>{specialty} • CP {license}</Text>
       </View>
 
-      {/* NUEVO: FOOTER DE DESCARGO DE RESPONSABILIDAD */}
+      {/* FOOTER MINIMALISTA Y PROFESIONAL */}
       <View style={styles.legalFooter}>
         <Text style={styles.legalText}>
-          Documento generado con asistencia de inteligencia artificial (MediScribe AI). 
-          La verificación, validación clínica y prescripción final es responsabilidad exclusiva del médico tratante firmante.
-        </Text>
-        <Text style={styles.legalText}>
-          Generado el {new Date().toLocaleDateString()} - Uso exclusivo médico.
+          Fecha de impresión: {new Date().toLocaleDateString()} • Uso exclusivo del médico tratante.
         </Text>
       </View>
 
