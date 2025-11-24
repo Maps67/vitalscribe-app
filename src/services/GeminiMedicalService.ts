@@ -33,19 +33,27 @@ export const GeminiMedicalService = {
     }
   },
 
-  // 2. GENERAR NOTA SOAP
-  async generateClinicalNote(transcript: string): Promise<GeminiResponse> {
+  // 2. GENERAR NOTA SOAP (AHORA CON ESPECIALIDAD)
+  async generateClinicalNote(transcript: string, specialty: string = "Medicina General"): Promise<GeminiResponse> {
     try {
       const modelName = await this.getBestAvailableModel();
       const URL = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${API_KEY}`;
 
+      // EL SECRETO: Inyectamos la especialidad en el Prompt del Sistema
       const prompt = `
-        Actúa como un médico experto. Transforma el siguiente dictado en un JSON estricto.
+        Actúa como un Médico Especialista en ${specialty} experto y detallista.
+        Transforma el siguiente dictado de consulta en un JSON estricto.
+        
+        CONTEXTO CLÍNICO:
+        - Especialidad: ${specialty}
+        - Tono: Profesional, técnico y preciso según la especialidad indicada.
+        
         DICTADO: "${transcript}"
+
         Responde ÚNICAMENTE con este JSON (sin markdown):
         {
-          "clinicalNote": "Nota clínica completa formato SOAP.",
-          "patientInstructions": "Instrucciones claras para el paciente.",
+          "clinicalNote": "Redacta la Nota Clínica (Formato SOAP). Usa terminología propia de ${specialty}.",
+          "patientInstructions": "Instrucciones claras y empáticas para el paciente (medicamentos, cuidados, signos de alarma).",
           "actionItems": {
             "next_appointment": "Fecha sugerida o null",
             "urgent_referral": false,
@@ -75,8 +83,6 @@ export const GeminiMedicalService = {
 
   // 3. RECETA RÁPIDA
   async generatePrescriptionOnly(transcript: string): Promise<string> {
-    // ... (Tu código actual de receta, mantenlo igual o usa el mismo patrón fetch)
-     // Para brevedad asumo que está igual que antes, si necesitas te lo pego completo de nuevo
      try {
         const modelName = await this.getBestAvailableModel();
         const URL = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${API_KEY}`;
@@ -91,7 +97,7 @@ export const GeminiMedicalService = {
      } catch (e) { throw e; }
   },
 
-  // 4. NUEVO: CHAT CON CONTEXTO
+  // 4. CHAT CON CONTEXTO
   async chatWithContext(context: string, userMessage: string): Promise<string> {
     try {
         const modelName = await this.getBestAvailableModel();

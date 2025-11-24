@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Mic, Square, Save, RefreshCw, FileText, Share2, Printer, Search, Calendar as CalendarIcon, X, Clock, MessageSquare, User, Send, Edit2, Check, ArrowLeft, AlertTriangle } from 'lucide-react';
+import { Mic, Square, Save, RefreshCw, FileText, Share2, Printer, Search, Calendar as CalendarIcon, X, Clock, MessageSquare, User, Send, Edit2, Check, ArrowLeft, AlertTriangle, Stethoscope } from 'lucide-react';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
 import { GeminiMedicalService } from '../services/GeminiMedicalService';
 import { supabase } from '../lib/supabase';
@@ -12,6 +12,14 @@ import { AppointmentService } from '../services/AppointmentService';
 
 type TabType = 'record' | 'patient' | 'chat';
 interface ChatMessage { role: 'user' | 'ai'; text: string; }
+
+// Lista de Especialidades Comunes para el Selector
+const SPECIALTIES = [
+    "Medicina General", "Cardiología", "Pediatría", "Ginecología", 
+    "Dermatología", "Traumatología", "Psiquiatría", "Neurología", 
+    "Gastroenterología", "Oftalmología", "Otorrinolaringología", 
+    "Neumología", "Urología", "Endocrinología"
+];
 
 const ConsultationView: React.FC = () => {
   const { isListening, transcript, startListening, stopListening, resetTranscript } = useSpeechRecognition();
@@ -28,6 +36,9 @@ const ConsultationView: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabType>('record');
   const transcriptEndRef = useRef<HTMLDivElement>(null);
   
+  // NUEVO: Estado de Especialidad
+  const [selectedSpecialty, setSelectedSpecialty] = useState('Medicina General');
+
   // Edición In-Situ
   const [editableInstructions, setEditableInstructions] = useState('');
   const [isEditingInstructions, setIsEditingInstructions] = useState(false);
@@ -63,7 +74,13 @@ const ConsultationView: React.FC = () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
         const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single();
-        if (data) setDoctorProfile(data as DoctorProfile);
+        if (data) {
+            setDoctorProfile(data as DoctorProfile);
+            // INTELIGENTE: Si el doctor tiene especialidad definida, usarla por defecto
+            if (data.specialty && data.specialty !== 'Medicina General') {
+                setSelectedSpecialty(data.specialty);
+            }
+        }
     }
   };
 
@@ -84,13 +101,15 @@ const ConsultationView: React.FC = () => {
     if (!consentGiven) { toast.warning("Confirme consentimiento."); return; }
 
     setIsProcessing(true);
-    toast.info("Generando...");
+    toast.info(`Generando análisis de ${selectedSpecialty}...`); // Feedback visual
+    
     try {
-      const response = await GeminiMedicalService.generateClinicalNote(transcript);
+      // Pasamos la especialidad seleccionada al servicio
+      const response = await GeminiMedicalService.generateClinicalNote(transcript, selectedSpecialty);
       setGeneratedNote(response);
       setEditableInstructions(response.patientInstructions);
       setActiveTab('record');
-      setChatMessages([{ role: 'ai', text: 'Nota generada. ¿Alguna pregunta sobre este caso?' }]);
+      setChatMessages([{ role: 'ai', text: `Nota de ${selectedSpecialty} generada. ¿Alguna duda sobre el caso?` }]);
       toast.success("Éxito al generar");
     } catch (error) {
       console.error(error);
@@ -142,7 +161,7 @@ const ConsultationView: React.FC = () => {
       setChatMessages(prev => [...prev, { role: 'user', text: userMsg }]);
       setIsChatting(true);
       try {
-          const context = `NOTA: ${generatedNote.clinicalNote}\n\nINSTRUCCIONES ACTUALES: ${editableInstructions}`;
+          const context = `NOTA (${selectedSpecialty}): ${generatedNote.clinicalNote}\n\nINSTRUCCIONES: ${editableInstructions}`;
           const reply = await GeminiMedicalService.chatWithContext(context, userMsg);
           setChatMessages(prev => [...prev, { role: 'ai', text: reply }]);
       } catch (error) { toast.error("Error en el chat"); } finally { setIsChatting(false); }
@@ -235,6 +254,21 @@ const ConsultationView: React.FC = () => {
       `}>
         <h2 className="text-2xl font-bold text-slate-800 dark:text-white">Consulta Inteligente</h2>
         
+        {/* SELECTOR DE ESPECIALIDAD (NUEVO) */}
+        <div className="bg-indigo-50 dark:bg-indigo-900/20 p-3 rounded-lg border border-indigo-100 dark:border-indigo-800/50 flex flex-col gap-2">
+            <label className="text-xs font-bold text-indigo-600 dark:text-indigo-300 uppercase flex items-center gap-1">
+                <Stethoscope size={14}/> Modo Especialista
+            </label>
+            <select 
+                value={selectedSpecialty}
+                onChange={(e) => setSelectedSpecialty(e.target.value)}
+                className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md p-2 text-sm font-medium text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+                {SPECIALTIES.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+        </div>
+
+        {/* Selector Paciente */}
         <div className="relative z-30">
             <div className="flex items-center border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 bg-slate-50 dark:bg-slate-800 focus-within:ring-2 focus-within:ring-brand-teal transition-all">
                 <Search className="text-slate-400 mr-2" size={18} />
@@ -250,11 +284,13 @@ const ConsultationView: React.FC = () => {
             )}
         </div>
         
+        {/* Checkbox Consentimiento */}
         <div className={`flex items-center gap-2 p-3 rounded-lg border transition-colors ${consentGiven ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800' : 'bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800'}`}>
             <input type="checkbox" id="consent" checked={consentGiven} onChange={(e) => setConsentGiven(e.target.checked)} className="w-5 h-5 text-brand-teal rounded focus:ring-brand-teal cursor-pointer"/>
             <label htmlFor="consent" className="text-sm text-slate-700 dark:text-slate-300 leading-tight cursor-pointer select-none">Confirmo consentimiento verbal.</label>
         </div>
 
+        {/* Micrófono */}
         <div className={`flex-1 border-2 border-dashed rounded-2xl flex flex-col items-center justify-center p-4 transition-all relative overflow-hidden ${isListening ? 'border-red-400 bg-red-50 dark:bg-red-900/10' : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50'}`}>
             <div className={`w-24 h-24 rounded-full flex items-center justify-center mb-4 transition-all z-10 ${isListening ? 'bg-red-500 text-white animate-pulse shadow-xl shadow-red-500/30 scale-110' : 'bg-white dark:bg-slate-700 text-slate-300 dark:text-slate-500 shadow-sm'}`}>
                 <Mic size={40} />
@@ -297,17 +333,16 @@ const ConsultationView: React.FC = () => {
             ) : (
                 <div className="animate-fade-in-up h-full flex flex-col">
                     
-                    {/* --- NUEVO: BANNER DE SEGURIDAD LEGAL --- */}
+                    {/* BANNER DE SEGURIDAD LEGAL */}
                     <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50 p-3 rounded-lg flex items-start gap-3 mb-4 shrink-0">
                         <AlertTriangle className="text-amber-500 dark:text-amber-400 shrink-0 mt-0.5" size={18} />
                         <div>
-                            <p className="text-xs font-bold text-amber-800 dark:text-amber-200">IA de Asistencia Clínica</p>
+                            <p className="text-xs font-bold text-amber-800 dark:text-amber-200">Modo: {selectedSpecialty}</p>
                             <p className="text-[10px] text-amber-700 dark:text-amber-300/80 mt-0.5 leading-snug">
-                                La información generada es un soporte. La validación de diagnósticos y dosis es responsabilidad exclusiva del médico tratante.
+                                La validación clínica es responsabilidad exclusiva del médico tratante.
                             </p>
                         </div>
                     </div>
-                    {/* ---------------------------------------- */}
 
                     {/* EXPEDIENTE */}
                     {activeTab === 'record' && (
