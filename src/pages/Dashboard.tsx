@@ -114,7 +114,7 @@ const Dashboard: React.FC = () => {
             Desarrollado por <span className="text-brand-teal font-bold">Pixel Art Studio</span>.
             </p>
             <div className="flex justify-center gap-4 text-[10px] text-slate-400">
-                <span>v2.1 BI Update</span>
+                <span>v2.2 Security Verified</span>
                 <span>•</span>
                 <button 
                     onClick={() => navigate('/privacy')} 
