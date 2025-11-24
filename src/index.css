@@ -2,18 +2,29 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Estilos globales adicionales para que la app se sienta nativa */
-body {
-  background-color: #f8fafc;
+/* Fondo persistente para evitar flashes en dark mode */
+html, body, #root {
+  height: 100%;
+  background-color: #f8fafc; /* slate-50 */
   margin: 0;
   padding: 0;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
 }
 
-/* Ocultar scrollbar pero mantener funcionalidad (opcional, estético) */
+html.dark, html.dark body, html.dark #root {
+  background-color: #020617; /* slate-950 */
+}
+
+/* Ajuste para iPhone Notch y Home Bar */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .pb-safe-area-inset-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+/* Estilos personalizados de Scrollbar */
 ::-webkit-scrollbar {
-  width: 8px;
+  width: 6px;
+  height: 6px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
@@ -22,18 +33,9 @@ body {
   background: #cbd5e1;
   border-radius: 4px;
 }
-
-/* Agrega esto al final: */
-html {
-  scroll-behavior: smooth;
-  -webkit-tap-highlight-color: transparent; /* Quita el brillo azul al tocar botones en móvil */
+.dark ::-webkit-scrollbar-thumb {
+  background: #334155;
 }
-
-/* Ocultar barra de scroll en contenedores horizontales (Action Board) */
-.scrollbar-hide::-webkit-scrollbar {
-    display: none;
-}
-.scrollbar-hide {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }
