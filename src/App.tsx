@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { supabase } from './lib/supabase';
 import { Toaster } from 'sonner';
 import { ThemeProvider } from './context/ThemeContext';
@@ -13,7 +13,8 @@ import AuthView from './components/AuthView';
 import Dashboard from './pages/Dashboard';
 import CalendarView from './components/CalendarView';
 import PrivacyPolicy from './pages/PrivacyPolicy';
-import ReloadPrompt from './components/ReloadPrompt'; // <--- NUEVO IMPORT
+import ReloadPrompt from './components/ReloadPrompt';
+import SplashScreen from './components/SplashScreen'; // <--- NUEVO IMPORT
 import { Menu } from 'lucide-react';
 import { ViewState } from './types';
 
@@ -25,17 +26,11 @@ const MainLayout: React.FC<{ session: any; onLogout: () => void }> = ({ session 
       <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
       <main className="flex-1 md:ml-64 transition-all duration-300 flex flex-col min-h-screen">
         
-        {/* --- HEADER MÓVIL CON LOGO --- */}
+        {/* HEADER MÓVIL */}
         <div className="md:hidden bg-slate-900 dark:bg-slate-950 text-white p-4 flex items-center justify-between sticky top-0 z-40 shadow-md">
            <div className="flex items-center gap-3">
-             <img 
-                src="/pwa-192x192.png" 
-                alt="MediScribe Logo" 
-                className="h-8 w-8 rounded-lg bg-white/10 p-0.5 object-cover"
-             />
-             <span className="font-bold text-lg tracking-tight">
-               MediScribe AI
-             </span>
+             <img src="/pwa-192x192.png" alt="Logo" className="h-8 w-8 rounded-lg bg-white/10 p-0.5 object-cover"/>
+             <span className="font-bold text-lg tracking-tight">MediScribe AI</span>
            </div>
            <button onClick={() => setIsSidebarOpen(true)} className="text-white p-2 hover:bg-slate-800 rounded-lg transition-colors">
              <Menu size={24} />
@@ -62,8 +57,10 @@ const MainLayout: React.FC<{ session: any; onLogout: () => void }> = ({ session 
 const App: React.FC = () => {
   const [session, setSession] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [showSplash, setShowSplash] = useState(true); // CONTROL DEL SPLASH
 
   useEffect(() => {
+    // 1. Lógica de Supabase (Carga de sesión)
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setLoading(false);
@@ -72,32 +69,44 @@ const App: React.FC = () => {
       setSession(session);
       setLoading(false);
     });
-    return () => subscription.unsubscribe();
+
+    // 2. Lógica del Splash Screen (Temporizador)
+    const timer = setTimeout(() => {
+        setShowSplash(false);
+    }, 2500); // 2.5 segundos de duración
+
+    return () => {
+        subscription.unsubscribe();
+        clearTimeout(timer);
+    };
   }, []);
 
-  if (loading) {
-    return <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900 text-slate-400">Cargando sistema...</div>;
+  // SI EL SPLASH ESTÁ ACTIVO, MOSTRAMOS SOLO EL SPLASH
+  if (showSplash) {
+      return (
+        <ThemeProvider>
+            <SplashScreen />
+        </ThemeProvider>
+      );
   }
 
+  // SI NO HAY SESIÓN (LOGIN)
   if (!session) {
     return (
         <ThemeProvider>
             <Toaster position="top-center" richColors />
-            {/* También ponemos el prompt aquí por si hay updates en la pantalla de login */}
             <ReloadPrompt /> 
             <AuthView authService={{ supabase }} onLoginSuccess={() => {}} />
         </ThemeProvider>
     );
   }
 
+  // APP PRINCIPAL
   return (
     <ThemeProvider>
         <BrowserRouter>
         <Toaster position="top-center" richColors closeButton />
-        
-        {/* VIGILANTE DE ACTUALIZACIONES */}
         <ReloadPrompt />
-        
         <MainLayout session={session} onLogout={async () => await supabase.auth.signOut()} />
         </BrowserRouter>
     </ThemeProvider>
