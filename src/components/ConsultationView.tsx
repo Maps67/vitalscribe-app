@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Mic, Square, Save, RefreshCw, FileText, Share2, Printer, Search, Calendar as CalendarIcon, X, Clock, MessageSquare, User, Send } from 'lucide-react';
+import { Mic, Square, Save, RefreshCw, FileText, Share2, Printer, Search, Calendar as CalendarIcon, X, Clock, MessageSquare, User, Send, Edit2, Check } from 'lucide-react';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
 import { GeminiMedicalService } from '../services/GeminiMedicalService';
 import { supabase } from '../lib/supabase';
@@ -26,8 +26,12 @@ const ConsultationView: React.FC = () => {
   // UI States
   const [consentGiven, setConsentGiven] = useState(false);
   const [activeTab, setActiveTab] = useState<TabType>('record');
-  const transcriptEndRef = useRef<HTMLDivElement>(null); // Para auto-scroll del texto
+  const transcriptEndRef = useRef<HTMLDivElement>(null);
   
+  // ESTADOS NUEVOS PARA EDICIÓN IN-SITU
+  const [editableInstructions, setEditableInstructions] = useState(''); // Texto editable de la receta
+  const [isEditingInstructions, setIsEditingInstructions] = useState(false); // Modo edición activado/desactivado
+
   // Cita Rápida
   const [isAppointmentModalOpen, setIsAppointmentModalOpen] = useState(false);
   const [nextApptDate, setNextApptDate] = useState('');
@@ -43,10 +47,8 @@ const ConsultationView: React.FC = () => {
     fetchDoctorProfile();
   }, []);
 
-  // Auto-scroll al final del chat y de la transcripción
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [chatMessages, activeTab]);
   
-  // Auto-scroll para la transcripción en tiempo real
   useEffect(() => { 
       if (isListening && transcriptEndRef.current) {
           transcriptEndRef.current.scrollIntoView({ behavior: 'smooth' });
@@ -75,6 +77,10 @@ const ConsultationView: React.FC = () => {
     try {
       const response = await GeminiMedicalService.generateClinicalNote(transcript);
       setGeneratedNote(response);
+      
+      // Inicializamos el texto editable con lo que trajo la IA
+      setEditableInstructions(response.patientInstructions);
+      
       setActiveTab('record');
       setChatMessages([{ role: 'ai', text: 'Nota generada. ¿Alguna pregunta sobre este caso?' }]);
       toast.success("Éxito al generar");
@@ -93,11 +99,12 @@ const ConsultationView: React.FC = () => {
         const { data: { user } } = await supabase.auth.getUser();
         if(!user || !user.id) { toast.error("Sesión inválida"); return; }
 
+        // Guardamos usando 'editableInstructions' por si el médico hizo cambios manuales
         const { error } = await supabase.from('consultations').insert({
             doctor_id: user.id,
             patient_id: selectedPatient.id,
             transcript: transcript || 'Sin transcripción', 
-            summary: generatedNote.clinicalNote, 
+            summary: generatedNote.clinicalNote + "\n\nINDICACIONES:\n" + editableInstructions, 
             status: 'completed'
         });
 
@@ -106,6 +113,7 @@ const ConsultationView: React.FC = () => {
         toast.success("Consulta guardada correctamente");
         resetTranscript();
         setGeneratedNote(null);
+        setEditableInstructions('');
         setSelectedPatient(null);
         setConsentGiven(false);
         setChatMessages([]);
@@ -124,7 +132,8 @@ const ConsultationView: React.FC = () => {
       setChatMessages(prev => [...prev, { role: 'user', text: userMsg }]);
       setIsChatting(true);
       try {
-          const context = `NOTA: ${generatedNote.clinicalNote}\n\nINSTRUCCIONES: ${generatedNote.patientInstructions}`;
+          // Usamos editableInstructions en el contexto por si cambió
+          const context = `NOTA: ${generatedNote.clinicalNote}\n\nINSTRUCCIONES ACTUALES: ${editableInstructions}`;
           const reply = await GeminiMedicalService.chatWithContext(context, userMsg);
           setChatMessages(prev => [...prev, { role: 'ai', text: reply }]);
       } catch (error) { toast.error("Error en el chat"); } finally { setIsChatting(false); }
@@ -133,7 +142,6 @@ const ConsultationView: React.FC = () => {
   const handleOpenAppointmentModal = () => {
      if (!selectedPatient) { toast.error("Seleccione paciente."); return; }
      const now = new Date(); now.setDate(now.getDate() + 7); now.setMinutes(0);
-     // Ajuste simple de zona horaria local para el input datetime-local
      const toLocalISO = (date: Date) => {
         const offset = date.getTimezoneOffset() * 60000;
         return new Date(date.getTime() - offset).toISOString().slice(0, 16);
@@ -160,6 +168,7 @@ const ConsultationView: React.FC = () => {
       } catch (error) { toast.error("Error al agendar"); }
   };
 
+  // --- PDF COMPARTIDO (Imprimir) ---
   const handlePrint = async () => {
       if (!selectedPatient || !generatedNote || !doctorProfile) return;
       const blob = await pdf(
@@ -169,10 +178,41 @@ const ConsultationView: React.FC = () => {
             university={doctorProfile.university} address={doctorProfile.address}
             logoUrl={doctorProfile.logo_url} signatureUrl={doctorProfile.signature_url}
             patientName={selectedPatient.name} date={new Date().toLocaleDateString()}
-            content={generatedNote.patientInstructions} 
+            content={editableInstructions} // Usamos la versión editada
         />
       ).toBlob();
       window.open(URL.createObjectURL(blob), '_blank');
+  };
+
+  // --- WHATSAPP (Compartir PDF Nativo) ---
+  const handleShareWhatsApp = async () => {
+    if (!selectedPatient || !generatedNote || !doctorProfile) return;
+    try {
+        const blob = await pdf(
+            <PrescriptionPDF 
+                doctorName={doctorProfile.full_name} specialty={doctorProfile.specialty}
+                license={doctorProfile.license_number} phone={doctorProfile.phone}
+                university={doctorProfile.university} address={doctorProfile.address}
+                logoUrl={doctorProfile.logo_url} signatureUrl={doctorProfile.signature_url}
+                patientName={selectedPatient.name} date={new Date().toLocaleDateString()}
+                content={editableInstructions} // Usamos la versión editada
+            />
+        ).toBlob();
+
+        const file = new File([blob], `Receta-${selectedPatient.name}.pdf`, { type: 'application/pdf' });
+
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+            await navigator.share({
+                files: [file],
+                title: 'Receta Médica',
+                text: `Hola ${selectedPatient.name}, aquí está tu receta médica.`
+            });
+        } else {
+            toast.error("Tu dispositivo no soporta compartir archivos directos. Usa Imprimir.");
+        }
+    } catch (error) {
+        console.log("Compartir cancelado o fallido", error);
+    }
   };
 
   const filteredPatients = patients.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -202,26 +242,17 @@ const ConsultationView: React.FC = () => {
             <label htmlFor="consent" className="text-sm text-slate-700 dark:text-slate-300 leading-tight cursor-pointer select-none">Confirmo consentimiento verbal.</label>
         </div>
 
-        {/* ÁREA DE GRABACIÓN MEJORADA */}
         <div className={`flex-1 border-2 border-dashed rounded-2xl flex flex-col items-center justify-center p-4 transition-all relative overflow-hidden ${isListening ? 'border-red-400 bg-red-50 dark:bg-red-900/10' : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50'}`}>
-            
-            {/* Micrófono Central con Animación */}
             <div className={`w-24 h-24 rounded-full flex items-center justify-center mb-4 transition-all z-10 ${isListening ? 'bg-red-500 text-white animate-pulse shadow-xl shadow-red-500/30 scale-110' : 'bg-white dark:bg-slate-700 text-slate-300 dark:text-slate-500 shadow-sm'}`}>
                 <Mic size={40} />
             </div>
-            
-            <p className="text-center font-medium text-slate-600 dark:text-slate-400 mb-4 z-10">
-                {isListening ? "Escuchando..." : "Listo para iniciar."}
-            </p>
-            
-            {/* Transcripción en Tiempo Real (Scrollable) */}
+            <p className="text-center font-medium text-slate-600 dark:text-slate-400 mb-4 z-10">{isListening ? "Escuchando..." : "Listo para iniciar."}</p>
             {transcript && (
                 <div className="w-full flex-1 overflow-y-auto bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 text-sm text-slate-600 dark:text-slate-300 italic mb-4 z-10 shadow-inner">
                     "{transcript}"
-                    <div ref={transcriptEndRef} /> {/* Ancla para auto-scroll */}
+                    <div ref={transcriptEndRef} />
                 </div>
             )}
-
             <div className="flex w-full gap-3 z-10 mt-auto">
                 <button onClick={isListening ? stopListening : startListening} disabled={!consentGiven && !isListening} className={`flex-1 py-3 rounded-xl font-bold flex justify-center items-center gap-2 transition-all text-white shadow-lg ${isListening ? 'bg-slate-800 hover:bg-slate-900' : 'bg-slate-900 hover:bg-slate-800 disabled:bg-slate-400'}`}>{isListening ? <><Square size={18}/> Detener</> : <><Mic size={18}/> Iniciar</>}</button>
                 <button onClick={handleGenerate} disabled={!transcript || isListening || isProcessing} className="flex-1 bg-brand-teal text-white py-3 rounded-xl font-bold hover:bg-teal-600 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2">{isProcessing ? <RefreshCw className="animate-spin" size={18}/> : <RefreshCw size={18}/>} Generar</button>
@@ -262,16 +293,49 @@ const ConsultationView: React.FC = () => {
                         </div>
                     )}
 
-                    {/* PACIENTE */}
+                    {/* PACIENTE (RECETA EDITABLE + WHATSAPP) */}
                     {activeTab === 'patient' && (
-                         <div className="bg-white dark:bg-slate-900 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800">
-                            <div className="flex justify-between items-center mb-4 border-b dark:border-slate-700 pb-2">
+                         <div className="bg-white dark:bg-slate-900 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 flex flex-col h-full">
+                            <div className="flex justify-between items-center mb-4 border-b dark:border-slate-700 pb-2 shrink-0">
                                 <h3 className="font-bold text-slate-800 dark:text-white flex items-center gap-2"><Share2 className="text-brand-teal"/> Indicaciones / Receta</h3>
-                                <button onClick={handlePrint} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded text-slate-600 dark:text-slate-400 flex gap-1 items-center text-sm font-medium border border-slate-200 dark:border-slate-700"><Printer size={16}/> Imprimir PDF</button>
+                                
+                                <div className="flex gap-2">
+                                    {/* BOTÓN EDITAR */}
+                                    <button 
+                                        onClick={() => setIsEditingInstructions(!isEditingInstructions)}
+                                        className={`p-2 rounded transition-colors flex gap-2 items-center text-sm font-bold ${isEditingInstructions ? 'bg-green-100 text-green-700' : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400'}`}
+                                        title="Editar receta manualmente"
+                                    >
+                                        {isEditingInstructions ? <><Check size={16}/> Terminar Edición</> : <><Edit2 size={16}/> Editar</>}
+                                    </button>
+
+                                    {/* BOTÓN WHATSAPP */}
+                                    <button onClick={handleShareWhatsApp} className="p-2 bg-green-500 hover:bg-green-600 text-white rounded flex gap-2 items-center text-sm font-bold shadow-sm transition-colors" title="Enviar PDF por WhatsApp">
+                                        <Send size={16} /> WhatsApp
+                                    </button>
+
+                                    {/* BOTÓN IMPRIMIR */}
+                                    <button onClick={handlePrint} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded text-slate-600 dark:text-slate-400 flex gap-1 items-center text-sm font-medium border border-slate-200 dark:border-slate-700"><Printer size={16}/></button>
+                                </div>
                             </div>
-                            <div className="dark:text-slate-300">
-                                <FormattedText content={generatedNote.patientInstructions} />
+                            
+                            {/* ÁREA EDITABLE / LECTURA */}
+                            <div className="flex-1 overflow-y-auto dark:text-slate-300">
+                                {isEditingInstructions ? (
+                                    <textarea 
+                                        className="w-full h-full p-4 border-2 border-brand-teal rounded-lg outline-none resize-none bg-slate-50 dark:bg-slate-800 dark:text-white font-mono text-sm focus:ring-2 focus:ring-teal-200 transition-all"
+                                        value={editableInstructions}
+                                        onChange={(e) => setEditableInstructions(e.target.value)}
+                                        placeholder="Escriba o dicte las indicaciones aquí..."
+                                    />
+                                ) : (
+                                    <FormattedText content={editableInstructions} />
+                                )}
                             </div>
+                            
+                            {isEditingInstructions && (
+                                <p className="text-xs text-slate-400 mt-2 text-center animate-pulse">Modo Edición Activo: Puedes usar el dictado de tu teclado móvil.</p>
+                            )}
                          </div>
                     )}
 
