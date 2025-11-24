@@ -28,9 +28,9 @@ const ConsultationView: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabType>('record');
   const transcriptEndRef = useRef<HTMLDivElement>(null);
   
-  // ESTADOS NUEVOS PARA EDICIÓN IN-SITU
-  const [editableInstructions, setEditableInstructions] = useState(''); // Texto editable de la receta
-  const [isEditingInstructions, setIsEditingInstructions] = useState(false); // Modo edición activado/desactivado
+  // Edición In-Situ
+  const [editableInstructions, setEditableInstructions] = useState('');
+  const [isEditingInstructions, setIsEditingInstructions] = useState(false);
 
   // Cita Rápida
   const [isAppointmentModalOpen, setIsAppointmentModalOpen] = useState(false);
@@ -47,8 +47,10 @@ const ConsultationView: React.FC = () => {
     fetchDoctorProfile();
   }, []);
 
+  // Auto-scroll chat
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [chatMessages, activeTab]);
   
+  // Auto-scroll transcripción en vivo
   useEffect(() => { 
       if (isListening && transcriptEndRef.current) {
           transcriptEndRef.current.scrollIntoView({ behavior: 'smooth' });
@@ -68,8 +70,24 @@ const ConsultationView: React.FC = () => {
     }
   };
 
+  // --- FUNCIÓN CANDADO DE SEGURIDAD ---
+  const handleToggleRecording = () => {
+      if (isListening) {
+          // Siempre permitir detener
+          stopListening();
+      } else {
+          // Solo permitir iniciar si hay consentimiento explícito
+          if (!consentGiven) {
+              toast.warning("⚠️ Por ley, debe marcar la casilla de consentimiento primero.");
+              return;
+          }
+          startListening();
+      }
+  };
+
   const handleGenerate = async () => {
     if (!transcript) { toast.error("No hay audio."); return; }
+    // Doble verificación por seguridad
     if (!consentGiven) { toast.warning("Confirme consentimiento."); return; }
 
     setIsProcessing(true);
@@ -77,10 +95,7 @@ const ConsultationView: React.FC = () => {
     try {
       const response = await GeminiMedicalService.generateClinicalNote(transcript);
       setGeneratedNote(response);
-      
-      // Inicializamos el texto editable con lo que trajo la IA
       setEditableInstructions(response.patientInstructions);
-      
       setActiveTab('record');
       setChatMessages([{ role: 'ai', text: 'Nota generada. ¿Alguna pregunta sobre este caso?' }]);
       toast.success("Éxito al generar");
@@ -99,7 +114,6 @@ const ConsultationView: React.FC = () => {
         const { data: { user } } = await supabase.auth.getUser();
         if(!user || !user.id) { toast.error("Sesión inválida"); return; }
 
-        // Guardamos usando 'editableInstructions' por si el médico hizo cambios manuales
         const { error } = await supabase.from('consultations').insert({
             doctor_id: user.id,
             patient_id: selectedPatient.id,
@@ -132,7 +146,6 @@ const ConsultationView: React.FC = () => {
       setChatMessages(prev => [...prev, { role: 'user', text: userMsg }]);
       setIsChatting(true);
       try {
-          // Usamos editableInstructions en el contexto por si cambió
           const context = `NOTA: ${generatedNote.clinicalNote}\n\nINSTRUCCIONES ACTUALES: ${editableInstructions}`;
           const reply = await GeminiMedicalService.chatWithContext(context, userMsg);
           setChatMessages(prev => [...prev, { role: 'ai', text: reply }]);
@@ -168,7 +181,6 @@ const ConsultationView: React.FC = () => {
       } catch (error) { toast.error("Error al agendar"); }
   };
 
-  // --- PDF COMPARTIDO (Imprimir) ---
   const handlePrint = async () => {
       if (!selectedPatient || !generatedNote || !doctorProfile) return;
       const blob = await pdf(
@@ -178,13 +190,12 @@ const ConsultationView: React.FC = () => {
             university={doctorProfile.university} address={doctorProfile.address}
             logoUrl={doctorProfile.logo_url} signatureUrl={doctorProfile.signature_url}
             patientName={selectedPatient.name} date={new Date().toLocaleDateString()}
-            content={editableInstructions} // Usamos la versión editada
+            content={editableInstructions} 
         />
       ).toBlob();
       window.open(URL.createObjectURL(blob), '_blank');
   };
 
-  // --- WHATSAPP (Compartir PDF Nativo) ---
   const handleShareWhatsApp = async () => {
     if (!selectedPatient || !generatedNote || !doctorProfile) return;
     try {
@@ -195,7 +206,7 @@ const ConsultationView: React.FC = () => {
                 university={doctorProfile.university} address={doctorProfile.address}
                 logoUrl={doctorProfile.logo_url} signatureUrl={doctorProfile.signature_url}
                 patientName={selectedPatient.name} date={new Date().toLocaleDateString()}
-                content={editableInstructions} // Usamos la versión editada
+                content={editableInstructions}
             />
         ).toBlob();
 
@@ -208,10 +219,10 @@ const ConsultationView: React.FC = () => {
                 text: `Hola ${selectedPatient.name}, aquí está tu receta médica.`
             });
         } else {
-            toast.error("Tu dispositivo no soporta compartir archivos directos. Usa Imprimir.");
+            toast.error("Tu dispositivo no soporta compartir archivos. Usa Imprimir.");
         }
     } catch (error) {
-        console.log("Compartir cancelado o fallido", error);
+        console.log("Compartir cancelado", error);
     }
   };
 
@@ -222,6 +233,7 @@ const ConsultationView: React.FC = () => {
       {/* IZQUIERDA: GRABACIÓN */}
       <div className="w-full md:w-1/3 p-4 flex flex-col gap-4 border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-y-auto shrink-0 z-20 shadow-sm">
         <h2 className="text-2xl font-bold text-slate-800 dark:text-white">Consulta Inteligente</h2>
+        
         <div className="relative z-30">
             <div className="flex items-center border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 bg-slate-50 dark:bg-slate-800 focus-within:ring-2 focus-within:ring-brand-teal transition-all">
                 <Search className="text-slate-400 mr-2" size={18} />
@@ -243,19 +255,36 @@ const ConsultationView: React.FC = () => {
         </div>
 
         <div className={`flex-1 border-2 border-dashed rounded-2xl flex flex-col items-center justify-center p-4 transition-all relative overflow-hidden ${isListening ? 'border-red-400 bg-red-50 dark:bg-red-900/10' : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50'}`}>
+            
             <div className={`w-24 h-24 rounded-full flex items-center justify-center mb-4 transition-all z-10 ${isListening ? 'bg-red-500 text-white animate-pulse shadow-xl shadow-red-500/30 scale-110' : 'bg-white dark:bg-slate-700 text-slate-300 dark:text-slate-500 shadow-sm'}`}>
                 <Mic size={40} />
             </div>
+            
             <p className="text-center font-medium text-slate-600 dark:text-slate-400 mb-4 z-10">{isListening ? "Escuchando..." : "Listo para iniciar."}</p>
+            
             {transcript && (
                 <div className="w-full flex-1 overflow-y-auto bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 text-sm text-slate-600 dark:text-slate-300 italic mb-4 z-10 shadow-inner">
                     "{transcript}"
                     <div ref={transcriptEndRef} />
                 </div>
             )}
+
             <div className="flex w-full gap-3 z-10 mt-auto">
-                <button onClick={isListening ? stopListening : startListening} disabled={!consentGiven && !isListening} className={`flex-1 py-3 rounded-xl font-bold flex justify-center items-center gap-2 transition-all text-white shadow-lg ${isListening ? 'bg-slate-800 hover:bg-slate-900' : 'bg-slate-900 hover:bg-slate-800 disabled:bg-slate-400'}`}>{isListening ? <><Square size={18}/> Detener</> : <><Mic size={18}/> Iniciar</>}</button>
-                <button onClick={handleGenerate} disabled={!transcript || isListening || isProcessing} className="flex-1 bg-brand-teal text-white py-3 rounded-xl font-bold hover:bg-teal-600 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2">{isProcessing ? <RefreshCw className="animate-spin" size={18}/> : <RefreshCw size={18}/>} Generar</button>
+                <button 
+                    onClick={handleToggleRecording} 
+                    disabled={!consentGiven && !isListening} 
+                    className={`flex-1 py-3 rounded-xl font-bold flex justify-center items-center gap-2 transition-all text-white shadow-lg ${
+                        isListening 
+                            ? 'bg-red-600 hover:bg-red-700 animate-pulse' 
+                            : 'bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 disabled:cursor-not-allowed'
+                    }`}
+                >
+                    {isListening ? <><Square size={18}/> Detener</> : <><Mic size={18}/> Iniciar</>}
+                </button>
+                
+                <button onClick={handleGenerate} disabled={!transcript || isListening || isProcessing} className="flex-1 bg-brand-teal text-white py-3 rounded-xl font-bold hover:bg-teal-600 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2">
+                    {isProcessing ? <RefreshCw className="animate-spin" size={18}/> : <RefreshCw size={18}/>} Generar
+                </button>
             </div>
         </div>
       </div>
@@ -293,49 +322,24 @@ const ConsultationView: React.FC = () => {
                         </div>
                     )}
 
-                    {/* PACIENTE (RECETA EDITABLE + WHATSAPP) */}
+                    {/* PACIENTE */}
                     {activeTab === 'patient' && (
                          <div className="bg-white dark:bg-slate-900 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 flex flex-col h-full">
                             <div className="flex justify-between items-center mb-4 border-b dark:border-slate-700 pb-2 shrink-0">
                                 <h3 className="font-bold text-slate-800 dark:text-white flex items-center gap-2"><Share2 className="text-brand-teal"/> Indicaciones / Receta</h3>
-                                
                                 <div className="flex gap-2">
-                                    {/* BOTÓN EDITAR */}
-                                    <button 
-                                        onClick={() => setIsEditingInstructions(!isEditingInstructions)}
-                                        className={`p-2 rounded transition-colors flex gap-2 items-center text-sm font-bold ${isEditingInstructions ? 'bg-green-100 text-green-700' : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400'}`}
-                                        title="Editar receta manualmente"
-                                    >
-                                        {isEditingInstructions ? <><Check size={16}/> Terminar Edición</> : <><Edit2 size={16}/> Editar</>}
-                                    </button>
-
-                                    {/* BOTÓN WHATSAPP */}
-                                    <button onClick={handleShareWhatsApp} className="p-2 bg-green-500 hover:bg-green-600 text-white rounded flex gap-2 items-center text-sm font-bold shadow-sm transition-colors" title="Enviar PDF por WhatsApp">
-                                        <Send size={16} /> WhatsApp
-                                    </button>
-
-                                    {/* BOTÓN IMPRIMIR */}
+                                    <button onClick={() => setIsEditingInstructions(!isEditingInstructions)} className={`p-2 rounded transition-colors flex gap-2 items-center text-sm font-bold ${isEditingInstructions ? 'bg-green-100 text-green-700' : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400'}`} title="Editar receta">{isEditingInstructions ? <><Check size={16}/> Terminar</> : <><Edit2 size={16}/> Editar</>}</button>
+                                    <button onClick={handleShareWhatsApp} className="p-2 bg-green-500 hover:bg-green-600 text-white rounded flex gap-2 items-center text-sm font-bold shadow-sm transition-colors" title="Enviar PDF por WhatsApp"><Send size={16} /> WhatsApp</button>
                                     <button onClick={handlePrint} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded text-slate-600 dark:text-slate-400 flex gap-1 items-center text-sm font-medium border border-slate-200 dark:border-slate-700"><Printer size={16}/></button>
                                 </div>
                             </div>
-                            
-                            {/* ÁREA EDITABLE / LECTURA */}
                             <div className="flex-1 overflow-y-auto dark:text-slate-300">
                                 {isEditingInstructions ? (
-                                    <textarea 
-                                        className="w-full h-full p-4 border-2 border-brand-teal rounded-lg outline-none resize-none bg-slate-50 dark:bg-slate-800 dark:text-white font-mono text-sm focus:ring-2 focus:ring-teal-200 transition-all"
-                                        value={editableInstructions}
-                                        onChange={(e) => setEditableInstructions(e.target.value)}
-                                        placeholder="Escriba o dicte las indicaciones aquí..."
-                                    />
+                                    <textarea className="w-full h-full p-4 border-2 border-brand-teal rounded-lg outline-none resize-none bg-slate-50 dark:bg-slate-800 dark:text-white font-mono text-sm focus:ring-2 focus:ring-teal-200 transition-all" value={editableInstructions} onChange={(e) => setEditableInstructions(e.target.value)} placeholder="Escriba o dicte las indicaciones aquí..."/>
                                 ) : (
                                     <FormattedText content={editableInstructions} />
                                 )}
                             </div>
-                            
-                            {isEditingInstructions && (
-                                <p className="text-xs text-slate-400 mt-2 text-center animate-pulse">Modo Edición Activo: Puedes usar el dictado de tu teclado móvil.</p>
-                            )}
                          </div>
                     )}
 
@@ -344,11 +348,7 @@ const ConsultationView: React.FC = () => {
                         <div className="flex flex-col h-full bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden">
                             <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50 dark:bg-slate-950/50">
                                 {chatMessages.map((msg, i) => (
-                                    <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                        <div className={`max-w-[80%] p-3 rounded-2xl text-sm ${msg.role === 'user' ? 'bg-slate-800 dark:bg-brand-teal text-white rounded-br-none' : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-bl-none shadow-sm'}`}>
-                                            {msg.text}
-                                        </div>
-                                    </div>
+                                    <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}><div className={`max-w-[80%] p-3 rounded-2xl text-sm ${msg.role === 'user' ? 'bg-slate-800 dark:bg-brand-teal text-white rounded-br-none' : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-bl-none shadow-sm'}`}>{msg.text}</div></div>
                                 ))}
                                 {isChatting && <div className="flex justify-start"><div className="bg-slate-200 dark:bg-slate-800 p-3 rounded-2xl text-xs text-slate-500 dark:text-slate-400 animate-pulse">Escribiendo...</div></div>}
                                 <div ref={chatEndRef} />
@@ -371,10 +371,7 @@ const ConsultationView: React.FC = () => {
                   <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center"><h3 className="font-bold text-slate-800 dark:text-white">Cita de Seguimiento</h3><button onClick={() => setIsAppointmentModalOpen(false)}><X size={20} className="text-slate-400 hover:text-red-500"/></button></div>
                   <div className="p-6 space-y-4">
                       <div className="bg-slate-50 dark:bg-slate-800 p-3 rounded-lg border border-slate-200 dark:border-slate-700"><p className="text-xs text-slate-500 dark:text-slate-400 uppercase font-bold">Paciente</p><p className="text-lg font-medium text-slate-800 dark:text-white">{selectedPatient?.name}</p></div>
-                      <div>
-                          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-2"><Clock size={16}/> Fecha y Hora</label>
-                          <input type="datetime-local" className="w-full p-3 border border-slate-200 dark:border-slate-700 rounded-lg outline-none focus:border-indigo-500 dark:bg-slate-800 dark:text-white" value={nextApptDate} onChange={(e) => setNextApptDate(e.target.value)}/>
-                      </div>
+                      <div><label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-2"><Clock size={16}/> Fecha y Hora</label><input type="datetime-local" className="w-full p-3 border border-slate-200 dark:border-slate-700 rounded-lg outline-none focus:border-indigo-500 dark:bg-slate-800 dark:text-white" value={nextApptDate} onChange={(e) => setNextApptDate(e.target.value)}/></div>
                       <button onClick={handleConfirmAppointment} className="w-full bg-indigo-600 text-white py-3 rounded-lg font-bold hover:bg-indigo-700 shadow-lg mt-2">Confirmar Cita</button>
                   </div>
               </div>
