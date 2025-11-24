@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { LayoutDashboard, Stethoscope, Users, Smartphone, LogOut, X, Settings, Download, Share, Calendar, Moon, Sun } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { useTheme } from '../context/ThemeContext'; // <--- Importar Hook
+import { useTheme } from '../context/ThemeContext';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -13,7 +13,7 @@ interface SidebarProps {
 
 const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   const [profile, setProfile] = useState({ name: 'Cargando...', specialty: '' });
-  const { theme, toggleTheme } = useTheme(); // <--- Usar el tema
+  const { theme, toggleTheme } = useTheme();
   
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isIOS, setIsIOS] = useState(false);
@@ -81,12 +81,16 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
           md:translate-x-0 flex flex-col
         `}
       >
+        {/* HEADER CON EL NUEVO LOGO */}
         <div className="p-6 flex items-center justify-between border-b border-slate-100 dark:border-slate-800 shrink-0">
-          <div className="flex items-center space-x-2">
-            <div className="bg-brand-teal p-2 rounded-lg">
-              <Stethoscope className="text-white h-6 w-6" />
-            </div>
-            <span className="text-xl font-bold text-slate-800 dark:text-white">MediScribe</span>
+          <div className="flex items-center space-x-3">
+            {/* IMAGEN DEL LOGO */}
+            <img 
+              src="/pwa-192x192.png" 
+              alt="Logo" 
+              className="h-10 w-10 rounded-xl shadow-sm object-cover bg-slate-50" 
+            />
+            <span className="text-xl font-bold text-slate-800 dark:text-white tracking-tight">MediScribe</span>
           </div>
           <button onClick={onClose} className="md:hidden text-slate-400 hover:text-slate-600">
             <X size={24} />
