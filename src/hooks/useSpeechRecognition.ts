@@ -6,91 +6,149 @@ interface IWindow extends Window {
 }
 
 export const useSpeechRecognition = () => {
+  // --- ESTADOS ---
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState('');
-  // Inicialización INMEDIATA: Comprueba si existe la API al cargar el archivo
-  const [isAPISupported, setIsAPISupported] = useState(
-    typeof window !== 'undefined' && !!((window as unknown as IWindow).webkitSpeechRecognition || (window as unknown as IWindow).SpeechRecognition)
-  );
+  // Detección silenciosa al cargar (para habilitar/deshabilitar botones en la UI)
+  const [isAPISupported, setIsAPISupported] = useState(false); 
   
+  // --- REFS (Buffer Persistente) ---
   const recognitionRef = useRef<any>(null);
+  // finalTranscriptRef guarda todo el texto que la IA ya ha confirmado.
+  const finalTranscriptRef = useRef(''); 
+  const isUserInitiatedStop = useRef(false);
 
-  // --- FUNCIÓN DE INICIO ---
-  const startListening = useCallback(() => {
+  // --- MOTOR DE RECONOCIMIENTO ---
+  const setupRecognition = useCallback(() => {
     const { webkitSpeechRecognition, SpeechRecognition } = window as unknown as IWindow;
     const SpeechRecognitionAPI = SpeechRecognition || webkitSpeechRecognition;
 
     if (!SpeechRecognitionAPI) {
-      alert("Tu navegador no soporta reconocimiento de voz.");
-      return;
+      setIsAPISupported(false);
+      return null;
     }
 
-    try {
-      // Si ya existe una instancia, la detenemos antes de crear otra
-      if (recognitionRef.current) {
-        try { recognitionRef.current.stop(); } catch(e) {}
-      }
+    setIsAPISupported(true);
+    
+    const recognition = new SpeechRecognitionAPI();
+    recognition.continuous = true; // TRUE para evitar cortes en Android
+    recognition.interimResults = true;
+    recognition.lang = 'es-MX';
+    recognition.maxAlternatives = 1;
 
-      const recognition = new SpeechRecognitionAPI();
-      recognition.continuous = true; 
-      recognition.interimResults = true;
-      recognition.lang = 'es-MX';
+    recognition.onstart = () => {
+      setIsListening(true);
+    };
 
-      recognition.onstart = () => {
-        console.log("🎙️ Micrófono ABIERTO");
-        setIsListening(true);
-      };
-
-      recognition.onresult = (event: any) => {
-        let currentTranscript = '';
+    // LÓGICA DE DEDUPLICACIÓN (El Fix de Android)
+    recognition.onresult = (event: any) => {
+        let currentInterim = '';
+        let fullFinalTextFromEvent = '';
+        
+        // 1. Recorrer resultados
         for (let i = 0; i < event.results.length; ++i) {
-          currentTranscript += event.results[i][0].transcript;
+          const result = event.results[i];
+          if (result.isFinal) {
+            fullFinalTextFromEvent += result[0].transcript;
+          } else {
+            currentInterim = result[0].transcript;
+          }
         }
-        setTranscript(currentTranscript);
-      };
+        
+        // 2. Filtrar repetidos por longitud
+        const currentConfirmedLength = finalTranscriptRef.current.length;
+        
+        if (fullFinalTextFromEvent.length > currentConfirmedLength) {
+            const newlyConfirmedText = fullFinalTextFromEvent.substring(currentConfirmedLength);
+            
+            // Lógica de espaciado
+            const prev = finalTranscriptRef.current;
+            const spacer = (prev && !prev.endsWith(' ') && newlyConfirmedText.length > 0) ? ' ' : '';
+            finalTranscriptRef.current += spacer + newlyConfirmedText;
+        }
 
-      recognition.onerror = (event: any) => {
-        console.error("⚠️ Error de voz:", event.error);
-        if (event.error === 'not-allowed') {
-          setIsListening(false);
-          alert("Permiso denegado. Revisa la configuración del sitio (candado en la barra de dirección).");
-        }
-        if (event.error === 'no-speech') {
-           // Ignorar silencio, dejar que siga
-        }
-      };
+        // 3. Actualizar Estado
+        const displayInterim = currentInterim.trim() ? ' ' + currentInterim.trim() : '';
+        setTranscript(finalTranscriptRef.current + displayInterim);
+    };
 
-      recognition.onend = () => {
-        console.log("🛑 Micrófono CERRADO por el navegador");
-        // Solo cambiamos el estado visual, no intentamos resurrección automática 
-        // en esta versión de prueba para aislar el problema.
+    recognition.onerror = (event: any) => {
+      // Ignoramos errores silenciosos, solo nos importa si el usuario bloqueó el permiso
+      if (event.error === 'not-allowed') {
         setIsListening(false);
-      };
+        isUserInitiatedStop.current = true;
+      }
+    };
 
-      recognitionRef.current = recognition;
-      recognition.start();
+    recognition.onend = () => {
+      // BUCLE DE REINICIO (Keep-Alive)
+      if (!isUserInitiatedStop.current) {
+          try {
+            recognition.start();
+          } catch (e) {
+            setTimeout(() => {
+              if (!isUserInitiatedStop.current) recognition.start();
+            }, 500);
+          }
+      } else {
+        setIsListening(false);
+      }
+    };
 
-    } catch (e) {
-      console.error("Error CRÍTICO al iniciar:", e);
-      alert("Error al intentar abrir el micrófono: " + e);
-      setIsListening(false);
-    }
+    return recognition;
   }, []);
 
-  const stopListening = useCallback(() => {
+  // --- CONTROLES ---
+
+  const startListening = useCallback(() => {
+    finalTranscriptRef.current = '';
+    setTranscript('');
+    isUserInitiatedStop.current = false;
+    
     if (recognitionRef.current) {
-      recognitionRef.current.stop();
-      setIsListening(false);
+        try { recognitionRef.current.stop(); } catch(e){}
     }
+
+    const recognition = setupRecognition();
+    if (recognition) {
+        recognitionRef.current = recognition;
+        try {
+            recognition.start();
+        } catch (e) {
+            console.error("Error start:", e);
+        }
+    }
+  }, [setupRecognition]);
+
+  const stopListening = useCallback(() => {
+    isUserInitiatedStop.current = true;
+    if (recognitionRef.current) {
+        try { recognitionRef.current.stop(); } catch(e){}
+    }
+    setTranscript(finalTranscriptRef.current);
+    setIsListening(false);
   }, []);
 
   const resetTranscript = useCallback(() => {
+    finalTranscriptRef.current = '';
     setTranscript('');
   }, []);
 
   const setTranscriptManual = useCallback((text: string) => {
+      finalTranscriptRef.current = text;
       setTranscript(text);
   }, []);
+
+  // Inicializar al montar para checar soporte
+  useEffect(() => {
+    setupRecognition();
+    return () => {
+        isUserInitiatedStop.current = true;
+        if (recognitionRef.current) {
+            try { recognitionRef.current.stop(); } catch(e){}
+        }
+    };
+  }, [setupRecognition]);
 
   return { 
     isListening, 
@@ -99,6 +157,6 @@ export const useSpeechRecognition = () => {
     stopListening, 
     resetTranscript, 
     setTranscript: setTranscriptManual,
-    isAPISupported
+    isAPISupported // EXPORTADO
   };
 };
