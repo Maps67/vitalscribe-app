@@ -5,7 +5,7 @@ import {
   Edit2, Check, ArrowLeft, AlertTriangle, Stethoscope, AlertCircle, Trash2 
 } from 'lucide-react';
 
-// CAMBIO CRÍTICO 1: Extraemos isAPISupported del hook
+// CAMBIO CRÍTICO 1: Extracción de la bandera de soporte
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition'; 
 
 import { GeminiMedicalService, ChatMessage } from '../services/GeminiMedicalService';
@@ -109,7 +109,7 @@ const ConsultationView: React.FC = () => {
     }
 
     return () => { mounted = false; };
-  }, [setTranscript]); // Añadimos setTranscript como dependencia por si acaso.
+  }, [setTranscript]); 
 
   // 2. Auto-Scroll & Auto-Save
   useEffect(() => { 
@@ -164,9 +164,6 @@ const ConsultationView: React.FC = () => {
         toast.error("Seleccione un paciente para la receta.");
         return;
     }
-    // Si ya hay un transcript, lo usamos, si no, iniciamos la grabación (Opción A)
-    // O simplemente abrimos el modal para que el usuario dicte allí (Opción B)
-    // Usaremos Opción B para que la dictación ocurra DENTRO del modal
     setIsQuickRxModalOpen(true);
   };
 
@@ -445,7 +442,8 @@ const ConsultationView: React.FC = () => {
             <div className="flex w-full gap-3 z-10 mt-auto">
                 <button 
                     onClick={handleToggleRecording} 
-                    disabled={!consentGiven && !isListening} 
+                    // CRÍTICO: Deshabilitar si la API no está soportada O si falta consentimiento
+                    disabled={!consentGiven || !isAPISupported && !isListening} 
                     className={`flex-1 py-3 rounded-xl font-bold flex justify-center items-center gap-2 transition-all text-white shadow-lg ${isListening ? 'bg-red-600 hover:bg-red-700 animate-pulse' : 'bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 disabled:cursor-not-allowed dark:disabled:bg-slate-700 dark:disabled:text-slate-500'}`}
                 >
                     {isListening ? <><Square size={18}/> Detener</> : <><Mic size={18}/> Iniciar</>}
@@ -463,7 +461,6 @@ const ConsultationView: React.FC = () => {
 
             {/* BOTÓN EXTRA: RECETA RÁPIDA */}
             <div className='w-full mt-2'>
-                {/* CAMBIO CRÍTICO: Usamos isAPISupported para habilitar el botón */}
                 <button 
                     onClick={handleQuickRx} 
                     // El botón está inactivo si no hay paciente seleccionado O si la API de voz no está disponible.
@@ -477,7 +474,6 @@ const ConsultationView: React.FC = () => {
       </div>
 
       {/* PANEL DERECHO: RESULTADOS */}
-      {/* ... (El resto del JSX que no fue modificado) ... */}
       <div className={`
           w-full md:w-2/3 bg-slate-100 dark:bg-slate-950 flex flex-col overflow-hidden border-l border-slate-200 dark:border-slate-800
           ${!generatedNote ? 'hidden md:flex' : 'flex h-full'}
@@ -681,18 +677,18 @@ const ConsultationView: React.FC = () => {
               </div>
           </div>
       )}
-      {/* Nuevo Modal de Receta Rápida */}
-      {isQuickRxModalOpen && selectedPatient && doctorProfile && (
-          <QuickRxModal
-              isOpen={isQuickRxModalOpen}
-              onClose={() => setIsQuickRxModalOpen(false)}
-              initialTranscript={transcript} // Podemos pasar el transcript actual para reutilizar
-              patientName={selectedPatient.name}
-              doctorProfile={doctorProfile} // Pasamos el perfil del doctor para el PDF
-          />
-      )}
-    </div>
-  );
+      {/* Nuevo Modal de Receta Rápida */}
+      {isQuickRxModalOpen && selectedPatient && doctorProfile && (
+          <QuickRxModal
+              isOpen={isQuickRxModalOpen}
+              onClose={() => setIsQuickRxModalOpen(false)}
+              initialTranscript={transcript} // Podemos pasar el transcript actual para reutilizar
+              patientName={selectedPatient.name}
+              doctorProfile={doctorProfile} // Pasamos el perfil del doctor para el PDF
+          />
+      )}
+    </div>
+  );
 };
 
 export default ConsultationView;
