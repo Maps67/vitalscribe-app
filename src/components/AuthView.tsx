@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 interface AuthProps {
   authService: any;
   onLoginSuccess: () => void;
-  // Nuevas props para comunicarse con App.tsx
+  // Props para comunicación con App.tsx
   forceResetMode?: boolean;
   onPasswordResetSuccess?: () => void;
 }
@@ -18,7 +18,6 @@ const AuthView: React.FC<AuthProps> = ({
 }) => {
   const [isRegistering, setIsRegistering] = useState(false);
   const [isRecovering, setIsRecovering] = useState(false);
-  // Inicializamos el reset basado en lo que diga App.tsx
   const [isResettingPassword, setIsResettingPassword] = useState(forceResetMode); 
   
   const [loading, setLoading] = useState(false);
@@ -35,14 +34,14 @@ const AuthView: React.FC<AuthProps> = ({
     termsAccepted: false 
   });
 
-  // Efecto para reaccionar si App.tsx detecta el evento tarde
+  // Detectar cambios desde el padre (App.tsx)
   useEffect(() => {
     if (forceResetMode) {
       setIsResettingPassword(true);
     }
   }, [forceResetMode]);
 
-  // --- MANEJO DE LOGIN ---
+  // --- MANEJO DE LOGIN Y REGISTRO ---
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isRegistering && !formData.termsAccepted) {
@@ -80,7 +79,7 @@ const AuthView: React.FC<AuthProps> = ({
     }
   };
 
-  // --- SOLICITAR CORREO DE RECUPERACIÓN ---
+  // --- SOLICITUD DE RECUPERACIÓN ---
   const handleRecoveryRequest = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -99,28 +98,22 @@ const AuthView: React.FC<AuthProps> = ({
     }
   };
 
-  // --- ACTUALIZAR CONTRASEÑA (RESET FINAL) ---
+  // --- ACTUALIZAR CONTRASEÑA ---
   const handlePasswordUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
-      // Usamos updateUser para cambiar la contraseña del usuario logueado (Supabase ya logueó al usuario al hacer click en el link)
       const { error } = await authService.supabase.auth.updateUser({ 
         password: formData.newPassword 
       });
-
       if (error) throw error;
-      
       toast.success("Contraseña actualizada exitosamente.");
-      
-      // Notificar a App.tsx que termine el bloqueo
       if (onPasswordResetSuccess) {
         onPasswordResetSuccess();
       } else {
         setIsResettingPassword(false);
         setIsRecovering(false);
       }
-      
     } catch (error: any) {
       console.error(error);
       toast.error("Error al actualizar: " + error.message);
@@ -129,10 +122,10 @@ const AuthView: React.FC<AuthProps> = ({
     }
   };
 
-  // --- VISTAS DE FEEDBACK ---
+  // --- FEEDBACK VISUAL ---
   if (verificationSent) {
     return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 animate-fade-in-up">
         <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center border border-slate-100">
           <div className="w-20 h-20 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-6"><Mail size={40} /></div>
           <h2 className="text-2xl font-bold text-slate-800 mb-2">¡Casi listo!</h2>
@@ -145,7 +138,7 @@ const AuthView: React.FC<AuthProps> = ({
 
   if (recoverySent) {
     return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 animate-fade-in-up">
         <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center border border-slate-100">
           <div className="w-20 h-20 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-6"><KeyRound size={40} /></div>
           <h2 className="text-2xl font-bold text-slate-800 mb-2">Revise su Correo</h2>
@@ -158,23 +151,46 @@ const AuthView: React.FC<AuthProps> = ({
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col lg:flex-row font-sans">
-      {/* Panel Izquierdo */}
+      {/* --- PANEL IZQUIERDO (RESTAURADO) --- */}
       <div className="hidden lg:flex lg:w-1/2 bg-slate-900 text-white flex-col justify-center p-12 relative overflow-hidden">
         <div className="absolute top-0 left-0 w-full h-full opacity-10 bg-[url('https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?auto=format&fit=crop&q=80')] bg-cover bg-center"></div>
         <div className="relative z-10 max-w-lg">
           <div className="flex items-center gap-4 mb-8">
-            <img src="/pwa-192x192.png" alt="Logo MediScribe" className="w-20 h-20 rounded-2xl bg-white p-1 shadow-lg object-cover"/>
+            <img 
+                src="/pwa-192x192.png" 
+                alt="Logo MediScribe" 
+                className="w-20 h-20 rounded-2xl bg-white p-1 shadow-lg object-cover"
+            />
             <h1 className="text-5xl font-bold tracking-tight">MediScribe AI</h1>
           </div>
-          <h2 className="text-3xl font-bold mb-4 leading-tight">El asistente clínico inteligente.</h2>
+          <h2 className="text-3xl font-bold mb-4 leading-tight">El asistente clínico inteligente para médicos modernos.</h2>
+          <p className="text-slate-400 text-lg">Automatice sus notas clínicas, gestione su agenda y recupere su tiempo con el poder de la IA.</p>
+          
+          {/* BLOQUE RESTAURADO: INDICADORES DE CONFIANZA */}
+          <div className="mt-12 flex gap-8">
+            <div className="flex flex-col gap-2">
+                <span className="text-2xl font-bold text-brand-teal">NOM-004</span>
+                <span className="text-sm text-slate-400">Cumplimiento Normativo</span>
+            </div>
+            <div className="flex flex-col gap-2">
+                <span className="text-2xl font-bold text-brand-teal">IA 2.0</span>
+                <span className="text-sm text-slate-400">Reconocimiento de Voz</span>
+            </div>
+            <div className="flex flex-col gap-2">
+                <span className="text-2xl font-bold text-brand-teal">100%</span>
+                <span className="text-sm text-slate-400">Seguro y Privado</span>
+            </div>
+          </div>
+          {/* FIN BLOQUE RESTAURADO */}
+
         </div>
       </div>
 
-      {/* Panel Derecho */}
+      {/* --- PANEL DERECHO (FORMULARIO LÓGICO V3.0) --- */}
       <div className="flex-1 flex items-center justify-center p-6">
         <div className="w-full max-w-md space-y-8 animate-fade-in-up">
           
-          {/* --- VISTA: NUEVA CONTRASEÑA --- */}
+          {/* MODO: NUEVA CONTRASEÑA */}
           {isResettingPassword ? (
              <>
                <div className="text-center">
@@ -196,7 +212,7 @@ const AuthView: React.FC<AuthProps> = ({
               </form>
              </>
           ) : isRecovering ? (
-             /* --- VISTA: SOLICITUD DE RECUPERACIÓN --- */
+             /* MODO: SOLICITUD DE RECUPERACIÓN */
              <>
                <div className="text-center lg:text-left">
                 <button onClick={() => setIsRecovering(false)} className="mb-4 text-slate-500 hover:text-slate-700 flex items-center gap-2 text-sm font-medium transition-colors"><ArrowLeft size={16} /> Volver</button>
@@ -217,7 +233,7 @@ const AuthView: React.FC<AuthProps> = ({
               </form>
              </>
           ) : (
-             /* --- VISTA: LOGIN NORMAL --- */
+             /* MODO: LOGIN NORMAL */
              <>
                 <div className="text-center lg:text-left">
                   <h2 className="text-3xl font-bold text-slate-900">{isRegistering ? 'Alta de Médico' : 'Bienvenido de nuevo'}</h2>
