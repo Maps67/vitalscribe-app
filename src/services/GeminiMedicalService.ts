@@ -16,56 +16,59 @@ interface ConsultationResponse {
 export const GeminiMedicalService = {
   
   /**
-   * Genera una Receta Rápida (QuickRx) limpia y directa.
-   * ELIMINA: Saludos, placeholders, datos del doctor (ya están en el PDF).
-   * MANTIENE: Solo medicamentos e indicaciones.
+   * Genera una Receta Rápida (QuickRx) INTELIGENTE.
+   * AHORA: Interpreta, completa dosis estándar si faltan y agrega recomendaciones de seguridad.
+   * MANTIENE: Limpieza de saludos y datos del doctor (que ya están en el PDF).
    */
   async generateQuickRx(transcript: string, specialty: string = 'Medicina General'): Promise<string> {
     try {
         const prompt = `
-        ACTÚA COMO: Un asistente clínico robotizado experto en farmacología.
-        CONTEXTO: Tu salida se imprimirá DIRECTAMENTE en el cuerpo de una receta médica PDF que YA TIENE membrete, logo, nombre del doctor, fecha y datos del paciente.
+        ACTÚA COMO: Un Asistente Médico Experto en ${specialty}.
         
-        TU TAREA:
-        Analiza el siguiente texto dictado por el médico: "${transcript}"
-        Extrae y redecta ÚNICAMENTE la prescripción médica formal.
-
-        REGLAS DE ORO (OBLIGATORIAS):
-        1. NO incluyas saludos, despedidas ni introducciones (Ej: "Aquí tienes la receta", "Claro doctor").
-        2. NO incluyas datos del médico, ni firma, ni fecha, ni datos del paciente. (ESTÁN PROHIBIDOS).
-        3. NO uses Markdown complejo (negritas **, cursivas _, titulos #). Usa texto plano limpio.
-        4. SI EL MÉDICO DICTA SINTOMAS, IGNÓRALOS. Solo redacta el tratamiento.
+        CONTEXTO:
+        El doctor ha dictado una orden rápida: "${transcript}"
+        Tu trabajo es redactar el cuerpo de la receta médica para imprimir en PDF.
         
-        FORMATO DE SALIDA REQUERIDO:
-        Medicamento: [Nombre] [Concentración]
-        Tomar: [Dosis] vía [Vía de administración] cada [Frecuencia] por [Duración].
-        Nota: [Indicación adicional si la hay].
-
-        (Repetir para cada medicamento si hay varios).
+        OBJETIVO:
+        Transforma ese dictado breve en una prescripción profesional, completa y segura.
         
-        SI NO HAY MEDICAMENTOS EN EL TEXTO:
-        Responde únicamente: "No se detectaron medicamentos en el dictado."
+        INSTRUCCIONES DE REDACCIÓN INTELIGENTE:
+        1. DETECTA el medicamento. Si el doctor no dijo la dosis o frecuencia, SUGIERE la posología estándar para un adulto (ej: Paracetamol -> 500mg c/8h).
+        2. AGREGA recomendaciones breves de seguridad o farmacovigilancia (ej: "No exceder dosis", "Tomar con alimentos", "Hidratación").
+        3. USA un lenguaje técnico pero claro para el paciente.
+        
+        REGLAS DE FORMATO (ESTRICTAS):
+        - NO pongas saludos, ni despedidas ("Hola", "Aquí está").
+        - NO inventes datos del doctor, ni fecha, ni firma (El PDF ya tiene membrete).
+        - NO uses Markdown de títulos (como # o ##). Usa mayúsculas o negritas simples si es necesario.
+        
+        ESTRUCTURA ESPERADA DE SALIDA:
+        [Nombre Medicamento] [Concentración] [Forma Farmacéutica]
+        Indicación: [Instrucciones detalladas de toma]
+        
+        Notas/Recomendaciones:
+        - [Consejo práctico 1]
+        - [Consejo de seguridad o alarma]
         `;
 
         const result = await model.generateContent(prompt);
         const response = result.response;
         let text = response.text();
 
-        // Limpieza de seguridad post-IA (por si la IA desobedece)
-        text = text.replace(/\*\*/g, "").replace(/#/g, "").replace(/---/g, ""); // Quitar markdown residual
-        text = text.replace(/\[.*?\]/g, (match) => match); // Mantener corchetes si son parte de la dosis, pero la IA debería llenarlos.
+        // Limpieza de seguridad post-IA
+        text = text.replace(/#/g, "").replace(/---/g, ""); // Quitar markdown de títulos grandes
+        text = text.replace(/\[.*?\]/g, (match) => match); // Respetar corchetes si la IA los usa para dosis
         
         return text.trim();
 
     } catch (error) {
         console.error("Error generando QuickRx:", error);
-        return "Error al generar la receta. Por favor, edite manualmente.";
+        return "Error al generar la receta. Por favor, revise el dictado.";
     }
   },
 
   /**
    * Genera la Consulta Completa (SOAP + Receta + Recomendaciones).
-   * Mantiene la lógica anterior pero reforzada.
    */
   async generateConsultationNote(transcript: string, specialty: string): Promise<ConsultationResponse> {
     try {
@@ -77,7 +80,7 @@ export const GeminiMedicalService = {
         Genera un objeto JSON ESTRICTO con la siguiente estructura (sin bloques de código, solo el JSON):
         {
           "soapNote": "Redacta la nota clínica en formato SOAP (Subjetivo, Objetivo, Análisis, Plan). Formal y profesional.",
-          "prescription": "SOLO el listado de medicamentos e indicaciones de toma. SIN saludos, SIN datos del doctor, SIN cabeceras.",
+          "prescription": "SOLO el listado de medicamentos e indicaciones de toma. Completa con dosis estándar si no se mencionan explícitamente.",
           "recommendations": "Recomendaciones no farmacológicas (dieta, ejercicios, alarmas) claras para el paciente."
         }
       `;
@@ -86,7 +89,7 @@ export const GeminiMedicalService = {
       const response = result.response;
       const text = response.text();
 
-      // Limpiar el texto para asegurar que sea JSON válido (quitar ```json y ```)
+      // Limpiar el texto para asegurar que sea JSON válido
       const cleanJson = text.replace(/```json/g, "").replace(/```/g, "").trim();
       
       return JSON.parse(cleanJson);
