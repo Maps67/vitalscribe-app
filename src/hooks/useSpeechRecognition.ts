@@ -6,129 +6,165 @@ interface IWindow extends Window {
 }
 
 export const useSpeechRecognition = () => {
+  // Estado de UI
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState('');
   
-  // USAMOS REFS PARA PERSISTENCIA "A PRUEBA DE BALAS"
-  // Esto evita que el texto se borre si el componente se re-renderiza o el mic se reinicia
+  // REFS CRÍTICAS PARA EL MANEJO DE ESTADO EN ANDROID
   const recognitionRef = useRef<any>(null);
-  const committedTextRef = useRef(''); // Texto confirmado (Final)
-  const userStoppedRef = useRef(false); // ¿El usuario pidió parar?
+  // 'masterTranscriptRef' es el "disco duro". Guarda todas las frases confirmadas hasta ahora.
+  const masterTranscriptRef = useRef(''); 
+  // 'isUserInitiatedStop' distingue si paró el médico o si paró el navegador por silencio.
+  const isUserInitiatedStop = useRef(false); 
+  // Control de bucle para evitar reinicios infinitos en caso de error fatal
+  const retryCountRef = useRef(0);
 
-  useEffect(() => {
+  // Función para inicializar el motor (se llamará repetidamente en el bucle)
+  const setupRecognition = useCallback(() => {
     const { webkitSpeechRecognition, SpeechRecognition } = window as unknown as IWindow;
     const SpeechRecognitionAPI = SpeechRecognition || webkitSpeechRecognition;
 
     if (!SpeechRecognitionAPI) {
       console.warn("Speech API no soportada.");
-      return;
+      return null;
     }
 
     const recognition = new SpeechRecognitionAPI();
-    recognition.continuous = true;
+    // CAMBIO CRÍTICO PARA ANDROID: continuous = false
+    // Esto fuerza a Android a procesar frase por frase, evitando la duplicación masiva.
+    recognition.continuous = false; 
     recognition.interimResults = true;
     recognition.lang = 'es-MX';
 
-    // --- MANEJO DE RESULTADOS (LÓGICA ANDROID) ---
+    recognition.onstart = () => {
+      setIsListening(true);
+      retryCountRef.current = 0; // Reset de intentos al tener éxito
+    };
+
     recognition.onresult = (event: any) => {
-      let interimTranscript = '';
-      let newFinalTranscript = '';
-
-      // Iteramos SOLO sobre los nuevos resultados devueltos por la API
-      for (let i = event.resultIndex; i < event.results.length; ++i) {
-        const result = event.results[i];
-        
-        // Si el resultado es FINAL (Android confirmó la frase)
-        if (result.isFinal) {
-          newFinalTranscript += result[0].transcript;
-        } else {
-          // Si es INTERINO (Android está adivinando todavía)
-          interimTranscript += result[0].transcript;
+        let currentSentenceFinal = '';
+        let currentSentenceInterim = '';
+  
+        // Procesamos solo el resultado actual de esta sesión corta
+        for (let i = 0; i < event.results.length; ++i) {
+          if (event.results[i].isFinal) {
+            currentSentenceFinal += event.results[i][0].transcript;
+          } else {
+            currentSentenceInterim += event.results[i][0].transcript;
+          }
         }
-      }
 
-      // 1. Agregamos lo final al "Disco Duro" (Ref)
-      if (newFinalTranscript) {
-        // Añadimos un espacio para que no se pegue con lo anterior
-        const prev = committedTextRef.current;
-        // Lógica para evitar espacios dobles
-        const spacer = prev.length > 0 && !prev.endsWith(' ') ? ' ' : '';
-        committedTextRef.current += spacer + newFinalTranscript;
-      }
+        // Si hay una frase final, la agregamos al "disco duro" maestro
+        if (currentSentenceFinal) {
+            // Lógica de espaciado inteligente
+            const spacer = masterTranscriptRef.current && !masterTranscriptRef.current.endsWith(' ') ? ' ' : '';
+            masterTranscriptRef.current += spacer + currentSentenceFinal;
+        }
 
-      // 2. Actualizamos la UI: Lo confirmado + Lo que se está hablando ahora
-      // Esto elimina el parpadeo y la duplicación
-      setTranscript(committedTextRef.current + (interimTranscript ? ' ' + interimTranscript : ''));
+        // Actualizamos la UI: Lo que ya estaba guardado + lo que se está diciendo ahora mismo
+        // Usamos trim() en interim para evitar saltos raros
+        const displayInterim = currentSentenceInterim.trim() ? ' ' + currentSentenceInterim.trim() : '';
+        setTranscript(masterTranscriptRef.current + displayInterim);
     };
 
     recognition.onerror = (event: any) => {
-      // Ignoramos 'no-speech' porque usaremos reinicio automático
-      if (event.error !== 'no-speech') {
-          console.warn("Error de voz:", event.error);
-      }
-      if (event.error === 'not-allowed') {
+      console.warn("Speech Error:", event.error);
+      // Si es error de red o permiso, paramos el bucle.
+      if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+        isUserInitiatedStop.current = true;
         setIsListening(false);
-        userStoppedRef.current = true;
       }
+      // Ignoramos 'no-speech' y 'aborted', el onend manejará el reinicio.
     };
 
     recognition.onend = () => {
-      // LÓGICA DE "INMORTALIDAD"
-      // Si el usuario NO pulsó "Detener", reiniciamos inmediatamente.
-      // Android suele cortar el mic cada 10-15 segundos para ahorrar batería.
-      if (!userStoppedRef.current) {
-        try {
-          recognition.start();
-        } catch (e) {
-          // Si falla el reinicio inmediato, esperamos 200ms
-          setTimeout(() => {
-             if (!userStoppedRef.current) recognition.start();
-          }, 200);
+      // EL NÚCLEO DEL BUCLE MANUAL
+      // Si el médico NO pulsó parar, intentamos reiniciar.
+      if (!isUserInitiatedStop.current) {
+        if (retryCountRef.current < 5) { // Límite de seguridad de 5 reintentos rápidos
+             retryCountRef.current++;
+             // Pequeño delay para no ahogar al navegador
+             setTimeout(() => {
+                 try {
+                   // Re-instanciamos y arrancamos de nuevo
+                   const newReco = setupRecognition();
+                   if (newReco) {
+                       recognitionRef.current = newReco;
+                       newReco.start();
+                   }
+                 } catch (e) {
+                   console.error("Fallo al reiniciar el bucle:", e);
+                   setIsListening(false); // Freno de emergencia
+                 }
+             }, 150);
+        } else {
+             // Si falla muchas veces seguidas, paramos de verdad
+             console.warn("Demasiados reinicios fallidos. Deteniendo.");
+             setIsListening(false);
         }
       } else {
+        // Parada legítima del usuario
         setIsListening(false);
       }
     };
 
-    recognitionRef.current = recognition;
+    return recognition;
+  }, []); // setupRecognition no depende de nada externo
 
-    return () => {
-      userStoppedRef.current = true;
-      if (recognitionRef.current) recognitionRef.current.stop();
-    };
-  }, []);
 
-  // --- CONTROLES ---
+  // --- CONTROLES PÚBLICOS ---
 
   const startListening = useCallback(() => {
-    if (recognitionRef.current && !isListening) {
-      userStoppedRef.current = false;
-      try {
-        recognitionRef.current.start();
-        setIsListening(true);
-      } catch (e) {
-        console.error("Error al iniciar:", e);
-      }
-    }
-  }, [isListening]);
+    // Limpieza inicial para una nueva sesión de dictado
+    masterTranscriptRef.current = '';
+    setTranscript('');
+    isUserInitiatedStop.current = false;
+    retryCountRef.current = 0;
 
-  const stopListening = useCallback(() => {
-    if (recognitionRef.current) {
-      userStoppedRef.current = true; // BANDERA CRÍTICA
-      recognitionRef.current.stop();
+    if (recognitionRef.current) { 
+        try { recognitionRef.current.stop(); } catch(e){} 
+    }
+
+    try {
+      const recognition = setupRecognition();
+      if (recognition) {
+          recognitionRef.current = recognition;
+          recognition.start();
+      }
+    } catch (e) {
+      console.error("Error al iniciar:", e);
       setIsListening(false);
     }
+  }, [setupRecognition]);
+
+  const stopListening = useCallback(() => {
+    isUserInitiatedStop.current = true; // Bandera CRÍTICA para romper el bucle
+    if (recognitionRef.current) {
+      try { recognitionRef.current.stop(); } catch(e){}
+    }
+    // Forzamos la actualización final del estado UI
+    setTranscript(masterTranscriptRef.current);
+    setIsListening(false);
   }, []);
 
   const resetTranscript = useCallback(() => {
+    masterTranscriptRef.current = '';
     setTranscript('');
-    committedTextRef.current = ''; // Limpiamos también el buffer interno
   }, []);
 
-  // Permite inyectar texto manualmente (para recuperar borradores)
   const setTranscriptManual = useCallback((text: string) => {
+      masterTranscriptRef.current = text;
       setTranscript(text);
-      committedTextRef.current = text;
+  }, []);
+
+  // Cleanup al desmontar
+  useEffect(() => {
+      return () => {
+          isUserInitiatedStop.current = true;
+          if (recognitionRef.current) {
+              try { recognitionRef.current.stop(); } catch(e){}
+          }
+      };
   }, []);
 
   return {
@@ -137,6 +173,6 @@ export const useSpeechRecognition = () => {
     startListening,
     stopListening,
     resetTranscript,
-    setTranscript: setTranscriptManual 
+    setTranscript: setTranscriptManual
   };
 };
