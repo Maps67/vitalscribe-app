@@ -6,16 +6,43 @@ interface IWindow extends Window {
 }
 
 export const useSpeechRecognition = () => {
+  // Estado UI
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState('');
   
+  // Refs de Lógica
   const recognitionRef = useRef<any>(null);
   const masterTranscriptRef = useRef(''); 
   const isUserInitiatedStop = useRef(false);
   
-  // NUEVO: Control de tiempo de reinicio para latencia cero
-  const lastRestartRef = useRef(0);
+  // Ref para el Bloqueo de Pantalla (Wake Lock)
+  const wakeLockRef = useRef<any>(null);
 
+  // --- FUNCIÓN: GESTIÓN DE PANTALLA (WAKE LOCK) ---
+  const requestWakeLock = async () => {
+    try {
+      if ('wakeLock' in navigator) {
+        wakeLockRef.current = await (navigator as any).wakeLock.request('screen');
+        console.log('Pantalla bloqueada (Wake Lock activo)');
+      }
+    } catch (err) {
+      console.warn('No se pudo bloquear la pantalla:', err);
+    }
+  };
+
+  const releaseWakeLock = async () => {
+    try {
+      if (wakeLockRef.current) {
+        await wakeLockRef.current.release();
+        wakeLockRef.current = null;
+        console.log('Pantalla desbloqueada');
+      }
+    } catch (err) {
+      console.warn('Error al liberar pantalla:', err);
+    }
+  };
+
+  // --- FUNCIÓN: MOTOR DE RECONOCIMIENTO ---
   const setupRecognition = useCallback(() => {
     const { webkitSpeechRecognition, SpeechRecognition } = window as unknown as IWindow;
     const SpeechRecognitionAPI = SpeechRecognition || webkitSpeechRecognition;
@@ -23,11 +50,10 @@ export const useSpeechRecognition = () => {
     if (!SpeechRecognitionAPI) return null;
 
     const recognition = new SpeechRecognitionAPI();
-    recognition.continuous = false; // Mantenemos false para estabilidad en Android
+    // Mantenemos false para evitar el bug de duplicación de Android
+    recognition.continuous = false; 
     recognition.interimResults = true;
     recognition.lang = 'es-MX';
-    
-    // TRUCO: Aumentamos maxAlternatives para forzar al motor a procesar más contexto interno
     recognition.maxAlternatives = 1;
 
     recognition.onresult = (event: any) => {
@@ -43,70 +69,63 @@ export const useSpeechRecognition = () => {
         }
 
         if (currentFinal) {
-            const spacer = masterTranscriptRef.current && !masterTranscriptRef.current.endsWith(' ') ? ' ' : '';
+            // Lógica inteligente de espaciado
+            const prev = masterTranscriptRef.current;
+            // Solo agrega espacio si no lo tiene y si no está vacío
+            const spacer = (prev && !prev.endsWith(' ')) ? ' ' : '';
             masterTranscriptRef.current += spacer + currentFinal;
         }
 
-        // UX: Mostramos interim solo si tiene contenido sustancial
         const displayInterim = currentInterim.trim() ? ' ' + currentInterim.trim() : '';
         setTranscript(masterTranscriptRef.current + displayInterim);
     };
 
     recognition.onerror = (event: any) => {
-      // Ignoramos errores triviales para mantener el bucle vivo
-      if (event.error === 'not-allowed') {
-        setIsListening(false);
+      // Si el error es de permisos, ahí sí paramos todo
+      if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
         isUserInitiatedStop.current = true;
+        setIsListening(false);
+        releaseWakeLock();
       }
     };
 
     recognition.onend = () => {
+      // BUCLE DE REINICIO
       if (!isUserInitiatedStop.current) {
-         // ESTRATEGIA DE REINICIO ULTRARRÁPIDO
-         const now = Date.now();
-         const timeSinceLastStart = now - lastRestartRef.current;
-         
-         // Si el reinicio fue hace menos de 1 segundo, asumimos inestabilidad y damos un respiro.
-         // Si fue hace más (dictado normal), reiniciamos INMEDIATAMENTE para sensación continua.
-         const delay = timeSinceLastStart < 1000 ? 50 : 0; 
-
-         setTimeout(() => {
-             try {
-               recognition.start();
-               lastRestartRef.current = Date.now();
-             } catch (e) {
-               // Si falla el arranque inmediato, reintentamos con un poco mas de margen
-               setTimeout(() => {
-                   if (!isUserInitiatedStop.current) {
-                       try { recognition.start(); } catch(e){}
-                   }
-               }, 150);
-             }
-         }, delay);
+         // Reinicio INMEDIATO (0ms delay) para minimizar la pérdida de audio
+         try {
+           recognition.start();
+         } catch (e) {
+           // Si falla el inmediato, reintentamos en 150ms
+           setTimeout(() => {
+               if (!isUserInitiatedStop.current) recognition.start();
+           }, 150);
+         }
       } else {
         setIsListening(false);
+        releaseWakeLock(); // Liberamos pantalla al terminar
       }
     };
 
     return recognition;
   }, []);
 
+  // --- MÉTODOS PÚBLICOS ---
+
   const startListening = useCallback(() => {
     masterTranscriptRef.current = '';
     setTranscript('');
     isUserInitiatedStop.current = false;
     
-    if (recognitionRef.current) {
-        try { recognitionRef.current.stop(); } catch(e){}
-    }
+    if (recognitionRef.current) recognitionRef.current.stop();
 
     const recognition = setupRecognition();
     if (recognition) {
         recognitionRef.current = recognition;
         try {
             recognition.start();
-            lastRestartRef.current = Date.now();
             setIsListening(true);
+            requestWakeLock(); // <--- SOLICITAMOS PANTALLA ENCENDIDA
         } catch (e) {
             console.error(e);
         }
@@ -115,11 +134,12 @@ export const useSpeechRecognition = () => {
 
   const stopListening = useCallback(() => {
     isUserInitiatedStop.current = true;
-    if (recognitionRef.current) {
-        try { recognitionRef.current.stop(); } catch(e){}
-    }
-    setTranscript(masterTranscriptRef.current); // Fijar texto final limpio
+    if (recognitionRef.current) recognitionRef.current.stop();
+    
+    // Aseguramos que el estado final sea consistente
+    setTranscript(masterTranscriptRef.current);
     setIsListening(false);
+    releaseWakeLock(); // <--- LIBERAMOS PANTALLA
   }, []);
 
   const resetTranscript = useCallback(() => {
@@ -132,14 +152,24 @@ export const useSpeechRecognition = () => {
       setTranscript(text);
   }, []);
 
+  // Limpieza al salir de la pantalla
   useEffect(() => {
+      // Re-adquirir Wake Lock si la app vuelve de segundo plano y seguía grabando
+      const handleVisibilityChange = () => {
+        if (document.visibilityState === 'visible' && isListening) {
+          requestWakeLock();
+        }
+      };
+
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+
       return () => {
           isUserInitiatedStop.current = true;
-          if (recognitionRef.current) {
-              try { recognitionRef.current.stop(); } catch(e){}
-          }
+          if (recognitionRef.current) recognitionRef.current.stop();
+          releaseWakeLock();
+          document.removeEventListener('visibilitychange', handleVisibilityChange);
       };
-  }, []);
+  }, [isListening]);
 
   return { isListening, transcript, startListening, stopListening, resetTranscript, setTranscript: setTranscriptManual };
 };
