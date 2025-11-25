@@ -8,97 +8,97 @@ interface IWindow extends Window {
 export const useSpeechRecognition = () => {
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState('');
-  const [isAPISupported, setIsAPISupported] = useState(false); 
+  // Inicialización INMEDIATA: Comprueba si existe la API al cargar el archivo
+  const [isAPISupported, setIsAPISupported] = useState(
+    typeof window !== 'undefined' && !!((window as unknown as IWindow).webkitSpeechRecognition || (window as unknown as IWindow).SpeechRecognition)
+  );
   
   const recognitionRef = useRef<any>(null);
-  const finalTranscriptRef = useRef(''); 
-  const isUserInitiatedStop = useRef(false);
 
-  // Funciones auxiliares para Wake Lock... (omitidas por brevedad, pero mantenidas en tu archivo)
-
-  const setupRecognition = useCallback(() => {
+  // --- FUNCIÓN DE INICIO ---
+  const startListening = useCallback(() => {
     const { webkitSpeechRecognition, SpeechRecognition } = window as unknown as IWindow;
     const SpeechRecognitionAPI = SpeechRecognition || webkitSpeechRecognition;
 
     if (!SpeechRecognitionAPI) {
-      setIsAPISupported(false);
-      return null;
+      alert("Tu navegador no soporta reconocimiento de voz.");
+      return;
     }
 
-    setIsAPISupported(true);
-    
-    const recognition = new SpeechRecognitionAPI();
-    recognition.continuous = true; 
-    recognition.interimResults = true;
-    recognition.lang = 'es-MX';
+    try {
+      // Si ya existe una instancia, la detenemos antes de crear otra
+      if (recognitionRef.current) {
+        try { recognitionRef.current.stop(); } catch(e) {}
+      }
 
-    recognition.onstart = () => {
-      setIsListening(true);
-      // requestWakeLock(); // Si tienes el Wake Lock implementado, actívalo aquí
-    };
+      const recognition = new SpeechRecognitionAPI();
+      recognition.continuous = true; 
+      recognition.interimResults = true;
+      recognition.lang = 'es-MX';
 
-    // LÓGICA V6: Lectura directa del texto (Simplificación extrema)
-    recognition.onresult = (event: any) => {
+      recognition.onstart = () => {
+        console.log("🎙️ Micrófono ABIERTO");
+        setIsListening(true);
+      };
+
+      recognition.onresult = (event: any) => {
         let currentTranscript = '';
-        
-        // Simplemente leemos todo el buffer y dejamos que el DOM lo reemplace.
         for (let i = 0; i < event.results.length; ++i) {
-             currentTranscript += event.results[i][0].transcript;
+          currentTranscript += event.results[i][0].transcript;
         }
+        setTranscript(currentTranscript);
+      };
 
-        // El texto final se actualiza directamente con lo que el motor piensa
-        setTranscript(currentTranscript); 
-        // No intentamos deducir por longitud, sino que confiamos en el buffer actual.
-    };
+      recognition.onerror = (event: any) => {
+        console.error("⚠️ Error de voz:", event.error);
+        if (event.error === 'not-allowed') {
+          setIsListening(false);
+          alert("Permiso denegado. Revisa la configuración del sitio (candado en la barra de dirección).");
+        }
+        if (event.error === 'no-speech') {
+           // Ignorar silencio, dejar que siga
+        }
+      };
 
-    recognition.onerror = (event: any) => {
-      if (event.error === 'not-allowed') {
-        isUserInitiatedStop.current = true;
+      recognition.onend = () => {
+        console.log("🛑 Micrófono CERRADO por el navegador");
+        // Solo cambiamos el estado visual, no intentamos resurrección automática 
+        // en esta versión de prueba para aislar el problema.
         setIsListening(false);
-      }
-    };
+      };
 
-    recognition.onend = () => {
-      // Bucle suave de reinicio
-      if (!isUserInitiatedStop.current) {
-         setTimeout(() => {
-           try {
-             recognition.start();
-           } catch (e) {
-             console.warn("Fallo reinicio V6:", e);
-           }
-         }, 500); // 500ms de delay para evitar el bloqueo del navegador
-      } else {
-        setIsListening(false);
-        // releaseWakeLock(); // Si tienes el Wake Lock implementado, libéralo aquí
-      }
-    };
-    
-    recognitionRef.current = recognition;
-    return recognition;
+      recognitionRef.current = recognition;
+      recognition.start();
+
+    } catch (e) {
+      console.error("Error CRÍTICO al iniciar:", e);
+      alert("Error al intentar abrir el micrófono: " + e);
+      setIsListening(false);
+    }
   }, []);
 
-  // ... (MÉTODOS start, stop, reset, etc. deben ser mantenidos igual que la versión anterior,
-  // pero el useEffect de inicialización debe llamar a setupRecognition())
+  const stopListening = useCallback(() => {
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+    }
+  }, []);
 
-  // Mantenemos la estructura de retorno
-  const startListening = useCallback(() => { /* ... */ }, [/* ... */]);
-  const stopListening = useCallback(() => { /* ... */ }, []);
-  const resetTranscript = useCallback(() => { /* ... */ }, []);
-  const setTranscriptManual = useCallback((text: string) => { /* ... */ }, []);
-  
-  useEffect(() => {
-    // Esto se mantiene para asegurar la correcta inicialización y cleanup
-    const recognitionInstance = setupRecognition();
-    if (recognitionInstance) recognitionRef.current = recognitionInstance;
-    return () => {
-        isUserInitiatedStop.current = true;
-        if (recognitionRef.current) recognitionRef.current.stop();
-    };
-  }, [setupRecognition]);
-  
+  const resetTranscript = useCallback(() => {
+    setTranscript('');
+  }, []);
+
+  const setTranscriptManual = useCallback((text: string) => {
+      setTranscript(text);
+  }, []);
+
   return { 
-    isListening, transcript, startListening, stopListening, resetTranscript, 
-    setTranscript: setTranscriptManual, isAPISupported 
+    isListening, 
+    transcript, 
+    startListening, 
+    stopListening, 
+    resetTranscript, 
+    setTranscript: setTranscriptManual,
+    isAPISupported
   };
 };
