@@ -1,7 +1,7 @@
 // @ts-ignore
 const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 
-// --- DEFINICIÓN DE TIPOS EXPORTADOS (Para que otros archivos los usen) ---
+// --- TIPOS ---
 export interface ChatMessage { 
   role: 'user' | 'model'; 
   text: string; 
@@ -25,15 +25,37 @@ export interface MedicationItem {
   notes: string;     
 }
 
-// --- UTILIDADES ---
+// --- UTILIDADES DE LIMPIEZA (EL ESCÁNER MEJORADO) ---
+
 const sanitizeInput = (input: string): string => input.replace(/ignore previous|system override/gi, "[BLOQUEADO]").trim();
 
+/**
+ * ESCÁNER TITANIO: Limpia Markdown, espacios y busca llaves JSON
+ */
 const extractJSON = (text: string): any => {
-  try { return JSON.parse(text); } 
-  catch {
-    const match = text.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
-    if (match) return JSON.parse(match[0]);
-    throw new Error("Formato JSON inválido.");
+  try {
+    // 1. Eliminación de Markdown típico (```json ... ```)
+    let clean = text.replace(/```json/gi, '').replace(/```/g, '').trim();
+
+    // 2. Búsqueda quirúrgica del objeto o array
+    // Buscamos la primera llave '{' o corchete '[' y el último '}' o ']'
+    const firstBrace = clean.search(/[{[]/);
+    const lastBrace = clean.search(/[}\]]$/); // Busca al final, ajustado abajo
+
+    // Si encontramos estructura, recortamos todo lo que esté fuera
+    if (firstBrace !== -1) {
+       // Buscamos el cierre real desde el final
+       const lastClosing = clean.lastIndexOf(clean[firstBrace] === '{' ? '}' : ']');
+       if (lastClosing !== -1) {
+           clean = clean.substring(firstBrace, lastClosing + 1);
+       }
+    }
+
+    // 3. Intento de Parseo
+    return JSON.parse(clean);
+  } catch (e) {
+    console.error("CRASH ESCÁNER JSON. Texto recibido:", text);
+    throw new Error("La IA devolvió datos ilegibles. Intente de nuevo.");
   }
 };
 
@@ -41,16 +63,33 @@ const extractJSON = (text: string): any => {
 export const GeminiMedicalService = {
   async callGeminiAPI(payload: any): Promise<string> {
     if (!API_KEY) throw new Error("API Key faltante.");
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+    
+    // Usamos flash por defecto por velocidad, pro como fallback si hiciera falta
+    const URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`;
+
+    const response = await fetch(URL, {
+      method: 'POST', 
+      headers: { 'Content-Type': 'application/json' }, 
+      body: JSON.stringify(payload)
     });
-    if (!response.ok) throw new Error(`Error ${response.status}`);
+
+    if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        console.error("Gemini Error:", err);
+        throw new Error(`Error API: ${response.status}`);
+    }
+    
     const data = await response.json();
     return data.candidates?.[0]?.content?.parts?.[0]?.text || "";
   },
 
   async generateQuickRxJSON(transcript: string): Promise<MedicationItem[]> {
-    const prompt = `ROL: Médico. TAREA: Extraer medicamentos de: "${sanitizeInput(transcript)}". SALIDA: Array JSON exacto: [{"drug":"", "details":"", "frequency":"", "duration":"", "notes":""}]. Sin texto extra.`;
+    const prompt = `
+      ROL: Médico. 
+      TAREA: Extraer medicamentos de: "${sanitizeInput(transcript)}". 
+      FORMATO: JSON Array puro (sin markdown).
+      Estructura: [{"drug":"", "details":"", "frequency":"", "duration":"", "notes":""}]
+    `;
     try {
       const res = await this.callGeminiAPI({ contents: [{ parts: [{ text: prompt }] }] });
       return extractJSON(res);
@@ -58,7 +97,22 @@ export const GeminiMedicalService = {
   },
 
   async generateClinicalNote(transcript: string, specialty: string): Promise<GeminiResponse> {
-    const prompt = `ACTÚA: Médico ${specialty}. ANALIZA: "${sanitizeInput(transcript)}". SALIDA: JSON: {"clinicalNote": "SOAP completo", "patientInstructions": "Instrucciones paciente", "actionItems": {"next_appointment": null, "urgent_referral": false, "lab_tests_required": []}}`;
+    const prompt = `
+      ACTÚA: Médico ${specialty}. 
+      ANALIZA: "${sanitizeInput(transcript)}". 
+      SALIDA OBLIGATORIA: Solamente un objeto JSON válido (RFC 8259), sin bloques de código markdown, sin texto introductorio.
+      
+      JSON SCHEMA:
+      {
+        "clinicalNote": "Texto SOAP completo y formateado.",
+        "patientInstructions": "Lista de indicaciones claras.",
+        "actionItems": {
+            "next_appointment": "YYYY-MM-DD" o null,
+            "urgent_referral": boolean,
+            "lab_tests_required": ["..."]
+        }
+      }
+    `;
     try {
       const res = await this.callGeminiAPI({ contents: [{ parts: [{ text: prompt }] }] });
       return extractJSON(res);
@@ -67,7 +121,7 @@ export const GeminiMedicalService = {
 
   async chatWithContext(ctx: string, history: ChatMessage[], msg: string): Promise<string> {
     const contents = [
-        { role: 'user', parts: [{ text: `CONTEXTO: ${ctx}` }] },
+        { role: 'user', parts: [{ text: `SISTEMA: ${ctx}` }] },
         { role: 'model', parts: [{ text: "Entendido." }] },
         ...history.map(h => ({ role: h.role, parts: [{ text: h.text }] })),
         { role: 'user', parts: [{ text: sanitizeInput(msg) }] }
