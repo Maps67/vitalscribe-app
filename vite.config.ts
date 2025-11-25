@@ -92,7 +92,7 @@ export default defineConfig({
           'vendor-ui': ['lucide-react', 'sonner'], // Iconos y notificaciones aparte
           'vendor-supabase': ['@supabase/supabase-js'], // Cliente BD aparte
           'vendor-pdf': ['@react-pdf/renderer'], // Renderizador PDF (pesado) aparte
-          'vendor-ai': ['@google/generative-ai'] // SDK de Gemini aparte
+          // NOTA: Eliminamos 'vendor-ai' porque ya usamos fetch nativo, ahorrando peso.
         }
       }
     }
@@ -100,5 +100,4 @@ export default defineConfig({
 
   // 4. ELIMINACIÓN DE POLYFILLS PELIGROSOS
   // Quitamos "define: { global: 'window' }". 
-  // En 2024, con Vite y ESM, esto rompe más cosas de las que arregla.
 });
