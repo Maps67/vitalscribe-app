@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   Mic, Square, Save, RefreshCw, FileText, Printer, Search, 
   X, MessageSquare, User, Send, Edit2, Check, ArrowLeft, 
-  Stethoscope, Trash2, Share2, Download 
+  Stethoscope, Trash2, Share2, Download, Paperclip 
 } from 'lucide-react';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition'; 
 import { GeminiMedicalService, ChatMessage, GeminiResponse } from '../services/GeminiMedicalService';
@@ -14,6 +14,7 @@ import { pdf } from '@react-pdf/renderer';
 import PrescriptionPDF from './PrescriptionPDF';
 import { AppointmentService } from '../services/AppointmentService';
 import QuickRxModal from './QuickRxModal';
+import { DoctorFileGallery } from './DoctorFileGallery';
 
 type TabType = 'record' | 'patient' | 'chat';
 
@@ -49,6 +50,9 @@ const ConsultationView: React.FC = () => {
   const [nextApptDate, setNextApptDate] = useState('');
   const [isQuickRxModalOpen, setIsQuickRxModalOpen] = useState(false); 
   
+  // ESTADO PARA EL PANEL LATERAL DE ARCHIVOS
+  const [isAttachmentsOpen, setIsAttachmentsOpen] = useState(false);
+
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [isChatting, setIsChatting] = useState(false);
@@ -267,12 +271,23 @@ const ConsultationView: React.FC = () => {
   };
   
   return (
-    <div className="flex flex-col md:flex-row h-[calc(100vh-64px)] bg-slate-50 dark:bg-slate-900">
+    <div className="flex flex-col md:flex-row h-[calc(100vh-64px)] bg-slate-50 dark:bg-slate-900 relative">
       
       {/* Panel Izquierdo (Controles) */}
       <div className={`w-full md:w-1/3 p-4 flex flex-col gap-4 border-r dark:border-slate-800 bg-white dark:bg-slate-900 overflow-y-auto ${generatedNote ? 'hidden md:flex' : 'flex'}`}>
-        <h2 className="text-2xl font-bold dark:text-white flex justify-between items-center">
-            Consulta IA 
+        <div className="flex justify-between items-center mb-1">
+            <h2 className="text-2xl font-bold dark:text-white flex items-center gap-2">
+                Consulta IA 
+                {/* BOTÓN PARA ABRIR ARCHIVOS ADJUNTOS */}
+                <button 
+                    onClick={() => setIsAttachmentsOpen(true)}
+                    className="p-2 ml-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-full text-slate-500 dark:text-slate-300 transition-colors"
+                    title="Ver archivos adjuntos"
+                >
+                    <Paperclip size={18} />
+                </button>
+            </h2>
+            
             {transcript && (
                 <button 
                     onClick={()=>{if(confirm("¿Estás seguro de borrar el dictado actual?")) resetTranscript()}} 
@@ -282,7 +297,7 @@ const ConsultationView: React.FC = () => {
                     <Trash2 size={20}/>
                 </button>
             )}
-        </h2>
+        </div>
         
         <div className="bg-indigo-50 dark:bg-indigo-900/20 p-3 rounded-lg border border-indigo-100 dark:border-indigo-800">
             <label className="text-xs font-bold text-indigo-600 dark:text-indigo-300 uppercase flex gap-1 items-center mb-1">
@@ -313,7 +328,7 @@ const ConsultationView: React.FC = () => {
             </div>
             
             {searchTerm && !selectedPatient && (
-                <div className="absolute top-full left-0 w-full bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-b-lg shadow-xl max-h-48 overflow-y-auto mt-1">
+                <div className="absolute top-full left-0 w-full bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-b-lg shadow-xl max-h-48 overflow-y-auto mt-1 z-20">
                     {filteredPatients.length > 0 ? filteredPatients.map(p=>(
                         <div key={p.id} onClick={()=>{setSelectedPatient(p);setSearchTerm('')}} className="p-3 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer border-b dark:border-slate-700 dark:text-white last:border-0">
                             <p className="font-bold text-sm">{p.name}</p>
@@ -401,7 +416,7 @@ const ConsultationView: React.FC = () => {
                     onClick={()=>setActiveTab(t.id as TabType)} 
                     disabled={!generatedNote && t.id !== 'record'} 
                     className={`flex-1 py-4 flex justify-center items-center gap-2 text-sm font-bold border-b-4 transition-colors ${activeTab===t.id ? 'text-brand-teal border-brand-teal' : 'text-slate-400 border-transparent hover:text-slate-600'}`}
-                 >
+                  >
                     <t.icon size={18}/>
                     <span className="hidden sm:inline">{t.label}</span>
                  </button>
@@ -436,16 +451,14 @@ const ConsultationView: React.FC = () => {
                           </div>
                       )}
 
-                      {/* Pestaña: Plan / Receta (4 BOTONES AHORA) */}
+                      {/* Pestaña: Plan / Receta */}
                       {activeTab === 'patient' && (
                           <div className="bg-white dark:bg-slate-900 p-6 rounded-xl shadow-sm h-full flex flex-col border dark:border-slate-800 overflow-hidden">
                               <div className="flex justify-between items-center mb-4 pb-2 border-b dark:border-slate-800">
                                   <h3 className="font-bold text-lg dark:text-white">Instrucciones y Plan</h3>
                                   
-                                  {/* --- ZONA DE BOTONES (4 ICONOS) --- */}
+                                  {/* --- ZONA DE BOTONES --- */}
                                   <div className="flex gap-2">
-                                      
-                                      {/* 1. WhatsApp (Verde) */}
                                       <button 
                                           onClick={handleWhatsAppShare}
                                           className="p-2 bg-green-50 text-green-600 hover:bg-green-100 dark:bg-green-900/20 dark:text-green-400 rounded-lg transition-colors border border-green-200 dark:border-green-800"
@@ -453,8 +466,6 @@ const ConsultationView: React.FC = () => {
                                       >
                                           <Share2 size={18} />
                                       </button>
-                                      
-                                      {/* 2. Descargar PDF (Azul/Icono Descarga) - NUEVO AGREGADO */}
                                       <button 
                                           onClick={handlePrint} 
                                           className="p-2 bg-blue-50 text-blue-600 hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400 rounded-lg transition-colors border border-blue-200 dark:border-blue-800"
@@ -462,8 +473,6 @@ const ConsultationView: React.FC = () => {
                                       >
                                           <Download size={18}/>
                                       </button>
-
-                                      {/* 3. Editar (Gris) */}
                                       <button 
                                           onClick={()=>setIsEditingInstructions(!isEditingInstructions)} 
                                           className={`p-2 rounded-lg transition-colors border ${isEditingInstructions ? 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-300' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'}`}
@@ -471,8 +480,6 @@ const ConsultationView: React.FC = () => {
                                       >
                                           {isEditingInstructions ? <Check size={18}/> : <Edit2 size={18}/>}
                                       </button>
-                                      
-                                      {/* 4. Imprimir (Gris) */}
                                       <button 
                                           onClick={handlePrint} 
                                           className="p-2 bg-slate-50 text-slate-600 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-300 rounded-lg transition-colors border border-slate-200 dark:border-slate-700"
@@ -530,7 +537,38 @@ const ConsultationView: React.FC = () => {
           </div>
       </div>
 
-      {/* Modales (Sin cambios) */}
+      {/* --- PANEL LATERAL DESLIZANTE (ARCHIVOS) --- */}
+      {isAttachmentsOpen && (
+        <div className="fixed inset-0 z-50 flex justify-end">
+            {/* Fondo oscuro con blur */}
+            <div 
+                className="absolute inset-0 bg-black/30 backdrop-blur-sm transition-opacity" 
+                onClick={() => setIsAttachmentsOpen(false)} 
+            />
+            
+            {/* Contenido del Panel */}
+            <div className="relative w-full max-w-md bg-white dark:bg-slate-900 h-full shadow-2xl p-4 flex flex-col border-l dark:border-slate-800 animate-slide-in-right">
+                <div className="flex justify-between items-center mb-4 pb-2 border-b dark:border-slate-800">
+                    <h3 className="font-bold text-lg dark:text-white flex items-center gap-2">
+                        <Paperclip size={20} className="text-brand-teal"/> Archivos Adjuntos
+                    </h3>
+                    <button 
+                        onClick={() => setIsAttachmentsOpen(false)} 
+                        className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors"
+                    >
+                        <X size={20} className="text-slate-500"/>
+                    </button>
+                </div>
+                
+                <div className="flex-1 overflow-y-auto">
+                    {/* Aquí reutilizamos tu galería existente */}
+                    <DoctorFileGallery />
+                </div>
+            </div>
+        </div>
+      )}
+
+      {/* Modales Existentes */}
       {isAppointmentModalOpen && (
           <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
               <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 max-w-sm w-full shadow-2xl animate-fade-in-up">

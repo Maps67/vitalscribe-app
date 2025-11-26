@@ -1,9 +1,14 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Calendar, MapPin, ChevronRight, Sun, Moon, Bell, CloudRain, Cloud, ShieldCheck } from 'lucide-react';
+import { Calendar, MapPin, ChevronRight, Sun, Moon, Bell, CloudRain, Cloud, ShieldCheck, Upload, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { Appointment } from '../types';
+// Asegúrate de que esta ruta sea correcta según tu estructura
+import { Appointment } from '../types'; 
 import { getTimeOfDayGreeting } from '../utils/greetingUtils';
+
+// --- IMPORTACIONES NUEVAS ---
+import { UploadMedico } from '../components/UploadMedico';
+import { DoctorFileGallery } from '../components/DoctorFileGallery';
 
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -11,6 +16,9 @@ const Dashboard: React.FC = () => {
   const [todayAppointments, setTodayAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
   const [weather, setWeather] = useState({ temp: '--', code: 0 });
+  
+  // Estado para el Modal de Subida
+  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   
   const now = new Date();
   const hour = now.getHours();
@@ -20,7 +28,7 @@ const Dashboard: React.FC = () => {
   // Usamos useMemo para que el saludo no cambie en cada render, pero sí al recargar
   const dynamicGreeting = useMemo(() => getTimeOfDayGreeting(doctorName), [doctorName]);
 
-  // Lógica de Clima
+  // Lógica de Clima (ORIGINAL)
   useEffect(() => {
     if ("geolocation" in navigator) {
         navigator.geolocation.getCurrentPosition(async (position) => {
@@ -39,7 +47,6 @@ const Dashboard: React.FC = () => {
 
   const getWeatherIcon = () => {
       // Agregamos clases de animación 'animate-pulse' o una personalizada 'animate-float' si la definimos en CSS
-      // Usaremos 'animate-bounce' muy suave o 'animate-pulse' para movimiento.
       const animClass = "animate-pulse duration-[3000ms]"; 
       
       if (weather.code >= 51 && weather.code <= 67) return <CloudRain size={56} className={`text-blue-200 opacity-90 ${animClass}`}/>;
@@ -53,7 +60,7 @@ const Dashboard: React.FC = () => {
     ? { bg: "bg-gradient-to-br from-slate-900 to-indigo-950", text: "text-indigo-100" }
     : { bg: "bg-gradient-to-br from-teal-500 to-teal-700", text: "text-teal-50" };
 
-  // Lógica de Datos
+  // Lógica de Datos (ORIGINAL)
   useEffect(() => {
     const fetchData = async () => {
         try {
@@ -81,7 +88,7 @@ const Dashboard: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-slate-950 font-sans w-full overflow-x-hidden flex flex-col">
       
-      {/* HEADER MÓVIL */}
+      {/* HEADER MÓVIL (ORIGINAL) */}
       <div className="md:hidden px-5 pt-6 pb-4 flex justify-between items-center bg-white dark:bg-slate-900 sticky top-0 z-30 border-b border-gray-100 dark:border-slate-800 shadow-sm w-full">
         <div className="flex items-center gap-3">
             <img src="/pwa-192x192.png" alt="Logo" className="w-9 h-9 rounded-lg object-cover shadow-sm" />
@@ -96,12 +103,12 @@ const Dashboard: React.FC = () => {
                 <span className="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full border-2 border-white dark:border-slate-900"></span>
             </button>
             <div onClick={() => navigate('/settings')} className="h-9 w-9 rounded-full bg-gradient-to-tr from-teal-400 to-teal-600 flex items-center justify-center text-white font-bold text-xs shadow-md cursor-pointer border-2 border-white dark:border-slate-800">
-                {doctorName.charAt(4) || 'D'} {/* Ajuste para tomar la inicial del nombre, saltando el "Dr. " */}
+                {doctorName.charAt(4) || 'D'}
             </div>
         </div>
       </div>
 
-      {/* HEADER ESCRITORIO */}
+      {/* HEADER ESCRITORIO (ORIGINAL) */}
       <div className="hidden md:block px-8 pt-8 pb-4 w-full max-w-7xl mx-auto">
          <div className="flex justify-between items-center">
             <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Tablero Principal</h1>
@@ -116,20 +123,26 @@ const Dashboard: React.FC = () => {
       {/* CONTENIDO PRINCIPAL */}
       <div className="flex-1 p-4 md:p-8 space-y-6 animate-fade-in-up w-full max-w-5xl mx-auto pb-32 md:pb-8">
         
-        {/* SECCIÓN DE SALUDO + ESCUDO MÓVIL */}
-        <div className="flex justify-between items-start">
+        {/* SECCIÓN DE SALUDO + BOTÓN DE ACCIÓN (MODIFICADO) */}
+        <div className="flex justify-between items-end">
             <div className="mt-1">
-                {/* SALUDO CORREGIDO CON "Dr." */}
                 <h1 className="text-2xl font-bold text-slate-800 dark:text-white leading-tight">
-                    {/* Forzamos "Dr." aquí si no viniera en el estado, pero ya lo procesamos en fetch */}
                     {dynamicGreeting.greeting.replace("Hola, ", "Hola, ")} 
                 </h1>
-                {/* MENSAJE ANIMADO (Fade In lento) */}
                 <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 leading-relaxed animate-[fadeIn_2s_ease-in-out]">
                     {dynamicGreeting.message}
                 </p>
             </div>
             
+            {/* BOTÓN FLOTANTE DE SUBIDA (TEXTO ACTUALIZADO) */}
+            <button 
+              onClick={() => setIsUploadModalOpen(true)}
+              className="hidden md:flex bg-brand-teal text-white px-4 py-2 rounded-xl font-bold items-center gap-2 shadow-lg hover:bg-teal-600 transition-transform active:scale-95"
+            >
+              <Upload size={18} />
+              <span>Subir Archivos (Nuevo/Recurrente)</span>
+            </button>
+
             {/* INSIGNIA DE SEGURIDAD MÓVIL (Solo icono y punto para no saturar) */}
             <div className="md:hidden flex flex-col items-center justify-center bg-white dark:bg-slate-800 p-2 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700">
                 <ShieldCheck size={20} className="text-green-500 mb-1" />
@@ -143,7 +156,7 @@ const Dashboard: React.FC = () => {
             </div>
         </div>
 
-        {/* TARJETA HERO (CLIMA REAL ANIMADO) */}
+        {/* TARJETA HERO (CLIMA REAL ANIMADO - ORIGINAL) */}
         <div className={`${heroStyle.bg} rounded-3xl p-6 text-white shadow-lg relative overflow-hidden flex justify-between items-center transition-all duration-500 w-full`}>
             <div className="relative z-10 flex-1">
                 <div className="flex items-center gap-2 mb-2">
@@ -162,17 +175,32 @@ const Dashboard: React.FC = () => {
                 </div>
             </div>
 
-            {/* ICONO CLIMA ANIMADO */}
             <div className="relative z-10 transform translate-x-2 drop-shadow-lg transition-transform duration-1000 hover:scale-110">
                 {getWeatherIcon()}
             </div>
 
-            {/* Decoración */}
             <div className="absolute -right-10 -top-10 w-40 h-40 bg-white/10 rounded-full blur-3xl animate-pulse"></div>
             <div className="absolute -left-10 -bottom-10 w-32 h-32 bg-black/20 rounded-full blur-2xl"></div>
         </div>
 
-        {/* AGENDA DEL DÍA */}
+        {/* BOTÓN MÓVIL GRANDE (TEXTO ACTUALIZADO) */}
+        <button 
+          onClick={() => setIsUploadModalOpen(true)}
+          className="md:hidden w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-4 rounded-xl flex items-center justify-between shadow-sm active:scale-95 transition-transform"
+        >
+          <div className="flex items-center gap-3">
+            <div className="bg-teal-50 dark:bg-teal-900/30 p-3 rounded-full text-brand-teal">
+              <Upload size={20} />
+            </div>
+            <div className="text-left">
+              <p className="font-bold text-slate-800 dark:text-white text-sm">Subir Archivos</p>
+              <p className="text-xs text-slate-500">Pacientes nuevos o recurrentes</p>
+            </div>
+          </div>
+          <ChevronRight size={18} className="text-slate-300" />
+        </button>
+
+        {/* AGENDA DEL DÍA (ORIGINAL) */}
         <section className="w-full">
             <div className="flex justify-between items-center mb-4 px-1">
                 <h3 className="text-lg font-bold text-slate-900 dark:text-white">Próximos Pacientes</h3>
@@ -222,6 +250,38 @@ const Dashboard: React.FC = () => {
             )}
         </section>
       </div>
+
+      {/* MODAL DE SUBIDA DE ARCHIVOS (TITULO ACTUALIZADO) */}
+      {isUploadModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+            <div className="p-4 border-b border-gray-100 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-800/50">
+              <h3 className="font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                <Upload size={18} className="text-brand-teal" /> Subir Archivos
+              </h3>
+              <button 
+                onClick={() => setIsUploadModalOpen(false)}
+                className="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full transition-colors text-slate-500"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="p-4 overflow-y-auto flex-1 space-y-4">
+              <div className="bg-blue-50 dark:bg-blue-900/10 p-3 rounded-lg text-xs text-blue-700 dark:text-blue-300 mb-2">
+                Sube documentos o fotos para asignar a un paciente. Estos archivos estarán disponibles en tu "Bandeja de Entrada" durante la consulta.
+              </div>
+              
+              <UploadMedico />
+              
+              <div className="pt-4 border-t dark:border-slate-800">
+                <DoctorFileGallery />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };
