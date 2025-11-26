@@ -1,142 +1,126 @@
-import { GeminiResponse, FollowUpMessage } from "../types";
-
+// @ts-ignore
 const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 
-if (!API_KEY) {
-  console.error("Falta la VITE_GEMINI_API_KEY en el archivo .env");
+// --- TIPOS ---
+export interface ChatMessage { role: 'user' | 'model'; text: string; }
+export interface GeminiResponse {
+  clinicalNote: string;
+  patientInstructions: string;
+  actionItems: { next_appointment: string | null; urgent_referral: boolean; lab_tests_required: string[]; };
+}
+export interface MedicationItem {
+  drug: string; details: string; frequency: string; duration: string; notes: string;
 }
 
+// --- UTILIDADES ---
+const sanitizeInput = (input: string): string => input.replace(/ignore previous|system override/gi, "[BLOQUEADO]").trim();
+
+/**
+ * PARSER HÍBRIDO (TITANIO)
+ * Evita la pantalla roja de "Error IA". Si falla el JSON, devuelve texto plano.
+ */
+const extractJSON = (text: string, fallbackText: string = ""): any => {
+  try {
+    let clean = text.replace(/```json/gi, '').replace(/```/g, '').trim();
+    const firstBrace = clean.search(/[{[]/);
+    const lastBrace = clean.search(/[}\]]$/);
+    if (firstBrace !== -1 && lastBrace !== -1) {
+       return JSON.parse(clean.substring(firstBrace, lastBrace + 1));
+    }
+    throw new Error("No JSON found");
+  } catch (e) {
+    console.warn("⚠️ Fallo JSON. Activando Rescate Híbrido.");
+    return {
+        clinicalNote: text || fallbackText || "Error generando texto estructurado.",
+        patientInstructions: "Por favor revise la nota clínica.",
+        actionItems: { next_appointment: null, urgent_referral: false, lab_tests_required: [] }
+    };
+  }
+};
+
+// --- SERVICIO PRINCIPAL ---
 export const GeminiMedicalService = {
-
-  // 1. AUTO-DESCUBRIMIENTO (Radar) - EL FIX DEL 404
+  // Usamos un modelo fijo y estable para evitar errores 404
   async getBestAvailableModel(): Promise<string> {
-    try {
-      const listUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${API_KEY}`;
-      const response = await fetch(listUrl);
-      
-      if (!response.ok) {
-          console.error("Error al validar API Key.");
-          return "gemini-pro"; // Fallback seguro
-      }
-      
-      const data = await response.json();
-      
-      const validModels = (data.models || []).filter((m: any) => 
-        m.supportedGenerationMethods?.includes("generateContent")
-      );
-
-      if (validModels.length === 0) return "gemini-pro";
-
-      const flashModel = validModels.find((m: any) => m.name.includes("flash"));
-      if (flashModel) return flashModel.name.replace('models/', '');
-
-      const proModel = validModels.find((m: any) => m.name.includes("pro"));
-      if (proModel) return proModel.name.replace('models/', '');
-
-      return validModels[0].name.replace('models/', '');
-    } catch (error) {
-      console.warn("Fallo en auto-descubrimiento, usando default seguro.");
-      return "gemini-pro";
-    }
+    return "gemini-1.5-flash"; 
   },
 
-  // 2. GENERAR NOTA SOAP (Usa el modelo descubierto)
-  async generateClinicalNote(transcript: string, specialty: string = "Medicina General"): Promise<GeminiResponse> {
+  async callGeminiAPI(payload: any): Promise<string> {
+    if (!API_KEY) throw new Error("Falta API Key");
+    const modelName = await this.getBestAvailableModel();
+    const URL = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${API_KEY}`;
+
     try {
-      const modelName = await this.getBestAvailableModel(); // Obtiene el modelo que no da 404
-      const URL = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${API_KEY}`;
-
-      const prompt = `
-        Actúa como un Médico Especialista en ${specialty} experto y detallista.
-        Transforma el siguiente dictado de consulta en un formato estructurado JSON.
-        
-        CONTEXTO CLÍNICO:
-        - Especialidad: ${specialty}
-        - Tono: Profesional, técnico y preciso según la especialidad indicada.
-        
-        DICTADO: "${transcript}"
-
-        Responde ÚNICAMENTE con este JSON (sin markdown):
-        {
-          "clinicalNote": "Redacta la Nota Clínica (Formato SOAP). Usa terminología propia de ${specialty}.",
-          "patientInstructions": "Instrucciones claras y empáticas para el paciente (medicamentos, cuidados, signos de alarma).",
-          "actionItems": {
-            "next_appointment": "Fecha sugerida o null",
-            "urgent_referral": false,
-            "lab_tests_required": []
-          }
+        const response = await fetch(URL, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+        });
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            throw new Error(`Google Error (${response.status}): ${err.error?.message || 'API Error'}`);
         }
-      `;
-
-      const response = await fetch(URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-      });
-
-      if (!response.ok) throw new Error("Error en petición a Google");
-      const data = await response.json();
-      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-
-      if (!text) throw new Error("IA vacía");
-
-      const cleanJson = text.replace(/```json/g, '').replace(/```/g, '').trim();
-      return JSON.parse(cleanJson) as GeminiResponse;
-    } catch (error) {
-      console.error("Error Gemini:", error);
-      throw error;
+        const data = await response.json();
+        return data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    } catch (error: any) {
+        console.error("Error API:", error);
+        throw new Error(error.message || "Error de conexión");
     }
   },
 
-  // 3. GENERAR PLAN DE SEGUIMIENTO (Función pendiente de UI)
-  async generateFollowUpPlan(patientName: string, clinicalNote: string, instructions: string): Promise<FollowUpMessage[]> {
-    throw new Error("Módulo de seguimiento pausado."); 
-  },
-
-  // 4. RECETA RÁPIDA
-  async generatePrescriptionOnly(transcript: string): Promise<string> {
-     try {
-        const modelName = await this.getBestAvailableModel();
-        const URL = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${API_KEY}`;
-        const prompt = `Genera receta médica texto plano para: "${transcript}"`;
-        const response = await fetch(URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-        });
-        const data = await response.json();
-        return data.candidates?.[0]?.content?.parts?.[0]?.text || "Error";
-     } catch (e) { throw e; }
-  },
-
-  // 5. CHAT CON CONTEXTO
-  async chatWithContext(context: string, userMessage: string): Promise<string> {
+  async generateQuickRxJSON(transcript: string): Promise<MedicationItem[]> {
+    const prompt = `ROL: Médico Auditor. TAREA: Extraer medicamentos EXACTOS de: "${sanitizeInput(transcript)}". SALIDA: JSON Array puro. Si no hay medicamentos, devuelve [].`;
     try {
-        const modelName = await this.getBestAvailableModel();
-        const URL = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${API_KEY}`;
-  
-        const prompt = `
-          CONTEXTO MÉDICO (Nota Clínica Generada):
-          ${context}
-  
-          PREGUNTA DEL USUARIO (MÉDICO):
-          "${userMessage}"
-  
-          Responde de manera breve, profesional y útil basada estrictamente en el contexto médico proporcionado.
-        `;
-  
-        const response = await fetch(URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-        });
-  
-        if (!response.ok) throw new Error("Error en Chat");
-        const data = await response.json();
-        return data.candidates?.[0]?.content?.parts?.[0]?.text || "No pude generar una respuesta.";
-    } catch (error) {
-        console.error("Chat Error:", error);
-        throw error;
-    }
+      const res = await this.callGeminiAPI({ contents: [{ parts: [{ text: prompt }] }] });
+      try {
+          const clean = res.replace(/```json/gi, '').replace(/```/g, '').trim();
+          const start = clean.indexOf('[');
+          const end = clean.lastIndexOf(']');
+          if (start !== -1 && end !== -1) return JSON.parse(clean.substring(start, end + 1));
+          return JSON.parse(clean);
+      } catch { return []; }
+    } catch { return []; }
+  },
+
+  // --- AQUÍ ESTÁ EL PROTOCOLO DYNAMIC SCRIBE (ANTI-ALUCINACIONES) ---
+  async generateClinicalNote(transcript: string, specialty: string): Promise<GeminiResponse> {
+    const cleanTranscript = sanitizeInput(transcript);
+
+    const prompt = `
+      ACTÚA COMO: Asistente Médico Clínico experto y Auditor Forense en: ${specialty.toUpperCase()}.
+      TU OBJETIVO: Generar una Nota Clínica SOAP basada EXCLUSIVAMENTE en la evidencia del audio.
+
+      REGLAS DE ORO (SEGURIDAD CLÍNICA - STRICT MODE):
+      1. PRINCIPIO DE EVIDENCIA CERO: Si un dato (Signos Vitales, Peso, Talla) no se menciona explícitamente, escribe "[No reportado]".
+         - PROHIBIDO INVENTAR: No asumas "Ruidos cardiacos rítmicos" si no se dijo.
+         - PROHIBIDO INVENTAR: No pongas "TA 120/80" por defecto.
+      
+      2. CONTEXTO DE ESPECIALIDAD (${specialty}):
+         - Usa terminología técnica propia de esta especialidad.
+      
+      3. FORMATO DE SALIDA (JSON):
+         {
+           "clinicalNote": "Nota SOAP completa y formal.",
+           "patientInstructions": "Instrucciones claras (Nivel secundaria).",
+           "actionItems": {
+              "next_appointment": "YYYY-MM-DD" o null,
+              "urgent_referral": boolean,
+              "lab_tests_required": []
+           }
+         }
+
+      TRANSCRIPCIÓN: "${cleanTranscript}"
+    `;
+    
+    const rawText = await this.callGeminiAPI({ contents: [{ parts: [{ text: prompt }] }] });
+    return extractJSON(rawText, "La IA respondió texto plano. Se muestra a continuación.");
+  },
+
+  async chatWithContext(ctx: string, history: ChatMessage[], msg: string): Promise<string> {
+    const contents = [
+        { role: 'user', parts: [{ text: `CONTEXTO MÉDICO: ${ctx}` }] },
+        { role: 'model', parts: [{ text: "Entendido. Solo responderé sobre ese contexto." }] },
+        ...history.map(h => ({ role: h.role, parts: [{ text: h.text }] })),
+        { role: 'user', parts: [{ text: sanitizeInput(msg) }] }
+    ];
+    try { return await this.callGeminiAPI({ contents }); } catch { return "Error conexión."; }
   }
 };
