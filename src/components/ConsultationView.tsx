@@ -76,7 +76,6 @@ const ConsultationView: React.FC = () => {
     };
     loadInitialData();
     
-    // Recuperar borrador
     const savedDraft = sessionStorage.getItem('mediscribe_draft_transcript');
     if (savedDraft && !transcript) { 
         setTranscript(savedDraft); 
@@ -86,7 +85,7 @@ const ConsultationView: React.FC = () => {
     return () => { mounted = false; };
   }, [setTranscript]); 
 
-  // --- Manejo de Scroll y Persistencia Local ---
+  // --- Manejo de Scroll ---
   useEffect(() => { 
     if (isListening && transcriptEndRef.current) {
         transcriptEndRef.current.scrollIntoView({ behavior: 'smooth' });
@@ -102,13 +101,13 @@ const ConsultationView: React.FC = () => {
       chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); 
   }, [chatMessages, activeTab]);
 
-  // --- Filtrado de Pacientes ---
+  // --- Filtrado ---
   const filteredPatients = useMemo(() => {
     if (!searchTerm) return [];
     return patients.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()));
   }, [patients, searchTerm]);
 
-  // --- Lógica de Grabación ---
+  // --- Acciones ---
   const handleToggleRecording = () => {
     if (isListening) {
         stopListening();
@@ -125,11 +124,9 @@ const ConsultationView: React.FC = () => {
     }
   };
 
-  // --- Generación con IA ---
   const handleGenerate = async () => {
     if (!transcript) return toast.error("No hay audio para procesar.");
     
-    // Cancelar peticiones anteriores si existen
     if (abortControllerRef.current) abortControllerRef.current.abort();
     abortControllerRef.current = new AbortController();
     
@@ -151,7 +148,6 @@ const ConsultationView: React.FC = () => {
     }
   };
 
-  // --- Guardado en Base de Datos ---
   const handleSaveConsultation = async () => {
     if (!selectedPatient || !generatedNote) return toast.error("Faltan datos para guardar.");
     
@@ -183,7 +179,6 @@ const ConsultationView: React.FC = () => {
     }
   };
 
-  // --- Chat Contextual ---
   const handleChatSend = async (e?: React.FormEvent) => {
       e?.preventDefault();
       if (!chatInput.trim() || !generatedNote) return;
@@ -204,7 +199,6 @@ const ConsultationView: React.FC = () => {
       }
   };
 
-  // --- Gestión de Citas ---
   const handleConfirmAppointment = async () => {
       if (!selectedPatient || !nextApptDate) return;
       try {
@@ -223,40 +217,32 @@ const ConsultationView: React.FC = () => {
       }
   };
 
-  // --- NUEVA FUNCIONALIDAD: WhatsApp Share ---
+  // --- LÓGICA NUEVA: WhatsApp y PDF ---
+  
   const handleWhatsAppShare = () => {
     if (!editableInstructions || !selectedPatient) {
         toast.error("No hay plan o paciente seleccionado.");
         return;
     }
     
-    // 1. Construir mensaje personalizado
     const drName = doctorProfile?.full_name || 'su médico';
     const message = `*Hola ${selectedPatient.name}, soy el Dr. ${drName}.*\n\nLe comparto las instrucciones de su consulta:\n\n${editableInstructions}\n\n*Saludos cordiales.*`;
-    
-    // 2. Codificar para URL
     const encodedMessage = encodeURIComponent(message);
     
-    // 3. Determinar destino (Teléfono específico o Genérico)
     let whatsappUrl = `https://wa.me/?text=${encodedMessage}`;
     
     if (selectedPatient.phone) {
-        // Limpiamos el teléfono (quitamos guiones, espacios, paréntesis)
         const cleanPhone = selectedPatient.phone.replace(/\D/g, '');
-        // Validación básica de longitud (para evitar errores con números cortos)
         if (cleanPhone.length >= 10) {
              whatsappUrl = `https://wa.me/${cleanPhone}?text=${encodedMessage}`;
         }
     }
     
-    // 4. Abrir en nueva pestaña
     window.open(whatsappUrl, '_blank');
   };
 
-  // --- PDF Generación ---
   const generatePDF = async () => {
       if (!selectedPatient || !doctorProfile) return null;
-      // Usamos el mismo componente PDF pero le pasamos el "content" texto libre
       return await pdf(
         <PrescriptionPDF 
             doctorName={doctorProfile.full_name} 
@@ -280,11 +266,10 @@ const ConsultationView: React.FC = () => {
       if(blob) window.open(URL.createObjectURL(blob), '_blank'); 
   };
   
-  // --- Renderizado ---
   return (
     <div className="flex flex-col md:flex-row h-[calc(100vh-64px)] bg-slate-50 dark:bg-slate-900">
       
-      {/* PANEL IZQUIERDO: Controles y Contexto */}
+      {/* Panel Izquierdo (Controles) */}
       <div className={`w-full md:w-1/3 p-4 flex flex-col gap-4 border-r dark:border-slate-800 bg-white dark:bg-slate-900 overflow-y-auto ${generatedNote ? 'hidden md:flex' : 'flex'}`}>
         <h2 className="text-2xl font-bold dark:text-white flex justify-between items-center">
             Consulta IA 
@@ -398,7 +383,7 @@ const ConsultationView: React.FC = () => {
         </div>
       </div>
       
-      {/* PANEL DERECHO: Resultados y Chat */}
+      {/* Panel Derecho (Resultados) */}
       <div className={`w-full md:w-2/3 bg-slate-100 dark:bg-slate-950 flex flex-col border-l dark:border-slate-800 ${!generatedNote ? 'hidden md:flex' : 'flex h-full'}`}>
           
           <div className="flex border-b dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0 items-center px-2">
@@ -432,7 +417,7 @@ const ConsultationView: React.FC = () => {
              ) : (
                  <div className="h-full flex flex-col max-w-4xl mx-auto w-full gap-4">
                       
-                      {/* VISTA: NOTA CLÍNICA */}
+                      {/* Pestaña: Nota Clínica */}
                       {activeTab === 'record' && (
                           <div className="bg-white dark:bg-slate-900 p-6 rounded-xl shadow-sm h-full flex flex-col border dark:border-slate-800">
                               <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
@@ -451,33 +436,37 @@ const ConsultationView: React.FC = () => {
                           </div>
                       )}
 
-                      {/* VISTA: PLAN Y RECETA */}
+                      {/* Pestaña: Plan / Receta (CON BOTONES AGREGADOS) */}
                       {activeTab === 'patient' && (
                           <div className="bg-white dark:bg-slate-900 p-6 rounded-xl shadow-sm h-full flex flex-col border dark:border-slate-800 overflow-hidden">
                               <div className="flex justify-between items-center mb-4 pb-2 border-b dark:border-slate-800">
                                   <h3 className="font-bold text-lg dark:text-white">Instrucciones y Plan</h3>
+                                  
+                                  {/* AQUÍ ESTÁN LOS BOTONES SOLICITADOS */}
                                   <div className="flex gap-2">
-                                      {/* NUEVOS BOTONES DE ACCIÓN */}
+                                      {/* WhatsApp (Verde) */}
                                       <button 
                                           onClick={handleWhatsAppShare}
-                                          className="p-2 bg-green-50 text-green-600 hover:bg-green-100 dark:bg-green-900/20 dark:text-green-400 dark:hover:bg-green-900/40 rounded-lg transition-colors border border-green-200 dark:border-green-800"
+                                          className="p-2 bg-green-50 text-green-600 hover:bg-green-100 dark:bg-green-900/20 dark:text-green-400 rounded-lg transition-colors border border-green-200 dark:border-green-800"
                                           title="Enviar por WhatsApp"
                                       >
                                           <Share2 size={18} />
                                       </button>
                                       
+                                      {/* Editar (Gris/Indigo) */}
                                       <button 
                                           onClick={()=>setIsEditingInstructions(!isEditingInstructions)} 
-                                          className={`p-2 rounded-lg transition-colors border ${isEditingInstructions ? 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-300 dark:border-indigo-800' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'}`}
-                                          title={isEditingInstructions ? "Terminar edición" : "Editar texto"}
+                                          className={`p-2 rounded-lg transition-colors border ${isEditingInstructions ? 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-300' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-300'}`}
+                                          title={isEditingInstructions ? "Guardar edición" : "Editar texto"}
                                       >
                                           {isEditingInstructions ? <Check size={18}/> : <Edit2 size={18}/>}
                                       </button>
                                       
+                                      {/* PDF (Gris) */}
                                       <button 
                                           onClick={handlePrint} 
-                                          className="p-2 bg-slate-50 text-slate-600 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 rounded-lg transition-colors border border-slate-200 dark:border-slate-700"
-                                          title="Descargar/Imprimir PDF"
+                                          className="p-2 bg-slate-50 text-slate-600 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-300 rounded-lg transition-colors border border-slate-200 dark:border-slate-700"
+                                          title="Descargar PDF"
                                       >
                                           <Printer size={18}/>
                                       </button>
@@ -499,7 +488,7 @@ const ConsultationView: React.FC = () => {
                           </div>
                       )}
 
-                      {/* VISTA: CHAT CON IA */}
+                      {/* Pestaña: Chat */}
                       {activeTab === 'chat' && (
                           <div className="bg-white dark:bg-slate-900 p-4 rounded-xl shadow-sm h-full flex flex-col border dark:border-slate-800">
                               <div className="flex-1 overflow-y-auto mb-4 pr-2 custom-scrollbar">
@@ -531,7 +520,7 @@ const ConsultationView: React.FC = () => {
           </div>
       </div>
 
-      {/* MODALES */}
+      {/* Modales (Sin cambios) */}
       {isAppointmentModalOpen && (
           <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
               <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 max-w-sm w-full shadow-2xl animate-fade-in-up">
