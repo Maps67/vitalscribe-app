@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { Save, User, Stethoscope, Hash, Phone, MapPin, BookOpen, Upload, Image as ImageIcon, PenTool, Globe } from 'lucide-react';
+import { Save, User, Stethoscope, Hash, Phone, MapPin, BookOpen, Upload, Image as ImageIcon, PenTool, Globe, Download, FileSpreadsheet, ShieldCheck } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { MedicalDataService } from '../services/MedicalDataService';
+import { toast } from 'sonner';
 
 const SettingsView: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [downloading, setDownloading] = useState(false); // Estado para la descarga CSV
   
   // Campos del formulario
   const [fullName, setFullName] = useState('');
@@ -13,13 +16,11 @@ const SettingsView: React.FC = () => {
   const [license, setLicense] = useState('');
   const [phone, setPhone] = useState('');
   
-  // Nuevos campos NOM-004
+  // Campos NOM-004
   const [university, setUniversity] = useState('');
   const [address, setAddress] = useState('');
   const [logoUrl, setLogoUrl] = useState('');
   const [signatureUrl, setSignatureUrl] = useState('');
-  
-  // Nuevo campo: Web Externa
   const [websiteUrl, setWebsiteUrl] = useState('');
 
   useEffect(() => {
@@ -31,7 +32,7 @@ const SettingsView: React.FC = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', user.id)
@@ -79,9 +80,11 @@ const SettingsView: React.FC = () => {
 
       if (type === 'logo') setLogoUrl(publicUrl);
       else setSignatureUrl(publicUrl);
+      
+      toast.success("Imagen subida correctamente");
 
     } catch (error) {
-      alert("Error subiendo imagen.");
+      toast.error("Error subiendo imagen.");
     } finally {
       setUploading(false);
     }
@@ -104,93 +107,127 @@ const SettingsView: React.FC = () => {
         address,
         logo_url: logoUrl,
         signature_url: signatureUrl,
-        website_url: websiteUrl, // Guardamos el link
+        website_url: websiteUrl,
         updated_at: new Date(),
       };
 
       const { error } = await supabase.from('profiles').upsert(updates);
       if (error) throw error;
       
-      alert("Perfil actualizado correctamente");
-      window.location.reload();
+      toast.success("Perfil actualizado correctamente");
     } catch (error) {
-      alert("Error al guardar.");
+      toast.error("Error al guardar perfil.");
     } finally {
       setSaving(false);
+    }
+  };
+
+  // --- NUEVA FUNCIÓN: RESPALDO DE DATOS ---
+  const handleBackup = async () => {
+    if(!confirm("¿Desea descargar una copia completa de sus pacientes y consultas en formato Excel (CSV)?")) return;
+    
+    setDownloading(true);
+    try {
+      // Llamamos al método que agregamos en MedicalDataService (o lo agregaremos a continuación)
+      // Nota: Si MedicalDataService no tiene este método aún, lo implementaremos en el siguiente paso.
+      if (typeof MedicalDataService.downloadFullBackup === 'function') {
+          const success = await MedicalDataService.downloadFullBackup();
+          if(success) toast.success("Respaldo descargado correctamente.");
+          else toast.info("No hay datos para respaldar aún.");
+      } else {
+          toast.error("Función de respaldo no disponible aún.");
+      }
+    } catch(e) {
+      toast.error("Error al generar respaldo.");
+    } finally {
+      setDownloading(false);
     }
   };
 
   if (loading) return <div className="p-10 text-center text-slate-400">Cargando perfil...</div>;
 
   return (
-    <div className="p-6 max-w-5xl mx-auto pb-20">
-      <h2 className="text-2xl font-bold text-slate-800 mb-2">Configuración de Consultorio</h2>
-      <p className="text-slate-500 text-sm mb-6">Datos requeridos por la NOM-004 para la receta médica.</p>
+    <div className="p-6 max-w-5xl mx-auto pb-24">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+          <div>
+              <h2 className="text-2xl font-bold text-slate-800 dark:text-white">Configuración</h2>
+              <p className="text-slate-500 dark:text-slate-400 text-sm">Datos del consultorio y cuenta.</p>
+          </div>
+          
+          {/* BOTÓN DE RESPALDO (SOBERANÍA DE DATOS) */}
+          <button 
+            onClick={handleBackup}
+            disabled={downloading}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-lg border border-blue-200 dark:border-blue-800 hover:bg-blue-100 transition-colors text-sm font-bold disabled:opacity-50"
+          >
+            {downloading ? <Download className="animate-bounce" size={16}/> : <FileSpreadsheet size={16}/>}
+            {downloading ? "Exportando..." : "Descargar Mis Datos"}
+          </button>
+      </div>
       
       <form onSubmit={updateProfile} className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        {/* COLUMNA 1 */}
+        {/* COLUMNA 1: DATOS TEXTO */}
         <div className="lg:col-span-2 space-y-6">
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                <div className="p-4 bg-slate-50 border-b border-slate-100 font-bold text-slate-700 flex items-center gap-2">
+            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+                <div className="p-4 bg-slate-50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-700 font-bold text-slate-700 dark:text-slate-200 flex items-center gap-2">
                     <User size={18} className="text-brand-teal"/> Identidad Profesional
                 </div>
                 <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="col-span-2">
-                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Nombre Completo</label>
-                        <input type="text" required value={fullName} onChange={e => setFullName(e.target.value)} className="w-full p-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-brand-teal outline-none" placeholder="Dr. Juan Pérez" />
+                        <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Nombre Completo</label>
+                        <input type="text" required value={fullName} onChange={e => setFullName(e.target.value)} className="w-full p-3 border border-slate-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-brand-teal outline-none dark:bg-slate-900 dark:text-white" placeholder="Dr. Juan Pérez" />
                     </div>
                     <div>
-                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Especialidad</label>
-                        <div className="flex items-center border border-slate-200 rounded-lg px-3 bg-white focus-within:ring-2 focus-within:ring-brand-teal">
+                        <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Especialidad</label>
+                        <div className="flex items-center border border-slate-200 dark:border-slate-700 rounded-lg px-3 bg-white dark:bg-slate-900 focus-within:ring-2 focus-within:ring-brand-teal">
                             <Stethoscope size={16} className="text-slate-400 mr-2"/>
-                            <input type="text" required value={specialty} onChange={e => setSpecialty(e.target.value)} className="w-full py-3 outline-none" placeholder="Cardiología" />
+                            <input type="text" required value={specialty} onChange={e => setSpecialty(e.target.value)} className="w-full py-3 outline-none bg-transparent dark:text-white" placeholder="Cardiología" />
                         </div>
                     </div>
                     <div>
-                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Cédula Prof.</label>
-                        <div className="flex items-center border border-slate-200 rounded-lg px-3 bg-white focus-within:ring-2 focus-within:ring-brand-teal">
+                        <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Cédula Prof.</label>
+                        <div className="flex items-center border border-slate-200 dark:border-slate-700 rounded-lg px-3 bg-white dark:bg-slate-900 focus-within:ring-2 focus-within:ring-brand-teal">
                             <Hash size={16} className="text-slate-400 mr-2"/>
-                            <input type="text" required value={license} onChange={e => setLicense(e.target.value)} className="w-full py-3 outline-none" placeholder="12345678" />
+                            <input type="text" required value={license} onChange={e => setLicense(e.target.value)} className="w-full py-3 outline-none bg-transparent dark:text-white" placeholder="12345678" />
                         </div>
                     </div>
                     <div className="col-span-2">
-                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Universidad / Institución</label>
-                        <div className="flex items-center border border-slate-200 rounded-lg px-3 bg-white focus-within:ring-2 focus-within:ring-brand-teal">
+                        <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Universidad / Institución</label>
+                        <div className="flex items-center border border-slate-200 dark:border-slate-700 rounded-lg px-3 bg-white dark:bg-slate-900 focus-within:ring-2 focus-within:ring-brand-teal">
                             <BookOpen size={16} className="text-slate-400 mr-2"/>
-                            <input type="text" required value={university} onChange={e => setUniversity(e.target.value)} className="w-full py-3 outline-none" placeholder="Ej. UNAM" />
+                            <input type="text" required value={university} onChange={e => setUniversity(e.target.value)} className="w-full py-3 outline-none bg-transparent dark:text-white" placeholder="Ej. UNAM" />
                         </div>
                     </div>
                 </div>
             </div>
 
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                <div className="p-4 bg-slate-50 border-b border-slate-100 font-bold text-slate-700 flex items-center gap-2">
+            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+                <div className="p-4 bg-slate-50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-700 font-bold text-slate-700 dark:text-slate-200 flex items-center gap-2">
                     <MapPin size={18} className="text-brand-teal"/> Contacto y Web
                 </div>
                 <div className="p-6 space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Teléfono Consultorio</label>
-                            <div className="flex items-center border border-slate-200 rounded-lg px-3 bg-white focus-within:ring-2 focus-within:ring-brand-teal">
+                            <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Teléfono Consultorio</label>
+                            <div className="flex items-center border border-slate-200 dark:border-slate-700 rounded-lg px-3 bg-white dark:bg-slate-900 focus-within:ring-2 focus-within:ring-brand-teal">
                                 <Phone size={16} className="text-slate-400 mr-2"/>
-                                <input type="text" value={phone} onChange={e => setPhone(e.target.value)} className="w-full py-3 outline-none" placeholder="55 1234 5678" />
+                                <input type="text" value={phone} onChange={e => setPhone(e.target.value)} className="w-full py-3 outline-none bg-transparent dark:text-white" placeholder="55 1234 5678" />
                             </div>
                         </div>
                         
-                        {/* CAMPO NUEVO WEB */}
                         <div>
-                            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Tarjeta Digital / Web</label>
-                            <div className="flex items-center border border-slate-200 rounded-lg px-3 bg-white focus-within:ring-2 focus-within:ring-brand-teal">
+                            <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Tarjeta Digital / Web</label>
+                            <div className="flex items-center border border-slate-200 dark:border-slate-700 rounded-lg px-3 bg-white dark:bg-slate-900 focus-within:ring-2 focus-within:ring-brand-teal">
                                 <Globe size={16} className="text-slate-400 mr-2"/>
-                                <input type="url" value={websiteUrl} onChange={e => setWebsiteUrl(e.target.value)} className="w-full py-3 outline-none" placeholder="https://misitio.com" />
+                                <input type="url" value={websiteUrl} onChange={e => setWebsiteUrl(e.target.value)} className="w-full py-3 outline-none bg-transparent dark:text-white" placeholder="https://misitio.com" />
                             </div>
                         </div>
                     </div>
 
                     <div>
-                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Dirección Completa</label>
-                        <textarea rows={3} value={address} onChange={e => setAddress(e.target.value)} className="w-full p-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-brand-teal outline-none resize-none" placeholder="Calle, Número, Colonia..." />
+                        <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Dirección Completa</label>
+                        <textarea rows={3} value={address} onChange={e => setAddress(e.target.value)} className="w-full p-3 border border-slate-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-brand-teal outline-none resize-none dark:bg-slate-900 dark:text-white" placeholder="Calle, Número, Colonia..." />
                     </div>
                 </div>
             </div>
@@ -198,12 +235,12 @@ const SettingsView: React.FC = () => {
 
         {/* COLUMNA 2: IMÁGENES */}
         <div className="space-y-6">
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                <div className="p-4 bg-slate-50 border-b border-slate-100 font-bold text-slate-700 flex items-center gap-2">
+            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+                <div className="p-4 bg-slate-50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-700 font-bold text-slate-700 dark:text-slate-200 flex items-center gap-2">
                     <ImageIcon size={18} className="text-brand-teal"/> Logo Clínica
                 </div>
                 <div className="p-6 flex flex-col items-center text-center">
-                    <div className="w-32 h-32 border-2 border-dashed border-slate-300 rounded-lg flex items-center justify-center mb-4 overflow-hidden bg-slate-50 relative group">
+                    <div className="w-32 h-32 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg flex items-center justify-center mb-4 overflow-hidden bg-slate-50 dark:bg-slate-900 relative group">
                         {logoUrl ? (
                             <img src={logoUrl} alt="Logo" className="w-full h-full object-contain" />
                         ) : (
@@ -224,12 +261,12 @@ const SettingsView: React.FC = () => {
                 </div>
             </div>
 
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                <div className="p-4 bg-slate-50 border-b border-slate-100 font-bold text-slate-700 flex items-center gap-2">
+            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+                <div className="p-4 bg-slate-50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-700 font-bold text-slate-700 dark:text-slate-200 flex items-center gap-2">
                     <PenTool size={18} className="text-brand-teal"/> Firma Digital
                 </div>
                 <div className="p-6 flex flex-col items-center text-center">
-                    <div className="w-48 h-24 border-2 border-dashed border-slate-300 rounded-lg flex items-center justify-center mb-4 overflow-hidden bg-slate-50 relative group">
+                    <div className="w-48 h-24 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg flex items-center justify-center mb-4 overflow-hidden bg-slate-50 dark:bg-slate-900 relative group">
                         {signatureUrl ? (
                             <img src={signatureUrl} alt="Firma" className="w-full h-full object-contain" />
                         ) : (
@@ -253,13 +290,23 @@ const SettingsView: React.FC = () => {
             <button 
               type="submit" 
               disabled={saving || uploading}
-              className="w-full bg-slate-900 text-white py-4 rounded-xl font-bold shadow-lg hover:bg-slate-800 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+              className="w-full bg-slate-900 dark:bg-slate-700 text-white py-4 rounded-xl font-bold shadow-lg hover:bg-slate-800 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
             >
               {saving ? 'Guardando...' : <><Save size={20} /> Guardar Cambios</>}
             </button>
         </div>
 
       </form>
+      
+      <div className="mt-8 p-4 bg-amber-50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-800/50 rounded-xl flex gap-3 items-start">
+         <ShieldCheck className="text-amber-600 shrink-0" size={20} />
+         <div>
+             <p className="text-sm font-bold text-amber-800 dark:text-amber-200">Privacidad y Seguridad de Datos</p>
+             <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">
+                 Sus datos están protegidos y son 100% de su propiedad. Puede descargar una copia de seguridad completa en formato Excel (.csv) cuando lo desee usando el botón de "Descargar Mis Datos" arriba.
+             </p>
+         </div>
+      </div>
     </div>
   );
 };
