@@ -29,52 +29,39 @@ export interface MedicationItem {
 
 const sanitizeInput = (input: string): string => input.replace(/ignore previous|system override/gi, "[BLOQUEADO]").trim();
 
-/**
- * PARSER HÍBRIDO (TITANIO):
- * Intenta extraer JSON. Si falla, NO rompe la app; devuelve el texto crudo
- * formateado como si fuera una nota válida.
- */
-const extractJSON = (text: string): any => {
+const extractJSON = (text: string, fallbackText: string = ""): any => {
   try {
-    // 1. Limpieza de Markdown (```json ... ```)
     let clean = text.replace(/```json/gi, '').replace(/```/g, '').trim();
-
-    // 2. Búsqueda quirúrgica de llaves
     const firstBrace = clean.search(/[{[]/);
     const lastBrace = clean.search(/[}\]]$/);
 
     if (firstBrace !== -1 && lastBrace !== -1) {
-       // Intentamos recortar lo que está fuera de las llaves
        const candidate = clean.substring(firstBrace, lastBrace + 1);
        return JSON.parse(candidate);
     }
-
-    // Si no hay llaves, forzamos el error para ir al catch (Plan B)
     throw new Error("No JSON found");
-
   } catch (e) {
-    console.warn("⚠️ Fallo parseo JSON. Activando modo Híbrido (Texto Plano).");
-    
-    // PLAN B (HÍBRIDO): Devolvemos el texto sucio dentro de la estructura válida.
-    // Esto evita el "Error IA" y muestra lo que la IA respondió.
+    console.warn("⚠️ Fallo parseo JSON. Activando Rescate Híbrido.");
     return {
-        clinicalNote: text || "No se pudo generar texto.",
-        patientInstructions: "Por favor, genere las instrucciones manualmente o intente de nuevo.",
-        actionItems: { 
-            next_appointment: null, 
-            urgent_referral: false, 
-            lab_tests_required: [] 
-        }
+        clinicalNote: text || fallbackText || "Error generando texto estructurado.",
+        patientInstructions: "Por favor revise la nota clínica.",
+        actionItems: { next_appointment: null, urgent_referral: false, lab_tests_required: [] }
     };
   }
 };
 
 // --- SERVICIO ---
 export const GeminiMedicalService = {
+  // CAMBIO CRÍTICO: Regresamos a 'gemini-pro' para máxima compatibilidad
+  async getBestAvailableModel(): Promise<string> {
+    return "gemini-pro"; 
+  },
+
   async callGeminiAPI(payload: any): Promise<string> {
     if (!API_KEY) throw new Error("API Key faltante.");
     
-    const URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`;
+    const modelName = await this.getBestAvailableModel();
+    const URL = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${API_KEY}`;
 
     try {
         const response = await fetch(URL, {
@@ -85,7 +72,8 @@ export const GeminiMedicalService = {
 
         if (!response.ok) {
             const err = await response.json().catch(() => ({}));
-            throw new Error(`Error Google: ${err.error?.message || response.status}`);
+            console.error("Gemini API Error Detail:", err);
+            throw new Error(`Error Google (${response.status}): ${err.error?.message || 'Modelo no disponible'}`);
         }
         
         const data = await response.json();
@@ -100,7 +88,6 @@ export const GeminiMedicalService = {
     const prompt = `ROL: Médico. TAREA: Extraer medicamentos de: "${sanitizeInput(transcript)}". SALIDA: JSON Array puro: [{"drug":"", "details":"", "frequency":"", "duration":"", "notes":""}].`;
     try {
       const res = await this.callGeminiAPI({ contents: [{ parts: [{ text: prompt }] }] });
-      // Para la receta intentamos ser estrictos, si falla devolvemos array vacío
       try {
           const clean = res.replace(/```json/gi, '').replace(/```/g, '').trim();
           const start = clean.indexOf('[');
@@ -112,27 +99,18 @@ export const GeminiMedicalService = {
   },
 
   async generateClinicalNote(transcript: string, specialty: string): Promise<GeminiResponse> {
-    const prompt = `
-      ACTÚA: Médico ${specialty}. 
-      ANALIZA: "${sanitizeInput(transcript)}". 
-      SALIDA: Objeto JSON (RFC8259).
-      SCHEMA: { "clinicalNote": "SOAP completo", "patientInstructions": "Indicaciones", "actionItems": {...} }
-    `;
-    
-    // Llamada a la API
+    const prompt = `ACTÚA: Médico ${specialty}. ANALIZA: "${sanitizeInput(transcript)}". SALIDA: JSON SOAP.`;
     const rawText = await this.callGeminiAPI({ contents: [{ parts: [{ text: prompt }] }] });
-    
-    // Aquí aplicamos el parser híbrido que evita el crash
-    return extractJSON(rawText);
+    return extractJSON(rawText, "La IA respondió texto plano. Se muestra a continuación.");
   },
 
   async chatWithContext(ctx: string, history: ChatMessage[], msg: string): Promise<string> {
     const contents = [
-        { role: 'user', parts: [{ text: `SISTEMA: ${ctx}` }] },
-        { role: 'model', parts: [{ text: "Entendido." }] },
+        { role: 'user', parts: [{ text: `CTX: ${ctx}` }] },
+        { role: 'model', parts: [{ text: "Ok" }] },
         ...history.map(h => ({ role: h.role, parts: [{ text: h.text }] })),
         { role: 'user', parts: [{ text: sanitizeInput(msg) }] }
     ];
-    try { return await this.callGeminiAPI({ contents }); } catch { return "Error de conexión."; }
+    try { return await this.callGeminiAPI({ contents }); } catch { return "Error conexión."; }
   }
 };
