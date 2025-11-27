@@ -3,7 +3,7 @@ import {
   Mic, Square, RefreshCw, FileText, Search, X, 
   MessageSquare, User, Send, Edit2, Check, ArrowLeft, 
   Stethoscope, Trash2, WifiOff, Save, Share2, Download, Printer,
-  Paperclip, Calendar, Clock, UserCircle, Activity, ClipboardList, Brain, FileSignature
+  Paperclip, Calendar, Clock, UserCircle, Activity, ClipboardList, Brain, FileSignature, Keyboard
 } from 'lucide-react';
 
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition'; 
@@ -100,6 +100,10 @@ const ConsultationView: React.FC = () => {
   }, [patients, searchTerm]);
 
   const handleToggleRecording = () => {
+    if (!isOnline) {
+        toast.info("Sin internet: Use el teclado o el dictado de su dispositivo.");
+        return;
+    }
     if (isListening) stopListening();
     else {
       if (!isAPISupported) { toast.error("Navegador no compatible."); return; }
@@ -114,7 +118,13 @@ const ConsultationView: React.FC = () => {
 
   const handleGenerate = async () => {
     if (!transcript) return toast.error("Sin audio.");
-    if (!isOnline) { toast.error("Sin internet. Guardado localmente.", { icon: <WifiOff/> }); return; }
+    
+    // --- MANEJO DE OFFLINE AL GENERAR ---
+    if (!isOnline) { 
+        toast.warning("Sin internet: La IA no puede procesar.", { icon: <WifiOff/> });
+        toast.info("La nota se ha guardado localmente. Genérela cuando recupere la conexión.");
+        return; 
+    }
 
     if (abortControllerRef.current) abortControllerRef.current.abort();
     abortControllerRef.current = new AbortController();
@@ -153,7 +163,7 @@ const ConsultationView: React.FC = () => {
 
   const handleSaveConsultation = async () => {
     if (!selectedPatient || !generatedNote) return toast.error("Faltan datos.");
-    if (!isOnline) return toast.error("Requiere internet.");
+    if (!isOnline) return toast.error("Requiere internet para sincronizar con la nube.");
     setIsSaving(true);
     try {
         const { data: { user } } = await supabase.auth.getUser();
@@ -229,7 +239,7 @@ const ConsultationView: React.FC = () => {
                 <button onClick={() => setIsAttachmentsOpen(true)} className="p-2 ml-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-full text-slate-500 dark:text-slate-300 transition-colors" title="Ver archivos adjuntos"><Paperclip size={18} /></button>
             </h2>
             <div className="flex gap-2">
-                {!isOnline && <span className="text-xs bg-red-100 text-red-600 px-2 py-1 rounded font-bold flex items-center gap-1"><WifiOff size={12}/> Offline</span>}
+                {!isOnline && <span className="text-xs bg-red-100 text-red-600 px-2 py-1 rounded font-bold flex items-center gap-1 animate-pulse"><WifiOff size={12}/> Offline</span>}
                 {transcript && <button onClick={handleClearTranscript} className="text-slate-400 hover:text-red-500"><Trash2 size={18}/></button>}
             </div>
         </div>
@@ -245,16 +255,70 @@ const ConsultationView: React.FC = () => {
             {searchTerm && !selectedPatient && <div className="absolute top-full left-0 w-full bg-white dark:bg-slate-800 border rounded-b-lg shadow-lg z-40 max-h-48 overflow-y-auto">{filteredPatients.map(p=><div key={p.id} onClick={()=>{setSelectedPatient(p);setSearchTerm('')}} className="p-3 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer border-b dark:border-slate-700 dark:text-white text-sm">{p.name}</div>)}</div>}
         </div>
         <div onClick={()=>setConsentGiven(!consentGiven)} className="flex items-center gap-2 p-3 rounded-lg border cursor-pointer select-none dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"><div className={`w-5 h-5 rounded border flex items-center justify-center ${consentGiven?'bg-green-500 border-green-500 text-white':'bg-white dark:bg-slate-700'}`}>{consentGiven&&<Check size={14}/>}</div><label className="text-xs dark:text-white cursor-pointer">Consentimiento otorgado.</label></div>
-        <div className={`flex-1 border-2 border-dashed rounded-2xl flex flex-col items-center justify-center p-4 relative transition-colors ${isListening?'border-red-400 bg-red-50 dark:bg-red-900/10':'border-slate-200 dark:border-slate-700'}`}>
-            <div className={`w-20 h-20 rounded-full flex items-center justify-center mb-4 transition-all ${isListening?'bg-red-500 text-white animate-pulse':'bg-white dark:bg-slate-800 text-slate-300 shadow-sm'}`}><Mic size={32}/></div>
-            <p className="text-center font-medium text-slate-600 dark:text-slate-400 mb-4 text-sm">{isListening?"Escuchando...":"Listo"}</p>
-            {transcript && <div className="w-full flex-1 overflow-y-auto bg-white dark:bg-slate-800 p-3 rounded-xl border dark:border-slate-700 text-xs italic mb-4 shadow-inner max-h-32 dark:text-slate-300">"{transcript}"<div ref={transcriptEndRef}/></div>}
+        
+        {/* --- ÁREA DE MICROFONO INTELIGENTE (ADAPTABLE) --- */}
+        <div className={`flex-1 border-2 border-dashed rounded-2xl flex flex-col items-center justify-center p-4 relative transition-colors ${!isOnline ? 'border-amber-300 bg-amber-50 dark:bg-amber-900/10' : (isListening?'border-red-400 bg-red-50 dark:bg-red-900/10':'border-slate-200 dark:border-slate-700')}`}>
+            
+            {/* ICONO CENTRAL QUE CAMBIA SEGÚN ESTADO */}
+            <div className={`w-20 h-20 rounded-full flex items-center justify-center mb-4 transition-all ${
+                !isOnline ? 'bg-amber-100 text-amber-500' :
+                isListening ? 'bg-red-500 text-white animate-pulse' : 
+                'bg-white dark:bg-slate-800 text-slate-300 shadow-sm'
+            }`}>
+                {!isOnline ? <WifiOff size={32}/> : <Mic size={32}/>}
+            </div>
+
+            {/* TEXTO DE ESTADO */}
+            <p className="text-center font-medium text-slate-600 dark:text-slate-400 mb-2 text-sm">
+                {!isOnline ? "Modo Offline Activo" : (isListening ? "Escuchando..." : "Listo para iniciar")}
+            </p>
+
+            {/* MENSAJE DE AYUDA OFFLINE */}
+            {!isOnline && (
+                <div className="bg-white/80 dark:bg-slate-800/80 p-2 rounded-lg text-xs text-center text-amber-700 dark:text-amber-400 mb-2 border border-amber-200 dark:border-amber-800">
+                    <Keyboard size={14} className="inline mr-1"/>
+                    Use el micrófono de su <b>teclado</b> para dictar.
+                </div>
+            )}
+
+            {/* ÁREA DE TEXTO (TRANSCRIPT) - SIEMPRE EDITABLE */}
+            <textarea 
+                className="w-full flex-1 bg-white dark:bg-slate-800 p-3 rounded-xl border dark:border-slate-700 text-xs italic mb-4 shadow-inner resize-none focus:ring-2 focus:ring-brand-teal focus:border-transparent outline-none dark:text-slate-300"
+                value={transcript}
+                onChange={(e) => setTranscript(e.target.value)}
+                placeholder={isOnline ? "La transcripción aparecerá aquí..." : "Escriba o dicte con el teclado aquí..."}
+            />
+            
+            {/* BOTONES DE CONTROL */}
             <div className="flex w-full gap-2 mt-auto flex-col xl:flex-row">
-                <button onClick={handleToggleRecording} disabled={!consentGiven || !isAPISupported && !isListening} className={`flex-1 py-3 rounded-xl font-bold flex justify-center gap-2 text-white shadow-lg text-sm ${isListening?'bg-red-600 hover:bg-red-700':'bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300'}`}>{isListening?<><Square size={16}/> Parar</>:<><Mic size={16}/> Grabar</>}</button>
-                <button onClick={handleGenerate} disabled={!transcript||isListening||isProcessing} className={`flex-1 text-white py-3 rounded-xl font-bold shadow-lg flex justify-center gap-2 disabled:opacity-50 text-sm ${!isOnline ? 'bg-amber-500' : 'bg-brand-teal hover:bg-teal-600'}`}>
-                    {isProcessing?<RefreshCw className="animate-spin" size={16}/>: (isOnline ? <RefreshCw size={16}/> : <Save size={16}/>)} {isProcessing ? '...' : (isOnline ? 'Generar' : 'Guardar')}
+                
+                {/* Botón Grabar (Desactivado si Offline) */}
+                <button 
+                    onClick={handleToggleRecording} 
+                    disabled={!isOnline || !consentGiven || (!isAPISupported && !isListening)} 
+                    className={`flex-1 py-3 rounded-xl font-bold flex justify-center gap-2 text-white shadow-lg text-sm transition-all ${
+                        !isOnline ? 'bg-slate-300 dark:bg-slate-700 cursor-not-allowed text-slate-500' :
+                        isListening ? 'bg-red-600 hover:bg-red-700' : 
+                        'bg-slate-900 hover:bg-slate-800'
+                    }`}
+                >
+                    {isListening ? <><Square size={16}/> Parar</> : <><Mic size={16}/> Grabar</>}
+                </button>
+
+                {/* Botón Generar/Guardar (Cambia función si Offline) */}
+                <button 
+                    onClick={handleGenerate} 
+                    disabled={!transcript || isListening || isProcessing} 
+                    className={`flex-1 text-white py-3 rounded-xl font-bold shadow-lg flex justify-center gap-2 disabled:opacity-50 text-sm transition-all ${
+                        !isOnline ? 'bg-amber-500 hover:bg-amber-600' : 
+                        'bg-brand-teal hover:bg-teal-600'
+                    }`}
+                >
+                    {isProcessing ? <RefreshCw className="animate-spin" size={16}/> : (isOnline ? <RefreshCw size={16}/> : <Save size={16}/>)} 
+                    {isProcessing ? '...' : (isOnline ? 'Generar' : 'Guardar')}
                 </button>
             </div>
+            
             <button onClick={()=>{if(selectedPatient && doctorProfile) setIsQuickRxModalOpen(true)}} disabled={!selectedPatient} className="w-full mt-2 py-2 text-brand-teal font-bold border border-brand-teal/30 rounded-xl hover:bg-teal-50 dark:hover:bg-teal-900/20 disabled:opacity-50 transition-colors text-xs flex items-center justify-center gap-2"><FileText size={14}/> Receta Rápida</button>
         </div>
       </div>
@@ -273,15 +337,11 @@ const ConsultationView: React.FC = () => {
                      <p className="text-lg text-center px-4">Área de Documentación</p>
                  </div>
              ) : (
-                 // FIX 1: "min-h-full" permite que el contenedor crezca si el papel es largo
                  <div className="min-h-full flex flex-col max-w-4xl mx-auto w-full gap-4 relative pb-8">
                       
-                      {/* NOTA CLÍNICA - ESTILO DOCUMENTO */}
                       {activeTab==='record' && generatedNote.soapData && (
-                        // FIX 2: "min-h-full" en la hoja blanca para que ocupe toda la altura y no se corte
-                        <div className="bg-white dark:bg-slate-900 rounded-sm shadow-lg border border-slate-200 dark:border-slate-800 p-8 md:p-12 min-h-full animate-fade-in-up relative">
-                            
-                            {/*  ENCABEZADO ADHESIVO (STICKY) CON BOTÓN DE GUARDADO */}
+                        <div className="bg-white dark:bg-slate-900 rounded-sm shadow-lg border border-slate-200 dark:border-slate-800 p-8 md:p-12 min-h-full h-fit pb-32 animate-fade-in-up relative">
+                            {/* STICKY HEADER */}
                             <div className="sticky top-0 z-20 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm border-b border-slate-100 dark:border-slate-800 pb-4 mb-8 -mx-2 px-2 flex justify-between items-start">
                                 <div>
                                     <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Nota de Evolución</h1>
@@ -291,8 +351,6 @@ const ConsultationView: React.FC = () => {
                                         <span className="flex items-center gap-1"><Clock size={12}/> {generatedNote.soapData.headers.time}</span>
                                     </div>
                                 </div>
-                                
-                                {/* BOTÓN DE GUARDADO INTEGRADO EN EL HEADER (NUNCA TAPA TEXTO) */}
                                 <div className="flex flex-col items-end gap-2">
                                     <button onClick={handleSaveConsultation} disabled={isSaving} className="bg-brand-teal text-white px-4 py-2 rounded-lg font-bold flex gap-2 hover:bg-teal-600 shadow-md transition-all disabled:opacity-70 text-sm items-center">
                                         {isSaving?<RefreshCw className="animate-spin" size={16}/>:<Save size={16}/>} Guardar
@@ -302,54 +360,35 @@ const ConsultationView: React.FC = () => {
                                     </div>
                                 </div>
                             </div>
-
-                            {/* CUERPO DE LA NOTA */}
+                            {/* CONTENIDO SOAP */}
                             <div className="space-y-8">
-                                {/* S - Subjetivo */}
-                                <div>
-                                    <h4 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2"><Activity size={14} className="text-blue-500"/> Subjetivo</h4>
-                                    <div className="text-slate-800 dark:text-slate-200 leading-7 text-base pl-1"><FormattedText content={generatedNote.soapData.subjective} /></div>
-                                </div>
+                                <div><h4 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2"><Activity size={14} className="text-blue-500"/> Subjetivo</h4><div className="text-slate-800 dark:text-slate-200 leading-7 text-base pl-1"><FormattedText content={generatedNote.soapData.subjective} /></div></div>
                                 <hr className="border-slate-100 dark:border-slate-800" />
-                                {/* O - Objetivo */}
-                                <div>
-                                    <h4 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2"><ClipboardList size={14} className="text-green-500"/> Objetivo</h4>
-                                    <div className="text-slate-800 dark:text-slate-200 leading-7 text-base pl-1"><FormattedText content={generatedNote.soapData.objective || "Sin hallazgos contributivos."} /></div>
-                                </div>
+                                <div><h4 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2"><ClipboardList size={14} className="text-green-500"/> Objetivo</h4><div className="text-slate-800 dark:text-slate-200 leading-7 text-base pl-1"><FormattedText content={generatedNote.soapData.objective || "Sin hallazgos contributivos."} /></div></div>
                                 <hr className="border-slate-100 dark:border-slate-800" />
-                                {/* A - Análisis */}
-                                <div>
-                                    <h4 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2"><Brain size={14} className="text-amber-500"/> Análisis y Diagnóstico</h4>
-                                    <div className="text-slate-800 dark:text-slate-200 leading-7 text-base pl-1"><FormattedText content={generatedNote.soapData.analysis} /></div>
-                                </div>
+                                <div><h4 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2"><Brain size={14} className="text-amber-500"/> Análisis y Diagnóstico</h4><div className="text-slate-800 dark:text-slate-200 leading-7 text-base pl-1"><FormattedText content={generatedNote.soapData.analysis} /></div></div>
                                 <hr className="border-slate-100 dark:border-slate-800" />
-                                {/* P - Plan */}
-                                <div>
-                                    <h4 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2"><FileSignature size={14} className="text-purple-500"/> Plan Médico</h4>
-                                    <div className="text-slate-800 dark:text-slate-200 leading-7 text-base pl-1"><FormattedText content={generatedNote.soapData.plan} /></div>
-                                </div>
+                                <div><h4 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2"><FileSignature size={14} className="text-purple-500"/> Plan Médico</h4><div className="text-slate-800 dark:text-slate-200 leading-7 text-base pl-1"><FormattedText content={generatedNote.soapData.plan} /></div></div>
                             </div>
                         </div>
                       )}
 
-                      {/* Fallback para notas antiguas */}
                       {activeTab==='record' && !generatedNote.soapData && generatedNote.clinicalNote && (
                           <div className="bg-white dark:bg-slate-900 p-8 rounded-xl shadow-sm h-full flex flex-col border dark:border-slate-800 overflow-hidden">
-                                <div className="bg-yellow-50 text-yellow-800 p-2 text-sm rounded mb-2 dark:bg-yellow-900/30 dark:text-yellow-200">Formato antiguo (Texto plano). Regenera para ver la nueva estructura visual.</div>
+                                <div className="bg-yellow-50 text-yellow-800 p-2 text-sm rounded mb-2 dark:bg-yellow-900/30 dark:text-yellow-200">Formato antiguo.</div>
                               <div className="flex-1 overflow-y-auto pr-4 custom-scrollbar"><FormattedText content={generatedNote.clinicalNote}/></div>
                               <div className="border-t dark:border-slate-800 pt-4 flex justify-end"><button onClick={handleSaveConsultation} disabled={isSaving} className="bg-brand-teal text-white px-6 py-3 rounded-xl font-bold flex gap-2 hover:bg-teal-600 shadow-lg disabled:opacity-70">{isSaving?<RefreshCw className="animate-spin"/>:<Save/>} Guardar</button></div>
                           </div>
                       )}
 
-                      {/* PLAN PACIENTE */}
                       {activeTab==='patient' && (
                           <div className="bg-white dark:bg-slate-900 p-6 rounded-xl shadow-sm h-full flex flex-col border dark:border-slate-800 animate-fade-in-up">
                               <div className="flex justify-between items-center mb-4 border-b dark:border-slate-800 pb-2">
-                                  <h3 className="font-bold text-lg dark:text-white flex items-center gap-2"><FileText className="text-brand-teal"/> Instrucciones para el Paciente</h3>
+                                  <h3 className="font-bold text-lg dark:text-white flex items-center gap-2"><FileText className="text-brand-teal"/> Instrucciones</h3>
                                   <div className="flex gap-2">
-                                      <button onClick={handleShareWhatsApp} className="p-2 bg-green-50 text-green-600 rounded-lg hover:bg-green-100 dark:bg-green-900/20 dark:text-green-400" title="WhatsApp"><Share2 size={18}/></button>
-                                      <button onClick={handlePrint} className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400" title="PDF"><Download size={18}/></button>
-                                      <button onClick={()=>setIsEditingInstructions(!isEditingInstructions)} className={`p-2 rounded-lg transition-colors ${isEditingInstructions ? 'bg-brand-teal text-white' : 'bg-slate-50 text-slate-600 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-300'}`} title="Editar">{isEditingInstructions?<Check size={18}/>:<Edit2 size={18}/>}</button>
+                                      <button onClick={handleShareWhatsApp} className="p-2 bg-green-50 text-green-600 rounded-lg hover:bg-green-100 dark:bg-green-900/20 dark:text-green-400"><Share2 size={18}/></button>
+                                      <button onClick={handlePrint} className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400"><Download size={18}/></button>
+                                      <button onClick={()=>setIsEditingInstructions(!isEditingInstructions)} className={`p-2 rounded-lg transition-colors ${isEditingInstructions ? 'bg-brand-teal text-white' : 'bg-slate-50 text-slate-600 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-300'}`}>{isEditingInstructions?<Check size={18}/>:<Edit2 size={18}/>}</button>
                                   </div>
                               </div>
                               <div className="flex-1 overflow-y-auto custom-scrollbar p-1">
@@ -358,14 +397,13 @@ const ConsultationView: React.FC = () => {
                           </div>
                       )}
 
-                      {/* CHAT */}
                       {activeTab==='chat' && (
                           <div className="bg-white dark:bg-slate-900 p-4 rounded-xl shadow-sm h-full flex flex-col border dark:border-slate-800 animate-fade-in-up">
                               <div className="flex-1 overflow-y-auto mb-4 pr-2 custom-scrollbar">
                                   {chatMessages.map((m,i)=><div key={i} className={`p-3 mb-3 rounded-2xl max-w-[85%] text-sm shadow-sm ${m.role==='user'?'bg-brand-teal text-white self-end ml-auto rounded-tr-none':'bg-slate-100 dark:bg-slate-800 dark:text-slate-200 self-start mr-auto rounded-tl-none'}`}>{m.text}</div>)}
                                   <div ref={chatEndRef}/>
                               </div>
-                              <form onSubmit={handleChatSend} className="flex gap-2 relative"><input className="flex-1 border dark:border-slate-700 p-4 pr-12 rounded-xl bg-slate-50 dark:bg-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-brand-teal shadow-sm" value={chatInput} onChange={e=>setChatInput(e.target.value)} placeholder="Pregunta sobre el caso actual..."/><button disabled={isChatting||!chatInput.trim()} className="absolute right-3 top-1/2 -translate-y-1/2 bg-brand-teal text-white p-2 rounded-lg hover:bg-teal-600 disabled:opacity-50 transition-all hover:scale-105 active:scale-95">{isChatting?<RefreshCw className="animate-spin" size={18}/>:<Send size={18}/>}</button></form>
+                              <form onSubmit={handleChatSend} className="flex gap-2 relative"><input className="flex-1 border dark:border-slate-700 p-4 pr-12 rounded-xl bg-slate-50 dark:bg-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-brand-teal shadow-sm" value={chatInput} onChange={e=>setChatInput(e.target.value)} placeholder="Pregunta..."/><button disabled={isChatting||!chatInput.trim()} className="absolute right-3 top-1/2 -translate-y-1/2 bg-brand-teal text-white p-2 rounded-lg hover:bg-teal-600 disabled:opacity-50 transition-all hover:scale-105 active:scale-95">{isChatting?<RefreshCw className="animate-spin" size={18}/>:<Send size={18}/>}</button></form>
                           </div>
                       )}
                  </div>
