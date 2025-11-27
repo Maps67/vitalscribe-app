@@ -5,113 +5,164 @@ interface IWindow extends Window {
   SpeechRecognition: any;
 }
 
+// --- ALGORITMO INTELIGENTE ANTI-ECO (DEDUPLICACIÓN) ---
+// Compara el final del texto A con el inicio del texto B para encontrar repeticiones
+function getOverlapLength(a: string, b: string) {
+  if (b.length === 0) return 0;
+  const max = Math.min(a.length, b.length);
+  // Buscamos la superposición más larga posible
+  for (let len = max; len > 0; len--) {
+    if (a.slice(-len) === b.slice(0, len)) return len;
+  }
+  return 0;
+}
+
 export const useSpeechRecognition = () => {
   const [isListening, setIsListening] = useState(false);
-  const [transcript, setTranscript] = useState('');
-  const [isAPISupported, setIsAPISupported] = useState(false);
+  const [transcript, setTranscript] = useState(''); // Texto para la UI
+  
+  // Detección de Móvil (Heurística simple pero efectiva para Chrome Android/iOS)
+  const isMobile = useRef(/Android|iPhone|iPad|iPod/i.test(navigator.userAgent));
 
-  // REFS: Guardan datos sin provocar re-renderizados lentos
+  const [isAPISupported] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    const { webkitSpeechRecognition, SpeechRecognition } = window as unknown as IWindow;
+    return !!(SpeechRecognition || webkitSpeechRecognition);
+  });
+  
   const recognitionRef = useRef<any>(null);
-  const finalTranscriptRef = useRef(''); // Texto confirmado (negro)
-  const isUserStop = useRef(false); // Bandera para saber si el usuario paró manual
+  const isUserInitiatedStop = useRef(false);
+  const wakeLockRef = useRef<any>(null);
+  
+  // Refs para manejo de texto de alto rendimiento (Sin re-renderizar React)
+  const finalTranscriptRef = useRef('');
+  const interimTranscriptRef = useRef('');
 
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const { webkitSpeechRecognition, SpeechRecognition } = window as unknown as IWindow;
-      if (SpeechRecognition || webkitSpeechRecognition) {
-        setIsAPISupported(true);
-      }
+  // --- GESTIÓN DE ENERGÍA (WAKE LOCK) ---
+  const requestWakeLock = useCallback(async () => {
+    if ('wakeLock' in navigator) {
+      try { wakeLockRef.current = await (navigator as any).wakeLock.request('screen'); } catch (err) {}
     }
   }, []);
 
+  const releaseWakeLock = useCallback(async () => {
+    if (wakeLockRef.current) {
+      try { await wakeLockRef.current.release(); wakeLockRef.current = null; } catch (err) {}
+    }
+  }, []);
+
+  // --- LÓGICA DE RECONOCIMIENTO ---
   const startListening = useCallback(() => {
     if (!isAPISupported) return;
+
+    if (recognitionRef.current) {
+        try { recognitionRef.current.stop(); } catch(e) {}
+    }
 
     const { webkitSpeechRecognition, SpeechRecognition } = window as unknown as IWindow;
     const SpeechAPI = SpeechRecognition || webkitSpeechRecognition;
     const recognition = new SpeechAPI();
 
-    // CONFIGURACIÓN DE RENDIMIENTO
-    recognition.continuous = true; 
-    recognition.interimResults = true; 
+    // ESTRATEGIA HÍBRIDA:
+    // Web: continuous = true (Mejor flujo)
+    // Móvil: continuous = false (Más estable, reiniciamos manual en onend)
+    recognition.continuous = !isMobile.current; 
+    recognition.interimResults = true;
     recognition.lang = 'es-MX';
-    
-    // Optimizacion: no pedir muchas alternativas, alenta el proceso
     recognition.maxAlternatives = 1;
 
     recognition.onstart = () => {
       setIsListening(true);
-      isUserStop.current = false;
+      isUserInitiatedStop.current = false;
+      requestWakeLock();
     };
 
     recognition.onresult = (event: any) => {
-      let interimTranscript = '';
+      let newInterim = '';
+      let newFinalChunk = '';
 
-      // Iteramos resultados
       for (let i = event.resultIndex; i < event.results.length; ++i) {
-        const transcriptChunk = event.results[i][0].transcript;
-        
         if (event.results[i].isFinal) {
-          // Si es final, lo guardamos en la referencia segura
-          // Lógica de mayúscula inicial
-          let cleanChunk = transcriptChunk.trim();
-          if (cleanChunk) {
-             cleanChunk = cleanChunk.charAt(0).toUpperCase() + cleanChunk.slice(1);
-             // Añadimos espacio si ya había texto
-             finalTranscriptRef.current += (finalTranscriptRef.current ? ' ' : '') + cleanChunk;
-          }
+          newFinalChunk += event.results[i][0].transcript;
         } else {
-          // Si es borrador, lo guardamos temporalmente
-          interimTranscript += transcriptChunk;
+          newInterim += event.results[i][0].transcript;
         }
       }
 
-      // ACTUALIZACIÓN DE UI: Juntamos Final + Borrador
-      // Esto es lo que ve el usuario
-      setTranscript(finalTranscriptRef.current + (interimTranscript ? ' ' + interimTranscript : ''));
+      // 1. PROCESAR TEXTO FINAL (CON DEDUPLICACIÓN INTELIGENTE)
+      if (newFinalChunk) {
+        newFinalChunk = newFinalChunk.trim();
+        const currentFinal = finalTranscriptRef.current.trim();
+        
+        // Magia Anti-Eco: Calculamos cuánto se superpone el final viejo con el nuevo
+        const overlapLen = getOverlapLength(currentFinal, newFinalChunk);
+        
+        // Solo agregamos la parte NUEVA que no es eco
+        const textToAppend = newFinalChunk.slice(overlapLen).trim();
+        
+        if (textToAppend) {
+            // Capitalizar si es inicio de frase
+            const spacer = (currentFinal && !currentFinal.endsWith(' ')) ? ' ' : '';
+            const formatted = textToAppend.charAt(0).toUpperCase() + textToAppend.slice(1);
+            finalTranscriptRef.current = currentFinal + spacer + formatted;
+        }
+      }
+
+      // 2. ACTUALIZAR UI (Combinando Final + Interim)
+      // Usamos requestAnimationFrame para no saturar la UI en Web (Fix Lentitud)
+      window.requestAnimationFrame(() => {
+          setTranscript(
+              (finalTranscriptRef.current + (newInterim ? ' ' + newInterim : '')).trim()
+          );
+      });
     };
 
     recognition.onerror = (event: any) => {
-      console.warn("Speech Error:", event.error);
       if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
         setIsListening(false);
-        isUserStop.current = true;
+        isUserInitiatedStop.current = true;
+        releaseWakeLock();
       }
-      // En móvil, 'no-speech' es común, no detenemos la UI, dejamos que onend reinicie
     };
 
     recognition.onend = () => {
-      // LÓGICA DE REINICIO ROBUSTA
-      if (!isUserStop.current) {
-        // Si el usuario NO paró, intentamos revivir la instancia
-        try {
-          recognition.start();
-        } catch (e) {
-          // Si falla revivir esta instancia, creamos una nueva recursivamente
-          // pero con un pequeño delay para no saturar el CPU del móvil
-          setTimeout(() => {
-             if (!isUserStop.current) startListening(); 
-          }, 100);
-        }
+      // REINICIO ROBUSTO (Especial para móvil que corta mucho)
+      if (!isUserInitiatedStop.current) {
+          try {
+            recognition.start();
+          } catch (e) {
+            // Si falla reinicio inmediato (común en móvil), esperamos un poco
+            setTimeout(() => {
+              if (!isUserInitiatedStop.current && recognitionRef.current) {
+                  try { recognition.start(); } catch(err) {}
+              }
+            }, 150);
+          }
       } else {
         setIsListening(false);
+        releaseWakeLock();
       }
     };
 
     recognitionRef.current = recognition;
-    recognition.start();
-  }, [isAPISupported]);
+    try {
+        recognition.start();
+    } catch (e) {
+        console.error("Error start:", e);
+        setIsListening(false);
+    }
+  }, [isAPISupported, requestWakeLock, releaseWakeLock]);
 
   const stopListening = useCallback(() => {
-    isUserStop.current = true;
+    isUserInitiatedStop.current = true;
     if (recognitionRef.current) {
-      try { recognitionRef.current.stop(); } catch(e) {}
+        try { recognitionRef.current.stop(); } catch(e) {}
     }
-    setIsListening(false);
-    
-    // Al parar, aseguramos que el texto final quede guardado en el estado limpio
+    // Al parar, consolidamos solo lo final
     setTranscript(finalTranscriptRef.current);
-  }, []);
+    setIsListening(false);
+    releaseWakeLock();
+  }, [releaseWakeLock]);
 
   const resetTranscript = useCallback(() => {
     finalTranscriptRef.current = '';
@@ -123,13 +174,24 @@ export const useSpeechRecognition = () => {
       setTranscript(text);
   }, []);
 
-  return {
-    isListening,
-    transcript,
-    startListening,
-    stopListening,
-    resetTranscript,
-    setTranscript: setTranscriptManual,
-    isAPISupported
+  // Limpieza
+  useEffect(() => {
+    return () => {
+        isUserInitiatedStop.current = true;
+        if (recognitionRef.current) {
+             try { recognitionRef.current.stop(); } catch(e) {}
+        }
+        releaseWakeLock();
+    };
+  }, [releaseWakeLock]);
+
+  return { 
+    isListening, 
+    transcript, 
+    startListening, 
+    stopListening, 
+    resetTranscript, 
+    setTranscript: setTranscriptManual, 
+    isAPISupported 
   };
 };
