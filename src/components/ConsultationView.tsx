@@ -273,11 +273,12 @@ const ConsultationView: React.FC = () => {
                      <p className="text-lg text-center px-4">Área de Documentación</p>
                  </div>
              ) : (
-                 <div className="h-full flex flex-col max-w-4xl mx-auto w-full gap-4 relative pb-32">
+                 <div className="h-full flex flex-col max-w-4xl mx-auto w-full gap-4 relative"> {/* Eliminamos pb-32 del contenedor general */}
                       
                       {/* NOTA CLÍNICA - ESTILO DOCUMENTO (PAPER UI) */}
                       {activeTab==='record' && generatedNote.soapData && (
-                        <div className="bg-white dark:bg-slate-900 rounded-sm shadow-lg border border-slate-200 dark:border-slate-800 p-8 md:p-12 min-h-[800px] animate-fade-in-up relative">
+                        // FIX: AGREGAMOS h-auto Y pb-24 AQUÍ
+                        <div className="bg-white dark:bg-slate-900 rounded-sm shadow-lg border border-slate-200 dark:border-slate-800 p-8 md:p-12 min-h-[800px] h-auto pb-24 animate-fade-in-up relative">
                             
                             {/* Encabezado del Documento */}
                             <div className="flex justify-between items-start border-b border-slate-200 dark:border-slate-700 pb-6 mb-8">
@@ -349,7 +350,7 @@ const ConsultationView: React.FC = () => {
 
                             </div>
 
-                            {/* Botón Flotante de Guardado (Ahora no tapa porque hay padding-bottom en el contenedor padre) */}
+                            {/* Botón Flotante de Guardado */}
                             <div className="fixed bottom-8 right-8 z-30">
                                 <button onClick={handleSaveConsultation} disabled={isSaving} className="bg-brand-teal text-white px-6 py-4 rounded-full font-bold flex gap-2 hover:bg-teal-600 shadow-2xl hover:shadow-teal-500/30 transition-all disabled:opacity-70 items-center scale-100 hover:scale-105 active:scale-95">
                                     {isSaving?<RefreshCw className="animate-spin" size={20}/>:<Save size={20}/>} Guardar en Expediente
