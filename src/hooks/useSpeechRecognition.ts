@@ -8,150 +8,128 @@ interface IWindow extends Window {
 export const useSpeechRecognition = () => {
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState('');
-  
-  const [isAPISupported] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    const { webkitSpeechRecognition, SpeechRecognition } = window as unknown as IWindow;
-    return !!(SpeechRecognition || webkitSpeechRecognition);
-  });
-  
+  const [isAPISupported, setIsAPISupported] = useState(false);
+
+  // REFS: Guardan datos sin provocar re-renderizados lentos
   const recognitionRef = useRef<any>(null);
-  const isUserInitiatedStop = useRef(false);
-  const wakeLockRef = useRef<any>(null);
+  const finalTranscriptRef = useRef(''); // Texto confirmado (negro)
+  const isUserStop = useRef(false); // Bandera para saber si el usuario paró manual
 
-  // --- GESTIÓN DE ENERGÍA ---
-  const requestWakeLock = useCallback(async () => {
-    if ('wakeLock' in navigator) {
-      try { wakeLockRef.current = await (navigator as any).wakeLock.request('screen'); } catch (err) {}
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const { webkitSpeechRecognition, SpeechRecognition } = window as unknown as IWindow;
+      if (SpeechRecognition || webkitSpeechRecognition) {
+        setIsAPISupported(true);
+      }
     }
   }, []);
 
-  const releaseWakeLock = useCallback(async () => {
-    if (wakeLockRef.current) {
-      try { await wakeLockRef.current.release(); wakeLockRef.current = null; } catch (err) {}
-    }
-  }, []);
-
-  // --- LÓGICA DE RECONOCIMIENTO ---
   const startListening = useCallback(() => {
     if (!isAPISupported) return;
 
-    if (recognitionRef.current) {
-        try { recognitionRef.current.abort(); } catch(e) {}
-    }
-
     const { webkitSpeechRecognition, SpeechRecognition } = window as unknown as IWindow;
-    const SpeechRecognitionAPI = SpeechRecognition || webkitSpeechRecognition;
-    const recognition = new SpeechRecognitionAPI();
+    const SpeechAPI = SpeechRecognition || webkitSpeechRecognition;
+    const recognition = new SpeechAPI();
 
-    // Configuración Híbrida Estable
+    // CONFIGURACIÓN DE RENDIMIENTO
     recognition.continuous = true; 
     recognition.interimResults = true; 
     recognition.lang = 'es-MX';
+    
+    // Optimizacion: no pedir muchas alternativas, alenta el proceso
     recognition.maxAlternatives = 1;
 
     recognition.onstart = () => {
       setIsListening(true);
-      isUserInitiatedStop.current = false;
-      requestWakeLock();
+      isUserStop.current = false;
     };
 
     recognition.onresult = (event: any) => {
-      let finalChunk = '';
-      // Usamos resultIndex para evitar duplicados en Android
+      let interimTranscript = '';
+
+      // Iteramos resultados
       for (let i = event.resultIndex; i < event.results.length; ++i) {
+        const transcriptChunk = event.results[i][0].transcript;
+        
         if (event.results[i].isFinal) {
-          finalChunk += event.results[i][0].transcript + ' ';
+          // Si es final, lo guardamos en la referencia segura
+          // Lógica de mayúscula inicial
+          let cleanChunk = transcriptChunk.trim();
+          if (cleanChunk) {
+             cleanChunk = cleanChunk.charAt(0).toUpperCase() + cleanChunk.slice(1);
+             // Añadimos espacio si ya había texto
+             finalTranscriptRef.current += (finalTranscriptRef.current ? ' ' : '') + cleanChunk;
+          }
+        } else {
+          // Si es borrador, lo guardamos temporalmente
+          interimTranscript += transcriptChunk;
         }
       }
 
-      if (finalChunk) {
-          const cleanChunk = finalChunk.trim();
-          if (cleanChunk) {
-              setTranscript(prev => {
-                  const spacer = (prev && !prev.endsWith(' ')) ? ' ' : '';
-                  // Capitalizar primera letra de frase nueva
-                  const formatted = cleanChunk.charAt(0).toUpperCase() + cleanChunk.slice(1);
-                  return prev + spacer + formatted;
-              });
-          }
-      }
+      // ACTUALIZACIÓN DE UI: Juntamos Final + Borrador
+      // Esto es lo que ve el usuario
+      setTranscript(finalTranscriptRef.current + (interimTranscript ? ' ' + interimTranscript : ''));
     };
 
     recognition.onerror = (event: any) => {
-      // Ignorar errores 'no-speech' o 'network' temporales en móvil para no cerrar
+      console.warn("Speech Error:", event.error);
       if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
         setIsListening(false);
-        isUserInitiatedStop.current = true;
-        releaseWakeLock();
+        isUserStop.current = true;
       }
+      // En móvil, 'no-speech' es común, no detenemos la UI, dejamos que onend reinicie
     };
 
     recognition.onend = () => {
-      // SI EL USUARIO NO LO PARÓ, REINICIAMOS SUAVEMENTE
-      if (!isUserInitiatedStop.current) {
-          // Pequeño delay de 300ms para dar respiro al hilo de audio en Android
+      // LÓGICA DE REINICIO ROBUSTA
+      if (!isUserStop.current) {
+        // Si el usuario NO paró, intentamos revivir la instancia
+        try {
+          recognition.start();
+        } catch (e) {
+          // Si falla revivir esta instancia, creamos una nueva recursivamente
+          // pero con un pequeño delay para no saturar el CPU del móvil
           setTimeout(() => {
-              if (!isUserInitiatedStop.current) {
-                  try { 
-                      recognition.start(); 
-                  } catch(e) {
-                      // Si falla el reinicio inmediato, esperamos un poco más
-                      setTimeout(() => {
-                          if(!isUserInitiatedStop.current) try { recognition.start(); } catch(err){}
-                      }, 1000);
-                  }
-              }
-          }, 300); 
+             if (!isUserStop.current) startListening(); 
+          }, 100);
+        }
       } else {
         setIsListening(false);
-        releaseWakeLock();
       }
     };
 
     recognitionRef.current = recognition;
-    try {
-        recognition.start();
-    } catch (e) {
-        console.error("Error start:", e);
-        setIsListening(false);
-    }
-  }, [isAPISupported, requestWakeLock, releaseWakeLock]);
+    recognition.start();
+  }, [isAPISupported]);
 
   const stopListening = useCallback(() => {
-    isUserInitiatedStop.current = true; // Marcar parada manual
+    isUserStop.current = true;
     if (recognitionRef.current) {
-        try { recognitionRef.current.stop(); } catch(e) {}
+      try { recognitionRef.current.stop(); } catch(e) {}
     }
     setIsListening(false);
-    releaseWakeLock();
-  }, [releaseWakeLock]);
+    
+    // Al parar, aseguramos que el texto final quede guardado en el estado limpio
+    setTranscript(finalTranscriptRef.current);
+  }, []);
 
   const resetTranscript = useCallback(() => {
+    finalTranscriptRef.current = '';
     setTranscript('');
   }, []);
 
   const setTranscriptManual = useCallback((text: string) => {
+      finalTranscriptRef.current = text;
       setTranscript(text);
   }, []);
 
-  useEffect(() => {
-    return () => {
-        isUserInitiatedStop.current = true;
-        if (recognitionRef.current) {
-             try { recognitionRef.current.stop(); } catch(e) {}
-        }
-        releaseWakeLock();
-    };
-  }, [releaseWakeLock]);
-
-  return { 
-    isListening, 
-    transcript, 
-    startListening, 
-    stopListening, 
-    resetTranscript, 
-    setTranscript: setTranscriptManual, 
-    isAPISupported 
+  return {
+    isListening,
+    transcript,
+    startListening,
+    stopListening,
+    resetTranscript,
+    setTranscript: setTranscriptManual,
+    isAPISupported
   };
 };
