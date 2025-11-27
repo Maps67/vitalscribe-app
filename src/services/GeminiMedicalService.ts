@@ -104,7 +104,7 @@ export const GeminiMedicalService = {
     return []; 
   },
 
-  // 4. RECETA RÁPIDA
+  // 4. RECETA RÁPIDA (TEXTO PLANO)
   async generatePrescriptionOnly(transcript: string): Promise<string> {
      try {
         const modelName = await this.getBestAvailableModel();
@@ -151,7 +151,7 @@ export const GeminiMedicalService = {
     }
   },
 
-  // 6. GENERAR JSON DE RECETA (AGREGADO PARA SOLUCIONAR ERROR DE COMPILACIÓN)
+  // 6. GENERAR JSON DE RECETA (ESTRUCTURADO PARA PDF)
   async generateQuickRxJSON(transcript: string, patientName: string): Promise<MedicationItem[]> {
     try {
        const modelName = await this.getBestAvailableModel();
@@ -166,13 +166,15 @@ export const GeminiMedicalService = {
          FORMATO JSON ESPERADO (Array de objetos):
          [
            {
-             "name": "Nombre del medicamento",
+             "drug": "Nombre del medicamento", 
              "details": "Dosis (ej. 500mg)",
              "frequency": "Frecuencia (ej. cada 8 horas)",
              "duration": "Duración (ej. por 5 días)",
              "notes": "Instrucciones extra"
            }
          ]
+         
+         IMPORTANTE: Usa las claves exactas: "drug", "details", "frequency", "duration", "notes".
          Devuelve SOLO el JSON sin markdown.
        `;
 
@@ -187,9 +189,12 @@ export const GeminiMedicalService = {
        const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "[]";
        
        const cleanJson = text.replace(/```json/g, '').replace(/```/g, '').trim();
-       if (!cleanJson.startsWith('[')) return [];
        
-       return JSON.parse(cleanJson);
+       // Validación básica
+       if (!cleanJson.startsWith('[') && !cleanJson.startsWith('{')) return [];
+       
+       const parsed = JSON.parse(cleanJson);
+       return Array.isArray(parsed) ? parsed : [parsed];
     } catch (e) {
        console.error("Error generando Rx JSON", e);
        return [];
