@@ -47,7 +47,7 @@ export interface MedicationItem {
 export interface GeminiResponse {
   clinicalNote: string;
   patientInstructions: string;
-  actionItems: {
+  actionItems?: { // Hecho opcional para flexibilidad
     next_appointment: string | null;
     urgent_referral: boolean;
     lab_tests_required: string[];
@@ -62,4 +62,30 @@ export interface FollowUpMessage {
 export interface DatabaseRecord {
   id: string;
   [key: string]: any;
+}
+
+// --- TIPOS AGREGADOS (CORRECCIÓN DE ERRORES) ---
+
+export interface Appointment {
+  id: string;
+  created_at?: string;
+  doctor_id?: string;
+  patient_id: string;
+  start_time: string;
+  end_time: string;
+  title?: string;
+  status: 'scheduled' | 'completed' | 'cancelled';
+  notes?: string;
+  // Relación: Al hacer join con pacientes, Supabase devuelve el objeto paciente anidado
+  patient?: Patient; 
+}
+
+export interface Consultation {
+  id: string;
+  created_at: string;
+  doctor_id: string;
+  patient_id: string;
+  transcript: string;
+  summary: string;
+  status: string;
 }

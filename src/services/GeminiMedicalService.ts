@@ -1,4 +1,4 @@
-import { GeminiResponse, FollowUpMessage } from "../types";
+import { GeminiResponse, FollowUpMessage, MedicationItem } from "../types";
 
 const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 
@@ -99,7 +99,9 @@ export const GeminiMedicalService = {
 
   // 3. GENERAR PLAN DE SEGUIMIENTO (Función pendiente de UI)
   async generateFollowUpPlan(patientName: string, clinicalNote: string, instructions: string): Promise<FollowUpMessage[]> {
-    throw new Error("Módulo de seguimiento pausado."); 
+    // Retornamos array vacío en lugar de error para no romper la UI si se llama accidentalmente
+    console.warn("Módulo de seguimiento pausado.");
+    return []; 
   },
 
   // 4. RECETA RÁPIDA
@@ -147,5 +149,50 @@ export const GeminiMedicalService = {
         console.error("Chat Error:", error);
         throw error;
     }
-  }
+  },
+
+  // 6. GENERAR JSON DE RECETA (AGREGADO PARA SOLUCIONAR ERROR DE COMPILACIÓN)
+  async generateQuickRxJSON(transcript: string, patientName: string): Promise<MedicationItem[]> {
+    try {
+       const modelName = await this.getBestAvailableModel();
+       const URL = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${API_KEY}`;
+
+       const prompt = `
+         ACTÚA COMO: Farmacéutico experto.
+         TAREA: Extraer medicamentos del siguiente texto y formatearlos como JSON estricto.
+         TEXTO: "${transcript}"
+         PACIENTE: "${patientName}"
+
+         FORMATO JSON ESPERADO (Array de objetos):
+         [
+           {
+             "name": "Nombre del medicamento",
+             "details": "Dosis (ej. 500mg)",
+             "frequency": "Frecuencia (ej. cada 8 horas)",
+             "duration": "Duración (ej. por 5 días)",
+             "notes": "Instrucciones extra"
+           }
+         ]
+         Devuelve SOLO el JSON sin markdown.
+       `;
+
+       const response = await fetch(URL, {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+       });
+
+       if (!response.ok) return [];
+       const data = await response.json();
+       const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "[]";
+       
+       const cleanJson = text.replace(/```json/g, '').replace(/```/g, '').trim();
+       if (!cleanJson.startsWith('[')) return [];
+       
+       return JSON.parse(cleanJson);
+    } catch (e) {
+       console.error("Error generando Rx JSON", e);
+       return [];
+    }
+ }
 };
