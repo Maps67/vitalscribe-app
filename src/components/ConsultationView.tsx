@@ -21,7 +21,6 @@ import { UploadMedico } from './UploadMedico';
 
 type TabType = 'record' | 'patient' | 'chat';
 
-// LISTA COMPLETA DE ESPECIALIDADES
 const SPECIALTIES = [
   "Medicina General", "Cardiología", "Cirugía General", "Cirugía de Columna", "Cirugía de Mano", 
   "Cirugía Oncológica", "Cirugía Pediátrica", "Cirugía Plástica y Reconstructiva", "Dermatología", 
@@ -32,11 +31,12 @@ const SPECIALTIES = [
 ];
 
 const ConsultationView: React.FC = () => {
-  // --- HOOKS Y ESTADOS ---
   const { isListening, transcript, startListening, stopListening, resetTranscript, setTranscript, isAPISupported } = useSpeechRecognition();
+  
   const [patients, setPatients] = useState<Patient[]>([]);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [doctorProfile, setDoctorProfile] = useState<DoctorProfile | null>(null);
+  
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -52,6 +52,7 @@ const ConsultationView: React.FC = () => {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [isChatting, setIsChatting] = useState(false);
+  
   const [isAttachmentsOpen, setIsAttachmentsOpen] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
 
@@ -59,7 +60,6 @@ const ConsultationView: React.FC = () => {
   const chatEndRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
-  // --- EFECTOS (Carga, Red, Persistencia) ---
   useEffect(() => {
     const handleOnline = () => { setIsOnline(true); toast.success("Conexión restablecida"); };
     const handleOffline = () => { setIsOnline(false); toast.warning("Sin conexión. Modo Offline activo."); };
@@ -94,13 +94,11 @@ const ConsultationView: React.FC = () => {
 
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [chatMessages, activeTab]);
 
-  // --- UTILIDADES ---
   const filteredPatients = useMemo(() => {
     if (!searchTerm) return [];
     return patients.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()));
   }, [patients, searchTerm]);
 
-  // --- MANEJADORES PRINCIPALES ---
   const handleToggleRecording = () => {
     if (isListening) stopListening();
     else {
@@ -133,7 +131,6 @@ const ConsultationView: React.FC = () => {
 
       const response = await GeminiMedicalService.generateClinicalNote(transcript, selectedSpecialty, historyContext);
       
-      // VALIDACIÓN CRÍTICA PARA EVITAR PANTALLA BLANCA
       if (!response || (!response.soapData && !response.clinicalNote)) {
           throw new Error("La IA generó una respuesta vacía o inválida.");
       }
@@ -162,7 +159,6 @@ const ConsultationView: React.FC = () => {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) throw new Error("Sesión expirada");
         
-        // Usamos el texto plano como respaldo si soapData falla, pero soapData es la prioridad
         const summaryToSave = generatedNote.soapData 
             ? `FECHA: ${generatedNote.soapData.headers.date} ${generatedNote.soapData.headers.time}\nS: ${generatedNote.soapData.subjective}\nO: ${generatedNote.soapData.objective}\nA: ${generatedNote.soapData.analysis}\nP: ${generatedNote.soapData.plan}\n\nPLAN PACIENTE:\n${editableInstructions}`
             : (generatedNote.clinicalNote + "\n\nPLAN PACIENTE:\n" + editableInstructions);
@@ -177,7 +173,6 @@ const ConsultationView: React.FC = () => {
     } catch (e:any) { toast.error(e.message); } finally { setIsSaving(false); }
   };
 
-  // --- MANEJADORES SECUNDARIOS (Chat, Citas, PDF, WhatsApp) ---
   const handleChatSend = async (e?: React.FormEvent) => {
       e?.preventDefault();
       if (!chatInput.trim() || !generatedNote) return;
@@ -186,7 +181,6 @@ const ConsultationView: React.FC = () => {
       setChatMessages(p => [...p, { role: 'user', text: msg }]);
       setIsChatting(true);
       try {
-          // Usamos una representación de texto de la nota estructurada para el contexto del chat
           const soapContext = generatedNote.soapData ? JSON.stringify(generatedNote.soapData) : generatedNote.clinicalNote;
           const ctx = `NOTA ESTRUCTURADA: ${soapContext}\nPLAN PACIENTE: ${editableInstructions}`;
           const reply = await GeminiMedicalService.chatWithContext(ctx, msg);
@@ -219,11 +213,15 @@ const ConsultationView: React.FC = () => {
     window.open(whatsappUrl, '_blank');
   };
 
-  // --- RENDERIZADO ---
+  const handleQuickRx = () => {
+    if (!selectedPatient) { toast.error("Seleccione paciente."); return; }
+    setIsQuickRxModalOpen(true);
+  };
+
   return (
     <div className="flex flex-col md:flex-row h-[calc(100vh-64px)] bg-slate-50 dark:bg-slate-900 relative">
       
-      {/* PANEL IZQUIERDO (CONTROLES 25%) */}
+      {/* PANEL IZQUIERDO */}
       <div className={`w-full md:w-1/4 p-4 flex flex-col gap-4 border-r dark:border-slate-800 bg-white dark:bg-slate-900 overflow-y-auto ${generatedNote ? 'hidden md:flex' : 'flex'}`}>
         <div className="flex justify-between items-center">
             <h2 className="text-xl font-bold dark:text-white flex items-center gap-2">
@@ -247,7 +245,6 @@ const ConsultationView: React.FC = () => {
             {searchTerm && !selectedPatient && <div className="absolute top-full left-0 w-full bg-white dark:bg-slate-800 border rounded-b-lg shadow-lg z-40 max-h-48 overflow-y-auto">{filteredPatients.map(p=><div key={p.id} onClick={()=>{setSelectedPatient(p);setSearchTerm('')}} className="p-3 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer border-b dark:border-slate-700 dark:text-white text-sm">{p.name}</div>)}</div>}
         </div>
         <div onClick={()=>setConsentGiven(!consentGiven)} className="flex items-center gap-2 p-3 rounded-lg border cursor-pointer select-none dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"><div className={`w-5 h-5 rounded border flex items-center justify-center ${consentGiven?'bg-green-500 border-green-500 text-white':'bg-white dark:bg-slate-700'}`}>{consentGiven&&<Check size={14}/>}</div><label className="text-xs dark:text-white cursor-pointer">Consentimiento otorgado.</label></div>
-        
         <div className={`flex-1 border-2 border-dashed rounded-2xl flex flex-col items-center justify-center p-4 relative transition-colors ${isListening?'border-red-400 bg-red-50 dark:bg-red-900/10':'border-slate-200 dark:border-slate-700'}`}>
             <div className={`w-20 h-20 rounded-full flex items-center justify-center mb-4 transition-all ${isListening?'bg-red-500 text-white animate-pulse':'bg-white dark:bg-slate-800 text-slate-300 shadow-sm'}`}><Mic size={32}/></div>
             <p className="text-center font-medium text-slate-600 dark:text-slate-400 mb-4 text-sm">{isListening?"Escuchando...":"Listo"}</p>
@@ -278,7 +275,7 @@ const ConsultationView: React.FC = () => {
              ) : (
                  <div className="h-full flex flex-col max-w-5xl mx-auto w-full gap-4 relative">
                       
-                      {/* --- PESTAÑA 1: NOTA ESTRUCTURADA (VISUALIZACIÓN PROFESIONAL) --- */}
+                      {/* NOTA ESTRUCTURADA (VISUALIZACIÓN PROFESIONAL) */}
                       {activeTab==='record' && generatedNote.soapData && (
                         <div className="flex flex-col h-full gap-4">
                             {/* Encabezado de la Nota */}
@@ -301,8 +298,8 @@ const ConsultationView: React.FC = () => {
                                 )}
                             </div>
 
-                            {/* Tarjetas SOAP Estructuradas */}
-                            <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col gap-4 pb-4">
+                            {/* --- ZONA DE SCROLL --- AQUI CAMBIAMOS pb-4 por pb-32 --- */}
+                            <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col gap-4 pb-32">
                                 
                                 {/* S - Subjetivo (Azul) */}
                                 <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border-l-4 border-blue-500 overflow-hidden animate-fade-in-up" style={{animationDelay: '0.1s'}}>
@@ -310,8 +307,9 @@ const ConsultationView: React.FC = () => {
                                         <Activity size={18} className="text-blue-600 dark:text-blue-400"/>
                                         <h3 className="font-bold text-blue-800 dark:text-blue-300">Subjetivo (Padecimiento Actual)</h3>
                                     </div>
-                                    <div className="p-4 text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">
-                                        {generatedNote.soapData.subjective}
+                                    {/* AQUI USAMOS FormattedText para renderizar negritas */}
+                                    <div className="p-4 text-slate-700 dark:text-slate-300 leading-relaxed">
+                                        <FormattedText content={generatedNote.soapData.subjective} />
                                     </div>
                                 </div>
 
@@ -319,10 +317,10 @@ const ConsultationView: React.FC = () => {
                                 <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border-l-4 border-green-500 overflow-hidden animate-fade-in-up" style={{animationDelay: '0.2s'}}>
                                     <div className="bg-green-50 dark:bg-green-900/20 p-3 border-b border-green-100 dark:border-green-800 flex items-center gap-2">
                                         <ClipboardList size={18} className="text-green-600 dark:text-green-400"/>
-                                        <h3 className="font-bold text-green-800 dark:text-green-300">Objetivo (Exploración Física y Vitales Dictados)</h3>
+                                        <h3 className="font-bold text-green-800 dark:text-green-300">Objetivo (Exploración Física y Vitales)</h3>
                                     </div>
-                                    <div className="p-4 text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed font-mono text-sm bg-slate-50 dark:bg-slate-950/50">
-                                        {generatedNote.soapData.objective || "No se dictaron hallazgos objetivos específicos."}
+                                    <div className="p-4 text-slate-700 dark:text-slate-300 leading-relaxed bg-slate-50 dark:bg-slate-950/50">
+                                        <FormattedText content={generatedNote.soapData.objective || "No se dictaron hallazgos objetivos específicos."} />
                                     </div>
                                 </div>
 
@@ -330,10 +328,10 @@ const ConsultationView: React.FC = () => {
                                 <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border-l-4 border-amber-500 overflow-hidden animate-fade-in-up" style={{animationDelay: '0.3s'}}>
                                     <div className="bg-amber-50 dark:bg-amber-900/20 p-3 border-b border-amber-100 dark:border-amber-800 flex items-center gap-2">
                                         <Brain size={18} className="text-amber-600 dark:text-amber-400"/>
-                                        <h3 className="font-bold text-amber-800 dark:text-amber-300">Análisis y Diagnóstico Presuntivo</h3>
+                                        <h3 className="font-bold text-amber-800 dark:text-amber-300">Análisis y Diagnóstico</h3>
                                     </div>
-                                    <div className="p-4 text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">
-                                        {generatedNote.soapData.analysis}
+                                    <div className="p-4 text-slate-700 dark:text-slate-300 leading-relaxed">
+                                        <FormattedText content={generatedNote.soapData.analysis} />
                                     </div>
                                 </div>
 
@@ -343,8 +341,8 @@ const ConsultationView: React.FC = () => {
                                         <FileSignature size={18} className="text-purple-600 dark:text-purple-400"/>
                                         <h3 className="font-bold text-purple-800 dark:text-purple-300">Plan de Manejo Médico</h3>
                                     </div>
-                                    <div className="p-4 text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">
-                                        {generatedNote.soapData.plan}
+                                    <div className="p-4 text-slate-700 dark:text-slate-300 leading-relaxed">
+                                        <FormattedText content={generatedNote.soapData.plan} />
                                     </div>
                                 </div>
 
@@ -359,7 +357,7 @@ const ConsultationView: React.FC = () => {
                         </div>
                       )}
 
-                      {/* Fallback para notas antiguas sin estructura SOAP (Prevención de pantalla blanca) */}
+                      {/* Fallback para notas antiguas */}
                       {activeTab==='record' && !generatedNote.soapData && generatedNote.clinicalNote && (
                           <div className="bg-white dark:bg-slate-900 p-8 rounded-xl shadow-sm h-full flex flex-col border dark:border-slate-800 overflow-hidden">
                                 <div className="bg-yellow-50 text-yellow-800 p-2 text-sm rounded mb-2 dark:bg-yellow-900/30 dark:text-yellow-200">Formato antiguo (Texto plano). Regenera para ver la nueva estructura visual.</div>
@@ -368,8 +366,7 @@ const ConsultationView: React.FC = () => {
                           </div>
                       )}
 
-
-                      {/* --- PESTAÑA 2: PLAN PACIENTE (INSTRUCCIONES) --- */}
+                      {/* PLAN PACIENTE */}
                       {activeTab==='patient' && (
                           <div className="bg-white dark:bg-slate-900 p-6 rounded-xl shadow-sm h-full flex flex-col border dark:border-slate-800 animate-fade-in-up">
                               <div className="flex justify-between items-center mb-4 border-b dark:border-slate-800 pb-2">
@@ -386,7 +383,7 @@ const ConsultationView: React.FC = () => {
                           </div>
                       )}
 
-                      {/* --- PESTAÑA 3: CHAT ASISTENTE --- */}
+                      {/* CHAT */}
                       {activeTab==='chat' && (
                           <div className="bg-white dark:bg-slate-900 p-4 rounded-xl shadow-sm h-full flex flex-col border dark:border-slate-800 animate-fade-in-up">
                               <div className="flex-1 overflow-y-auto mb-4 pr-2 custom-scrollbar">
@@ -401,7 +398,7 @@ const ConsultationView: React.FC = () => {
           </div>
       </div>
 
-      {/* PANEL LATERAL (ARCHIVOS) */}
+      {/* PANEL ARCHIVOS */}
       {isAttachmentsOpen && selectedPatient && (
         <div className="fixed inset-0 z-50 flex justify-end">
             <div className="absolute inset-0 bg-black/30 backdrop-blur-sm transition-opacity" onClick={() => setIsAttachmentsOpen(false)} />
@@ -418,7 +415,6 @@ const ConsultationView: React.FC = () => {
         </div>
       )}
 
-      {/* MODALES (Citas, Receta Rápida) */}
       {isAppointmentModalOpen && <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"><div className="bg-white dark:bg-slate-900 rounded-2xl p-6 max-w-sm w-full animate-fade-in-up"><h3 className="font-bold text-lg mb-4 dark:text-white">Agendar Seguimiento</h3><input type="datetime-local" className="w-full border dark:border-slate-700 p-3 rounded-xl mb-6 bg-slate-50 dark:bg-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-brand-teal" value={nextApptDate} onChange={e=>setNextApptDate(e.target.value)}/><div className="flex justify-end gap-3"><button onClick={()=>setIsAppointmentModalOpen(false)} className="text-slate-500 font-medium">Cancelar</button><button onClick={handleConfirmAppointment} className="bg-brand-teal text-white px-4 py-2 rounded-xl font-bold">Confirmar</button></div></div></div>}
       {isQuickRxModalOpen && selectedPatient && doctorProfile && <QuickRxModal isOpen={isQuickRxModalOpen} onClose={()=>setIsQuickRxModalOpen(false)} initialTranscript={transcript} patientName={selectedPatient.name} doctorProfile={doctorProfile}/>}
     </div>
