@@ -1,40 +1,35 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Calendar, Stethoscope, Users, BarChart2, LucideIcon } from 'lucide-react';
+import { LayoutDashboard, Calendar, Stethoscope, Users, Menu } from 'lucide-react';
 
-// ARQUITECTURA: Definición estricta de la estructura de una pestaña
-interface TabItem {
-  path: string;
-  icon: LucideIcon;
-  label: string;
-  isMain?: boolean;
-  end?: boolean; // Propiedad crítica para evitar coincidencias parciales en la ruta '/'
+// Interfaz de Props para recibir la acción de abrir menú
+interface MobileTabBarProps {
+  onMenuClick?: () => void; 
 }
 
-const MobileTabBar: React.FC = () => {
+const MobileTabBar: React.FC<MobileTabBarProps> = ({ onMenuClick }) => {
   
-  const tabs: TabItem[] = [
+  // Definimos los items de navegación principal
+  const tabs = [
     { path: '/', icon: LayoutDashboard, label: 'Inicio', end: true },
     { path: '/calendar', icon: Calendar, label: 'Agenda' },
     { path: '/consultation', icon: Stethoscope, label: 'Consulta', isMain: true },
-    { path: '/reports', icon: BarChart2, label: 'Reportes' },
-    // AJUSTE UX: Usamos 'Users' para pacientes para coincidir con el Sidebar
     { path: '/patients', icon: Users, label: 'Pacientes' },
   ];
 
   return (
-    // SOPORTE PWA: pb-[env(safe-area-inset-bottom)] protege el contenido en iPhone X+
-    // z-40 para estar sobre el contenido, pero debajo de modales (z-50) y Sidebar (z-50)
     <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 pb-[env(safe-area-inset-bottom)] z-40 shadow-[0_-4px_10px_rgba(0,0,0,0.03)] transition-colors duration-300">
-      <div className="flex justify-around items-end h-14 px-1">
+      <div className="flex justify-around items-end h-16 px-1">
+        
+        {/* 1. Items de Navegación */}
         {tabs.map((tab) => (
           <NavLink
             key={tab.path}
             to={tab.path}
-            end={tab.end} // Routing estricto aplicado aquí
-            aria-label={tab.label} // Mejora de accesibilidad
+            end={tab.end}
+            aria-label={tab.label}
             className={({ isActive }) => `
-              flex flex-col items-center justify-center w-full h-full pb-1 pt-1 relative
+              flex flex-col items-center justify-center w-full h-full pb-1 relative
               transition-colors duration-200 cursor-pointer select-none outline-none tap-highlight-transparent
               ${isActive && !tab.isMain ? 'text-brand-teal' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'}
             `}
@@ -42,7 +37,7 @@ const MobileTabBar: React.FC = () => {
             {({ isActive }) => (
               <>
                 {tab.isMain ? (
-                  // LOGICA VISUAL PARA EL BOTÓN FLOTANTE "CONSULTA"
+                  // BOTÓN FLOTANTE CENTRAL (CONSULTA)
                   <div className="absolute -top-6 flex flex-col items-center group">
                     <div className={`
                       bg-brand-teal text-white p-3.5 rounded-full shadow-lg shadow-teal-200/50 dark:shadow-none 
@@ -56,7 +51,7 @@ const MobileTabBar: React.FC = () => {
                     </span>
                   </div>
                 ) : (
-                  // LOGICA VISUAL PARA ITEMS ESTÁNDAR
+                  // ICONOS ESTÁNDAR
                   <>
                     <tab.icon 
                       size={22} 
@@ -70,6 +65,17 @@ const MobileTabBar: React.FC = () => {
             )}
           </NavLink>
         ))}
+
+        {/* 2. BOTÓN DE MENÚ (NUEVO) - Abre el Sidebar */}
+        <button
+          onClick={onMenuClick}
+          className="flex flex-col items-center justify-center w-full h-full pb-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 outline-none tap-highlight-transparent"
+          aria-label="Abrir Menú"
+        >
+          <Menu size={22} strokeWidth={2} className="mb-1" />
+          <span className="text-[9px] font-medium leading-none">Menú</span>
+        </button>
+
       </div>
     </nav>
   );

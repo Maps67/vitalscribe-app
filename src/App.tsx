@@ -4,7 +4,7 @@ import { Session } from '@supabase/supabase-js';
 import { supabase } from './lib/supabase';
 import { Toaster } from 'sonner';
 import { ThemeProvider } from './context/ThemeContext';
-import { LogOut, ShieldCheck } from 'lucide-react'; // Iconos para la despedida
+import { LogOut, ShieldCheck } from 'lucide-react'; 
 
 // Components & Pages
 import Sidebar from './components/Sidebar';
@@ -34,14 +34,18 @@ const MainLayout: React.FC<MainLayoutProps> = ({ session, onLogout }) => {
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex font-sans text-slate-900 dark:text-slate-100 transition-colors duration-300 relative">
       
-      {/* SIDEBAR ESCRITORIO */}
+      {/* SIDEBAR ESCRITORIO: Conectado al Logout */}
       <div className="hidden md:flex z-20">
-        <Sidebar isOpen={true} onClose={() => {}} />
+        <Sidebar isOpen={true} onClose={() => {}} onLogout={onLogout} />
       </div>
 
-      {/* SIDEBAR MÓVIL */}
+      {/* SIDEBAR MÓVIL: Conectado al Logout y al Estado de Apertura */}
       <div className="md:hidden">
-          <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
+          <Sidebar 
+            isOpen={isSidebarOpen} 
+            onClose={() => setIsSidebarOpen(false)} 
+            onLogout={onLogout} 
+          />
       </div>
 
       <main className="flex-1 md:ml-64 transition-all duration-300 flex flex-col min-h-screen bg-gray-50 dark:bg-slate-950">
@@ -57,19 +61,16 @@ const MainLayout: React.FC<MainLayoutProps> = ({ session, onLogout }) => {
             <Route path="/card" element={<DigitalCard />} />
             <Route path="/settings" element={<SettingsView />} />
             <Route path="/privacy" element={<PrivacyPolicy />} />
-            {/* RUTA DE TÉRMINOS LEGALES */}
             <Route path="/terms" element={<TermsOfService />} />
-            {/* Redirección por defecto */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </div>
 
-        {/* BARRA INFERIOR MÓVIL */}
+        {/* BARRA INFERIOR: Conectada para abrir el Menú */}
         <div className="md:hidden">
-          <MobileTabBar />
+          <MobileTabBar onMenuClick={() => setIsSidebarOpen(true)} />
         </div>
 
-        {/* Botón de Logout Móvil Oculto (Lógica manejada por Sidebar, pero accesible globalmente si se requiere) */}
       </main>
     </div>
   );
@@ -89,7 +90,6 @@ const App: React.FC = () => {
   useEffect(() => {
     let mounted = true;
 
-    // 1. Obtener sesión inicial
     const initSession = async () => {
       try {
         const { data: { session: initialSession } } = await supabase.auth.getSession();
@@ -104,7 +104,6 @@ const App: React.FC = () => {
 
     initSession();
 
-    // 2. Escuchar eventos de autenticación
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, newSession) => {
       if (!mounted) return;
 
@@ -113,7 +112,7 @@ const App: React.FC = () => {
       } else if (event === 'SIGNED_OUT') {
         setIsRecoveryFlow(false);
         setSession(null);
-        setIsClosing(false); // Asegurar que se quite la pantalla de cierre
+        setIsClosing(false); 
       } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
         setSession(newSession);
         setIsRecoveryFlow(false); 
@@ -135,9 +134,8 @@ const App: React.FC = () => {
 
   // --- LÓGICA DE CIERRE ELEGANTE ---
   const handleGlobalLogout = async () => {
-    setIsClosing(true); // Activa la pantalla de despedida
+    setIsClosing(true); 
     
-    // UX: Pequeña pausa para mostrar el mensaje "Cerrando de forma segura..."
     await new Promise(resolve => setTimeout(resolve, 1500));
     
     try {
@@ -145,7 +143,7 @@ const App: React.FC = () => {
         if (error) throw error;
     } catch (error) {
         console.error("Error al cerrar sesión:", error);
-        setIsClosing(false); // Si falla, quitamos la pantalla para que el usuario reintente
+        setIsClosing(false); 
     }
   };
 
@@ -153,7 +151,7 @@ const App: React.FC = () => {
 
   if (showSplash) return <ThemeProvider><SplashScreen /></ThemeProvider>;
 
-  // PANTALLA DE DESPEDIDA (Transición de Salida)
+  // PANTALLA DE DESPEDIDA 
   if (isClosing) {
       return (
         <ThemeProvider>
@@ -181,7 +179,7 @@ const App: React.FC = () => {
         <ReloadPrompt />
         <AuthView 
           authService={{ supabase }} 
-          onLoginSuccess={() => { /* Redirección automática por evento */ }} 
+          onLoginSuccess={() => { }} 
           forceResetMode={isRecoveryFlow}
           onPasswordResetSuccess={() => setIsRecoveryFlow(false)}
         />
@@ -196,7 +194,7 @@ const App: React.FC = () => {
         <ReloadPrompt />
         <MainLayout 
           session={session} 
-          onLogout={handleGlobalLogout} // Pasamos la función nueva
+          onLogout={handleGlobalLogout} 
         />
       </BrowserRouter>
     </ThemeProvider>

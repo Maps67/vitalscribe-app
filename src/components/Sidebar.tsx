@@ -1,18 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { 
-  LayoutDashboard, 
-  Stethoscope, 
-  Users, 
-  Smartphone, 
-  LogOut, 
-  X, 
-  Settings, 
-  Download, 
-  Share, 
-  Calendar, 
-  Moon, 
-  Sun 
+  LayoutDashboard, Stethoscope, Users, Smartphone, LogOut, X, 
+  Settings, Download, Share, Calendar, Moon, Sun 
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useTheme } from '../context/ThemeContext';
@@ -25,9 +15,10 @@ interface BeforeInstallPromptEvent extends Event {
 interface SidebarProps {
   isOpen: boolean;
   onClose: () => void;
+  onLogout: () => void; // <--- CABLE DE CONEXIÓN PARA LA ANIMACIÓN
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
+const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, onLogout }) => {
   const [profile, setProfile] = useState({ name: 'Cargando...', specialty: '' });
   const { theme, toggleTheme } = useTheme();
   
@@ -78,10 +69,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     };
   }, []);
   
-  const handleLogout = async () => { 
-    await supabase.auth.signOut(); 
-  };
-
   const handleInstallClick = () => {
     if (deferredPrompt) {
       deferredPrompt.prompt();
@@ -185,12 +172,17 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                   <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate uppercase tracking-wide">{profile.specialty}</p>
               </div>
           </div>
-          <button onClick={handleLogout} className="flex items-center justify-center space-x-2 px-4 py-2 w-full text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors text-sm font-medium">
+          
+          {/* BOTÓN DE CERRAR SESIÓN CONECTADO */}
+          <button 
+            onClick={onLogout} 
+            className="flex items-center justify-center space-x-2 px-4 py-2 w-full text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors text-sm font-medium"
+          >
             <LogOut size={18} />
             <span>Cerrar Sesión</span>
           </button>
 
-          {/* AVISO LEGAL INTEGRADO */}
+          {/* AVISO LEGAL */}
           <div className="mt-4 text-[10px] text-slate-400 text-center leading-tight opacity-70 hover:opacity-100 transition-opacity">
             <p className="font-bold">Clasificación: Software de Gestión (EHR)</p>
             <NavLink to="/terms" className="underline hover:text-brand-teal mt-1 block">
