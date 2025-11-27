@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 
-// Interfaz para soportar navegadores modernos y legacy (Chrome/Edge/Safari)
+// Interfaz para soportar navegadores modernos y legacy
 interface IWindow extends Window {
   webkitSpeechRecognition: any;
   SpeechRecognition: any;
@@ -10,7 +10,6 @@ export const useSpeechRecognition = () => {
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState('');
   
-  // OPTIMIZACIÓN: Detección síncrona inicial para evitar parpadeos del mensaje de error
   const [isAPISupported, setIsAPISupported] = useState(() => {
     if (typeof window === 'undefined') return false;
     const { webkitSpeechRecognition, SpeechRecognition } = window as unknown as IWindow;
@@ -18,15 +17,44 @@ export const useSpeechRecognition = () => {
   });
   
   const recognitionRef = useRef<any>(null);
-  const finalTranscriptRef = useRef(''); // Memoria a largo plazo
-  const isUserInitiatedStop = useRef(false); // Flag para evitar auto-restart si el usuario paró
+  const finalTranscriptRef = useRef('');
+  const isUserInitiatedStop = useRef(false);
+  
+  // REFERENCIA PARA EL GESTOR DE ENERGÍA (WAKE LOCK)
+  const wakeLockRef = useRef<any>(null);
+
+  /**
+   * GESTIÓN DE ENERGÍA (WAKE LOCK API)
+   * Evita que la pantalla se apague durante el dictado, lo cual cortaría el micrófono.
+   */
+  const requestWakeLock = async () => {
+    if ('wakeLock' in navigator) {
+      try {
+        wakeLockRef.current = await (navigator as any).wakeLock.request('screen');
+        console.log('💡 Pantalla mantenida activa (Wake Lock activado)');
+      } catch (err) {
+        console.warn('⚠️ No se pudo activar Wake Lock:', err);
+      }
+    }
+  };
+
+  const releaseWakeLock = async () => {
+    if (wakeLockRef.current) {
+      try {
+        await wakeLockRef.current.release();
+        wakeLockRef.current = null;
+        console.log('🌑 Wake Lock liberado');
+      } catch (err) {
+        console.warn('Error liberando Wake Lock', err);
+      }
+    }
+  };
 
   // Función constructora del reconocedor
   const setupRecognition = useCallback(() => {
     const { webkitSpeechRecognition, SpeechRecognition } = window as unknown as IWindow;
     const SpeechRecognitionAPI = SpeechRecognition || webkitSpeechRecognition;
 
-    // Doble verificación de seguridad
     if (!SpeechRecognitionAPI) {
       setIsAPISupported(false);
       return null;
@@ -37,57 +65,46 @@ export const useSpeechRecognition = () => {
     const recognition = new SpeechRecognitionAPI();
     recognition.continuous = true; 
     recognition.interimResults = true;
-    recognition.lang = 'es-MX'; // Español México
+    recognition.lang = 'es-MX';
     recognition.maxAlternatives = 1;
 
     recognition.onstart = () => {
       setIsListening(true);
       isUserInitiatedStop.current = false;
+      // ACTIVAR WAKE LOCK AL INICIAR
+      requestWakeLock();
     };
 
-    /**
-     * LÓGICA CORE (FIX BUCLE INFINITO)
-     * Iteramos desde resultIndex para procesar solo nuevos fragmentos.
-     */
     recognition.onresult = (event: any) => {
       let interimTranscript = '';
-
-      // Iteramos solo sobre los resultados nuevos proporcionados en este evento
       for (let i = event.resultIndex; i < event.results.length; ++i) {
         const transcriptSegment = event.results[i][0].transcript;
-
         if (event.results[i].isFinal) {
-          // Si es final, lo guardamos en la memoria permanente
           const prev = finalTranscriptRef.current;
           const spacer = (prev && !prev.endsWith(' ')) ? ' ' : '';
           finalTranscriptRef.current += spacer + transcriptSegment;
         } else {
-          // Si es interino (estás hablando), lo guardamos temporalmente
           interimTranscript += transcriptSegment;
         }
       }
-
-      // Actualizamos el estado UI
       setTranscript(finalTranscriptRef.current + interimTranscript);
     };
 
     recognition.onerror = (event: any) => {
       console.warn("Speech API Error:", event.error);
-      // 'not-allowed' = Permiso denegado. 'service-not-allowed' = Sin internet o sin soporte.
       if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
         setIsListening(false);
         isUserInitiatedStop.current = true;
+        releaseWakeLock(); // Liberar si hay error fatal
       }
     };
 
-    /**
-     * AUTO-RESTART ROBUSTO
-     */
     recognition.onend = () => {
       if (!isUserInitiatedStop.current) {
           try {
-            console.log("Reiniciando escucha por silencio...");
+            console.log("🔄 Keep-Alive: Reiniciando escucha...");
             recognition.start();
+            // NOTA: No liberamos Wake Lock aquí porque seguimos "escuchando" lógicamente
           } catch (e) {
             setTimeout(() => {
               if (!isUserInitiatedStop.current && recognitionRef.current) {
@@ -97,6 +114,7 @@ export const useSpeechRecognition = () => {
           }
       } else {
         setIsListening(false);
+        releaseWakeLock(); // Liberar solo si el usuario paró voluntariamente
       }
     };
 
@@ -133,6 +151,7 @@ export const useSpeechRecognition = () => {
     }
     setTranscript(finalTranscriptRef.current);
     setIsListening(false);
+    releaseWakeLock(); // Asegurar liberación manual
   }, []);
 
   const resetTranscript = useCallback(() => {
@@ -145,12 +164,14 @@ export const useSpeechRecognition = () => {
       setTranscript(text);
   }, []);
 
+  // Limpieza al desmontar componente
   useEffect(() => {
     return () => {
         isUserInitiatedStop.current = true;
         if (recognitionRef.current) {
              try { recognitionRef.current.stop(); } catch(e) {}
         }
+        releaseWakeLock();
     };
   }, []);
 
