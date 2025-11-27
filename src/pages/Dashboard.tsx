@@ -275,6 +275,7 @@ const Dashboard: React.FC = () => {
               <UploadMedico />
               
               <div className="pt-4 border-t dark:border-slate-800">
+                {/* Se muestra sin paciente seleccionado como placeholder o para futuros usos */}
                 <DoctorFileGallery />
               </div>
             </div>

@@ -15,6 +15,7 @@ import PrescriptionPDF from './PrescriptionPDF';
 import { AppointmentService } from '../services/AppointmentService';
 import QuickRxModal from './QuickRxModal';
 import { DoctorFileGallery } from './DoctorFileGallery';
+import { UploadMedico } from './UploadMedico';
 
 type TabType = 'record' | 'patient' | 'chat';
 
@@ -537,21 +538,22 @@ const ConsultationView: React.FC = () => {
           </div>
       </div>
 
-      {/* --- PANEL LATERAL DESLIZANTE (ARCHIVOS) --- */}
-      {isAttachmentsOpen && (
+      {/* --- PANEL LATERAL DESLIZANTE (ARCHIVOS DEL PACIENTE) --- */}
+      {isAttachmentsOpen && selectedPatient && (
         <div className="fixed inset-0 z-50 flex justify-end">
-            {/* Fondo oscuro con blur */}
             <div 
                 className="absolute inset-0 bg-black/30 backdrop-blur-sm transition-opacity" 
                 onClick={() => setIsAttachmentsOpen(false)} 
             />
             
-            {/* Contenido del Panel */}
             <div className="relative w-full max-w-md bg-white dark:bg-slate-900 h-full shadow-2xl p-4 flex flex-col border-l dark:border-slate-800 animate-slide-in-right">
                 <div className="flex justify-between items-center mb-4 pb-2 border-b dark:border-slate-800">
-                    <h3 className="font-bold text-lg dark:text-white flex items-center gap-2">
-                        <Paperclip size={20} className="text-brand-teal"/> Archivos Adjuntos
-                    </h3>
+                    <div>
+                        <h3 className="font-bold text-lg dark:text-white flex items-center gap-2">
+                            <Paperclip size={20} className="text-brand-teal"/> Expediente
+                        </h3>
+                        <p className="text-xs text-slate-500">Paciente: {selectedPatient.name}</p>
+                    </div>
                     <button 
                         onClick={() => setIsAttachmentsOpen(false)} 
                         className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors"
@@ -560,9 +562,27 @@ const ConsultationView: React.FC = () => {
                     </button>
                 </div>
                 
-                <div className="flex-1 overflow-y-auto">
-                    {/* Aquí reutilizamos tu galería existente */}
-                    <DoctorFileGallery />
+                <div className="flex-1 overflow-y-auto flex flex-col gap-4">
+                    {/* 1. Subida Rápida en Contexto */}
+                    <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-lg">
+                        <p className="text-xs font-bold text-slate-500 mb-2 uppercase">Agregar nuevo archivo:</p>
+                        {/* Reutilizamos UploadMedico pero forzamos el paciente seleccionado */}
+                        <UploadMedico 
+                            preSelectedPatient={selectedPatient} 
+                            onUploadComplete={() => {
+                                // Truco sucio pero efectivo para recargar la galería: 
+                                // Desmontar y montar galería o usar un contexto. 
+                                // Por ahora, el usuario puede dar clic en refrescar en la galería.
+                                toast.success("Archivo agregado. Refresca la lista si no aparece.");
+                            }}
+                        />
+                    </div>
+
+                    {/* 2. Galería Filtrada */}
+                    <div className="flex-1">
+                        <p className="text-xs font-bold text-slate-500 mb-2 uppercase">Historial de archivos:</p>
+                        <DoctorFileGallery patientId={selectedPatient.id} />
+                    </div>
                 </div>
             </div>
         </div>
