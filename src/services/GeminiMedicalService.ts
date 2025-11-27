@@ -1,4 +1,4 @@
-import { GeminiResponse, FollowUpMessage, MedicationItem } from "../types";
+import { GeminiResponse, FollowUpMessage, MedicationItem, PatientInsight } from "../types";
 
 const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 
@@ -6,24 +6,9 @@ if (!API_KEY) {
   console.error("Falta la VITE_GEMINI_API_KEY en el archivo .env");
 }
 
-// INTERFAZ INTERNA PARA ESTRUCTURA SOAP
-interface SOAPStructure {
-    headers: {
-        date: string;
-        time: string;
-        patientName?: string;
-        patientAge?: string;
-        patientGender?: string;
-    };
-    subjective: string;
-    objective: string;
-    analysis: string;
-    plan: string;
-}
-
 export const GeminiMedicalService = {
 
-  // 1. AUTO-DESCUBRIMIENTO (PROTOCOLO RADAR)
+  // 1. AUTO-DESCUBRIMIENTO (PROTOCOLO RADAR) - NO TOCAR
   async getBestAvailableModel(): Promise<string> {
     try {
       const listUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${API_KEY}`;
@@ -35,13 +20,13 @@ export const GeminiMedicalService = {
       }
       
       const data = await response.json();
-      
       const validModels = (data.models || []).filter((m: any) => 
         m.supportedGenerationMethods?.includes("generateContent")
       );
 
       if (validModels.length === 0) return "gemini-pro";
 
+      // Prioridad: Flash -> Pro -> Cualquiera
       const flashModel = validModels.find((m: any) => m.name.includes("flash"));
       if (flashModel) return flashModel.name.replace('models/', '');
 
@@ -54,10 +39,10 @@ export const GeminiMedicalService = {
     }
   },
 
-  // 2. GENERAR NOTA SOAP ESTRUCTURADA
+  // 2. GENERAR NOTA SOAP ESTRUCTURADA (V4)
   async generateClinicalNote(transcript: string, specialty: string = "Medicina General", patientHistory: string = ""): Promise<GeminiResponse> {
     try {
-      const modelName = await this.getBestAvailableModel(); 
+      const modelName = await this.getBestAvailableModel(); // Usa Radar
       const URL = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${API_KEY}`;
 
       const now = new Date();
@@ -66,41 +51,24 @@ export const GeminiMedicalService = {
 
       const prompt = `
         ACTÚA COMO: Un Médico Escribano de Élite y Auditor Clínico, especializado en ${specialty.toUpperCase()}.
-        TU OBJETIVO: Analizar el dictado y generar una Nota Clínica SOAP ESTRUCTURADA y PROFESIONAL.
+        TU OBJETIVO: Analizar el dictado y generar una Nota Clínica SOAP ESTRUCTURADA.
 
-        DATOS DE ENTRADA:
-        - FECHA REAL: ${currentDate}
-        - HORA REAL: ${currentTime}
-        - HISTORIAL PREVIO: "${patientHistory || 'Sin historial.'}"
+        DATOS:
+        - FECHA: ${currentDate} ${currentTime}
+        - HISTORIAL: "${patientHistory || 'Sin historial.'}"
         - DICTADO ACTUAL: "${transcript}"
 
-        REGLAS DE ORO:
-        1.  **PROFESIONALISMO:** Terminología médica precisa.
-        2.  **DYNAMIC SCRIBE (VERDAD):** NO inventes signos vitales. Si no se dictan, omítelos.
-        3.  **INTEGRACIÓN:** Usa el historial si existe.
-        4.  **LIMPIEZA:** Texto plano dentro de cada sección JSON.
-
-        FORMATO DE SALIDA (JSON ESTRICTO):
+        FORMATO JSON STRICTO:
         {
           "soapData": {
-            "headers": {
-                "date": "${currentDate}",
-                "time": "${currentTime}",
-                "patientName": "Extraer o null",
-                "patientAge": "Extraer o null",
-                "patientGender": "Extraer o null"
-            },
-            "subjective": "Texto del Padecimiento Actual...",
-            "objective": "Hallazgos físicos reales...",
-            "analysis": "Razonamiento clínico...",
-            "plan": "Tratamiento y seguimiento..."
+            "headers": { "date": "${currentDate}", "time": "${currentTime}", "patientName": "Extraer o null", "patientAge": "Extraer o null", "patientGender": "Extraer o null" },
+            "subjective": "Texto limpio...",
+            "objective": "Texto limpio...",
+            "analysis": "Texto limpio...",
+            "plan": "Texto limpio..."
           },
-          "patientInstructions": "Instrucciones para el paciente.",
-          "actionItems": {
-             "next_appointment": "YYYY-MM-DD" o null,
-             "urgent_referral": boolean,
-             "lab_tests_required": []
-          }
+          "patientInstructions": "Instrucciones claras...",
+          "actionItems": { "next_appointment": null, "urgent_referral": false, "lab_tests_required": [] }
         }
       `;
 
@@ -110,28 +78,23 @@ export const GeminiMedicalService = {
         body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
       });
 
-      if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(`Google API Error: ${errorData.error?.message || response.statusText}`);
-      }
-
+      if (!response.ok) throw new Error("Error API Google");
       const data = await response.json();
       const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
       
       const cleanJsonText = text.replace(/```json/g, '').replace(/```/g, '').trim();
       let parsedData;
-      
       try {
           parsedData = JSON.parse(cleanJsonText);
       } catch (e) {
-          console.error("Fallo parseo JSON V4", e);
+          // Fallback seguro
           return {
-              clinicalNote: text, 
+              clinicalNote: text,
               patientInstructions: "Revisar nota completa.",
-              actionItems: { next_appointment: null, urgent_referral: false, lab_tests_required: [] }
+              actionItems: {}
           };
       }
-
+      
       return {
           ...parsedData,
           clinicalNote: parsedData.soapData ? 
@@ -140,18 +103,101 @@ export const GeminiMedicalService = {
       } as GeminiResponse;
 
     } catch (error) {
-      console.error("Error en Servicio Médico:", error);
+      console.error("Error Gemini:", error);
       throw error;
     }
   },
 
-  async generateFollowUpPlan(patientName: string, clinicalNote: string, instructions: string): Promise<FollowUpMessage[]> {
-    return []; 
+  // 3. NUEVA FUNCIÓN: GENERAR BALANCE CLÍNICO (INSIGHTS)
+  async generatePatientInsights(patientName: string, historySummary: string, consultations: string[]): Promise<PatientInsight> {
+      try {
+        const modelName = await this.getBestAvailableModel(); // Usa Radar
+        const URL = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${API_KEY}`;
+
+        const allConsultationsText = consultations.join("\n\n--- SIGUIENTE CONSULTA ---\n\n");
+
+        const prompt = `
+            ACTÚA COMO: Consultor Clínico Senior y Auditor Médico.
+            OBJETIVO: Analizar el expediente completo del paciente "${patientName}" y generar un "Balance Clínico 360".
+            
+            DATOS DE ENTRADA:
+            1. Antecedentes: ${historySummary}
+            2. Historial de Consultas:
+            ${allConsultationsText}
+
+            FORMATO JSON ESTRICTO DE SALIDA:
+            {
+                "evolution": "Resumen narrativo de la evolución de salud...",
+                "medication_audit": "Análisis de medicamentos (eficacia, cambios)...",
+                "risk_flags": ["Riesgo 1", "Riesgo 2"],
+                "pending_actions": ["Pendiente 1", "Pendiente 2"]
+            }
+        `;
+
+        const response = await fetch(URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+        });
+
+        if (!response.ok) throw new Error("Error generando Insights");
+        const data = await response.json();
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
+        const cleanJsonText = text.replace(/```json/g, '').replace(/```/g, '').trim();
+        
+        return JSON.parse(cleanJsonText) as PatientInsight;
+
+      } catch (e) {
+          console.error("Error Insights:", e);
+          throw e;
+      }
   },
 
+  // 4. PLAN DE SEGUIMIENTO (CHAT)
+  async chatWithContext(context: string, userMessage: string): Promise<string> {
+    try {
+        const modelName = await this.getBestAvailableModel(); // Usa Radar
+        const URL = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${API_KEY}`;
+        const prompt = `CONTEXTO: ${context}. PREGUNTA: "${userMessage}". RESPUESTA BREVE Y PROFESIONAL:`;
+        const response = await fetch(URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+        });
+        const data = await response.json();
+        return data.candidates?.[0]?.content?.parts?.[0]?.text || "Error.";
+    } catch (e) { return "Error chat"; }
+  },
+
+  // 5. RECETA RÁPIDA (JSON + REGEX FIX)
+  async generateQuickRxJSON(transcript: string, patientName: string): Promise<MedicationItem[]> {
+    try {
+       const modelName = await this.getBestAvailableModel(); // Usa Radar
+       const URL = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${API_KEY}`;
+       const prompt = `Extraer medicamentos JSON de: "${transcript}" para "${patientName}". FORMATO: [{"drug":"", "details":"", "frequency":"", "duration":"", "notes":""}]. SOLO JSON.`;
+       const response = await fetch(URL, {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+       });
+       if (!response.ok) return [];
+       const data = await response.json();
+       const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "[]";
+       
+       // Limpieza quirúrgica (Regex)
+       let cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
+       const firstBracket = cleanText.indexOf('[');
+       const lastBracket = cleanText.lastIndexOf(']');
+       if (firstBracket !== -1 && lastBracket !== -1) cleanText = cleanText.substring(firstBracket, lastBracket + 1);
+       
+       return JSON.parse(cleanText);
+    } catch (e) { return []; }
+  },
+
+  // 6. RECETA TEXTO PLANO (LEGACY)
   async generatePrescriptionOnly(transcript: string): Promise<string> {
      try {
-        const modelName = await this.getBestAvailableModel();
+        const modelName = await this.getBestAvailableModel(); // Usa Radar
         const URL = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${API_KEY}`;
         const prompt = `Genera receta médica texto plano para: "${transcript}". Solo la receta.`;
         const response = await fetch(URL, {
@@ -164,71 +210,7 @@ export const GeminiMedicalService = {
      } catch (e) { throw e; }
   },
 
-  async chatWithContext(context: string, userMessage: string): Promise<string> {
-    try {
-        const modelName = await this.getBestAvailableModel();
-        const URL = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${API_KEY}`;
-        const prompt = `CONTEXTO: ${context}. PREGUNTA: "${userMessage}". RESPUESTA BREVE:`;
-        const response = await fetch(URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-        });
-        if (!response.ok) throw new Error("Error Chat");
-        const data = await response.json();
-        return data.candidates?.[0]?.content?.parts?.[0]?.text || "Error.";
-    } catch (error) { throw error; }
-  },
-
-  // --- AQUÍ ESTÁ LA CORRECCIÓN DE LA RECETA RÁPIDA ---
-  async generateQuickRxJSON(transcript: string, patientName: string): Promise<MedicationItem[]> {
-    try {
-       const modelName = await this.getBestAvailableModel();
-       const URL = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${API_KEY}`;
-       
-       // Prompt blindado para evitar charla
-       const prompt = `
-         ACTÚA COMO: API de Farmacia Estructurada.
-         TAREA: Extraer medicamentos del siguiente texto clínico.
-         PACIENTE: "${patientName}"
-         TEXTO: "${transcript}"
-         
-         SALIDA ESTRICTA: Devuelve ÚNICAMENTE un Array JSON válido. No saludes, no uses markdown, no des explicaciones.
-         FORMATO OBJETIVO: [{"drug":"Nombre Comercial/Genérico", "details":"Dosis y Presentación", "frequency":"Cada cuánto", "duration":"Por cuánto tiempo", "notes":"Instrucciones especiales"}].
-         
-         Si no encuentras medicamentos, devuelve [].
-       `;
-
-       const response = await fetch(URL, {
-         method: 'POST',
-         headers: { 'Content-Type': 'application/json' },
-         body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-       });
-
-       if (!response.ok) return [];
-       
-       const data = await response.json();
-       const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || "[]";
-       
-       // --- LIMPIEZA QUIRÚRGICA DEL JSON ---
-       // 1. Quitar bloques de código markdown
-       let cleanText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
-       
-       // 2. Extraer solo lo que está entre corchetes [] (por si la IA habla antes o después)
-       const firstBracket = cleanText.indexOf('[');
-       const lastBracket = cleanText.lastIndexOf(']');
-       
-       if (firstBracket !== -1 && lastBracket !== -1) {
-           cleanText = cleanText.substring(firstBracket, lastBracket + 1);
-       } else {
-           // Si no hay corchetes, asumimos error o vacío
-           return [];
-       }
-
-       return JSON.parse(cleanText);
-    } catch (e) { 
-        console.error("Error parseando Receta JSON:", e);
-        return []; 
-    }
- }
+  async generateFollowUpPlan(patientName: string, clinicalNote: string, instructions: string): Promise<FollowUpMessage[]> {
+    return []; 
+  }
 };
