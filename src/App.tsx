@@ -22,7 +22,6 @@ import SplashScreen from './components/SplashScreen';
 import MobileTabBar from './components/MobileTabBar';
 import TermsOfService from './pages/TermsOfService';
 
-// Actualizamos la interfaz para aceptar el nombre opcional
 interface MainLayoutProps {
   session: Session | null;
   onLogout: (name?: string) => Promise<void>;
@@ -62,7 +61,6 @@ const MainLayout: React.FC<MainLayoutProps> = ({ session, onLogout }) => {
           </Routes>
         </div>
         <div className="md:hidden">
-          {/* CONEXIÓN CRÍTICA: El botón de menú abre el Sidebar */}
           <MobileTabBar onMenuClick={() => setIsSidebarOpen(true)} />
         </div>
       </main>
@@ -76,7 +74,6 @@ const App: React.FC = () => {
   const [showSplash, setShowSplash] = useState(true);
   const [isRecoveryFlow, setIsRecoveryFlow] = useState(false);
   
-  // Estado para la animación y el nombre del doctor
   const [isClosing, setIsClosing] = useState(false);
   const [closingName, setClosingName] = useState('');
 
@@ -94,19 +91,33 @@ const App: React.FC = () => {
       }
     };
     initSession();
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, newSession) => {
       if (!mounted) return;
-      if (event === 'PASSWORD_RECOVERY') setIsRecoveryFlow(true);
+
+      if (event === 'PASSWORD_RECOVERY') {
+        setIsRecoveryFlow(true);
+      } 
       else if (event === 'SIGNED_OUT') {
         setIsRecoveryFlow(false);
         setSession(null);
         setIsClosing(false); 
-      } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+      } 
+      else if (event === 'SIGNED_IN') {
+        // --- AJUSTE CRUCIAL: FORZAR DASHBOARD ---
+        // Al iniciar sesión explícitamente, limpiamos la URL para ir a la raíz (Dashboard)
+        window.history.replaceState(null, '', '/');
         setSession(newSession);
-        setIsRecoveryFlow(false); 
+        setIsRecoveryFlow(false);
       }
+      else if (event === 'TOKEN_REFRESHED') {
+        // Si solo se refresca el token (usuario ya trabajando), NO redirigimos
+        setSession(newSession);
+      }
+      
       setLoading(false);
     });
+
     const splashTimer = setTimeout(() => { if (mounted) setShowSplash(false); }, 2500);
     return () => { mounted = false; subscription.unsubscribe(); clearTimeout(splashTimer); };
   }, []);
@@ -120,10 +131,10 @@ const App: React.FC = () => {
   };
 
   const handleGlobalLogout = async (name?: string) => {
-    setClosingName(name || 'Doctor(a)'); // Guardamos el nombre
+    setClosingName(name || 'Doctor(a)');
     setIsClosing(true);
     
-    await new Promise(resolve => setTimeout(resolve, 2000)); // Damos 2 segundos para leer el mensaje
+    await new Promise(resolve => setTimeout(resolve, 2000));
     
     try {
         const { error } = await supabase.auth.signOut();
@@ -136,25 +147,15 @@ const App: React.FC = () => {
 
   if (showSplash) return <ThemeProvider><SplashScreen /></ThemeProvider>;
 
-  // --- PANTALLA DE DESPEDIDA PERSONALIZADA ---
   if (isClosing) {
       const greeting = getGreeting();
       return (
         <ThemeProvider>
             <div className="fixed inset-0 bg-slate-900 flex flex-col items-center justify-center z-50 animate-fade-in px-4 text-center">
                 <div className="p-8 bg-slate-800/50 backdrop-blur-md rounded-3xl shadow-2xl flex flex-col items-center border border-slate-700 max-w-sm w-full">
-                    
-                    <div className="mb-6 animate-bounce-slow">
-                        {greeting.icon}
-                    </div>
-
-                    <h2 className="text-2xl font-bold text-white mb-1">
-                        {greeting.text},
-                    </h2>
-                    <h3 className="text-xl font-medium text-brand-teal mb-6 truncate w-full">
-                        {closingName}
-                    </h3>
-
+                    <div className="mb-6 animate-bounce-slow">{greeting.icon}</div>
+                    <h2 className="text-2xl font-bold text-white mb-1">{greeting.text},</h2>
+                    <h3 className="text-xl font-medium text-brand-teal mb-6 truncate w-full">{closingName}</h3>
                     <div className="flex items-center gap-3 text-slate-400 text-sm bg-slate-900/50 px-4 py-2 rounded-full border border-slate-700/50">
                         <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
                         <span>Cerrando sistema de forma segura...</span>
