@@ -1,118 +1,109 @@
-import React, { useEffect, useState } from 'react';
-import { TrendingUp, UserMinus, Send, AlertCircle } from 'lucide-react';
-import { AnalyticsService, InactivePatient, DiagnosisTrend } from '../services/AnalyticsService';
+import React from 'react';
+import { TrendingUp, AlertTriangle, Pill, ClipboardList, X, Brain } from 'lucide-react';
+import { PatientInsight } from '../types';
 
-const InsightsPanel: React.FC = () => {
-  const [inactivePatients, setInactivePatients] = useState<InactivePatient[]>([]);
-  const [trends, setTrends] = useState<DiagnosisTrend[]>([]);
-  const [loading, setLoading] = useState(true);
+interface InsightsPanelProps {
+  isOpen: boolean;
+  onClose: () => void;
+  data: PatientInsight | null;
+  patientName: string;
+  loading: boolean;
+}
 
-  useEffect(() => {
-    loadInsights();
-  }, []);
-
-  const loadInsights = async () => {
-    try {
-      const [inactive, trendData] = await Promise.all([
-        AnalyticsService.getInactivePatients(6), // 6 meses de inactividad
-        AnalyticsService.getDiagnosisTrends()
-      ]);
-      setInactivePatients(inactive);
-      setTrends(trendData);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleReactivate = (patient: InactivePatient) => {
-    if (!patient.phone) return alert("El paciente no tiene teléfono registrado.");
-    
-    const message = `Hola ${patient.name}, notamos que hace tiempo no vienes a consulta. En MediScribe nos preocupamos por tu salud. ¿Te gustaría agendar una revisión general?`;
-    const url = `https://wa.me/${patient.phone}?text=${encodeURIComponent(message)}`;
-    window.open(url, '_blank');
-  };
-
-  if (loading) return <div className="h-40 bg-slate-50 dark:bg-slate-800/50 rounded-2xl animate-pulse mb-8"></div>;
+// NOTA: Debe ser export const, NO export default
+export const InsightsPanel: React.FC<InsightsPanelProps> = ({ isOpen, onClose, data, patientName, loading }) => {
+  if (!isOpen) return null;
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8 animate-fade-in-up delay-100">
-      
-      {/* TARJETA 1: OPORTUNIDADES DE REACTIVACIÓN */}
-      <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm">
-        <div className="flex items-center justify-between mb-4">
-            <h3 className="font-bold text-slate-800 dark:text-white flex items-center gap-2">
-                <UserMinus className="text-orange-500" size={20}/>
-                Oportunidad de Reactivación
-            </h3>
-            <span className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded-full font-bold">
-                {inactivePatients.length} Detectados
-            </span>
-        </div>
+    <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
+      <div className="bg-white dark:bg-slate-900 w-full max-w-4xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         
-        {inactivePatients.length === 0 ? (
-            <p className="text-slate-400 text-sm text-center py-4">¡Excelente! Tus pacientes son recurrentes.</p>
-        ) : (
-            <div className="space-y-3">
-                {inactivePatients.map(p => (
-                    <div key={p.id} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-700/50 rounded-xl border border-slate-100 dark:border-slate-700">
-                        <div>
-                            <p className="font-bold text-slate-700 dark:text-slate-200 text-sm">{p.name}</p>
-                            <p className="text-xs text-slate-400">Ausente hace {p.daysSince} días</p>
-                        </div>
-                        <button 
-                            onClick={() => handleReactivate(p)}
-                            className="p-2 bg-green-100 text-green-600 hover:bg-green-200 rounded-lg transition-colors"
-                            title="Enviar mensaje de reactivación"
-                        >
-                            <Send size={16} />
-                        </button>
-                    </div>
-                ))}
+        {/* Header con Disclaimer */}
+        <div className="p-6 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 flex justify-between items-start">
+            <div>
+                <h2 className="text-xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                    <Brain className="text-purple-500" /> Balance Clínico 360° (IA)
+                </h2>
+                <p className="text-sm text-slate-500 mt-1">
+                    Análisis del expediente de <span className="font-bold">{patientName}</span>. 
+                    <span className="ml-2 text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded border border-amber-200">
+                        Informativo - Verificar con criterio médico
+                    </span>
+                </p>
             </div>
-        )}
-        <p className="text-[10px] text-slate-400 mt-4 text-center">Pacientes sin visita en +6 meses.</p>
-      </div>
-
-      {/* TARJETA 2: TENDENCIAS CLÍNICAS */}
-      <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm">
-        <div className="flex items-center justify-between mb-6">
-            <h3 className="font-bold text-slate-800 dark:text-white flex items-center gap-2">
-                <TrendingUp className="text-indigo-500" size={20}/>
-                Tendencias del Mes
-            </h3>
-            <span className="text-xs text-slate-400">Análisis IA</span>
+            <button onClick={onClose} className="p-2 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-full transition-colors text-slate-400">
+                <X size={24} />
+            </button>
         </div>
 
-        {trends.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-40 text-slate-400 text-sm">
-                <AlertCircle size={24} className="mb-2 opacity-50"/>
-                <p>Insuficientes datos para analizar.</p>
-            </div>
-        ) : (
-            <div className="space-y-4">
-                {trends.map((t, i) => (
-                    <div key={i}>
-                        <div className="flex justify-between text-sm mb-1">
-                            <span className="text-slate-600 dark:text-slate-300 font-medium">{t.topic}</span>
-                            <span className="text-indigo-500 font-bold">{t.count} casos</span>
-                        </div>
-                        <div className="w-full bg-slate-100 dark:bg-slate-700 rounded-full h-2.5 overflow-hidden">
-                            <div 
-                                className="bg-indigo-500 h-2.5 rounded-full transition-all duration-1000 ease-out" 
-                                style={{ width: `${Math.min(t.percentage * 2, 100)}%` }} // Multiplicador visual
-                            ></div>
-                        </div>
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto p-6 md:p-8 bg-slate-50 dark:bg-slate-950">
+            {loading ? (
+                <div className="flex flex-col items-center justify-center h-64 space-y-4">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500"></div>
+                    <p className="text-slate-500 animate-pulse font-medium">Analizando historial completo...</p>
+                    <p className="text-xs text-slate-400">Leyendo consultas pasadas, antecedentes y resultados.</p>
+                </div>
+            ) : data ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    
+                    {/* 1. Evolución (Ancho completo) */}
+                    <div className="col-span-1 md:col-span-2 bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm relative overflow-hidden">
+                        <div className="absolute top-0 left-0 w-1 h-full bg-blue-500"></div>
+                        <h3 className="font-bold text-slate-800 dark:text-white mb-3 flex items-center gap-2">
+                            <TrendingUp size={20} className="text-blue-500"/> Evolución Cronológica
+                        </h3>
+                        <p className="text-slate-600 dark:text-slate-300 leading-relaxed text-sm md:text-base">
+                            {data.evolution}
+                        </p>
                     </div>
-                ))}
-            </div>
-        )}
-        <p className="text-[10px] text-slate-400 mt-6 text-center">Basado en palabras clave de tus notas recientes.</p>
-      </div>
 
+                    {/* 2. Riesgos (Rojo) */}
+                    <div className="bg-red-50 dark:bg-red-900/10 p-6 rounded-xl border border-red-100 dark:border-red-900/30">
+                        <h3 className="font-bold text-red-700 dark:text-red-400 mb-3 flex items-center gap-2">
+                            <AlertTriangle size={20}/> Banderas Rojas / Riesgos
+                        </h3>
+                        <ul className="space-y-2">
+                            {data.risk_flags.length > 0 ? data.risk_flags.map((item, i) => (
+                                <li key={i} className="flex items-start gap-2 text-sm text-red-800 dark:text-red-200">
+                                    <span className="mt-1.5 w-1.5 h-1.5 bg-red-500 rounded-full shrink-0"></span>
+                                    {item}
+                                </li>
+                            )) : <p className="text-sm text-slate-500 italic">No se detectaron riesgos críticos.</p>}
+                        </ul>
+                    </div>
+
+                    {/* 3. Farmacología (Verde) */}
+                    <div className="bg-green-50 dark:bg-green-900/10 p-6 rounded-xl border border-green-100 dark:border-green-900/30">
+                        <h3 className="font-bold text-green-700 dark:text-green-400 mb-3 flex items-center gap-2">
+                            <Pill size={20}/> Auditoría Farmacológica
+                        </h3>
+                        <p className="text-green-900 dark:text-green-100 text-sm leading-relaxed">
+                            {data.medication_audit}
+                        </p>
+                    </div>
+
+                    {/* 4. Pendientes (Naranja - Ancho completo) */}
+                    <div className="col-span-1 md:col-span-2 bg-amber-50 dark:bg-amber-900/10 p-6 rounded-xl border border-amber-100 dark:border-amber-900/30">
+                        <h3 className="font-bold text-amber-700 dark:text-amber-400 mb-3 flex items-center gap-2">
+                            <ClipboardList size={20}/> Pendientes y Brechas (Gap Analysis)
+                        </h3>
+                        <ul className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                            {data.pending_actions.length > 0 ? data.pending_actions.map((item, i) => (
+                                <li key={i} className="flex items-start gap-2 text-sm text-amber-900 dark:text-amber-100 bg-white/50 dark:bg-black/20 p-2 rounded">
+                                    <span className="mt-1.5 w-1.5 h-1.5 bg-amber-500 rounded-full shrink-0"></span>
+                                    {item}
+                                </li>
+                            )) : <p className="text-sm text-slate-500 italic">No hay pendientes obvios.</p>}
+                        </ul>
+                    </div>
+
+                </div>
+            ) : (
+                <div className="text-center text-slate-400 mt-10">No se pudo generar el análisis.</div>
+            )}
+        </div>
+      </div>
     </div>
   );
 };
-
-export default InsightsPanel;
