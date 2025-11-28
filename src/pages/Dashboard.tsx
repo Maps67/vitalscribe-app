@@ -24,8 +24,8 @@ interface DashboardAppointment {
   };
 }
 
-// --- COMPONENTE INTERNO DE RELOJ DIGITAL ---
-const LiveClock = () => {
+// --- COMPONENTE RELOJ (ADAPTATIVO) ---
+const LiveClock = ({ mobile = false }: { mobile?: boolean }) => {
   const [time, setTime] = useState(new Date());
 
   useEffect(() => {
@@ -34,10 +34,13 @@ const LiveClock = () => {
   }, []);
 
   return (
-    <div className="flex flex-col items-center justify-center mx-auto absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 md:relative md:left-auto md:top-auto md:transform-none">
-      <div className="text-4xl md:text-6xl font-bold tracking-widest tabular-nums leading-none">
+    <div className={`flex flex-col ${mobile ? 'items-start mt-3 border-t border-white/20 pt-2 w-full' : 'items-center justify-center'}`}>
+      <div className={`${mobile ? 'text-3xl' : 'text-6xl'} font-bold tracking-widest tabular-nums leading-none flex items-baseline`}>
         {format(time, 'h:mm')}
-        <span className="text-lg md:text-2xl ml-1 font-medium text-white/80">{format(time, 'a')}</span>
+        <span className={`${mobile ? 'text-sm' : 'text-2xl'} ml-1 font-medium opacity-60`}>{format(time, 'a')}</span>
+      </div>
+      <div className={`${mobile ? 'text-[10px]' : 'text-sm'} font-medium opacity-80 uppercase tracking-widest mt-1`}>
+        {format(time, "EEEE d 'de' MMMM", { locale: es })}
       </div>
     </div>
   );
@@ -205,10 +208,10 @@ const Dashboard: React.FC = () => {
             </button>
         </div>
 
-        {/* TARJETA CLIMA + RELOJ */}
+        {/* TARJETA CLIMA + RELOJ ADAPTATIVO */}
         <div className={`${heroStyle.bg} rounded-3xl p-6 text-white shadow-lg relative overflow-hidden flex justify-between items-center transition-all duration-500 w-full min-h-[140px]`}>
             
-            {/* IZQUIERDA: TEMPERATURA Y CITAS */}
+            {/* IZQUIERDA: TEMPERATURA Y CITAS (Y AHORA RELOJ MÓVIL) */}
             <div className="relative z-10 flex-1">
                 <div className="flex items-center gap-2 mb-2">
                     <div className="bg-white/20 backdrop-blur-md px-2 py-1 rounded-md flex items-center gap-1.5">
@@ -223,10 +226,15 @@ const Dashboard: React.FC = () => {
                         <p className={`text-xs font-medium ${heroStyle.text} opacity-90`}>Hoy</p>
                     </div>
                 </div>
+
+                {/* 📱 RELOJ MÓVIL: Se muestra AQUÍ solo en pantallas pequeñas */}
+                <div className="md:hidden block">
+                    <LiveClock mobile={true} />
+                </div>
             </div>
 
-            {/* CENTRO: RELOJ DIGITAL */}
-            <div className="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 z-20">
+            {/* 💻 RELOJ ESCRITORIO: Se muestra AQUÍ solo en pantallas grandes */}
+            <div className="hidden md:block absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 z-20">
                <LiveClock />
             </div>
 
