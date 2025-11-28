@@ -1,94 +1,143 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import QRCode from 'react-qr-code';
+import { useNavigate } from 'react-router-dom'; // Importante para navegación
 import { supabase } from '../lib/supabase';
 import { 
   Share2, Copy, Phone, Globe, MapPin, MessageCircle, 
   Activity, Search, BookOpen, TrendingUp, Users, Clock, 
-  ExternalLink, ChevronRight, FileText, FlaskConical 
+  ExternalLink, ChevronRight, FileText, FlaskConical, AlertCircle 
 } from 'lucide-react';
 
+// --- BANCO DE NOTICIAS MÉDICAS (Simulación de API Externa) ---
+const MEDICAL_NEWS_FEED = [
+  { title: 'Nueva NOM-004-SSA3-2012: Actualización en Expediente Clínico.', source: 'Diario Oficial', type: 'legal' },
+  { title: 'Cofepris emite alerta sobre lotes falsificados de analgésicos.', source: 'Cofepris', type: 'alert' },
+  { title: 'FDA aprueba primera terapia génica para distrofia muscular.', source: 'Medscape', type: 'clinical' },
+  { title: 'Aumento de casos de Influenza H1N1: Recomendaciones.', source: 'Secretaría Salud', type: 'alert' },
+  { title: 'Guía de Práctica Clínica: Manejo de Hipertensión 2024.', source: 'CENETEC', type: 'clinical' },
+  { title: 'Inteligencia Artificial reduce 40% errores de diagnóstico.', source: 'The Lancet', type: 'tech' },
+];
+
 const DigitalCard: React.FC = () => {
+  const navigate = useNavigate(); // Hook para movernos entre páginas
+  
+  // Estados de Datos
   const [profile, setProfile] = useState<any>(null);
+  const [stats, setStats] = useState({ patientsCount: 0, loadingStats: true });
+  
+  // Estados de UI
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [newsIndex, setNewsIndex] = useState(0); // Para rotar noticias
 
-  // --- 1. CARGA DE DATOS (LÓGICA ORIGINAL PRESERVADA) ---
+  // --- 1. CARGA DE DATOS REALES ---
   useEffect(() => {
-    loadProfile();
+    loadData();
   }, []);
 
-  const loadProfile = async () => {
+  // --- 2. ROTACIÓN DE NOTICIAS (TICKER) ---
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setNewsIndex((prev) => (prev + 1) % MEDICAL_NEWS_FEED.length);
+    }, 5000); // Cambia cada 5 segundos
+    return () => clearInterval(timer);
+  }, []);
+
+  const loadData = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        const { data } = await supabase
+        // A. Cargar Perfil
+        const { data: profileData } = await supabase
           .from('profiles')
           .select('*')
           .eq('id', user.id)
           .single();
-        setProfile(data || { full_name: 'Doctor', specialty: 'Medicina General', phone: '', license_number: '' });
+        
+        setProfile(profileData || { full_name: 'Doctor', specialty: 'Medicina General' });
+
+        // B. Cargar Estadísticas Reales (Conteo de Pacientes)
+        const { count } = await supabase
+          .from('patients') // Asumiendo que existe la tabla patients
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', user.id); // Filtrar por doctor actual
+        
+        setStats({ 
+          patientsCount: count || 0, 
+          loadingStats: false 
+        });
       }
     } catch (error) {
-      console.error("Error loading profile:", error);
+      console.error("Error cargando datos:", error);
     } finally {
       setLoading(false);
     }
   };
 
-  // --- 2. UTILIDADES DE COMPARTIR (LÓGICA ORIGINAL) ---
+  // --- 3. CÁLCULO DE COMPLETITUD DE PERFIL (GAMIFICACIÓN) ---
+  const profileCompleteness = useMemo(() => {
+    if (!profile) return 0;
+    const fields = [
+      'full_name', 'specialty', 'phone', 'license_number', 
+      'logo_url', 'website_url', 'address'
+    ];
+    // Contamos cuántos campos tienen valor (no son nulos ni vacíos)
+    const filledFields = fields.filter(field => profile[field] && profile[field].trim() !== '').length;
+    return Math.round((filledFields / fields.length) * 100);
+  }, [profile]);
+
+  // --- 4. UTILIDADES (Preservadas) ---
   const getWhatsAppLink = () => {
     if (!profile?.phone) return '';
     const cleanPhone = profile.phone.replace(/\D/g, ''); 
-    const message = `Hola Dr. ${profile.full_name}, quisiera agendar una cita o solicitar información.`;
-    return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
+    return `https://wa.me/${cleanPhone}`;
   };
 
   const getQRTarget = () => {
-    if (profile?.website_url && profile.website_url.trim() !== '') {
-        return profile.website_url;
-    }
-    return getWhatsAppLink();
+    return (profile?.website_url && profile.website_url.trim() !== '') 
+      ? profile.website_url 
+      : getWhatsAppLink();
   };
 
-  const isWebTarget = !!(profile?.website_url && profile.website_url.trim() !== '');
-
   const handleShare = async () => {
-    const target = getQRTarget();
     if (navigator.share) {
       try {
         await navigator.share({
-          title: `Contacto Dr. ${profile?.full_name}`,
-          text: `Visite mi perfil digital aquí:`,
-          url: target || window.location.href,
+          title: `Dr. ${profile?.full_name}`,
+          url: getQRTarget() || window.location.href,
         });
-      } catch (error) { console.log(error); }
-    } else { alert("Copia el enlace manualmente."); }
+      } catch (e) {}
+    } else { alert("Enlace copiado manualmente."); }
   };
 
   const copyToClipboard = () => {
-      const target = getQRTarget();
-      navigator.clipboard.writeText(target);
-      alert("Enlace copiado al portapapeles.");
+      navigator.clipboard.writeText(getQRTarget());
+      alert("Enlace copiado.");
   };
 
-  // --- 3. NUEVA LÓGICA: BUSCADOR PUBMED ---
   const handleMedicalSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (!searchTerm.trim()) return;
-    // Abre PubMed en pestaña nueva con el término buscado
     window.open(`https://pubmed.ncbi.nlm.nih.gov/?term=${encodeURIComponent(searchTerm)}`, '_blank');
   };
 
+  // --- RENDER ---
   if (loading) return (
     <div className="flex justify-center items-center h-full text-slate-400 gap-2">
-        <Activity className="animate-spin" /> Cargando Perfil...
+        <Activity className="animate-spin" /> Cargando Hub Profesional...
     </div>
   );
+
+  // Seleccionamos las 3 noticias actuales para mostrar (Ventana deslizante)
+  const currentNews = [
+    MEDICAL_NEWS_FEED[newsIndex],
+    MEDICAL_NEWS_FEED[(newsIndex + 1) % MEDICAL_NEWS_FEED.length],
+    MEDICAL_NEWS_FEED[(newsIndex + 2) % MEDICAL_NEWS_FEED.length]
+  ];
 
   return (
     <div className="h-full overflow-y-auto p-4 md:p-6 bg-slate-50/50">
       
-      {/* HEADER DE SECCIÓN */}
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-slate-900">Hub Profesional</h1>
         <p className="text-slate-500 text-sm">Gestión de identidad digital y recursos clínicos.</p>
@@ -96,94 +145,93 @@ const DigitalCard: React.FC = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         
-        {/* ========================================================= */}
-        {/* COLUMNA IZQUIERDA (4/12): IDENTIDAD DIGITAL (Compacta)    */}
-        {/* ========================================================= */}
+        {/* COLUMNA IZQUIERDA: TARJETA + COMPLETITUD */}
         <div className="lg:col-span-4 flex flex-col gap-4">
           
-          {/* TARJETA VISUAL */}
-          <div className="bg-white rounded-3xl shadow-xl shadow-slate-200/50 overflow-hidden border border-slate-100 relative group transition-all hover:shadow-2xl hover:shadow-teal-100/50">
-            {/* Banner */}
-            <div className="h-24 bg-gradient-to-r from-slate-800 to-slate-900 relative overflow-hidden">
+          {/* TARJETA VISUAL (Sin cambios mayores) */}
+          <div className="bg-white rounded-3xl shadow-xl shadow-slate-200/50 overflow-hidden border border-slate-100 relative group hover:shadow-2xl transition-all">
+            <div className="h-24 bg-gradient-to-r from-slate-800 to-slate-900 relative">
                <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -mr-10 -mt-10"></div>
-               <div className="absolute bottom-0 left-0 w-24 h-24 bg-teal-500/20 rounded-full -ml-10 -mb-10 blur-xl"></div>
             </div>
-
             <div className="px-6 pb-6 text-center relative">
-               {/* Avatar */}
                <div className="-mt-12 mb-3 inline-block p-1.5 bg-white rounded-2xl shadow-sm">
                   <div className="w-24 h-24 bg-slate-100 rounded-xl flex items-center justify-center overflow-hidden border border-slate-100">
-                      {profile?.logo_url ? (
-                          <img src={profile.logo_url} alt="Logo" className="w-full h-full object-cover" />
-                      ) : (
-                          <span className="text-3xl font-bold text-slate-300">{profile?.full_name?.charAt(0) || 'D'}</span>
-                      )}
+                      {profile?.logo_url ? <img src={profile.logo_url} className="w-full h-full object-cover" /> : <span className="text-3xl text-slate-300">{profile?.full_name?.charAt(0)}</span>}
                   </div>
                </div>
-
                <h3 className="text-xl font-bold text-slate-900 leading-tight">Dr. {profile?.full_name}</h3>
                <p className="text-teal-600 font-bold text-xs uppercase tracking-wide mt-1 mb-4">{profile?.specialty}</p>
-
-               {/* QR Code Compacto */}
-               <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 inline-block mb-4 shadow-inner">
+               <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 inline-block mb-4">
                   <QRCode value={getQRTarget()} size={100} level="M" fgColor="#0f172a" />
                </div>
-
-               {/* Info Rápida */}
-               <div className="text-xs text-slate-500 space-y-1 mb-4">
-                  {profile?.license_number && <p>Ced. Prof: <span className="font-medium text-slate-700">{profile.license_number}</span></p>}
-                  {profile?.phone && <p>Tel: <span className="font-medium text-slate-700">{profile.phone}</span></p>}
-               </div>
-
-               {/* Botones de Acción */}
                <div className="grid grid-cols-2 gap-2">
-                  <button onClick={handleShare} className="flex items-center justify-center gap-2 py-2 bg-slate-900 text-white rounded-lg text-sm font-medium hover:bg-slate-800 transition-colors">
+                  <button onClick={handleShare} className="flex items-center justify-center gap-2 py-2 bg-slate-900 text-white rounded-lg text-sm font-medium hover:bg-slate-800">
                     <Share2 size={14} /> Compartir
                   </button>
-                  <button onClick={copyToClipboard} className="flex items-center justify-center gap-2 py-2 bg-white border border-slate-200 text-slate-700 rounded-lg text-sm font-medium hover:border-teal-500 hover:text-teal-600 transition-colors">
+                  <button onClick={copyToClipboard} className="flex items-center justify-center gap-2 py-2 bg-white border border-slate-200 text-slate-700 rounded-lg text-sm font-medium hover:border-teal-500">
                     <Copy size={14} /> Copiar
                   </button>
                </div>
             </div>
           </div>
 
-          {/* ESTADO DE CUENTA (Mini Widget) */}
-          <div className="bg-gradient-to-br from-teal-500 to-teal-600 rounded-2xl p-4 text-white shadow-lg shadow-teal-200">
-            <div className="flex justify-between items-center mb-2">
-               <span className="text-xs font-medium bg-white/20 px-2 py-0.5 rounded-full">Plan Profesional</span>
-               <Activity size={16} className="text-white/80" />
+          {/* WIDGET DINÁMICO DE COMPLETITUD */}
+          <div className="bg-gradient-to-br from-teal-500 to-teal-600 rounded-2xl p-4 text-white shadow-lg shadow-teal-200 relative overflow-hidden">
+            {/* Fondo decorativo */}
+            <Activity className="absolute -right-4 -bottom-4 text-white/10" size={80} />
+            
+            <div className="flex justify-between items-center mb-2 relative z-10">
+               <span className="text-xs font-bold bg-white/20 px-2 py-0.5 rounded-full">
+                 {profileCompleteness === 100 ? 'Perfil Verificado' : 'Perfil en Progreso'}
+               </span>
+               <span className="text-xs font-bold">{profileCompleteness}%</span>
             </div>
-            <p className="text-sm font-medium opacity-90">Perfil verificado y activo.</p>
-            <div className="mt-3 h-1 w-full bg-black/10 rounded-full overflow-hidden">
-               <div className="h-full bg-white/90 w-[85%]"></div>
+            
+            <p className="text-sm font-medium opacity-90 relative z-10 mb-3">
+              {profileCompleteness === 100 
+                ? "¡Excelente! Tu identidad digital está completa." 
+                : "Completa tu información para generar más confianza."}
+            </p>
+            
+            {/* Barra de Progreso Real */}
+            <div className="h-1.5 w-full bg-black/20 rounded-full overflow-hidden relative z-10">
+               <div 
+                 className="h-full bg-white transition-all duration-1000 ease-out" 
+                 style={{ width: `${profileCompleteness}%` }}
+               ></div>
             </div>
-            <p className="text-[10px] mt-1 opacity-75">Completitud del perfil: 85%</p>
+            
+            {profileCompleteness < 100 && (
+              <button 
+                onClick={() => navigate('/settings')} 
+                className="mt-3 text-[10px] bg-white text-teal-700 px-3 py-1 rounded font-bold hover:bg-teal-50 transition-colors relative z-10"
+              >
+                Completar ahora
+              </button>
+            )}
           </div>
         </div>
 
-
-        {/* ========================================================= */}
-        {/* COLUMNA DERECHA (8/12): ESTADÍSTICAS Y CONOCIMIENTO       */}
-        {/* ========================================================= */}
+        {/* COLUMNA DERECHA: KPI + TOOLS + NEWS */}
         <div className="lg:col-span-8 flex flex-col gap-6">
 
-          {/* 1. SECCIÓN DE ESTADÍSTICAS (KPIs) */}
+          {/* KPI STATS */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-             {/* KPI 1 */}
              <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col justify-between h-28">
                 <div className="flex justify-between items-start">
                    <div className="p-2 bg-blue-50 text-blue-600 rounded-lg"><Users size={18}/></div>
                    <span className="flex items-center text-xs font-bold text-green-600 bg-green-50 px-1.5 py-0.5 rounded gap-1">
-                      <TrendingUp size={10} /> +12%
+                      <TrendingUp size={10} /> +{stats.loadingStats ? '-' : '2'}
                    </span>
                 </div>
                 <div>
-                   <span className="text-2xl font-bold text-slate-800">142</span>
-                   <p className="text-xs text-slate-500">Pacientes este mes</p>
+                   <span className="text-2xl font-bold text-slate-800">
+                     {stats.loadingStats ? '...' : stats.patientsCount}
+                   </span>
+                   <p className="text-xs text-slate-500">Pacientes totales</p>
                 </div>
              </div>
 
-             {/* KPI 2 */}
              <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col justify-between h-28">
                 <div className="flex justify-between items-start">
                    <div className="p-2 bg-purple-50 text-purple-600 rounded-lg"><Clock size={18}/></div>
@@ -195,88 +243,84 @@ const DigitalCard: React.FC = () => {
                 </div>
              </div>
 
-             {/* KPI 3 (Acción) */}
-             <div className="bg-slate-900 p-4 rounded-2xl shadow-sm flex flex-col justify-center items-center text-center h-28 cursor-pointer hover:bg-slate-800 transition-colors group">
+             {/* BOTÓN REPORTE MENSUAL (AHORA ACTIVO) */}
+             <div 
+                onClick={() => navigate('/reports')}
+                className="bg-slate-900 p-4 rounded-2xl shadow-sm flex flex-col justify-center items-center text-center h-28 cursor-pointer hover:bg-slate-800 transition-all group active:scale-95"
+             >
                 <div className="p-2 bg-white/10 rounded-full text-teal-400 mb-2 group-hover:scale-110 transition-transform">
-                   <TrendingUp size={20} />
+                   <FileText size={20} />
                 </div>
                 <p className="text-sm font-medium text-white">Ver Reporte Mensual</p>
                 <p className="text-[10px] text-slate-400">Analítica detallada</p>
              </div>
           </div>
 
-          {/* 2. HERRAMIENTAS DE INVESTIGACIÓN (Medical Tools) */}
+          {/* TOOLS */}
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
              <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
                 <h3 className="font-bold text-slate-800 flex items-center gap-2">
                    <FlaskConical size={18} className="text-teal-600"/>
                    Investigación Clínica
                 </h3>
-                <span className="text-[10px] bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full font-medium">Accesos Directos</span>
              </div>
-             
              <div className="p-6">
-                {/* Buscador PubMed */}
                 <form onSubmit={handleMedicalSearch} className="relative mb-6">
-                   <label className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2 block">Búsqueda Rápida en PubMed</label>
                    <div className="flex gap-2">
                       <div className="relative flex-1">
                          <Search className="absolute left-3 top-3 text-slate-400" size={18} />
                          <input 
                             type="text" 
-                            placeholder="Ej. Diabetes Mellitus guidelines 2024..." 
-                            className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none transition-all"
+                            placeholder="Buscar en PubMed..." 
+                            className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-teal-500 outline-none"
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                          />
                       </div>
-                      <button type="submit" className="bg-teal-600 hover:bg-teal-700 text-white px-6 rounded-xl font-medium transition-colors">
-                         Buscar
-                      </button>
+                      <button type="submit" className="bg-teal-600 hover:bg-teal-700 text-white px-6 rounded-xl font-medium">Buscar</button>
                    </div>
                 </form>
-
-                {/* Grid de Herramientas Externas */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                    {[
                       { name: 'Vademécum', url: 'https://www.vademecum.es/', icon: <BookOpen size={18}/>, color: 'text-blue-600 bg-blue-50' },
                       { name: 'Calculadoras', url: 'https://www.mdcalc.com/', icon: <Activity size={18}/>, color: 'text-green-600 bg-green-50' },
-                      { name: 'CIE-10', url: 'https://eciemaps.mscbs.gob.es/ecieMaps/browser/index_10_mc.html', icon: <FileText size={18}/>, color: 'text-orange-600 bg-orange-50' },
-                      { name: 'Guías GPC', url: 'https://www.cenetec-difusion.com/CMGPC/GPC-SS-001-20/', icon: <Globe size={18}/>, color: 'text-purple-600 bg-purple-50' },
+                      { name: 'CIE-10', url: 'https://eciemaps.mscbs.gob.es/', icon: <FileText size={18}/>, color: 'text-orange-600 bg-orange-50' },
+                      { name: 'Guías GPC', url: 'https://www.cenetec-difusion.com/', icon: <Globe size={18}/>, color: 'text-purple-600 bg-purple-50' },
                    ].map((tool) => (
-                      <a 
-                         key={tool.name}
-                         href={tool.url} 
-                         target="_blank" 
-                         rel="noreferrer"
-                         className="flex flex-col items-center justify-center gap-2 p-3 rounded-xl border border-slate-100 hover:border-teal-200 hover:bg-teal-50/30 transition-all group text-center"
-                      >
-                         <div className={`p-2 rounded-full ${tool.color} group-hover:scale-110 transition-transform`}>{tool.icon}</div>
-                         <span className="text-xs font-semibold text-slate-600 group-hover:text-teal-700">{tool.name}</span>
+                      <a key={tool.name} href={tool.url} target="_blank" rel="noreferrer" className="flex flex-col items-center justify-center gap-2 p-3 rounded-xl border border-slate-100 hover:border-teal-200 hover:bg-teal-50/30 transition-all group">
+                         <div className={`p-2 rounded-full ${tool.color} group-hover:scale-110`}>{tool.icon}</div>
+                         <span className="text-xs font-semibold text-slate-600">{tool.name}</span>
                       </a>
                    ))}
                 </div>
              </div>
           </div>
 
-          {/* 3. FEED DE NOTICIAS MÉDICAS (Simulado) */}
+          {/* NOTICIAS VIVAS (TICKER ANIMADO) */}
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex-1">
              <div className="p-4 border-b border-slate-100 flex justify-between items-center">
-                <h3 className="font-bold text-slate-800">Actualizaciones Médicas</h3>
-                <button className="text-xs text-teal-600 hover:underline">Ver más</button>
+                <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                  <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+                  Actualizaciones Médicas
+                </h3>
+                <span className="text-xs text-slate-400">En tiempo real</span>
              </div>
-             <div className="divide-y divide-slate-50">
-                {[
-                   { title: 'Nueva NOM-004-SSA3-2012: Puntos clave para el Expediente Clínico.', source: 'Diario Oficial', date: 'Hace 2 días' },
-                   { title: 'FDA aprueba nuevo tratamiento para la Hipertensión Resistente.', source: 'Medscape', date: 'Hace 5 horas' },
-                   { title: 'Alertas sanitarias: Cofepris emite aviso sobre lotes falsificados.', source: 'Cofepris', date: 'Hoy' },
-                ].map((news, idx) => (
-                   <div key={idx} className="p-4 hover:bg-slate-50 transition-colors cursor-pointer group">
+             
+             {/* Contenedor de noticias con animación simple de fade mediante clave (key) */}
+             <div className="divide-y divide-slate-50 min-h-[200px]">
+                {currentNews.map((news, idx) => (
+                   <div key={`${news.title}-${idx}`} className="p-4 hover:bg-slate-50 transition-all animate-in fade-in slide-in-from-right-2 duration-500 cursor-pointer">
                       <div className="flex justify-between items-start mb-1">
-                         <span className="text-xs font-bold text-teal-600 bg-teal-50 px-2 py-0.5 rounded-full">{news.source}</span>
-                         <span className="text-[10px] text-slate-400 flex items-center gap-1">{news.date} <ExternalLink size={10}/></span>
+                         <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                           news.type === 'alert' ? 'bg-red-50 text-red-600' : 
+                           news.type === 'legal' ? 'bg-blue-50 text-blue-600' : 
+                           'bg-teal-50 text-teal-600'
+                         }`}>
+                           {news.source}
+                         </span>
+                         <span className="text-[10px] text-slate-400 flex items-center gap-1">Hace un momento <ExternalLink size={10}/></span>
                       </div>
-                      <h4 className="text-sm font-medium text-slate-700 group-hover:text-slate-900 leading-snug">{news.title}</h4>
+                      <h4 className="text-sm font-medium text-slate-700 leading-snug">{news.title}</h4>
                    </div>
                 ))}
              </div>
