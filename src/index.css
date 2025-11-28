@@ -21,7 +21,7 @@ html.dark, html.dark body, html.dark #root {
   }
 }
 
-/* Estilos personalizados de Scrollbar */
+/* Estilos globales de Scrollbar (Base para toda la app) */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -38,4 +38,24 @@ html.dark, html.dark body, html.dark #root {
 }
 ::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
+}
+
+/* --- NUEVA UTILIDAD AGREGADA v3.8 --- */
+@layer utilities {
+  /* Scrollbar fino y elegante para contenedores internos (Hub, Menús) */
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 5px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    @apply bg-slate-300 rounded-full hover:bg-slate-400;
+  }
+  
+  .dark .custom-scrollbar::-webkit-scrollbar-thumb {
+    @apply bg-slate-700 hover:bg-slate-600;
+  }
 }
