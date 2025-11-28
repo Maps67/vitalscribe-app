@@ -9,7 +9,6 @@ import {
 } from 'lucide-react';
 
 // --- BANCO DE NOTICIAS MÉDICAS (CURADURÍA NOV 2025) ---
-// Fuentes: FDA Novel Drug Approvals 2025, IDSA Guidelines, WHO Publications
 const MEDICAL_NEWS_FEED = [
   { 
     title: 'FDA Aprueba Voyxact (sibeprenlimab) para Nefropatía por IgA.', 
@@ -89,23 +88,35 @@ const DigitalCard: React.FC = () => {
         setProfile(profileData || { full_name: 'Doctor', specialty: 'Medicina General' });
 
         // 2. Cargar Conteo de Pacientes REAL
+        // Intentamos contar filas en la tabla 'patients' asociadas al usuario
         const { count: patientsCount, error: countError } = await supabase
           .from('patients')
           .select('*', { count: 'exact', head: true })
           .eq('user_id', user.id);
         
-        if (countError) console.warn("Error contando pacientes:", countError.message);
+        if (countError) {
+            console.warn("⚠️ No se pudo contar pacientes (Revisar RLS o nombre de tabla):", countError.message);
+        }
 
-        // 3. Cargar Promedio de Duración REAL
+        // 3. Cargar Promedio de Duración REAL (Desde tabla appointments)
         let calculatedAvg = 0;
+        
+        // Verificamos si existe la tabla appointments antes de romper la UI
         const { data: appointments, error: apptError } = await supabase
             .from('appointments')
             .select('duration_minutes')
             .eq('user_id', user.id);
 
         if (!apptError && appointments && appointments.length > 0) {
-            const totalMinutes = appointments.reduce((acc, curr) => acc + (curr.duration_minutes || 0), 0);
-            calculatedAvg = Math.round(totalMinutes / appointments.length);
+            // Filtramos citas que tengan duración válida > 0
+            const validAppointments = appointments.filter(a => a.duration_minutes && a.duration_minutes > 0);
+            
+            if (validAppointments.length > 0) {
+                const totalMinutes = validAppointments.reduce((acc, curr) => acc + curr.duration_minutes, 0);
+                calculatedAvg = Math.round(totalMinutes / validAppointments.length);
+            }
+        } else if (apptError) {
+             console.warn("⚠️ No se pudo acceder a citas:", apptError.message);
         }
         
         setStats({ 
@@ -290,7 +301,7 @@ const DigitalCard: React.FC = () => {
                    <span className="text-xs text-indigo-400 font-bold bg-white/80 px-2 py-0.5 rounded backdrop-blur-sm">Promedio</span>
                 </div>
                 <div className="z-10">
-                   {/* Mostramos el promedio real o '--' si es 0 */}
+                   {/* Lógica de Visualización: Si es > 0 muestra minutos, si no, un guion profesional */}
                    <span className="text-2xl font-bold text-slate-800">
                       {stats.loadingStats ? '...' : (stats.avgDuration > 0 ? `${stats.avgDuration}m` : '--')}
                    </span>
