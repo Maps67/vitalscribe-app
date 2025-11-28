@@ -15,13 +15,13 @@ import SettingsView from './components/SettingsView';
 import AuthView from './components/AuthView';
 import Dashboard from './pages/Dashboard';
 import ReportsView from './pages/ReportsView';
-import CalendarView from './components/CalendarView';
+// CAMBIO CTO: Importamos la nueva Vista de Página, no el componente obsoleto
+import AgendaView from './pages/AgendaView';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import ReloadPrompt from './components/ReloadPrompt';
 import SplashScreen from './components/SplashScreen';
 import MobileTabBar from './components/MobileTabBar';
 import TermsOfService from './pages/TermsOfService';
-// IMPORTACIÓN NUEVA: MONITOR DE PRUEBA
 import { TrialMonitor } from './components/TrialMonitor';
 
 interface MainLayoutProps {
@@ -36,7 +36,6 @@ const MainLayout: React.FC<MainLayoutProps> = ({ session, onLogout }) => {
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex flex-col font-sans text-slate-900 dark:text-slate-100 transition-colors duration-300 relative">
       
       {/* --- INYECCIÓN SEGURA DEL MONITOR DE PRUEBA --- */}
-      {/* Se coloca aquí para que sea global y visible siempre arriba */}
       <TrialMonitor />
       {/* ------------------------------------------------ */}
 
@@ -58,7 +57,14 @@ const MainLayout: React.FC<MainLayoutProps> = ({ session, onLogout }) => {
               <Routes>
                 <Route path="/" element={<Dashboard />} />
                 <Route path="/consultation" element={<ConsultationView />} />
-                <Route path="/calendar" element={<CalendarView />} />
+                
+                {/* --- CAMBIO CTO: AGENDA V3.2 --- */}
+                {/* Ruta canónica para la nueva agenda */}
+                <Route path="/agenda" element={<AgendaView />} />
+                {/* Redirección de seguridad: Si el Sidebar busca /calendar, lo enviamos a /agenda */}
+                <Route path="/calendar" element={<Navigate to="/agenda" replace />} />
+                {/* -------------------------------- */}
+
                 <Route path="/patients" element={<PatientsView />} />
                 <Route path="/reports" element={<ReportsView />} />
                 <Route path="/card" element={<DigitalCard />} />
