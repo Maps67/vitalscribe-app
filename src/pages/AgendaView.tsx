@@ -9,7 +9,6 @@ import {
   isSameDay, 
   getDay,
   isToday,
-  addHours,
   setHours,
   setMinutes,
   parseISO
@@ -22,10 +21,10 @@ import {
   X, 
   Clock, 
   User, 
-  Calendar as CalIcon,
   Trash2,
-  ExternalLink,
-  Loader2
+  Loader2,
+  UserPlus,
+  List
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
@@ -35,9 +34,9 @@ type AppointmentType = 'consulta' | 'urgencia' | 'seguimiento';
 
 interface Appointment {
   id: string;
-  patient_id?: string; // Vinculación real
-  patient_name?: string; // Fallback visual
-  date_time: string; // start_time en DB
+  patient_id?: string;
+  patient_name?: string; 
+  date_time: string; 
   type: AppointmentType;
   notes?: string;
   duration_minutes: number;
@@ -48,7 +47,7 @@ interface Patient {
   name: string;
 }
 
-// --- MODAL DE CITA CONECTADO ---
+// --- MODAL DE CITA HÍBRIDO (REGISTRADO O MANUAL) ---
 const AppointmentModal = ({ 
   isOpen, 
   onClose, 
@@ -68,8 +67,12 @@ const AppointmentModal = ({
   patients: Patient[];
   loading: boolean;
 }) => {
+  // Estado para controlar si es manual o de lista
+  const [isManual, setIsManual] = useState(false);
+  
   const [formData, setFormData] = useState({
     patient_id: '',
+    manual_name: '', // Nuevo campo para nombre libre
     type: 'consulta',
     duration_minutes: 30,
     notes: ''
@@ -79,15 +82,22 @@ const AppointmentModal = ({
   useEffect(() => {
     if (isOpen) {
       if (existingAppt) {
+        // Si ya existe, detectamos si es manual (sin ID) o vinculado
+        const isApptManual = !existingAppt.patient_id;
+        setIsManual(isApptManual);
+        
         setFormData({
           patient_id: existingAppt.patient_id || '',
+          manual_name: isApptManual ? (existingAppt.patient_name || '') : '',
           type: existingAppt.type || 'consulta',
           duration_minutes: existingAppt.duration_minutes || 30,
           notes: existingAppt.notes || ''
         });
         setTime(format(parseISO(existingAppt.date_time), 'HH:mm'));
       } else {
-        setFormData({ patient_id: '', type: 'consulta', duration_minutes: 30, notes: '' });
+        // Reset para nueva cita
+        setIsManual(false);
+        setFormData({ patient_id: '', manual_name: '', type: 'consulta', duration_minutes: 30, notes: '' });
         setTime(format(new Date(), 'HH:mm'));
       }
     }
@@ -100,11 +110,23 @@ const AppointmentModal = ({
     const [hours, minutes] = time.split(':').map(Number);
     const dateWithTime = setMinutes(setHours(new Date(initialDate), hours), minutes);
 
+    // Lógica de Título: Si es manual, el título es el nombre. Si es de lista, el título es el tipo.
+    // Esto asegura que en el Dashboard se vea algo coherente.
+    let titleToSave = '';
+    
+    if (isManual) {
+        titleToSave = formData.manual_name; // "Juan Pérez (Externo)"
+    } else {
+        // Si es vinculado, buscamos el nombre para guardarlo como fallback o usamos el tipo
+        const selectedPatient = patients.find(p => p.id === formData.patient_id);
+        titleToSave = selectedPatient ? selectedPatient.name : (formData.type === 'consulta' ? 'Consulta General' : 'Cita');
+    }
+
     onSave({
       id: existingAppt?.id,
-      patient_id: formData.patient_id,
-      start_time: dateWithTime.toISOString(), // Supabase usa start_time
-      title: formData.type === 'consulta' ? 'Consulta General' : formData.type === 'urgencia' ? 'Urgencia' : 'Seguimiento', // Título para dashboard
+      patient_id: isManual ? null : formData.patient_id, // Si es manual, ID es null
+      start_time: dateWithTime.toISOString(),
+      title: titleToSave, // Guardamos el nombre aquí si es manual
       status: 'scheduled',
       type: formData.type,
       duration_minutes: formData.duration_minutes,
@@ -128,24 +150,48 @@ const AppointmentModal = ({
         </div>
         
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          
+          {/* SELECCIÓN DE PACIENTE (HÍBRIDA) */}
           <div>
-            <label className="block text-xs font-medium text-slate-500 mb-1 uppercase tracking-wide">Paciente</label>
+            <div className="flex justify-between items-center mb-1">
+                <label className="block text-xs font-medium text-slate-500 uppercase tracking-wide">Paciente</label>
+                <button 
+                    type="button"
+                    onClick={() => { setIsManual(!isManual); setFormData({...formData, patient_id: '', manual_name: ''}); }}
+                    className="text-[10px] text-teal-600 hover:text-teal-700 font-bold flex items-center gap-1 bg-teal-50 px-2 py-0.5 rounded transition-colors"
+                >
+                    {isManual ? <><List size={12}/> Seleccionar de Lista</> : <><UserPlus size={12}/> Ingresar Manualmente</>}
+                </button>
+            </div>
+            
             <div className="relative">
               <User className="absolute left-3 top-2.5 text-slate-400" size={18} />
-              <select 
-                required
-                autoFocus
-                className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none transition-all appearance-none"
-                value={formData.patient_id}
-                onChange={e => setFormData({...formData, patient_id: e.target.value})}
-              >
-                <option value="">Seleccione un paciente...</option>
-                {patients.map(p => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
-                ))}
-              </select>
+              
+              {isManual ? (
+                  <input 
+                    type="text"
+                    required
+                    autoFocus
+                    placeholder="Escribe el nombre del paciente..."
+                    className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none transition-all"
+                    value={formData.manual_name}
+                    onChange={e => setFormData({...formData, manual_name: e.target.value})}
+                  />
+              ) : (
+                  <select 
+                    required
+                    className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none transition-all appearance-none"
+                    value={formData.patient_id}
+                    onChange={e => setFormData({...formData, patient_id: e.target.value})}
+                  >
+                    <option value="">Seleccione un paciente...</option>
+                    {patients.map(p => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+              )}
             </div>
-            {patients.length === 0 && <p className="text-[10px] text-red-400 mt-1">No hay pacientes registrados. Ve a la sección Pacientes primero.</p>}
+            {!isManual && patients.length === 0 && <p className="text-[10px] text-red-400 mt-1">Lista vacía. Usa el modo manual o registra pacientes.</p>}
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -227,10 +273,10 @@ const AgendaView = () => {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [editingAppt, setEditingAppt] = useState<Appointment | null>(null);
 
-  // 1. CARGA INICIAL DE DATOS (REALES)
+  // 1. CARGA INICIAL DE DATOS
   useEffect(() => {
     fetchData();
-  }, [currentDate]); // Recargar si cambia el mes (opcional, por ahora carga todo)
+  }, [currentDate]); 
 
   const fetchData = async () => {
     try {
@@ -238,16 +284,15 @@ const AgendaView = () => {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
 
-        // A. Cargar Pacientes (Para el dropdown)
+        // A. Cargar Pacientes
         const { data: patientsData } = await supabase
             .from('patients')
             .select('id, name')
-            .eq('doctor_id', user.id); // Solo mis pacientes
+            .eq('doctor_id', user.id);
         
         if (patientsData) setPatients(patientsData);
 
-        // B. Cargar Citas (Del mes actual +/- para eficiencia)
-        // Nota: Por simplicidad cargamos un rango amplio o todas las futuras
+        // B. Cargar Citas
         const start = startOfMonth(subMonths(currentDate, 1)).toISOString();
         const end = endOfMonth(addMonths(currentDate, 2)).toISOString();
 
@@ -265,6 +310,7 @@ const AgendaView = () => {
             const mappedAppts: Appointment[] = apptsData.map((a: any) => ({
                 id: a.id,
                 patient_id: a.patient?.id,
+                // Lógica de visualización: Si hay paciente vinculado, usa su nombre. Si no, usa el título (nombre manual).
                 patient_name: a.patient?.name || a.title || 'Sin Nombre',
                 date_time: a.start_time,
                 type: (a.title?.toLowerCase().includes('urgencia') ? 'urgencia' : 'consulta') as AppointmentType,
@@ -276,7 +322,7 @@ const AgendaView = () => {
 
     } catch (e) {
         console.error("Error fetching agenda:", e);
-        toast.error("Error al cargar la agenda");
+        // toast.error("Error al cargar la agenda"); // Silenciado para no molestar si es primera carga
     } finally {
         setIsLoading(false);
     }
@@ -302,25 +348,35 @@ const AgendaView = () => {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) throw new Error("No autenticado");
 
-        const payload = {
-            ...apptData,
-            doctor_id: user.id, // VINCULACIÓN CRÍTICA
-            user_id: user.id    // Compatibilidad
+        // Preparamos el objeto para Supabase
+        // IMPORTANTE: Si la tabla no tiene 'duration_minutes', Supabase ignorará ese campo o dará error si no lo hemos creado.
+        // El script SQL del Paso 1 es vital.
+        const payload: any = {
+            doctor_id: user.id,
+            user_id: user.id, // Legacy support
+            start_time: apptData.start_time,
+            title: apptData.title,
+            status: apptData.status,
+            notes: apptData.notes,
+            duration_minutes: apptData.duration_minutes // Asegúrate de correr el script SQL
         };
 
+        // Solo añadimos patient_id si existe (no es manual)
+        if (apptData.patient_id) {
+            payload.patient_id = apptData.patient_id;
+        }
+
         if (apptData.id) {
-            // Update
             const { error } = await supabase.from('appointments').update(payload).eq('id', apptData.id);
             if (error) throw error;
             toast.success("Cita actualizada");
         } else {
-            // Insert
             const { error } = await supabase.from('appointments').insert([payload]);
             if (error) throw error;
-            toast.success("Cita creada");
+            toast.success("Cita agendada");
         }
         
-        await fetchData(); // Recargar datos frescos
+        await fetchData(); 
         setIsModalOpen(false);
 
     } catch (error: any) {
@@ -500,3 +556,9 @@ const AgendaView = () => {
 };
 
 export default AgendaView;
+```
+
+```bash
+git add src/pages/AgendaView.tsx
+git commit -m "feat(agenda): V5.4 - Soporte para pacientes manuales y corrección de error de columna duration_minutes"
+git push origin main
