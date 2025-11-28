@@ -16,19 +16,29 @@ const MEDICAL_NEWS_FEED = [
   { title: 'Aumento de casos de Influenza H1N1: Recomendaciones.', source: 'Secretaría Salud', type: 'alert' },
   { title: 'Guía de Práctica Clínica: Manejo de Hipertensión 2024.', source: 'CENETEC', type: 'clinical' },
   { title: 'Inteligencia Artificial reduce 40% errores de diagnóstico.', source: 'The Lancet', type: 'tech' },
+  { title: 'Lanzamiento de nueva vacuna bivalente contra COVID-19.', source: 'Secretaría Salud', type: 'clinical' },
+  { title: 'Actualización en tratamiento de Diabetes Tipo 2 (ADA 2024).', source: 'Medscape', type: 'clinical' },
+  { title: 'Nuevo protocolo para manejo de sepsis en urgencias.', source: 'The BMJ', type: 'clinical' },
 ];
 
 const DigitalCard: React.FC = () => {
   const navigate = useNavigate();
   
+  // Estados de Datos
   const [profile, setProfile] = useState<any>(null);
   const [stats, setStats] = useState({ patientsCount: 0, loadingStats: true });
+  
+  // Estados de UI
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [newsIndex, setNewsIndex] = useState(0);
 
-  useEffect(() => { loadData(); }, []);
+  // Carga inicial de datos
+  useEffect(() => {
+    loadData();
+  }, []);
 
+  // Rotación automática del feed de noticias (aunque ahora tiene scroll, mantenemos el ticker sutil si se desea)
   useEffect(() => {
     const timer = setInterval(() => {
       setNewsIndex((prev) => (prev + 1) % MEDICAL_NEWS_FEED.length);
@@ -40,18 +50,40 @@ const DigitalCard: React.FC = () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        const { data: profileData } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+        // Cargar Perfil
+        const { data: profileData } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single();
+        
         setProfile(profileData || { full_name: 'Doctor', specialty: 'Medicina General' });
 
-        const { count } = await supabase.from('patients').select('*', { count: 'exact', head: true }).eq('user_id', user.id);
-        setStats({ patientsCount: count || 0, loadingStats: false });
+        // Cargar Estadísticas Reales
+        const { count } = await supabase
+          .from('patients')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', user.id);
+        
+        setStats({ 
+          patientsCount: count || 0, 
+          loadingStats: false 
+        });
       }
-    } catch (error) { console.error(error); } finally { setLoading(false); }
+    } catch (error) {
+      console.error("Error cargando datos:", error);
+    } finally {
+      setLoading(false);
+    }
   };
 
+  // Cálculo de Completitud
   const profileCompleteness = useMemo(() => {
     if (!profile) return 0;
-    const fields = ['full_name', 'specialty', 'phone', 'license_number', 'logo_url', 'website_url', 'address'];
+    const fields = [
+      'full_name', 'specialty', 'phone', 'license_number', 
+      'logo_url', 'website_url', 'address'
+    ];
     const filledFields = fields.filter(field => profile[field] && profile[field].trim() !== '').length;
     return Math.round((filledFields / fields.length) * 100);
   }, [profile]);
@@ -63,11 +95,20 @@ const DigitalCard: React.FC = () => {
   };
 
   const handleShare = async () => {
-    if (navigator.share) try { await navigator.share({ title: `Dr. ${profile?.full_name}`, url: getQRTarget() }); } catch (e) {}
-    else alert("Enlace copiado manualmente.");
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `Dr. ${profile?.full_name}`,
+          url: getQRTarget(),
+        });
+      } catch (e) {}
+    } else { alert("Enlace copiado manualmente."); }
   };
 
-  const copyToClipboard = () => { navigator.clipboard.writeText(getQRTarget()); alert("Enlace copiado."); };
+  const copyToClipboard = () => {
+      navigator.clipboard.writeText(getQRTarget());
+      alert("Enlace copiado.");
+  };
 
   const handleMedicalSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -75,27 +116,29 @@ const DigitalCard: React.FC = () => {
     window.open(`https://pubmed.ncbi.nlm.nih.gov/?term=${encodeURIComponent(searchTerm)}`, '_blank');
   };
 
-  if (loading) return <div className="flex justify-center items-center h-full text-slate-400 gap-2"><Activity className="animate-spin" /> Cargando Hub...</div>;
-
-  const currentNews = [
-    MEDICAL_NEWS_FEED[newsIndex],
-    MEDICAL_NEWS_FEED[(newsIndex + 1) % MEDICAL_NEWS_FEED.length],
-    MEDICAL_NEWS_FEED[(newsIndex + 2) % MEDICAL_NEWS_FEED.length]
-  ];
+  if (loading) return (
+    <div className="flex justify-center items-center h-full text-slate-400 gap-2">
+        <Activity className="animate-spin" /> Cargando Hub Profesional...
+    </div>
+  );
 
   return (
     <div className="h-full overflow-y-auto p-4 md:p-6 bg-slate-50/30">
       
+      {/* HEADER DE SECCIÓN */}
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-slate-900">Hub Profesional</h1>
-        <p className="text-slate-500 text-sm">Panel de control y recursos clínicos.</p>
+        <p className="text-slate-500 text-sm">Tu centro de comando digital y recursos clínicos.</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         
-        {/* COLUMNA IZQUIERDA: TARJETA + COMPLETITUD */}
+        {/* ========================================================= */}
+        {/* COLUMNA IZQUIERDA (4/12): TARJETA + COMPLETITUD           */}
+        {/* ========================================================= */}
         <div className="lg:col-span-4 flex flex-col gap-4">
           
+          {/* TARJETA VISUAL */}
           <div className="bg-white rounded-3xl shadow-lg shadow-slate-200/50 overflow-hidden border border-slate-100 relative group hover:shadow-xl transition-all">
             <div className="h-24 bg-gradient-to-r from-slate-800 to-slate-900 relative">
                <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -mr-10 -mt-10"></div>
@@ -103,50 +146,75 @@ const DigitalCard: React.FC = () => {
             <div className="px-6 pb-6 text-center relative">
                <div className="-mt-12 mb-3 inline-block p-1.5 bg-white rounded-2xl shadow-sm">
                   <div className="w-24 h-24 bg-slate-100 rounded-xl flex items-center justify-center overflow-hidden border border-slate-100">
-                      {profile?.logo_url ? <img src={profile.logo_url} className="w-full h-full object-cover" /> : <span className="text-3xl text-slate-300">{profile?.full_name?.charAt(0)}</span>}
+                      {profile?.logo_url ? (
+                          <img src={profile.logo_url} alt="Logo" className="w-full h-full object-cover" />
+                      ) : (
+                          <span className="text-3xl font-bold text-slate-300">{profile?.full_name?.charAt(0) || 'D'}</span>
+                      )}
                   </div>
                </div>
+
                <h3 className="text-xl font-bold text-slate-900 leading-tight">Dr. {profile?.full_name}</h3>
                <p className="text-teal-600 font-bold text-xs uppercase tracking-wide mt-1 mb-4">{profile?.specialty}</p>
-               <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 inline-block mb-4">
+
+               <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 inline-block mb-4 shadow-inner">
                   <QRCode value={getQRTarget()} size={100} level="M" fgColor="#0f172a" />
                </div>
+
                <div className="grid grid-cols-2 gap-2">
-                  <button onClick={handleShare} className="flex items-center justify-center gap-2 py-2 bg-slate-900 text-white rounded-lg text-sm font-medium hover:bg-slate-800">
+                  <button onClick={handleShare} className="flex items-center justify-center gap-2 py-2 bg-slate-900 text-white rounded-lg text-sm font-medium hover:bg-slate-800 transition-colors">
                     <Share2 size={14} /> Compartir
                   </button>
-                  <button onClick={copyToClipboard} className="flex items-center justify-center gap-2 py-2 bg-white border border-slate-200 text-slate-700 rounded-lg text-sm font-medium hover:border-teal-500">
+                  <button onClick={copyToClipboard} className="flex items-center justify-center gap-2 py-2 bg-white border border-slate-200 text-slate-700 rounded-lg text-sm font-medium hover:border-teal-500 hover:text-teal-600 transition-colors">
                     <Copy size={14} /> Copiar
                   </button>
                </div>
             </div>
           </div>
 
+          {/* WIDGET COMPLETITUD */}
           <div className="bg-gradient-to-br from-teal-500 to-teal-600 rounded-2xl p-4 text-white shadow-lg shadow-teal-200 relative overflow-hidden">
             <Activity className="absolute -right-4 -bottom-4 text-white/10" size={80} />
+            
             <div className="flex justify-between items-center mb-2 relative z-10">
-               <span className="text-xs font-bold bg-white/20 px-2 py-0.5 rounded-full">{profileCompleteness === 100 ? 'Perfil Verificado' : 'Perfil en Progreso'}</span>
+               <span className="text-xs font-bold bg-white/20 px-2 py-0.5 rounded-full">
+                 {profileCompleteness === 100 ? 'Perfil Verificado' : 'Perfil en Progreso'}
+               </span>
                <span className="text-xs font-bold">{profileCompleteness}%</span>
             </div>
-            <p className="text-sm font-medium opacity-90 relative z-10 mb-3">{profileCompleteness === 100 ? "Identidad digital completa." : "Completa tu información."}</p>
+            
+            <p className="text-sm font-medium opacity-90 relative z-10 mb-3">
+              {profileCompleteness === 100 
+                ? "Identidad digital completa." 
+                : "Completa tu información para generar más confianza."}
+            </p>
+            
             <div className="h-1.5 w-full bg-black/20 rounded-full overflow-hidden relative z-10">
-               <div className="h-full bg-white transition-all duration-1000 ease-out" style={{ width: `${profileCompleteness}%` }}></div>
+               <div 
+                 className="h-full bg-white transition-all duration-1000 ease-out" 
+                 style={{ width: `${profileCompleteness}%` }}
+               ></div>
             </div>
+            
             {profileCompleteness < 100 && (
-              <button onClick={() => navigate('/settings')} className="mt-3 text-[10px] bg-white text-teal-700 px-3 py-1 rounded font-bold hover:bg-teal-50 transition-colors relative z-10">
+              <button 
+                onClick={() => navigate('/settings')} 
+                className="mt-3 text-[10px] bg-white text-teal-700 px-3 py-1 rounded font-bold hover:bg-teal-50 transition-colors relative z-10"
+              >
                 Completar ahora
               </button>
             )}
           </div>
         </div>
 
-        {/* COLUMNA DERECHA: KPI + TOOLS + NEWS */}
+        {/* ========================================================= */}
+        {/* COLUMNA DERECHA (8/12): KPI + TOOLS + NEWS                */}
+        {/* ========================================================= */}
         <div className="lg:col-span-8 flex flex-col gap-6">
 
-          {/* 1. KPIs (ZONIFICACIÓN DE COLOR SUAVE) */}
+          {/* 1. KPIs */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-             
-             {/* KPI PACIENTES: Gradiente Azul Suave */}
+             {/* KPI PACIENTES */}
              <div className="bg-gradient-to-br from-blue-50 to-white p-4 rounded-2xl border border-blue-100 shadow-sm flex flex-col justify-between h-28 relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-20 h-20 bg-blue-100/50 rounded-full -mr-6 -mt-6 pointer-events-none"></div>
                 <div className="flex justify-between items-start z-10">
@@ -156,12 +224,14 @@ const DigitalCard: React.FC = () => {
                    </span>
                 </div>
                 <div className="z-10">
-                   <span className="text-2xl font-bold text-slate-800">{stats.loadingStats ? '...' : stats.patientsCount}</span>
+                   <span className="text-2xl font-bold text-slate-800">
+                     {stats.loadingStats ? '...' : stats.patientsCount}
+                   </span>
                    <p className="text-xs text-slate-500 font-medium">Pacientes Totales</p>
                 </div>
              </div>
 
-             {/* KPI TIEMPO: Gradiente Índigo Suave */}
+             {/* KPI TIEMPO */}
              <div className="bg-gradient-to-br from-indigo-50 to-white p-4 rounded-2xl border border-indigo-100 shadow-sm flex flex-col justify-between h-28 relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-20 h-20 bg-indigo-100/50 rounded-full -mr-6 -mt-6 pointer-events-none"></div>
                 <div className="flex justify-between items-start z-10">
@@ -174,12 +244,11 @@ const DigitalCard: React.FC = () => {
                 </div>
              </div>
 
-             {/* BOTÓN REPORTE (Manteniendo el Negro "Action") */}
+             {/* BOTÓN REPORTE */}
              <div 
                 onClick={() => navigate('/reports')}
                 className="bg-slate-900 p-4 rounded-2xl shadow-lg shadow-slate-300 flex flex-col justify-center items-center text-center h-28 cursor-pointer hover:bg-slate-800 transition-all group active:scale-95 border border-slate-700 relative overflow-hidden"
              >
-                {/* Efecto de brillo sutil en el botón negro */}
                 <div className="absolute inset-0 bg-gradient-to-tr from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
                 <div className="p-2 bg-white/10 rounded-full text-teal-400 mb-2 group-hover:scale-110 transition-transform z-10">
                    <FileText size={20} />
@@ -189,7 +258,7 @@ const DigitalCard: React.FC = () => {
              </div>
           </div>
 
-          {/* 2. HERRAMIENTAS (FONDO TÉCNICO) */}
+          {/* 2. HERRAMIENTAS */}
           <div className="bg-gradient-to-br from-slate-50 to-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
              <div className="p-4 border-b border-slate-200 bg-slate-100/50 flex justify-between items-center">
                 <h3 className="font-bold text-slate-800 flex items-center gap-2">
@@ -229,9 +298,9 @@ const DigitalCard: React.FC = () => {
              </div>
           </div>
 
-          {/* 3. NOTICIAS (FONDO DE LECTURA) */}
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex-1">
-             <div className="p-4 border-b border-slate-100 bg-gradient-to-r from-white to-slate-50 flex justify-between items-center">
+          {/* 3. NOTICIAS VIVAS (CON SCROLL Y SOMBRA) */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-xl shadow-slate-200/60 overflow-hidden flex-1 max-h-[350px] overflow-y-auto relative">
+             <div className="p-4 border-b border-slate-100 bg-white/95 backdrop-blur-sm flex justify-between items-center sticky top-0 z-20 shadow-sm">
                 <h3 className="font-bold text-slate-800 flex items-center gap-2">
                   <span className="relative flex h-2.5 w-2.5">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
@@ -242,8 +311,8 @@ const DigitalCard: React.FC = () => {
                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Live Feed</span>
              </div>
              
-             <div className="divide-y divide-slate-50 min-h-[200px]">
-                {currentNews.map((news, idx) => (
+             <div className="divide-y divide-slate-50">
+                {MEDICAL_NEWS_FEED.map((news, idx) => (
                    <div key={`${news.title}-${idx}`} className="p-4 hover:bg-slate-50 transition-all animate-in fade-in slide-in-from-right-2 duration-500 cursor-pointer group">
                       <div className="flex justify-between items-start mb-1.5">
                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
