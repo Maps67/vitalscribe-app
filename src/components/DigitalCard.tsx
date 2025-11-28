@@ -8,17 +8,51 @@ import {
   ExternalLink, FlaskConical 
 } from 'lucide-react';
 
-// --- BANCO DE NOTICIAS MÉDICAS ---
+// --- BANCO DE NOTICIAS MÉDICAS (CURADURÍA NOV 2025) ---
+// Fuentes: FDA Novel Drug Approvals 2025, IDSA Guidelines, WHO Publications
 const MEDICAL_NEWS_FEED = [
-  { title: 'Nueva NOM-004-SSA3-2012: Actualización en Expediente Clínico.', source: 'Diario Oficial', type: 'legal' },
-  { title: 'Cofepris emite alerta sobre lotes falsificados de analgésicos.', source: 'Cofepris', type: 'alert' },
-  { title: 'FDA aprueba primera terapia génica para distrofia muscular.', source: 'Medscape', type: 'clinical' },
-  { title: 'Aumento de casos de Influenza H1N1: Recomendaciones.', source: 'Secretaría Salud', type: 'alert' },
-  { title: 'Guía de Práctica Clínica: Manejo de Hipertensión 2024.', source: 'CENETEC', type: 'clinical' },
-  { title: 'Inteligencia Artificial reduce 40% errores de diagnóstico.', source: 'The Lancet', type: 'tech' },
-  { title: 'Lanzamiento de nueva vacuna bivalente contra COVID-19.', source: 'Secretaría Salud', type: 'clinical' },
-  { title: 'Actualización en tratamiento de Diabetes Tipo 2 (ADA 2024).', source: 'Medscape', type: 'clinical' },
-  { title: 'Nuevo protocolo para manejo de sepsis en urgencias.', source: 'The BMJ', type: 'clinical' },
+  { 
+    title: 'FDA Aprueba Voyxact (sibeprenlimab) para Nefropatía por IgA.', 
+    summary: 'Primer tratamiento específico para reducir la proteinuria en adultos con nefropatía primaria por IgA con riesgo de progresión.',
+    source: 'FDA Approval', 
+    type: 'clinical',
+    url: 'https://www.fda.gov/drugs/novel-drug-approvals-fda/novel-drug-approvals-2025' 
+  },
+  { 
+    title: 'Nueva Guía IDSA 2025: Tratamiento de Infecciones Urinarias Complicadas (cUTI).', 
+    summary: 'Actualización sobre el manejo de resistencia antimicrobiana y nuevos agentes terapéuticos en cUTI.',
+    source: 'IDSA Guidelines', 
+    type: 'clinical',
+    url: 'https://www.idsociety.org/practice-guideline/all-practice-guidelines/' 
+  },
+  { 
+    title: 'Imfinzi aprobado como primera inmunoterapia perioperatoria en cáncer gástrico.', 
+    summary: 'AstraZeneca recibe luz verde para el uso de durvalumab en estadios resecables (II, III, IVA) de cáncer gástrico y de la unión gastroesofágica.',
+    source: 'Oncology News', 
+    type: 'tech',
+    url: 'https://www.astrazeneca.com/media-centre/press-releases/2025/imfinzi-approved-in-the-us-as-first-and-only-perioperative-immunotherapy-for-patients-with-early-gastric-and-gastroesophageal-cancers.html' 
+  },
+  { 
+    title: 'OMS lanza 4ta Edición de Recomendaciones sobre Uso de Anticonceptivos.', 
+    summary: 'Nuevos criterios de elegibilidad médica y práctica clínica para la salud reproductiva global.',
+    source: 'WHO Official', 
+    type: 'alert',
+    url: 'https://www.who.int/publications/who-guidelines' 
+  },
+  { 
+    title: 'Redemplo (plozasiran) autorizado para Síndrome de Quilomicronemia Familiar.', 
+    summary: 'Nueva terapia de interferencia de ARN (RNAi) para reducir triglicéridos en adultos con FCS.',
+    source: 'FDA / CDER', 
+    type: 'clinical',
+    url: 'https://www.fda.gov/drugs/novel-drug-approvals-fda/novel-drug-approvals-2025' 
+  },
+  { 
+    title: 'Estudio Global: Alimentos Ultraprocesados vinculados a 32 daños a la salud.', 
+    summary: 'Revisión paraguas en The BMJ asocia el consumo directo con mortalidad cardiovascular, diabetes tipo 2 y ansiedad.',
+    source: 'The BMJ', 
+    type: 'tech',
+    url: 'https://www.bmj.com/' 
+  }
 ];
 
 const DigitalCard: React.FC = () => {
@@ -28,7 +62,7 @@ const DigitalCard: React.FC = () => {
   const [profile, setProfile] = useState<any>(null);
   const [stats, setStats] = useState({ 
     patientsCount: 0, 
-    avgDuration: 0, // Nuevo estado para duración real
+    avgDuration: 0, 
     loadingStats: true 
   });
   
@@ -55,7 +89,6 @@ const DigitalCard: React.FC = () => {
         setProfile(profileData || { full_name: 'Doctor', specialty: 'Medicina General' });
 
         // 2. Cargar Conteo de Pacientes REAL
-        // Nota: Esto cuenta las filas en la tabla 'patients' vinculadas a este usuario.
         const { count: patientsCount, error: countError } = await supabase
           .from('patients')
           .select('*', { count: 'exact', head: true })
@@ -63,20 +96,16 @@ const DigitalCard: React.FC = () => {
         
         if (countError) console.warn("Error contando pacientes:", countError.message);
 
-        // 3. Cargar Promedio de Duración REAL (Desde tabla appointments)
-        // Intentamos leer la tabla de citas para calcular el promedio real
+        // 3. Cargar Promedio de Duración REAL
         let calculatedAvg = 0;
         const { data: appointments, error: apptError } = await supabase
             .from('appointments')
             .select('duration_minutes')
-            .eq('user_id', user.id); // Aseguramos filtrar por usuario
+            .eq('user_id', user.id);
 
         if (!apptError && appointments && appointments.length > 0) {
             const totalMinutes = appointments.reduce((acc, curr) => acc + (curr.duration_minutes || 0), 0);
             calculatedAvg = Math.round(totalMinutes / appointments.length);
-        } else {
-            // Si no hay citas o tabla, usamos 0 o un valor por defecto para no romper la UI
-            console.log("No hay citas suficientes para calcular promedio o tabla no existe.");
         }
         
         setStats({ 
@@ -131,11 +160,11 @@ const DigitalCard: React.FC = () => {
     window.open(`https://pubmed.ncbi.nlm.nih.gov/?term=${encodeURIComponent(searchTerm)}`, '_blank');
   };
 
-  // ACCIÓN RECUPERADA: Clic en noticia
-  const handleNewsClick = (newsTitle: string) => {
-    // Como no tenemos URLs reales en el feed simulado, abrimos una búsqueda inteligente
-    const query = encodeURIComponent(newsTitle);
-    window.open(`https://www.google.com/search?q=${query}`, '_blank');
+  // ACCIÓN DE ALTO NIVEL: Abrir Fuente Oficial
+  const handleNewsClick = (url: string) => {
+    if (url) {
+      window.open(url, '_blank');
+    }
   };
 
   if (loading) return (
@@ -253,7 +282,7 @@ const DigitalCard: React.FC = () => {
                 </div>
              </div>
 
-             {/* KPI TIEMPO (AHORA CONECTADO) */}
+             {/* KPI TIEMPO */}
              <div className="bg-gradient-to-br from-indigo-50 to-white p-4 rounded-2xl border border-indigo-100 shadow-sm flex flex-col justify-between h-28 relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-20 h-20 bg-indigo-100/50 rounded-full -mr-6 -mt-6 pointer-events-none"></div>
                 <div className="flex justify-between items-start z-10">
@@ -323,7 +352,7 @@ const DigitalCard: React.FC = () => {
              </div>
           </div>
 
-          {/* 3. NOTICIAS VIVAS (AHORA INTERACTIVAS Y SCROLLABLES) */}
+          {/* 3. NOTICIAS VIVAS (AHORA INTERACTIVAS Y CON FUENTES REALES) */}
           <div className="bg-white rounded-2xl border border-slate-200 shadow-xl shadow-slate-200/60 overflow-hidden flex-1 max-h-[350px] overflow-y-auto custom-scrollbar relative">
              <div className="p-4 border-b border-slate-100 bg-white/95 backdrop-blur-sm flex justify-between items-center sticky top-0 z-20 shadow-sm">
                 <h3 className="font-bold text-slate-800 flex items-center gap-2">
@@ -331,7 +360,7 @@ const DigitalCard: React.FC = () => {
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
                     <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500"></span>
                   </span>
-                  Actualizaciones
+                  Actualizaciones Médicas
                 </h3>
                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Live Feed</span>
              </div>
@@ -340,7 +369,7 @@ const DigitalCard: React.FC = () => {
                 {MEDICAL_NEWS_FEED.map((news, idx) => (
                    <div 
                      key={`${news.title}-${idx}`} 
-                     onClick={() => handleNewsClick(news.title)} // ACCIÓN RECUPERADA
+                     onClick={() => handleNewsClick(news.url)} // AHORA ABRE URL REAL
                      className="p-4 hover:bg-slate-50 transition-all animate-in fade-in slide-in-from-right-2 duration-500 cursor-pointer group"
                    >
                       <div className="flex justify-between items-start mb-1.5">
@@ -352,12 +381,14 @@ const DigitalCard: React.FC = () => {
                            {news.source}
                          </span>
                          <span className="text-[10px] text-slate-400 flex items-center gap-1 group-hover:text-teal-600 transition-colors">
-                           Ver <ExternalLink size={10}/>
+                           Fuente Oficial <ExternalLink size={10}/>
                          </span>
                       </div>
                       <h4 className="text-sm font-medium text-slate-700 leading-snug group-hover:text-teal-800 group-hover:underline decoration-teal-300 underline-offset-2">
                         {news.title}
                       </h4>
+                      {/* Resumen sutil añadido */}
+                      <p className="text-xs text-slate-500 mt-1 line-clamp-2 leading-relaxed opacity-90">{news.summary}</p>
                    </div>
                 ))}
              </div>
