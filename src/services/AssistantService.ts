@@ -82,17 +82,3 @@ export const AssistantService = {
     }
   }
 };
-```
-
-### 🚀 Comandos para implementar la Fase 1
-
-Ejecuta esto en tu terminal para crear el archivo y registrarlo en Git.
-
-```bash
-# 1. Crear el servicio
-# (Asegúrate de copiar el código de arriba en src/services/AssistantService.ts)
-
-# 2. Registrar cambios
-git add src/services/AssistantService.ts
-git commit -m "feat(ai): Implementación de AssistantService para procesamiento de voz (Fase 1)"
-git push origin main
