@@ -39,7 +39,6 @@ const LiveClock = () => {
         {format(time, 'h:mm')}
         <span className="text-lg md:text-2xl ml-1 font-medium text-white/80">{format(time, 'a')}</span>
       </div>
-      {/* Segundero opcional o fecha pequeña si se desea, por ahora solo hora limpia */}
     </div>
   );
 };
@@ -226,7 +225,7 @@ const Dashboard: React.FC = () => {
                 </div>
             </div>
 
-            {/* CENTRO: RELOJ DIGITAL (NUEVO) */}
+            {/* CENTRO: RELOJ DIGITAL */}
             <div className="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 z-20">
                <LiveClock />
             </div>
@@ -349,9 +348,3 @@ const Dashboard: React.FC = () => {
 };
 
 export default Dashboard;
-```
-
-```bash
-git add src/pages/Dashboard.tsx
-git commit -m "feat(ui): Agregar reloj digital en tiempo real al banner del Dashboard"
-git push origin main
