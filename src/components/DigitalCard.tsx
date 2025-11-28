@@ -26,31 +26,26 @@ const DigitalCard: React.FC = () => {
   
   // Estados de Datos
   const [profile, setProfile] = useState<any>(null);
-  const [stats, setStats] = useState({ patientsCount: 0, loadingStats: true });
+  const [stats, setStats] = useState({ 
+    patientsCount: 0, 
+    avgDuration: 0, // Nuevo estado para duración real
+    loadingStats: true 
+  });
   
   // Estados de UI
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [newsIndex, setNewsIndex] = useState(0);
 
   // Carga inicial de datos
   useEffect(() => {
     loadData();
   }, []);
 
-  // Rotación automática del feed de noticias (aunque ahora tiene scroll, mantenemos el ticker sutil si se desea)
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setNewsIndex((prev) => (prev + 1) % MEDICAL_NEWS_FEED.length);
-    }, 5000);
-    return () => clearInterval(timer);
-  }, []);
-
   const loadData = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        // Cargar Perfil
+        // 1. Cargar Perfil
         const { data: profileData } = await supabase
           .from('profiles')
           .select('*')
@@ -59,19 +54,39 @@ const DigitalCard: React.FC = () => {
         
         setProfile(profileData || { full_name: 'Doctor', specialty: 'Medicina General' });
 
-        // Cargar Estadísticas Reales
-        const { count } = await supabase
+        // 2. Cargar Conteo de Pacientes REAL
+        // Nota: Esto cuenta las filas en la tabla 'patients' vinculadas a este usuario.
+        const { count: patientsCount, error: countError } = await supabase
           .from('patients')
           .select('*', { count: 'exact', head: true })
           .eq('user_id', user.id);
         
+        if (countError) console.warn("Error contando pacientes:", countError.message);
+
+        // 3. Cargar Promedio de Duración REAL (Desde tabla appointments)
+        // Intentamos leer la tabla de citas para calcular el promedio real
+        let calculatedAvg = 0;
+        const { data: appointments, error: apptError } = await supabase
+            .from('appointments')
+            .select('duration_minutes')
+            .eq('user_id', user.id); // Aseguramos filtrar por usuario
+
+        if (!apptError && appointments && appointments.length > 0) {
+            const totalMinutes = appointments.reduce((acc, curr) => acc + (curr.duration_minutes || 0), 0);
+            calculatedAvg = Math.round(totalMinutes / appointments.length);
+        } else {
+            // Si no hay citas o tabla, usamos 0 o un valor por defecto para no romper la UI
+            console.log("No hay citas suficientes para calcular promedio o tabla no existe.");
+        }
+        
         setStats({ 
-          patientsCount: count || 0, 
+          patientsCount: patientsCount || 0, 
+          avgDuration: calculatedAvg,
           loadingStats: false 
         });
       }
     } catch (error) {
-      console.error("Error cargando datos:", error);
+      console.error("Error crítico cargando Hub:", error);
     } finally {
       setLoading(false);
     }
@@ -114,6 +129,13 @@ const DigitalCard: React.FC = () => {
     e.preventDefault();
     if (!searchTerm.trim()) return;
     window.open(`https://pubmed.ncbi.nlm.nih.gov/?term=${encodeURIComponent(searchTerm)}`, '_blank');
+  };
+
+  // ACCIÓN RECUPERADA: Clic en noticia
+  const handleNewsClick = (newsTitle: string) => {
+    // Como no tenemos URLs reales en el feed simulado, abrimos una búsqueda inteligente
+    const query = encodeURIComponent(newsTitle);
+    window.open(`https://www.google.com/search?q=${query}`, '_blank');
   };
 
   if (loading) return (
@@ -231,7 +253,7 @@ const DigitalCard: React.FC = () => {
                 </div>
              </div>
 
-             {/* KPI TIEMPO */}
+             {/* KPI TIEMPO (AHORA CONECTADO) */}
              <div className="bg-gradient-to-br from-indigo-50 to-white p-4 rounded-2xl border border-indigo-100 shadow-sm flex flex-col justify-between h-28 relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-20 h-20 bg-indigo-100/50 rounded-full -mr-6 -mt-6 pointer-events-none"></div>
                 <div className="flex justify-between items-start z-10">
@@ -239,7 +261,10 @@ const DigitalCard: React.FC = () => {
                    <span className="text-xs text-indigo-400 font-bold bg-white/80 px-2 py-0.5 rounded backdrop-blur-sm">Promedio</span>
                 </div>
                 <div className="z-10">
-                   <span className="text-2xl font-bold text-slate-800">22m</span>
+                   {/* Mostramos el promedio real o '--' si es 0 */}
+                   <span className="text-2xl font-bold text-slate-800">
+                      {stats.loadingStats ? '...' : (stats.avgDuration > 0 ? `${stats.avgDuration}m` : '--')}
+                   </span>
                    <p className="text-xs text-slate-500 font-medium">Duración Consulta</p>
                 </div>
              </div>
@@ -298,8 +323,8 @@ const DigitalCard: React.FC = () => {
              </div>
           </div>
 
-          {/* 3. NOTICIAS VIVAS (CON SCROLL Y SOMBRA) */}
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-xl shadow-slate-200/60 overflow-hidden flex-1 max-h-[350px] overflow-y-auto relative">
+          {/* 3. NOTICIAS VIVAS (AHORA INTERACTIVAS Y SCROLLABLES) */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-xl shadow-slate-200/60 overflow-hidden flex-1 max-h-[350px] overflow-y-auto custom-scrollbar relative">
              <div className="p-4 border-b border-slate-100 bg-white/95 backdrop-blur-sm flex justify-between items-center sticky top-0 z-20 shadow-sm">
                 <h3 className="font-bold text-slate-800 flex items-center gap-2">
                   <span className="relative flex h-2.5 w-2.5">
@@ -313,7 +338,11 @@ const DigitalCard: React.FC = () => {
              
              <div className="divide-y divide-slate-50">
                 {MEDICAL_NEWS_FEED.map((news, idx) => (
-                   <div key={`${news.title}-${idx}`} className="p-4 hover:bg-slate-50 transition-all animate-in fade-in slide-in-from-right-2 duration-500 cursor-pointer group">
+                   <div 
+                     key={`${news.title}-${idx}`} 
+                     onClick={() => handleNewsClick(news.title)} // ACCIÓN RECUPERADA
+                     className="p-4 hover:bg-slate-50 transition-all animate-in fade-in slide-in-from-right-2 duration-500 cursor-pointer group"
+                   >
                       <div className="flex justify-between items-start mb-1.5">
                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
                            news.type === 'alert' ? 'bg-red-50 text-red-600 border-red-100' : 
@@ -322,9 +351,13 @@ const DigitalCard: React.FC = () => {
                          }`}>
                            {news.source}
                          </span>
-                         <span className="text-[10px] text-slate-400 flex items-center gap-1 group-hover:text-teal-600 transition-colors">Ver <ExternalLink size={10}/></span>
+                         <span className="text-[10px] text-slate-400 flex items-center gap-1 group-hover:text-teal-600 transition-colors">
+                           Ver <ExternalLink size={10}/>
+                         </span>
                       </div>
-                      <h4 className="text-sm font-medium text-slate-700 leading-snug group-hover:text-slate-900">{news.title}</h4>
+                      <h4 className="text-sm font-medium text-slate-700 leading-snug group-hover:text-teal-800 group-hover:underline decoration-teal-300 underline-offset-2">
+                        {news.title}
+                      </h4>
                    </div>
                 ))}
              </div>
