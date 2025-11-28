@@ -23,11 +23,15 @@ import {
   User, 
   Calendar as CalIcon,
   Trash2,
+  Settings,
+  CheckCircle2,
+  Download,
   ExternalLink
 } from 'lucide-react';
 
 // --- TIPOS ---
 type AppointmentType = 'consulta' | 'urgencia' | 'seguimiento';
+type CalendarProvider = 'google' | 'outlook' | 'apple';
 
 interface Appointment {
   id: string;
@@ -38,35 +42,147 @@ interface Appointment {
   duration_minutes: number;
 }
 
-// --- UTILIDAD: GOOGLE CALENDAR DEEP LINK ---
-const getGoogleCalendarUrl = (appt: Appointment) => {
+// --- UTILIDAD: GENERADOR DE LINKS INTELIGENTE ---
+const getCalendarLink = (appt: Appointment, provider: CalendarProvider) => {
   const startDate = new Date(appt.date_time);
   const endDate = new Date(startDate.getTime() + appt.duration_minutes * 60000);
   
-  // Formato requerido por Google: YYYYMMDDTHHmmSSZ (UTC es mejor, pero usaremos local simplificado para este ejemplo PWA)
+  const title = `Consulta: ${appt.patient_name}`;
+  const description = `Tipo: ${appt.type.toUpperCase()}\nNotas: ${appt.notes || ''}\n---\nGenerado por MediScribe AI`;
+  const location = 'Consultorio';
+
+  // Formato YYYYMMDDTHHmmSSZ
   const formatDate = (date: Date) => date.toISOString().replace(/-|:|\.\d\d\d/g, "");
 
-  const params = new URLSearchParams({
-    action: 'TEMPLATE',
-    text: `Consulta MediScribe: ${appt.patient_name}`,
-    dates: `${formatDate(startDate)}/${formatDate(endDate)}`,
-    details: `Tipo: ${appt.type.toUpperCase()}\nNotas: ${appt.notes || 'Sin notas adicionales.'}\nGenerado por MediScribe AI.`,
-    location: 'Consultorio Virtual / Presencial',
-    sf: 'true',
-    output: 'xml'
-  });
+  if (provider === 'google') {
+    const params = new URLSearchParams({
+      action: 'TEMPLATE',
+      text: title,
+      dates: `${formatDate(startDate)}/${formatDate(endDate)}`,
+      details: description,
+      location: location,
+    });
+    return { url: `https://calendar.google.com/calendar/render?${params.toString()}`, type: 'link' };
+  }
 
-  return `https://calendar.google.com/calendar/render?${params.toString()}`;
+  if (provider === 'outlook') {
+    const params = new URLSearchParams({
+      path: '/calendar/action/compose',
+      rru: 'addevent',
+      startdt: startDate.toISOString(),
+      enddt: endDate.toISOString(),
+      subject: title,
+      body: description,
+      location: location
+    });
+    return { url: `https://outlook.live.com/calendar/0/deeplink/compose?${params.toString()}`, type: 'link' };
+  }
+
+  if (provider === 'apple') {
+    // Generación de archivo .ics en cliente (Data URI)
+    const icsContent = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'BEGIN:VEVENT',
+      `DTSTART:${formatDate(startDate)}`,
+      `DTEND:${formatDate(endDate)}`,
+      `SUMMARY:${title}`,
+      `DESCRIPTION:${description.replace(/\n/g, '\\n')}`,
+      `LOCATION:${location}`,
+      'END:VEVENT',
+      'END:VCALENDAR'
+    ].join('\n');
+    const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+    return { url: URL.createObjectURL(blob), type: 'download', filename: 'cita.ics' };
+  }
+
+  return { url: '#', type: 'link' };
 };
 
-// --- COMPONENTE MODAL (INTERNO PARA SIMPLICIDAD) ---
+// --- MODAL DE CONFIGURACIÓN DE CALENDARIO ---
+const SyncConfigModal = ({ 
+  isOpen, 
+  onClose, 
+  currentProvider, 
+  setProvider 
+}: { 
+  isOpen: boolean; 
+  onClose: () => void; 
+  currentProvider: CalendarProvider; 
+  setProvider: (p: CalendarProvider) => void; 
+}) => {
+  if (!isOpen) return null;
+
+  const providers = [
+    { id: 'google', name: 'Google Calendar', icon: 'G', color: 'bg-blue-100 text-blue-600', desc: 'Abre directamente en web/app de Google.' },
+    { id: 'outlook', name: 'Outlook / Office 365', icon: 'O', color: 'bg-cyan-100 text-cyan-600', desc: 'Ideal para usuarios corporativos.' },
+    { id: 'apple', name: 'Apple Calendar (iCal)', icon: 'A', color: 'bg-slate-100 text-slate-600', desc: 'Descarga archivo .ics para Mac/iPhone.' },
+  ];
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg border border-slate-100 overflow-hidden">
+        <div className="bg-slate-50 px-6 py-4 border-b border-slate-100 flex justify-between items-center">
+          <h3 className="font-bold text-slate-800 flex items-center gap-2">
+            <Settings size={20} className="text-teal-600"/>
+            Conectividad de Agenda
+          </h3>
+          <button onClick={onClose}><X size={20} className="text-slate-400 hover:text-slate-600"/></button>
+        </div>
+        
+        <div className="p-6">
+          <div className="mb-6 bg-teal-50 border border-teal-100 rounded-lg p-4 text-sm text-teal-800">
+            <p className="font-semibold mb-1">¿Cómo funciona la sincronización?</p>
+            <p className="opacity-90">MediScribe genera eventos inteligentes. Selecciona tu proveedor principal para que el botón de "Sincronizar" se adapte a tu flujo de trabajo.</p>
+          </div>
+
+          <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-3">Selecciona tu ecosistema</label>
+          
+          <div className="space-y-3">
+            {providers.map((p) => (
+              <button
+                key={p.id}
+                onClick={() => setProvider(p.id as CalendarProvider)}
+                className={`w-full flex items-center gap-4 p-4 rounded-xl border transition-all text-left ${
+                  currentProvider === p.id 
+                    ? 'border-teal-500 bg-teal-50 ring-1 ring-teal-500' 
+                    : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                }`}
+              >
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg ${p.color}`}>
+                  {p.icon}
+                </div>
+                <div className="flex-1">
+                  <div className="flex justify-between items-center">
+                    <span className="font-bold text-slate-800">{p.name}</span>
+                    {currentProvider === p.id && <CheckCircle2 size={18} className="text-teal-600"/>}
+                  </div>
+                  <p className="text-xs text-slate-500 mt-0.5">{p.desc}</p>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end">
+          <button onClick={onClose} className="px-6 py-2 bg-slate-900 text-white rounded-lg font-medium hover:bg-slate-800 transition-colors">
+            Guardar Preferencia
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// --- COMPONENTE MODAL DE CITA (ACTUALIZADO CON PROVIDER) ---
 const AppointmentModal = ({ 
   isOpen, 
   onClose, 
   onSave, 
   onDelete,
   initialDate, 
-  existingAppt 
+  existingAppt,
+  provider
 }: { 
   isOpen: boolean; 
   onClose: () => void; 
@@ -74,6 +190,7 @@ const AppointmentModal = ({
   onDelete?: (id: string) => void;
   initialDate: Date;
   existingAppt?: Appointment | null;
+  provider: CalendarProvider;
 }) => {
   const [formData, setFormData] = useState<Partial<Appointment>>({
     patient_name: '',
@@ -89,9 +206,8 @@ const AppointmentModal = ({
         setFormData(existingAppt);
         setTime(format(new Date(existingAppt.date_time), 'HH:mm'));
       } else {
-        // Reset para nueva cita
         setFormData({ patient_name: '', type: 'consulta', duration_minutes: 30, notes: '' });
-        setTime(format(new Date(), 'HH:mm')); // Hora actual por defecto o fija
+        setTime(format(new Date(), 'HH:mm'));
       }
     }
   }, [isOpen, existingAppt]);
@@ -113,6 +229,8 @@ const AppointmentModal = ({
     });
     onClose();
   };
+
+  const syncData = existingAppt ? getCalendarLink(existingAppt, provider) : null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
@@ -197,15 +315,20 @@ const AppointmentModal = ({
                 </button>
              )}
              
-             {existingAppt && (
+             {existingAppt && syncData && (
                <a 
-                 href={getGoogleCalendarUrl(existingAppt)}
-                 target="_blank"
+                 href={syncData.url}
+                 download={syncData.type === 'download' ? syncData.filename : undefined}
+                 target={syncData.type === 'link' ? "_blank" : undefined}
                  rel="noopener noreferrer"
-                 className="p-2.5 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors flex items-center justify-center"
-                 title="Sincronizar con Google Calendar"
+                 className={`p-2.5 rounded-lg transition-colors flex items-center justify-center ${
+                    provider === 'google' ? 'bg-blue-50 text-blue-600 hover:bg-blue-100' :
+                    provider === 'outlook' ? 'bg-cyan-50 text-cyan-600 hover:bg-cyan-100' :
+                    'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                 }`}
+                 title={`Sincronizar con ${provider}`}
                >
-                 <CalIcon size={20} />
+                 {provider === 'apple' ? <Download size={20} /> : <ExternalLink size={20} />}
                </a>
              )}
 
@@ -228,6 +351,10 @@ const AgendaView = () => {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [view, setView] = useState<'month' | 'week' | 'day'>('month');
   
+  // Settings State
+  const [calendarProvider, setCalendarProvider] = useState<CalendarProvider>('google');
+  const [isConfigOpen, setIsConfigOpen] = useState(false);
+
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
@@ -235,6 +362,7 @@ const AgendaView = () => {
 
   // Carga inicial (Mock)
   useEffect(() => {
+    // Aquí cargaríamos la preferencia del usuario desde Supabase en el futuro
     const mockData: Appointment[] = [
       { id: '1', patient_name: 'Roberto Gómez', date_time: new Date().toISOString(), type: 'consulta', duration_minutes: 30 },
       { id: '2', patient_name: 'Ana Torres', date_time: addHours(new Date(), 26).toISOString(), type: 'urgencia', duration_minutes: 45 },
@@ -320,13 +448,25 @@ const AgendaView = () => {
           </h1>
           <p className="text-slate-500 text-sm">Organiza tu práctica y sincroniza con el exterior.</p>
         </div>
-        <button 
-          onClick={() => { setSelectedDate(new Date()); setEditingAppt(null); setIsModalOpen(true); }}
-          className="bg-teal-600 hover:bg-teal-700 text-white px-5 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2 shadow-lg shadow-teal-200/50 transition-all active:scale-95"
-        >
-          <Plus size={18} />
-          Nueva Cita
-        </button>
+        
+        <div className="flex gap-3">
+          <button 
+            onClick={() => setIsConfigOpen(true)}
+            className="bg-white hover:bg-slate-50 text-slate-600 px-4 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2 border border-slate-200 shadow-sm transition-all"
+            title="Configurar Sincronización"
+          >
+            <Settings size={18} />
+            <span className="hidden sm:inline">Conectividad</span>
+          </button>
+
+          <button 
+            onClick={() => { setSelectedDate(new Date()); setEditingAppt(null); setIsModalOpen(true); }}
+            className="bg-teal-600 hover:bg-teal-700 text-white px-5 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2 shadow-lg shadow-teal-200/50 transition-all active:scale-95"
+          >
+            <Plus size={18} />
+            Nueva Cita
+          </button>
+        </div>
       </div>
 
       {/* CONTROLES */}
@@ -416,7 +556,15 @@ const AgendaView = () => {
         </div>
       </div>
 
-      {/* --- MODAL INYECTADO --- */}
+      {/* --- MODAL INYECTADO: CONFIGURACIÓN --- */}
+      <SyncConfigModal 
+        isOpen={isConfigOpen}
+        onClose={() => setIsConfigOpen(false)}
+        currentProvider={calendarProvider}
+        setProvider={(p) => { setCalendarProvider(p); }}
+      />
+
+      {/* --- MODAL INYECTADO: CITAS --- */}
       <AppointmentModal 
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
@@ -424,6 +572,7 @@ const AgendaView = () => {
         existingAppt={editingAppt}
         onSave={saveAppointment}
         onDelete={deleteAppointment}
+        provider={calendarProvider}
       />
 
     </div>
