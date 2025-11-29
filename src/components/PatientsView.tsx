@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-// CORRECCIÓN 1: Agregué 'FileCode' a la lista de iconos importados
 import { Search, UserPlus, FileText, Trash2, Edit2, Eye, Calendar, Share2, Download, FolderOpen, Paperclip, MoreVertical, X, FileCode } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Patient, DoctorProfile } from '../types';
@@ -11,8 +10,10 @@ import { pdf } from '@react-pdf/renderer';
 import PrescriptionPDF from './PrescriptionPDF';
 import { DoctorFileGallery } from './DoctorFileGallery';
 import { PatientWizard } from './PatientWizard';
-// CORRECCIÓN 2: Importar InsightsPanel (asegúrate de que el archivo exista en esa ruta)
-import InsightsPanel from './InsightsPanel'; 
+
+// --- CORRECCIÓN AQUÍ: Agregamos llaves { } ---
+import { InsightsPanel } from './InsightsPanel'; 
+// ---------------------------------------------
 
 interface PatientData extends Partial<Patient> {
   id: string;
@@ -48,7 +49,6 @@ const PatientsView: React.FC = () => {
   const [patientHistory, setPatientHistory] = useState<ConsultationRecord[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
 
-  // Estado para controlar el menú de acciones Kebab
   const [showActionsId, setShowActionsId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -155,7 +155,6 @@ const PatientsView: React.FC = () => {
                   
                   <td className="p-4 relative">
                     <div className="flex justify-center items-center">
-                        {/* BOTÓN KEBBAB FLOTANTE */}
                         <button 
                             onClick={() => setShowActionsId(showActionsId === patient.id ? null : patient.id)}
                             className="p-2 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
@@ -163,11 +162,9 @@ const PatientsView: React.FC = () => {
                         >
                             <MoreVertical size={20} />
                         </button>
-
-                        {/* POPOVER DE ACCIONES */}
                         {showActionsId === patient.id && (
                             <div 
-                                onMouseLeave={() => setShowActionsId(null)} // Cerrar al salir
+                                onMouseLeave={() => setShowActionsId(null)}
                                 className="absolute right-10 top-1/2 transform -translate-y-1/2 w-48 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl py-1 z-10 animate-fade-in-up origin-top-right"
                             >
                                 <button 
@@ -207,7 +204,6 @@ const PatientsView: React.FC = () => {
         </div>
       </div>
 
-      {/* MODALES */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-0 md:p-4 backdrop-blur-sm">
           <div className="bg-white dark:bg-slate-900 w-full md:max-w-4xl h-full md:h-[90vh] md:rounded-2xl shadow-2xl overflow-hidden animate-fade-in-up flex flex-col">
@@ -270,7 +266,10 @@ const PatientsView: React.FC = () => {
         </div>
       )}
 
+      {/* --- AQUÍ SE USA EL COMPONENTE QUE DABABA ERROR --- */}
       <InsightsPanel isOpen={false} onClose={() => {}} data={null} patientName={""} loading={false} />
+      {/* ------------------------------------------------ */}
+
       {selectedPatientForRx && doctorProfile && <QuickRxModal isOpen={!!selectedPatientForRx} onClose={() => setSelectedPatientForRx(null)} initialTranscript="" patientName={selectedPatientForRx.name} doctorProfile={doctorProfile} />}
     </div>
   );
