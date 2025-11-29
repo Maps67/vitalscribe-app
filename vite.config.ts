@@ -3,17 +3,20 @@ import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 import path from 'path';
 
+// https://vitejs.dev/config/
 export default defineConfig({
   plugins: [
     react(),
     VitePWA({
+      // ESTRATEGIA SIMPLE: Actualización automática sin complicaciones
       registerType: 'autoUpdate',
+      
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'mask-icon.svg'],
       
-      // CONFIGURACIÓN DEL MANIFIESTO
+      // ELIMINAMOS "WORKBOX": Dejamos que Vite use la configuración estándar de Google
       manifest: {
         name: 'MediScribe AI',
-        short_name: 'MediScribe App',
+        short_name: 'MediScribe', // Regresamos al nombre corto original
         description: 'Asistente Médico Inteligente',
         theme_color: '#0d9488',
         background_color: '#0f172a',
@@ -36,39 +39,9 @@ export default defineConfig({
           }
         ]
       },
-
-      // CONFIGURACIÓN DEL MOTOR (WORKBOX)
-      workbox: {
-        // 1. ESTA ES LA LÍNEA QUE FALTABA PARA ANDROID/CHROME:
-        navigateFallback: '/index.html',
-        
-        // 2. Límites y Patrones
-        maximumFileSizeToCacheInBytes: 6000000, 
-        globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
-        cleanupOutdatedCaches: true,
-        
-        // 3. Estrategias de Caché
-        runtimeCaching: [
-          {
-            // API Supabase: Siempre red (Seguridad)
-            urlPattern: /^https:\/\/.*\.supabase\.co\/.*$/i,
-            handler: 'NetworkOnly',
-            options: {
-              cacheName: 'supabase-api-protection',
-              expiration: { maxEntries: 10, maxAgeSeconds: 1 }
-            }
-          },
-          {
-            // Google Fonts: Caché agresiva (Velocidad)
-            urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'google-fonts-cache',
-              expiration: { maxEntries: 10, maxAgeSeconds: 31536000 },
-              cacheableResponse: { statuses: [0, 200] }
-            }
-          }
-        ]
+      // ACTIVAR MODO DEBUG (Para que si falla, nos diga por qué en la consola)
+      devOptions: {
+        enabled: true
       }
     })
   ],
@@ -77,6 +50,7 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  // MANTENEMOS TU ESTRATEGIA DE BUILD (Esto no afecta la instalación y es bueno para velocidad)
   build: {
     outDir: 'dist',
     sourcemap: false,
