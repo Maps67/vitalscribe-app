@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, UserPlus, FileText, Trash2, Edit2, Eye, Calendar, Share2, Download, FolderOpen, Paperclip, MoreVertical, X, FileCode, Phone, ChevronRight } from 'lucide-react';
+import { Search, UserPlus, FileText, Trash2, Edit2, Eye, Calendar, Share2, Download, FolderOpen, Paperclip, MoreVertical, X, FileCode, Phone } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Patient, DoctorProfile } from '../types';
 import { toast } from 'sonner';
@@ -193,11 +193,11 @@ const PatientsView: React.FC = () => {
         {/* --- VISTA MÓVIL (ESTILO WHATSAPP) --- */}
         <div className="md:hidden">
             {filteredPatients.map(patient => (
-                <div key={patient.id} className="flex items-center p-4 border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 active:bg-slate-100 transition-colors relative">
-                    {/* ZONA DE CLICK PRINCIPAL (ABRIR EXPEDIENTE) */}
+                <div key={patient.id} className="flex items-center p-4 border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 active:bg-slate-100 dark:hover:bg-slate-800/50 transition-colors relative">
+                    {/* ZONA DE CLICK PRINCIPAL */}
                     <div className="flex-1 flex items-center gap-4 cursor-pointer" onClick={() => handleViewHistory(patient)}>
-                        {/* AVATAR */}
-                        <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 flex items-center justify-center font-bold text-lg shrink-0">
+                        {/* AVATAR COLORIDO SIEMPRE */}
+                        <div className="w-12 h-12 rounded-full bg-teal-50 dark:bg-teal-900/20 text-brand-teal dark:text-teal-400 flex items-center justify-center font-bold text-lg shrink-0 border border-teal-100 dark:border-teal-900/50">
                             {getInitials(patient.name)}
                         </div>
                         {/* INFO */}
@@ -211,14 +211,14 @@ const PatientsView: React.FC = () => {
                         </div>
                     </div>
 
-                    {/* BOTÓN DE ACCIONES (KEBAB) */}
+                    {/* BOTÓN DE ACCIONES */}
                     <div className="ml-2 relative">
                          <button 
                             onClick={(e) => {
-                                e.stopPropagation(); // Evitar que abra el expediente al dar click al menu
+                                e.stopPropagation(); 
                                 setShowActionsId(showActionsId === patient.id ? null : patient.id);
                             }} 
-                            className="p-2 -mr-2 text-slate-400 hover:text-brand-teal active:bg-slate-200 rounded-full"
+                            className="p-2 -mr-2 text-slate-400 hover:text-brand-teal active:bg-slate-200 dark:active:bg-slate-700 rounded-full"
                          >
                             <MoreVertical size={24} />
                          </button>
@@ -226,19 +226,18 @@ const PatientsView: React.FC = () => {
                          {/* MENU DESPLEGABLE MOVIL */}
                          {showActionsId === patient.id && (
                             <>
-                                {/* Overlay invisible para cerrar al dar click fuera */}
                                 <div className="fixed inset-0 z-10" onClick={() => setShowActionsId(null)}></div>
-                                <div className="absolute right-0 top-10 w-48 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl py-2 z-20 animate-fade-in-up origin-top-right">
-                                    <button onClick={() => {handleViewHistory(patient); setShowActionsId(null);}} className="flex items-center gap-3 w-full px-4 py-3 text-sm text-purple-600 active:bg-slate-100"><Eye size={18}/> Ver Expediente</button>
-                                    <button onClick={() => {setSelectedPatientForRx(patient); setShowActionsId(null);}} className="flex items-center gap-3 w-full px-4 py-3 text-sm text-brand-teal active:bg-slate-100"><FileText size={18}/> Receta Rápida</button>
+                                <div className="absolute right-0 top-10 w-52 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl py-2 z-20 animate-fade-in-up origin-top-right">
+                                    <button onClick={() => {handleViewHistory(patient); setShowActionsId(null);}} className="flex items-center gap-3 w-full px-4 py-3 text-sm text-purple-600 dark:text-purple-400 active:bg-slate-100 dark:active:bg-slate-800"><Eye size={18}/> Ver Expediente</button>
+                                    <button onClick={() => {setSelectedPatientForRx(patient); setShowActionsId(null);}} className="flex items-center gap-3 w-full px-4 py-3 text-sm text-brand-teal dark:text-teal-400 active:bg-slate-100 dark:active:bg-slate-800"><FileText size={18}/> Receta Rápida</button>
                                     {patient.phone && (
-                                        <a href={`https://wa.me/${patient.phone.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" className="flex items-center gap-3 w-full px-4 py-3 text-sm text-green-600 active:bg-slate-100">
+                                        <a href={`https://wa.me/${patient.phone.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" className="flex items-center gap-3 w-full px-4 py-3 text-sm text-green-600 dark:text-green-400 active:bg-slate-100 dark:active:bg-slate-800">
                                             <Phone size={18}/> Enviar WhatsApp
                                         </a>
                                     )}
-                                    <button onClick={() => {openEditModal(patient); setShowActionsId(null);}} className="flex items-center gap-3 w-full px-4 py-3 text-sm text-blue-600 active:bg-slate-100"><Edit2 size={18}/> Editar Datos</button>
-                                    <hr className="my-1 border-slate-100" />
-                                    <button onClick={() => {handleDelete(patient.id); setShowActionsId(null);}} className="flex items-center gap-3 w-full px-4 py-3 text-sm text-red-600 active:bg-slate-100"><Trash2 size={18}/> Eliminar</button>
+                                    <button onClick={() => {openEditModal(patient); setShowActionsId(null);}} className="flex items-center gap-3 w-full px-4 py-3 text-sm text-blue-600 dark:text-blue-400 active:bg-slate-100 dark:active:bg-slate-800"><Edit2 size={18}/> Editar Datos</button>
+                                    <hr className="my-1 border-slate-100 dark:border-slate-700" />
+                                    <button onClick={() => {handleDelete(patient.id); setShowActionsId(null);}} className="flex items-center gap-3 w-full px-4 py-3 text-sm text-red-600 dark:text-red-400 active:bg-slate-100 dark:active:bg-slate-800"><Trash2 size={18}/> Eliminar</button>
                                 </div>
                             </>
                          )}
