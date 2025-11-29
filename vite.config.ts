@@ -9,32 +9,58 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'mask-icon.svg'],
-      workbox: {
-        maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
-        globPatterns: ['**/*.{js,css,html,ico,png,svg}']
-      },
       manifest: {
         name: 'MediScribe AI',
         short_name: 'MediScribe',
-        description: 'Asistente Clínico Inteligente',
+        description: 'Asistente Médico con IA',
         theme_color: '#0d9488',
         background_color: '#0f172a',
         display: 'standalone',
         orientation: 'portrait',
-        scope: '/',      
-        start_url: '/',  
+        scope: '/',
+        start_url: '/',
         icons: [
           {
-            src: '/pwa-192x192.png', // Ruta absoluta crítica
+            src: '/pwa-192x192.png', // Ruta absoluta
             sizes: '192x192',
             type: 'image/png',
             purpose: 'any'
           },
           {
-            src: '/pwa-512x512.png', // Ruta absoluta crítica
+            src: '/pwa-512x512.png', // Ruta absoluta
             sizes: '512x512',
             type: 'image/png',
             purpose: 'any maskable'
+          }
+        ]
+      },
+      workbox: {
+        // --- RESTAURACIÓN DE LA V1.5 ---
+        // 1. Límite de 6MB (Necesario para @react-pdf)
+        maximumFileSizeToCacheInBytes: 6000000, 
+        
+        cleanupOutdatedCaches: true,
+        
+        // 2. ESTRATEGIA DE RED (ESTO ES LO QUE FALTABA PARA PODER INSTALAR)
+        runtimeCaching: [
+          {
+            // Protege las llamadas a Supabase. Si esto falta, la instalación falla.
+            urlPattern: /^https:\/\/.*\.supabase\.co\/.*$/i,
+            handler: 'NetworkOnly',
+            options: {
+              cacheName: 'supabase-api-protection',
+              expiration: { maxEntries: 10, maxAgeSeconds: 1 }
+            }
+          },
+          {
+            // Permite caché para fuentes y assets estáticos
+            urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'google-fonts-cache',
+              expiration: { maxEntries: 10, maxAgeSeconds: 31536000 },
+              cacheableResponse: { statuses: [0, 200] }
+            }
           }
         ]
       }
