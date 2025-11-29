@@ -1,0 +1,40 @@
+# CONFIGURACIÓN MAESTRA DE NETLIFY (V4.0)
+
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+# --- SECCIÓN CRÍTICA PWA (Excepciones) ---
+# Obliga a Netlify a entregar el Service Worker y el Manifiesto tal cual son.
+# Si esto falta, Netlify los redirige al index.html y la instalación falla.
+
+[[redirects]]
+  from = "/sw.js"
+  to = "/sw.js"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/manifest.webmanifest"
+  to = "/manifest.webmanifest"
+  status = 200
+  force = true
+
+# --- SECCIÓN SPA (React Router) ---
+# Cualquier otra ruta (ej: /pacientes) carga la app.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# --- SECCIÓN CACHÉ (Actualizaciones) ---
+# Evita que el navegador guarde versiones viejas del instalador.
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+[[headers]]
+  for = "/manifest.webmanifest"
+  [headers.values]
+    Cache-Control = "no-cache"
