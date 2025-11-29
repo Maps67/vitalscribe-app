@@ -1,8 +1,8 @@
 // Archivo: src/components/TrialMonitor.tsx
 import React, { useEffect, useState } from 'react';
-import { X } from 'lucide-react'; // Solo necesitamos X, el resto lo maneja SubscriptionPlans
-import { supabase } from '../supabase/client'; // Ruta corregida
-import { SubscriptionPlans } from './SubscriptionPlans'; // <--- LA CLAVE PARA VENDER
+import { X } from 'lucide-react'; 
+import { supabase } from '../lib/supabase'; // <--- CORRECCIÓN AQUÍ (Antes decía supabase/client)
+import { SubscriptionPlans } from './SubscriptionPlans';
 
 const TRIAL_DAYS = 15;
 
@@ -32,7 +32,6 @@ export const TrialMonitor: React.FC = () => {
   if (loading) return null;
 
   // 🔴 CASO 1: PRUEBA TERMINADA (VENTA AGRESIVA)
-  // En lugar de un simple mensaje de error, mostramos la TABLA DE PRECIOS.
   if (daysLeft !== null && daysLeft <= 0) {
     return (
       <div className="fixed inset-0 z-[9999] bg-slate-900/95 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
