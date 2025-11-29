@@ -1,13 +1,15 @@
+// Archivo: src/components/TrialMonitor.tsx
 import React, { useEffect, useState } from 'react';
-import { Clock, Lock, MessageCircle, X } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { X } from 'lucide-react'; // Solo necesitamos X, el resto lo maneja SubscriptionPlans
+import { supabase } from '../supabase/client'; // Ruta corregida
+import { SubscriptionPlans } from './SubscriptionPlans'; // <--- LA CLAVE PARA VENDER
 
 const TRIAL_DAYS = 15;
 
 export const TrialMonitor: React.FC = () => {
   const [daysLeft, setDaysLeft] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isMinimized, setIsMinimized] = useState(false); // Opción para ocultarlo temporalmente
+  const [isMinimized, setIsMinimized] = useState(false);
 
   useEffect(() => {
     checkTrialStatus();
@@ -27,35 +29,22 @@ export const TrialMonitor: React.FC = () => {
     setLoading(false);
   };
 
-  const handleContactSupport = () => {
-      window.open('https://wa.me/?text=Hola,%20mi%20prueba%20de%20MediScribe%20terminó%20y%20quiero%20continuar.', '_blank');
-  };
-
   if (loading) return null;
 
-  // 🔴 CASO 1: PRUEBA TERMINADA (BLOQUEO TOTAL - ESTE SE QUEDA GRANDE POR SEGURIDAD)
+  // 🔴 CASO 1: PRUEBA TERMINADA (VENTA AGRESIVA)
+  // En lugar de un simple mensaje de error, mostramos la TABLA DE PRECIOS.
   if (daysLeft !== null && daysLeft <= 0) {
     return (
-      <div className="fixed inset-0 z-[100] bg-slate-900/95 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center animate-fade-in">
-        <div className="bg-white dark:bg-slate-800 p-8 rounded-3xl shadow-2xl max-w-md w-full border border-slate-700 relative overflow-hidden">
-            <div className="absolute top-0 left-0 w-full h-2 bg-red-500"></div>
-            <div className="w-16 h-16 bg-red-100 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Lock size={32} />
-            </div>
-            <h2 className="text-2xl font-bold text-slate-800 dark:text-white mb-2">Periodo de Prueba Finalizado</h2>
-            <p className="text-slate-500 dark:text-slate-300 mb-6 text-sm">
-                Han pasado los 15 días de acceso gratuito. Para continuar usando la Inteligencia Artificial y acceder a sus pacientes, por favor active su licencia.
-            </p>
-            <button onClick={handleContactSupport} className="w-full py-3 bg-brand-teal hover:bg-teal-600 text-white rounded-xl font-bold text-base flex items-center justify-center gap-2 shadow-lg transition-transform active:scale-95">
-                <MessageCircle size={20}/> Contactar Soporte
-            </button>
+      <div className="fixed inset-0 z-[9999] bg-slate-900/95 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
+        <div className="animate-fade-in w-full max-w-4xl">
+           <SubscriptionPlans />
         </div>
       </div>
     );
   }
 
   // 🟢 CASO 2: PRUEBA ACTIVA (CÁPSULA FLOTANTE DISCRETA)
-  if (isMinimized) return null; // Si el usuario lo cerró, no mostramos nada hasta recargar
+  if (isMinimized) return null;
 
   return (
     <div className="fixed z-40 bottom-20 right-4 md:bottom-4 md:right-4 animate-slide-in-right">
