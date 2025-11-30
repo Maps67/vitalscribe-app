@@ -101,7 +101,22 @@ const PatientsView: React.FC = () => {
   const handlePrintNote = async (consultation: ConsultationRecord) => {
       if (!viewingPatient || !doctorProfile) return;
       try {
-          const blob = await pdf(<PrescriptionPDF doctorName={doctorProfile.full_name} specialty={doctorProfile.specialty} license={doctorProfile.license_number} phone={doctorProfile.phone} university={doctorProfile.university} address={doctorProfile.address} logoUrl={doctorProfile.logo_url} signatureUrl={doctorProfile.signature_url} patientName={viewingPatient.name} date={new Date(consultation.created_at).toLocaleDateString()} content={consultation.summary} />).toBlob();
+          const blob = await pdf(
+            <PrescriptionPDF 
+                doctorName={doctorProfile.full_name} 
+                specialty={doctorProfile.specialty} 
+                license={doctorProfile.license_number} 
+                phone={doctorProfile.phone} 
+                university={doctorProfile.university} 
+                address={doctorProfile.address} 
+                logoUrl={doctorProfile.logo_url} 
+                signatureUrl={doctorProfile.signature_url} 
+                patientName={viewingPatient.name} 
+                date={new Date(consultation.created_at).toLocaleDateString()} 
+                content={consultation.summary} 
+                documentTitle="NOTA DE EVOLUCIÓN" // <--- CAMBIO CRÍTICO: Título correcto para historial
+            />
+          ).toBlob();
           window.open(URL.createObjectURL(blob), '_blank');
       } catch (e) { toast.error("Error generando PDF"); }
   };
