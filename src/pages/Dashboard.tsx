@@ -1,11 +1,10 @@
-// Archivo: src/pages/Dashboard.tsx (VERSIÓN FINAL COMPLETA - SIN RECORTES)
 import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Calendar, MapPin, ChevronRight, Sun, Moon, Bell, CloudRain, Cloud, 
   ShieldCheck, Upload, X, Bot, Mic, Square, Loader2, CheckCircle2,
   Stethoscope, UserCircle, ArrowRight, AlertTriangle, FileText,
-  Clock, TrendingUp, UserPlus, Zap
+  Clock, TrendingUp, UserPlus, Zap, Thermometer
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { format, isToday, isTomorrow, parseISO, startOfDay, endOfDay, addDays } from 'date-fns';
@@ -30,17 +29,59 @@ interface DashboardAppointment {
   };
 }
 
-// --- COMPONENTE BOTÓN ASISTENTE ---
+// --- COMPONENTE RELOJ ELEGANTE (SOLO PC) ---
+const LiveClockDesktop = () => {
+  const [time, setTime] = useState(new Date());
+  useEffect(() => {
+    const timer = setInterval(() => setTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  return (
+    <div className="flex flex-col items-center justify-center text-white h-full">
+      <div className="flex items-baseline gap-2">
+        <span className="text-6xl font-bold tracking-tighter drop-shadow-sm">
+            {format(time, 'h:mm')}
+        </span>
+        <span className="text-2xl font-light opacity-80 pb-1">{format(time, 'a')}</span>
+      </div>
+      <div className="w-12 h-1 bg-white/30 rounded-full my-2"></div>
+      <span className="text-sm font-medium uppercase tracking-widest opacity-90">
+        {format(time, "EEEE d 'de' MMMM", { locale: es })}
+      </span>
+    </div>
+  );
+};
+
+// --- COMPONENTE RELOJ (MOVIL) ---
+const LiveClockMobile = () => {
+    const [time, setTime] = useState(new Date());
+    useEffect(() => {
+      const timer = setInterval(() => setTime(new Date()), 1000);
+      return () => clearInterval(timer);
+    }, []);
+    return (
+        <div className="flex flex-col items-start mt-3 border-t border-white/20 pt-2 w-full">
+            <div className="text-3xl font-bold tracking-widest tabular-nums leading-none flex items-baseline">
+            {format(time, 'h:mm')}
+            <span className="text-sm ml-1 font-medium opacity-60">{format(time, 'a')}</span>
+            </div>
+            <div className="text-[10px] font-medium opacity-80 uppercase tracking-widest mt-1">
+            {format(time, "EEEE d 'de' MMMM", { locale: es })}
+            </div>
+        </div>
+    );
+};
+
 const AssistantButton = ({ onClick, mobile = false }: { onClick: () => void, mobile?: boolean }) => (
   <button 
     onClick={onClick}
     className={`
       group flex items-center gap-3 bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 
       rounded-full transition-all active:scale-95 shadow-sm hover:shadow-lg
-      ${mobile ? 'mt-4 py-2.5 px-4 w-full justify-center' : 'mt-4 py-2 px-5'}
+      ${mobile ? 'mt-4 py-2.5 px-4 w-full justify-center' : 'w-full justify-center py-3'}
     `}
   >
-    <div className="bg-gradient-to-r from-indigo-400 to-violet-400 p-1.5 rounded-full group-hover:scale-110 transition-transform shadow-inner">
+    <div className="bg-white/20 p-1.5 rounded-full group-hover:scale-110 transition-transform shadow-inner">
       <Bot size={mobile ? 18 : 20} className="text-white" />
     </div>
     <span className={`text-white font-bold ${mobile ? 'text-xs' : 'text-sm'} tracking-wide shadow-black/10 drop-shadow-sm`}>
@@ -49,27 +90,7 @@ const AssistantButton = ({ onClick, mobile = false }: { onClick: () => void, mob
   </button>
 );
 
-// --- COMPONENTE RELOJ ---
-const LiveClock = ({ mobile = false }: { mobile?: boolean }) => {
-  const [time, setTime] = useState(new Date());
-  useEffect(() => {
-    const timer = setInterval(() => setTime(new Date()), 1000);
-    return () => clearInterval(timer);
-  }, []);
-  return (
-    <div className={`flex flex-col ${mobile ? 'items-start mt-3 border-t border-white/20 pt-2 w-full' : 'items-center justify-center'}`}>
-      <div className={`${mobile ? 'text-3xl' : 'text-6xl'} font-bold tracking-widest tabular-nums leading-none flex items-baseline`}>
-        {format(time, 'h:mm')}
-        <span className={`${mobile ? 'text-sm' : 'text-2xl'} ml-1 font-medium opacity-60`}>{format(time, 'a')}</span>
-      </div>
-      <div className={`${mobile ? 'text-[10px]' : 'text-sm'} font-medium opacity-80 uppercase tracking-widest mt-1`}>
-        {format(time, "EEEE d 'de' MMMM", { locale: es })}
-      </div>
-    </div>
-  );
-};
-
-// --- MODAL DEL ASISTENTE (LÓGICA COMPLETA) ---
+// --- MODAL ASISTENTE ---
 const AssistantModal = ({ isOpen, onClose, onActionComplete }: { isOpen: boolean; onClose: () => void; onActionComplete: () => void }) => {
   const { isListening, transcript, startListening, stopListening, resetTranscript } = useSpeechRecognition();
   const [status, setStatus] = useState<'idle' | 'listening' | 'processing' | 'confirming'>('idle');
@@ -140,7 +161,7 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete }: { isOpen: boolean
       case 'NAVIGATION':
         const dest = aiResponse.data.destination?.toLowerCase();
         onClose();
-        if (dest.includes('agenda')) navigate('/agenda'); // Ajustado a la ruta real
+        if (dest.includes('agenda')) navigate('/agenda');
         else if (dest.includes('paciente')) navigate('/patients');
         else if (dest.includes('config')) navigate('/settings');
         else navigate('/');
@@ -164,10 +185,10 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete }: { isOpen: boolean
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm animate-in fade-in">
       <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-3xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800">
         
-        <div className="bg-gradient-to-r from-indigo-600 to-violet-600 p-6 text-white text-center relative overflow-hidden">
+        <div className="bg-gradient-to-r from-teal-600 to-teal-700 p-6 text-white text-center relative overflow-hidden">
           <Bot size={48} className="mx-auto mb-2 relative z-10" />
           <h3 className="text-xl font-bold relative z-10">Copiloto Clínico</h3>
-          <p className="text-indigo-100 text-sm relative z-10">Escuchando órdenes médicas...</p>
+          <p className="text-teal-100 text-sm relative z-10">Escuchando órdenes médicas...</p>
           <div className="absolute top-0 left-0 w-full h-full opacity-20">
              <div className="absolute w-32 h-32 bg-white rounded-full -top-10 -left-10 blur-2xl"></div>
              <div className="absolute w-32 h-32 bg-white rounded-full -bottom-10 -right-10 blur-2xl"></div>
@@ -181,14 +202,14 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete }: { isOpen: boolean
                  "{transcript || 'Diga un comando (Ej: "Dosis paracetamol", "Ir a agenda", "Cita mañana")...'}"
                </div>
                {status === 'processing' ? (
-                 <div className="flex items-center gap-2 text-indigo-600 font-bold animate-pulse">
+                 <div className="flex items-center gap-2 text-teal-600 font-bold animate-pulse">
                    <Loader2 className="animate-spin" /> Analizando intención...
                  </div>
                ) : (
                  <button 
                   onClick={handleToggleRecord}
                   className={`w-20 h-20 rounded-full flex items-center justify-center shadow-xl transition-all transform active:scale-95 ${
-                    isListening ? 'bg-red-500 text-white animate-pulse ring-4 ring-red-200' : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                    isListening ? 'bg-red-500 text-white animate-pulse ring-4 ring-red-200' : 'bg-teal-600 text-white hover:bg-teal-700'
                   }`}
                  >
                    {isListening ? <Square size={32} fill="currentColor"/> : <Mic size={32} />}
@@ -199,7 +220,7 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete }: { isOpen: boolean
 
           {status === 'confirming' && aiResponse && (
             <div className="animate-in slide-in-from-bottom-4 fade-in">
-              <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-t-xl p-4 border border-indigo-100 dark:border-indigo-800">
+              <div className="bg-teal-50 dark:bg-teal-900/20 rounded-t-xl p-4 border border-teal-100 dark:border-teal-800">
                 <div className="flex items-start gap-3">
                   {aiResponse.intent === 'MEDICAL_QUERY' ? <Stethoscope className="text-blue-500 shrink-0 mt-1"/> : 
                    aiResponse.intent === 'NAVIGATION' ? <ArrowRight className="text-orange-500 shrink-0 mt-1"/> :
@@ -215,7 +236,7 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete }: { isOpen: boolean
                 </div>
               </div>
 
-              <div className="bg-white dark:bg-slate-800 p-4 rounded-b-xl border-x border-b border-indigo-100 dark:border-indigo-800 mb-6 shadow-sm">
+              <div className="bg-white dark:bg-slate-800 p-4 rounded-b-xl border-x border-b border-teal-100 dark:border-teal-800 mb-6 shadow-sm">
                 
                 {aiResponse.intent === 'CREATE_APPOINTMENT' && aiResponse.data && (
                    <div className="text-sm grid grid-cols-2 gap-y-2">
@@ -241,7 +262,7 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete }: { isOpen: boolean
 
                 {aiResponse.intent === 'NAVIGATION' && aiResponse.data && (
                    <div className="flex items-center justify-center py-2 text-slate-600 dark:text-slate-300">
-                      Ir a: <span className="font-bold ml-2 text-indigo-600 uppercase">{aiResponse.data.destination}</span>
+                      Ir a: <span className="font-bold ml-2 text-teal-600 uppercase">{aiResponse.data.destination}</span>
                    </div>
                 )}
 
@@ -253,7 +274,7 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete }: { isOpen: boolean
                 </button>
                 
                 {aiResponse.intent !== 'MEDICAL_QUERY' && (
-                  <button onClick={handleExecute} className="flex-1 py-3 bg-indigo-600 text-white font-bold rounded-xl shadow-lg hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2">
+                  <button onClick={handleExecute} className="flex-1 py-3 bg-teal-600 text-white font-bold rounded-xl shadow-lg hover:bg-teal-700 transition-colors flex items-center justify-center gap-2">
                     Ejecutar <ChevronRight size={18}/>
                   </button>
                 )}
@@ -274,22 +295,19 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete }: { isOpen: boolean
   );
 };
 
-// --- NUEVO WIDGET ROI (RETORNO DE INVERSIÓN) ---
+// --- WIDGETS AUXILIARES ---
 const RoiWidget = () => (
   <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-100 dark:border-slate-800 shadow-sm relative overflow-hidden group">
     <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
         <TrendingUp size={80} className="text-teal-500" />
     </div>
-    
     <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
         <Clock size={14} /> Tiempo Ahorrado (Semanal)
     </h3>
-    
     <div className="flex items-baseline gap-2 mb-2">
         <span className="text-4xl font-black text-slate-900 dark:text-white">4.5</span>
         <span className="text-sm font-bold text-slate-500 dark:text-slate-400">Horas</span>
     </div>
-    
     <div className="bg-teal-50 dark:bg-teal-900/20 rounded-lg p-2 flex items-center gap-2 border border-teal-100 dark:border-teal-800/30">
         <div className="bg-teal-500 rounded-full p-1">
             <Zap size={10} className="text-white" fill="currentColor" />
@@ -301,7 +319,6 @@ const RoiWidget = () => (
   </div>
 );
 
-// --- NUEVO WIDGET ACCIONES RÁPIDAS ---
 const QuickActions = ({ navigate }: { navigate: any }) => (
   <div className="grid grid-cols-1 gap-3">
       <button onClick={() => navigate('/consultation')} className="flex items-center gap-3 p-4 bg-gradient-to-r from-teal-500 to-teal-600 rounded-2xl text-white shadow-lg shadow-teal-500/20 hover:scale-[1.02] transition-transform group">
@@ -332,7 +349,7 @@ const QuickActions = ({ navigate }: { navigate: any }) => (
   </div>
 );
 
-// --- COMPONENTE DASHBOARD PRINCIPAL ---
+// --- DASHBOARD PRINCIPAL ---
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const [doctorName, setDoctorName] = useState<string>('');
@@ -374,7 +391,7 @@ const Dashboard: React.FC = () => {
   };
 
   const heroStyle = isNight 
-    ? { bg: "bg-gradient-to-br from-slate-900 to-indigo-950", text: "text-indigo-100" }
+    ? { bg: "bg-gradient-to-br from-slate-900 to-teal-950", text: "text-teal-100" }
     : { bg: "bg-gradient-to-br from-teal-500 to-teal-700", text: "text-teal-50" };
 
   const fetchData = async () => {
@@ -399,7 +416,6 @@ const Dashboard: React.FC = () => {
 
               let { data: aptsData, error } = await query;
 
-              // Fallback para tabla anterior si existe
               if (error || !aptsData) {
                   const fallbackQuery = supabase
                       .from('appointments')
@@ -449,11 +465,14 @@ const Dashboard: React.FC = () => {
     return acc;
   }, {} as Record<string, DashboardAppointment[]>);
 
-  // --- RENDIZADO DEL DASHBOARD ---
+  const todayAppointmentsCount = appointments.filter(a => isToday(parseISO(a.start_time))).length;
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-slate-950 font-sans w-full overflow-x-hidden flex flex-col relative">
       
-      {/* HEADER MÓVIL */}
+      {/* --------------------------- */}
+      {/* HEADER MÓVIL (INTACTO)      */}
+      {/* --------------------------- */}
       <div className="md:hidden px-5 pt-6 pb-4 flex justify-between items-center bg-white dark:bg-slate-900 sticky top-0 z-30 border-b border-gray-100 dark:border-slate-800 shadow-sm w-full">
         <div className="flex items-center gap-3">
             <img src="/pwa-192x192.png" alt="Logo" className="w-9 h-9 rounded-lg object-cover shadow-sm" />
@@ -487,7 +506,7 @@ const Dashboard: React.FC = () => {
       {/* CONTENIDO PRINCIPAL */}
       <div className="flex-1 p-4 md:p-8 space-y-6 animate-fade-in-up w-full max-w-7xl mx-auto pb-32 md:pb-8">
         
-        {/* SALUDO */}
+        {/* SALUDO (Visible en ambas) */}
         <div className="flex justify-between items-end">
             <div className="mt-1">
                 <h1 className="text-2xl font-bold text-slate-800 dark:text-white leading-tight">
@@ -504,44 +523,112 @@ const Dashboard: React.FC = () => {
             </button>
         </div>
 
-        {/* TARJETA CLIMA + RELOJ (HERO) */}
-        <div className={`${heroStyle.bg} rounded-3xl p-6 text-white shadow-lg relative overflow-hidden flex justify-between items-center transition-all duration-500 w-full min-h-[140px]`}>
-            <div className="relative z-10 flex-1">
-                <div className="flex items-center gap-2 mb-2">
-                    <div className="bg-white/20 backdrop-blur-md px-2 py-1 rounded-md flex items-center gap-1.5">
-                        <MapPin size={11} className="text-white"/>
-                        <span className="text-[10px] font-bold uppercase tracking-wide">Consultorio</span>
+        {/* -------------------------------------------------------- */}
+        {/* VERSIÓN MÓVIL (BLOQUE HERO ORIGINAL - NO TOCAR)          */}
+        {/* -------------------------------------------------------- */}
+        <div className="md:hidden">
+            <div className={`${heroStyle.bg} rounded-3xl p-6 text-white shadow-lg relative overflow-hidden flex justify-between items-center transition-all duration-500 w-full min-h-[140px]`}>
+                <div className="relative z-10 flex-1">
+                    <div className="flex items-center gap-2 mb-2">
+                        <div className="bg-white/20 backdrop-blur-md px-2 py-1 rounded-md flex items-center gap-1.5">
+                            <MapPin size={11} className="text-white"/>
+                            <span className="text-[10px] font-bold uppercase tracking-wide">Consultorio</span>
+                        </div>
                     </div>
-                </div>
-                <div className="flex items-end gap-3">
-                    <h2 className="text-5xl font-bold tracking-tighter leading-none">{weather.temp}°</h2>
-                    <div className="mb-1">
-                        <p className="text-lg font-bold leading-none">{appointments.filter(a => isToday(parseISO(a.start_time))).length} Citas</p>
-                        <p className={`text-xs font-medium ${heroStyle.text} opacity-90`}>Hoy</p>
+                    <div className="flex items-end gap-3">
+                        <h2 className="text-5xl font-bold tracking-tighter leading-none">{weather.temp}°</h2>
+                        <div className="mb-1">
+                            <p className="text-lg font-bold leading-none">{appointments.filter(a => isToday(parseISO(a.start_time))).length} Citas</p>
+                            <p className={`text-xs font-medium ${heroStyle.text} opacity-90`}>Hoy</p>
+                        </div>
                     </div>
-                </div>
-                <div className="md:hidden block">
-                    <LiveClock mobile={true} />
+                    <LiveClockMobile />
                     <AssistantButton mobile={true} onClick={() => setIsAssistantOpen(true)} />
                 </div>
+                <div className="relative z-10 transform translate-x-2 drop-shadow-lg transition-transform duration-1000">
+                    {getWeatherIcon()}
+                </div>
+                <div className="absolute -right-10 -top-10 w-40 h-40 bg-white/10 rounded-full blur-3xl animate-pulse"></div>
             </div>
-            <div className="hidden md:flex absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 z-20 flex-col items-center">
-                <LiveClock />
-                <AssistantButton onClick={() => setIsAssistantOpen(true)} />
-            </div>
-            <div className="relative z-10 transform translate-x-2 drop-shadow-lg transition-transform duration-1000 hover:scale-110">
-                {getWeatherIcon()}
-            </div>
-            <div className="absolute -right-10 -top-10 w-40 h-40 bg-white/10 rounded-full blur-3xl animate-pulse"></div>
         </div>
 
-        {/* 🚀 LAYOUT GRID V2.0: AGENDA + WIDGETS */}
+        {/* -------------------------------------------------------- */}
+        {/* VERSIÓN PC (GRID DE 3 TARJETAS VERDES SEPARADAS)         */}
+        {/* -------------------------------------------------------- */}
+        <div className="hidden md:grid grid-cols-12 gap-5 h-40">
+            
+            {/* 1. CLIMA Y UBICACIÓN */}
+            <div className="col-span-4 bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-200 dark:border-slate-800 shadow-sm relative overflow-hidden group">
+                <div className="flex justify-between items-start z-10 relative h-full">
+                    <div className="flex flex-col justify-between h-full">
+                        <div className="flex items-center gap-2 text-teal-600 dark:text-teal-400">
+                            <MapPin size={16} />
+                            <span className="text-xs font-bold uppercase tracking-wider">Consultorio</span>
+                        </div>
+                        <div>
+                            <h2 className="text-5xl font-black text-slate-800 dark:text-white tracking-tighter">{weather.temp}°</h2>
+                            <p className="text-xs font-bold text-slate-400 mt-1">Clima actual</p>
+                        </div>
+                    </div>
+                    <div className="transform scale-110 group-hover:scale-125 transition-transform duration-500">
+                        {getWeatherIcon()}
+                    </div>
+                </div>
+                <div className="absolute bottom-0 right-0 w-24 h-24 bg-teal-500/10 rounded-full blur-2xl"></div>
+            </div>
+
+            {/* 2. RELOJ CENTRAL (Protagonista - Verde Degradado) */}
+            <div className="col-span-4 bg-gradient-to-br from-teal-500 to-teal-700 rounded-3xl shadow-lg relative overflow-hidden flex items-center justify-center border border-teal-400/30">
+                <div className="absolute top-0 left-0 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
+                <div className="relative z-10">
+                    <LiveClockDesktop />
+                </div>
+                {/* Brillo decorativo */}
+                <div className="absolute -top-10 -right-10 w-32 h-32 bg-white/20 rounded-full blur-3xl"></div>
+                <div className="absolute bottom-0 left-0 w-full h-1 bg-white/20"></div>
+            </div>
+
+            {/* 3. ACCIÓN Y ASISTENTE */}
+            <div className="col-span-4 bg-slate-900 rounded-3xl p-6 shadow-lg relative overflow-hidden flex flex-col justify-between border border-slate-800">
+                <div className="flex justify-between items-start z-10">
+                    <div>
+                        <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Agenda de Hoy</p>
+                        <div className="flex items-baseline gap-2">
+                            <span className="text-4xl font-bold text-white">{todayAppointmentsCount}</span>
+                            <span className="text-sm font-medium text-teal-400">Pacientes</span>
+                        </div>
+                    </div>
+                    <div className="bg-slate-800 p-2 rounded-xl border border-slate-700">
+                        <Calendar size={20} className="text-teal-400" />
+                    </div>
+                </div>
+                
+                <div className="relative z-10 mt-auto">
+                    <button 
+                        onClick={() => setIsAssistantOpen(true)}
+                        className="w-full flex items-center justify-between bg-teal-600 hover:bg-teal-500 text-white p-3 rounded-xl transition-all active:scale-95 shadow-lg shadow-teal-900/50 group"
+                    >
+                        <div className="flex items-center gap-3">
+                            <div className="bg-white/20 p-1.5 rounded-lg group-hover:rotate-12 transition-transform">
+                                <Bot size={18} />
+                            </div>
+                            <span className="text-xs font-bold tracking-wide">Asistente V4</span>
+                        </div>
+                        <ChevronRight size={16} className="opacity-70 group-hover:translate-x-1 transition-transform" />
+                    </button>
+                </div>
+                
+                {/* Decoración de fondo */}
+                <div className="absolute top-0 right-0 w-40 h-full bg-gradient-to-l from-teal-900/20 to-transparent pointer-events-none"></div>
+            </div>
+
+        </div>
+
+        {/* RESTO DEL CONTENIDO (AGENDA Y WIDGETS) - IGUAL */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             
-            {/* COLUMNA IZQUIERDA: AGENDA (Ocupa 2 espacios) */}
             <div className="lg:col-span-2 space-y-6">
-                
-                {/* Botón Móvil Subir Archivos */}
+                {/* Botón Móvil Subir (Solo visible en cel) */}
                 <button onClick={() => setIsUploadModalOpen(true)} className="md:hidden w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-4 rounded-xl flex items-center justify-between shadow-sm active:scale-95 transition-transform">
                   <div className="flex items-center gap-3">
                     <div className="bg-teal-50 dark:bg-teal-900/30 p-3 rounded-full text-brand-teal"><Upload size={20} /></div>
@@ -553,7 +640,6 @@ const Dashboard: React.FC = () => {
                   <ChevronRight size={18} className="text-slate-300" />
                 </button>
 
-                {/* AGENDA INTELIGENTE */}
                 <section className="w-full">
                     <div className="flex justify-between items-center mb-4 px-1">
                         <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
@@ -624,12 +710,8 @@ const Dashboard: React.FC = () => {
                 </section>
             </div>
 
-            {/* COLUMNA DERECHA: WIDGETS (SOLO ESCRITORIO) */}
             <div className="hidden lg:block space-y-6">
-                {/* WIDGET 1: ROI */}
                 <RoiWidget />
-                
-                {/* WIDGET 2: ACCIONES RÁPIDAS */}
                 <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 ml-1">Accesos Rápidos</h3>
                 <QuickActions navigate={navigate} />
             </div>
@@ -659,7 +741,6 @@ const Dashboard: React.FC = () => {
         </div>
       )}
 
-      {/* INCLUYE EL MODAL DEL ASISTENTE */}
       <AssistantModal 
         isOpen={isAssistantOpen} 
         onClose={() => setIsAssistantOpen(false)} 
