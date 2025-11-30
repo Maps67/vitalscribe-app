@@ -4,7 +4,7 @@ import {
   Calendar, MapPin, ChevronRight, Sun, Moon, Bell, CloudRain, Cloud, 
   ShieldCheck, Upload, X, Bot, Mic, Square, Loader2, CheckCircle2,
   Stethoscope, UserCircle, ArrowRight, AlertTriangle, FileText,
-  Clock, TrendingUp, UserPlus, Zap, Thermometer
+  Clock, TrendingUp, UserPlus, Zap, Activity, LogOut
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { format, isToday, isTomorrow, parseISO, startOfDay, endOfDay, addDays } from 'date-fns';
@@ -29,7 +29,18 @@ interface DashboardAppointment {
   };
 }
 
-// --- COMPONENTE RELOJ ELEGANTE (SOLO PC) ---
+// --- BOTÓN ASISTENTE PEQUEÑO (HEADER) ---
+const AssistantButtonSmall = ({ onClick }: { onClick: () => void }) => (
+  <button 
+    onClick={onClick}
+    className="group flex items-center gap-2 bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 text-white px-3 py-1.5 rounded-full shadow-md hover:shadow-lg transition-all active:scale-95 border border-indigo-400/50"
+  >
+    <Bot size={16} className="text-white animate-pulse" />
+    <span className="text-xs font-bold tracking-wide">Asistente V4</span>
+  </button>
+);
+
+// --- COMPONENTE RELOJ ELEGANTE ---
 const LiveClockDesktop = () => {
   const [time, setTime] = useState(new Date());
   useEffect(() => {
@@ -37,15 +48,16 @@ const LiveClockDesktop = () => {
     return () => clearInterval(timer);
   }, []);
   return (
-    <div className="flex flex-col items-center justify-center text-white h-full">
+    <div className="flex flex-col items-center justify-center text-white h-full drop-shadow-md">
       <div className="flex items-baseline gap-2">
-        <span className="text-6xl font-bold tracking-tighter drop-shadow-sm">
+        <span className="text-7xl font-black tracking-tighter leading-none">
             {format(time, 'h:mm')}
         </span>
-        <span className="text-2xl font-light opacity-80 pb-1">{format(time, 'a')}</span>
+        <div className="flex flex-col">
+            <span className="text-xl font-medium opacity-80">{format(time, 'a')}</span>
+        </div>
       </div>
-      <div className="w-12 h-1 bg-white/30 rounded-full my-2"></div>
-      <span className="text-sm font-medium uppercase tracking-widest opacity-90">
+      <span className="text-sm font-bold uppercase tracking-[0.2em] opacity-90 mt-1 border-t border-white/30 pt-1 px-4">
         {format(time, "EEEE d 'de' MMMM", { locale: es })}
       </span>
     </div>
@@ -71,24 +83,6 @@ const LiveClockMobile = () => {
         </div>
     );
 };
-
-const AssistantButton = ({ onClick, mobile = false }: { onClick: () => void, mobile?: boolean }) => (
-  <button 
-    onClick={onClick}
-    className={`
-      group flex items-center gap-3 bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 
-      rounded-full transition-all active:scale-95 shadow-sm hover:shadow-lg
-      ${mobile ? 'mt-4 py-2.5 px-4 w-full justify-center' : 'w-full justify-center py-3'}
-    `}
-  >
-    <div className="bg-white/20 p-1.5 rounded-full group-hover:scale-110 transition-transform shadow-inner">
-      <Bot size={mobile ? 18 : 20} className="text-white" />
-    </div>
-    <span className={`text-white font-bold ${mobile ? 'text-xs' : 'text-sm'} tracking-wide shadow-black/10 drop-shadow-sm`}>
-      Asistente Inteligente V4
-    </span>
-  </button>
-);
 
 // --- MODAL ASISTENTE ---
 const AssistantModal = ({ isOpen, onClose, onActionComplete }: { isOpen: boolean; onClose: () => void; onActionComplete: () => void }) => {
@@ -184,17 +178,11 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete }: { isOpen: boolean
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm animate-in fade-in">
       <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-3xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800">
-        
         <div className="bg-gradient-to-r from-teal-600 to-teal-700 p-6 text-white text-center relative overflow-hidden">
           <Bot size={48} className="mx-auto mb-2 relative z-10" />
           <h3 className="text-xl font-bold relative z-10">Copiloto Clínico</h3>
           <p className="text-teal-100 text-sm relative z-10">Escuchando órdenes médicas...</p>
-          <div className="absolute top-0 left-0 w-full h-full opacity-20">
-             <div className="absolute w-32 h-32 bg-white rounded-full -top-10 -left-10 blur-2xl"></div>
-             <div className="absolute w-32 h-32 bg-white rounded-full -bottom-10 -right-10 blur-2xl"></div>
-          </div>
         </div>
-
         <div className="p-6">
           {status !== 'confirming' && (
             <div className="flex flex-col items-center gap-6">
@@ -217,72 +205,22 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete }: { isOpen: boolean
                )}
             </div>
           )}
-
           {status === 'confirming' && aiResponse && (
             <div className="animate-in slide-in-from-bottom-4 fade-in">
               <div className="bg-teal-50 dark:bg-teal-900/20 rounded-t-xl p-4 border border-teal-100 dark:border-teal-800">
                 <div className="flex items-start gap-3">
-                  {aiResponse.intent === 'MEDICAL_QUERY' ? <Stethoscope className="text-blue-500 shrink-0 mt-1"/> : 
-                   aiResponse.intent === 'NAVIGATION' ? <ArrowRight className="text-orange-500 shrink-0 mt-1"/> :
-                   <CheckCircle2 className="text-green-500 shrink-0 mt-1"/>}
+                  <CheckCircle2 className="text-green-500 shrink-0 mt-1"/>
                   <div>
                     <h4 className="font-bold text-slate-800 dark:text-white text-lg">
-                      {aiResponse.intent === 'CREATE_APPOINTMENT' ? 'Agendar Cita' : 
-                       aiResponse.intent === 'MEDICAL_QUERY' ? 'Respuesta Médica' : 
-                       aiResponse.intent === 'NAVIGATION' ? 'Navegación' : 'Acción Detectada'}
+                        Acción Detectada
                     </h4>
                     <p className="text-slate-600 dark:text-slate-300 text-sm mt-1">{aiResponse.message}</p>
                   </div>
                 </div>
               </div>
-
-              <div className="bg-white dark:bg-slate-800 p-4 rounded-b-xl border-x border-b border-teal-100 dark:border-teal-800 mb-6 shadow-sm">
-                
-                {aiResponse.intent === 'CREATE_APPOINTMENT' && aiResponse.data && (
-                   <div className="text-sm grid grid-cols-2 gap-y-2">
-                      <span className="text-slate-500">Paciente:</span>
-                      <span className="font-bold text-right text-slate-800 dark:text-white">{aiResponse.data.patientName}</span>
-                      <span className="text-slate-500">Fecha:</span>
-                      <span className="font-bold text-right text-slate-800 dark:text-white">
-                        {aiResponse.data.start_time ? format(parseISO(aiResponse.data.start_time), "d MMM, h:mm a", {locale: es}) : '--'}
-                      </span>
-                   </div>
-                )}
-
-                {aiResponse.intent === 'MEDICAL_QUERY' && aiResponse.data && (
-                   <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-100 dark:border-blue-800">
-                      <p className="text-slate-800 dark:text-slate-200 text-sm leading-relaxed font-medium">
-                        {aiResponse.data.answer || "No se pudo generar una respuesta clínica."}
-                      </p>
-                      <div className="mt-2 flex items-center gap-1 text-[10px] text-blue-600 uppercase font-bold">
-                        <AlertTriangle size={10} /> Sugerencia generada por IA - Verificar.
-                      </div>
-                   </div>
-                )}
-
-                {aiResponse.intent === 'NAVIGATION' && aiResponse.data && (
-                   <div className="flex items-center justify-center py-2 text-slate-600 dark:text-slate-300">
-                      Ir a: <span className="font-bold ml-2 text-teal-600 uppercase">{aiResponse.data.destination}</span>
-                   </div>
-                )}
-
-              </div>
-
-              <div className="flex gap-3">
-                <button onClick={() => { setStatus('idle'); resetTranscript(); }} className="flex-1 py-3 text-slate-500 font-bold hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors">
-                  {aiResponse.intent === 'MEDICAL_QUERY' ? 'Nueva Consulta' : 'Cancelar'}
-                </button>
-                
-                {aiResponse.intent !== 'MEDICAL_QUERY' && (
-                  <button onClick={handleExecute} className="flex-1 py-3 bg-teal-600 text-white font-bold rounded-xl shadow-lg hover:bg-teal-700 transition-colors flex items-center justify-center gap-2">
-                    Ejecutar <ChevronRight size={18}/>
-                  </button>
-                )}
-                {aiResponse.intent === 'MEDICAL_QUERY' && (
-                  <button onClick={onClose} className="flex-1 py-3 bg-slate-800 text-white font-bold rounded-xl shadow-lg hover:bg-slate-700 transition-colors">
-                    Entendido
-                  </button>
-                )}
+              <div className="flex gap-3 mt-4">
+                <button onClick={() => { setStatus('idle'); resetTranscript(); }} className="flex-1 py-3 text-slate-500 font-bold hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors">Cancelar</button>
+                <button onClick={handleExecute} className="flex-1 py-3 bg-teal-600 text-white font-bold rounded-xl shadow-lg hover:bg-teal-700 transition-colors flex items-center justify-center gap-2">Ejecutar <ChevronRight size={18}/></button>
               </div>
             </div>
           )}
@@ -390,9 +328,15 @@ const Dashboard: React.FC = () => {
         : <Sun size={56} className={`text-yellow-300 opacity-90 ${animClass}`}/>;
   };
 
-  const heroStyle = isNight 
-    ? { bg: "bg-gradient-to-br from-slate-900 to-teal-950", text: "text-teal-100" }
-    : { bg: "bg-gradient-to-br from-teal-500 to-teal-700", text: "text-teal-50" };
+  // --- GRADIENTES DINÁMICOS PANORÁMICOS ---
+  // Left: Light | Center: Turquoise | Right: Dark Green
+  const panoramicGradient = isNight
+    ? "bg-gradient-to-r from-slate-900 via-teal-900 to-emerald-950" 
+    : "bg-gradient-to-r from-emerald-50 via-teal-500 to-teal-800";
+
+  // Text Colors adjustments
+  const leftTextColor = isNight ? "text-slate-300" : "text-teal-800";
+  const rightTextColor = "text-white"; 
 
   const fetchData = async () => {
       try {
@@ -465,14 +409,17 @@ const Dashboard: React.FC = () => {
     return acc;
   }, {} as Record<string, DashboardAppointment[]>);
 
-  const todayAppointmentsCount = appointments.filter(a => isToday(parseISO(a.start_time))).length;
+  // Stats para la sección derecha
+  const todayAppointments = appointments.filter(a => isToday(parseISO(a.start_time)));
+  const pendingCount = todayAppointments.filter(a => a.status === 'scheduled').length;
+  const completedCount = todayAppointments.filter(a => a.status === 'completed').length;
+  const totalToday = todayAppointments.length || 1; // avoid div by 0
+  const progressPercent = Math.round((completedCount / totalToday) * 100);
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-slate-950 font-sans w-full overflow-x-hidden flex flex-col relative">
       
-      {/* --------------------------- */}
-      {/* HEADER MÓVIL (INTACTO)      */}
-      {/* --------------------------- */}
+      {/* HEADER MÓVIL (INTACTO) */}
       <div className="md:hidden px-5 pt-6 pb-4 flex justify-between items-center bg-white dark:bg-slate-900 sticky top-0 z-30 border-b border-gray-100 dark:border-slate-800 shadow-sm w-full">
         <div className="flex items-center gap-3">
             <img src="/pwa-192x192.png" alt="Logo" className="w-9 h-9 rounded-lg object-cover shadow-sm" />
@@ -506,13 +453,19 @@ const Dashboard: React.FC = () => {
       {/* CONTENIDO PRINCIPAL */}
       <div className="flex-1 p-4 md:p-8 space-y-6 animate-fade-in-up w-full max-w-7xl mx-auto pb-32 md:pb-8">
         
-        {/* SALUDO (Visible en ambas) */}
+        {/* SALUDO */}
         <div className="flex justify-between items-end">
             <div className="mt-1">
-                <h1 className="text-2xl font-bold text-slate-800 dark:text-white leading-tight">
-                    {dynamicGreeting.greeting} 
-                </h1>
-                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
+                <div className="flex items-center gap-3 mb-1">
+                    <h1 className="text-2xl font-bold text-slate-800 dark:text-white leading-tight">
+                        {dynamicGreeting.greeting}
+                    </h1>
+                    {/* BOTÓN ASISTENTE REUBICADO AQUÍ */}
+                    <div className="hidden md:block">
+                        <AssistantButtonSmall onClick={() => setIsAssistantOpen(true)} />
+                    </div>
+                </div>
+                <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
                     {dynamicGreeting.message}
                 </p>
             </div>
@@ -527,7 +480,7 @@ const Dashboard: React.FC = () => {
         {/* VERSIÓN MÓVIL (BLOQUE HERO ORIGINAL - NO TOCAR)          */}
         {/* -------------------------------------------------------- */}
         <div className="md:hidden">
-            <div className={`${heroStyle.bg} rounded-3xl p-6 text-white shadow-lg relative overflow-hidden flex justify-between items-center transition-all duration-500 w-full min-h-[140px]`}>
+            <div className={`bg-gradient-to-br from-teal-500 to-teal-700 rounded-3xl p-6 text-white shadow-lg relative overflow-hidden flex justify-between items-center transition-all duration-500 w-full min-h-[140px]`}>
                 <div className="relative z-10 flex-1">
                     <div className="flex items-center gap-2 mb-2">
                         <div className="bg-white/20 backdrop-blur-md px-2 py-1 rounded-md flex items-center gap-1.5">
@@ -538,12 +491,16 @@ const Dashboard: React.FC = () => {
                     <div className="flex items-end gap-3">
                         <h2 className="text-5xl font-bold tracking-tighter leading-none">{weather.temp}°</h2>
                         <div className="mb-1">
-                            <p className="text-lg font-bold leading-none">{appointments.filter(a => isToday(parseISO(a.start_time))).length} Citas</p>
-                            <p className={`text-xs font-medium ${heroStyle.text} opacity-90`}>Hoy</p>
+                            <p className="text-lg font-bold leading-none">{todayAppointments.length} Citas</p>
+                            <p className={`text-xs font-medium text-teal-100 opacity-90`}>Hoy</p>
                         </div>
                     </div>
                     <LiveClockMobile />
-                    <AssistantButton mobile={true} onClick={() => setIsAssistantOpen(true)} />
+                    
+                    <button onClick={() => setIsAssistantOpen(true)} className="mt-4 py-2.5 px-4 w-full justify-center group flex items-center gap-3 bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 rounded-full transition-all active:scale-95 shadow-sm hover:shadow-lg">
+                        <Bot size={18} className="text-white" />
+                        <span className="text-white font-bold text-xs tracking-wide">Asistente Inteligente V4</span>
+                    </button>
                 </div>
                 <div className="relative z-10 transform translate-x-2 drop-shadow-lg transition-transform duration-1000">
                     {getWeatherIcon()}
@@ -553,93 +510,83 @@ const Dashboard: React.FC = () => {
         </div>
 
         {/* -------------------------------------------------------- */}
-        {/* VERSIÓN PC (GRID DE 3 TARJETAS VERDES SEPARADAS)         */}
+        {/* VERSIÓN PC: PANORÁMICO DEGRADADO CON SORPRESA A LA DERECHA */}
         {/* -------------------------------------------------------- */}
-        <div className="hidden md:grid grid-cols-12 gap-5 h-40">
+        <div className={`hidden md:flex ${panoramicGradient} rounded-[2rem] shadow-2xl h-56 relative overflow-hidden transition-all duration-1000 border border-slate-200/20`}>
             
-            {/* 1. CLIMA Y UBICACIÓN */}
-            <div className="col-span-4 bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-200 dark:border-slate-800 shadow-sm relative overflow-hidden group">
-                <div className="flex justify-between items-start z-10 relative h-full">
-                    <div className="flex flex-col justify-between h-full">
-                        <div className="flex items-center gap-2 text-teal-600 dark:text-teal-400">
-                            <MapPin size={16} />
-                            <span className="text-xs font-bold uppercase tracking-wider">Consultorio</span>
-                        </div>
-                        <div>
-                            <h2 className="text-5xl font-black text-slate-800 dark:text-white tracking-tighter">{weather.temp}°</h2>
-                            <p className="text-xs font-bold text-slate-400 mt-1">Clima actual</p>
-                        </div>
+            {/* TEXTURA SUTIL DE FONDO */}
+            <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-[0.03]"></div>
+
+            {/* SECCIÓN 1: CLIMA (Izquierda - Claro) */}
+            <div className="w-1/3 p-8 flex flex-col justify-between relative z-10 border-r border-white/5">
+                <div className="flex justify-between items-start">
+                    <div className={`flex items-center gap-2 ${leftTextColor}`}>
+                        <MapPin size={16} />
+                        <span className="text-xs font-bold uppercase tracking-wider">Consultorio</span>
                     </div>
-                    <div className="transform scale-110 group-hover:scale-125 transition-transform duration-500">
+                    <div className="transform scale-110 drop-shadow-md">
                         {getWeatherIcon()}
                     </div>
                 </div>
-                <div className="absolute bottom-0 right-0 w-24 h-24 bg-teal-500/10 rounded-full blur-2xl"></div>
+                <div>
+                    <h2 className={`text-6xl font-black ${isNight ? 'text-white' : 'text-teal-900'} tracking-tighter`}>{weather.temp}°</h2>
+                    <p className={`text-sm font-bold ${isNight ? 'text-slate-400' : 'text-teal-700/70'} mt-1`}>Temperatura</p>
+                </div>
             </div>
 
-            {/* 2. RELOJ CENTRAL (Protagonista - Verde Degradado) */}
-            <div className="col-span-4 bg-gradient-to-br from-teal-500 to-teal-700 rounded-3xl shadow-lg relative overflow-hidden flex items-center justify-center border border-teal-400/30">
-                <div className="absolute top-0 left-0 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
-                <div className="relative z-10">
-                    <LiveClockDesktop />
-                </div>
-                {/* Brillo decorativo */}
-                <div className="absolute -top-10 -right-10 w-32 h-32 bg-white/20 rounded-full blur-3xl"></div>
-                <div className="absolute bottom-0 left-0 w-full h-1 bg-white/20"></div>
+            {/* SECCIÓN 2: RELOJ (Centro - Turquesa Vibrante) */}
+            <div className="w-1/3 flex items-center justify-center relative z-10">
+                <LiveClockDesktop />
+                {/* Efecto de luz central */}
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-white/10 rounded-full blur-[80px] pointer-events-none"></div>
             </div>
 
-            {/* 3. ACCIÓN Y ASISTENTE */}
-            <div className="col-span-4 bg-slate-900 rounded-3xl p-6 shadow-lg relative overflow-hidden flex flex-col justify-between border border-slate-800">
-                <div className="flex justify-between items-start z-10">
-                    <div>
-                        <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Agenda de Hoy</p>
-                        <div className="flex items-baseline gap-2">
-                            <span className="text-4xl font-bold text-white">{todayAppointmentsCount}</span>
-                            <span className="text-sm font-medium text-teal-400">Pacientes</span>
+            {/* SECCIÓN 3: PULSO DEL CONSULTORIO (Derecha - Oscuro - SORPRESA) */}
+            <div className="w-1/3 p-8 relative z-10 flex flex-col justify-between text-right border-l border-white/5">
+                
+                {/* Header de la sección */}
+                <div className="flex justify-end items-center gap-2 mb-2">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-teal-200/80">Pulso del Día</span>
+                    <Activity size={14} className="text-teal-300 animate-pulse" />
+                </div>
+
+                {/* Contenido Principal: Progreso Visual */}
+                <div className="flex items-center justify-end gap-6">
+                    <div className="text-right">
+                        <div className="text-4xl font-bold text-white leading-none">{pendingCount}</div>
+                        <div className="text-xs text-teal-200 font-medium">Pendientes</div>
+                    </div>
+                    
+                    {/* Anillo de Progreso (SVG) */}
+                    <div className="relative w-16 h-16">
+                        <svg className="w-full h-full transform -rotate-90">
+                            <circle cx="32" cy="32" r="28" stroke="currentColor" strokeWidth="6" fill="transparent" className="text-teal-900/50" />
+                            <circle cx="32" cy="32" r="28" stroke="currentColor" strokeWidth="6" fill="transparent" 
+                                strokeDasharray={175} 
+                                strokeDashoffset={175 - (175 * progressPercent) / 100} 
+                                className="text-white transition-all duration-1000 ease-out" 
+                                strokeLinecap="round"
+                            />
+                        </svg>
+                        <div className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-white">
+                            {progressPercent}%
                         </div>
                     </div>
-                    <div className="bg-slate-800 p-2 rounded-xl border border-slate-700">
-                        <Calendar size={20} className="text-teal-400" />
-                    </div>
                 </div>
-                
-                <div className="relative z-10 mt-auto">
-                    <button 
-                        onClick={() => setIsAssistantOpen(true)}
-                        className="w-full flex items-center justify-between bg-teal-600 hover:bg-teal-500 text-white p-3 rounded-xl transition-all active:scale-95 shadow-lg shadow-teal-900/50 group"
-                    >
-                        <div className="flex items-center gap-3">
-                            <div className="bg-white/20 p-1.5 rounded-lg group-hover:rotate-12 transition-transform">
-                                <Bot size={18} />
-                            </div>
-                            <span className="text-xs font-bold tracking-wide">Asistente V4</span>
-                        </div>
-                        <ChevronRight size={16} className="opacity-70 group-hover:translate-x-1 transition-transform" />
-                    </button>
+
+                {/* Footer: Estimación de salida */}
+                <div className="mt-auto pt-4 flex items-center justify-end gap-2 text-teal-100/70 text-xs">
+                    <LogOut size={12} />
+                    <span>Salida est: {format(addDays(new Date(), 0).setHours(new Date().getHours() + (pendingCount * 0.5)), 'h:mm a')}</span>
                 </div>
-                
-                {/* Decoración de fondo */}
-                <div className="absolute top-0 right-0 w-40 h-full bg-gradient-to-l from-teal-900/20 to-transparent pointer-events-none"></div>
             </div>
 
         </div>
 
-        {/* RESTO DEL CONTENIDO (AGENDA Y WIDGETS) - IGUAL */}
+        {/* RESTO DEL CONTENIDO (AGENDA Y WIDGETS) */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             
             <div className="lg:col-span-2 space-y-6">
-                {/* Botón Móvil Subir (Solo visible en cel) */}
-                <button onClick={() => setIsUploadModalOpen(true)} className="md:hidden w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-4 rounded-xl flex items-center justify-between shadow-sm active:scale-95 transition-transform">
-                  <div className="flex items-center gap-3">
-                    <div className="bg-teal-50 dark:bg-teal-900/30 p-3 rounded-full text-brand-teal"><Upload size={20} /></div>
-                    <div className="text-left">
-                      <p className="font-bold text-slate-800 dark:text-white text-sm">Subir Archivos</p>
-                      <p className="text-xs text-slate-500">Gestión documental</p>
-                    </div>
-                  </div>
-                  <ChevronRight size={18} className="text-slate-300" />
-                </button>
-
                 <section className="w-full">
                     <div className="flex justify-between items-center mb-4 px-1">
                         <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
