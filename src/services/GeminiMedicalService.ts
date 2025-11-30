@@ -139,7 +139,7 @@ export const GeminiMedicalService = {
     }
   },
 
-  // 3. RECETA RÁPIDA (EXTRAER MEDICAMENTOS) - ESTA ES LA FUNCIÓN CRÍTICA CORREGIDA
+  // 3. RECETA RÁPIDA (EXTRAER MEDICAMENTOS) - CORRECCIÓN PARA ENTENDER PREGUNTAS "¿?"
   async extractMedications(text: string): Promise<MedicationItem[]> {
     try {
       console.log("Enviando a IA para extracción:", text);
@@ -148,15 +148,22 @@ export const GeminiMedicalService = {
       const { data, error } = await supabase.functions.invoke('gemini-proxy', {
         body: {
           prompt: `
-            Actúa como un farmacéutico experto. Analiza el texto: "${text}".
-            Extrae los medicamentos recetados.
+            ACTÚA COMO: Farmacéutico experto transcribiendo una receta verbal.
             
-            REGLAS:
-            1. Retorna SOLAMENTE un arreglo JSON válido (Array de objetos).
-            2. NO añadas texto fuera del JSON.
-            3. Estructura: [{"drug": "Nombre", "details": "500mg", "frequency": "cada 8h", "duration": "3 días", "notes": "con alimentos"}]
+            TEXTO DICTADO: "${text}"
             
-            Si no hay medicamentos claros, retorna [].
+            TU OBJETIVO:
+            Identificar y extraer TODOS los medicamentos mencionados.
+            
+            REGLAS CRÍTICAS:
+            1. IMPORTANTE: Si el texto está entre signos de interrogación (ej: "¿Tomar paracetamol?"), INTERPRÉTALO COMO UNA ORDEN CONFIRMADA, NO COMO UNA DUDA. Asume que el médico está dictando y el sistema transcribió con duda.
+            2. Retorna SOLAMENTE un arreglo JSON válido.
+            3. Si falta la dosis, infiere la estándar para adultos o déjala vacía.
+            
+            ESTRUCTURA JSON OBLIGATORIA:
+            [{"drug": "Nombre Genérico/Comercial", "details": "500mg tabletas", "frequency": "cada 8 horas", "duration": "3 días", "notes": "Tomar con alimentos"}]
+            
+            Si absolutamente NO hay medicamentos en el texto, retorna [].
           `
         }
       });
@@ -234,7 +241,7 @@ export const GeminiMedicalService = {
     } catch (e) { return "Error chat"; }
   },
 
-  // Mantenemos métodos antiguos por compatibilidad
+  // Mantenemos métodos legacy por seguridad
   async generateQuickRxJSON(transcript: string, patientName: string): Promise<MedicationItem[]> {
      return this.extractMedications(transcript);
   },
