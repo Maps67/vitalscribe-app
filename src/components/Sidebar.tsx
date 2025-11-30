@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom'; // Agregué useNavigate
+import { NavLink, useNavigate } from 'react-router-dom'; 
 import { 
   LayoutDashboard, Stethoscope, Users, Briefcase, LogOut, X, 
-  Settings, Download, Share, Calendar, Moon, Sun, Crown // Agregué Crown
+  Settings, Download, Share, Calendar, Moon, Sun, Crown 
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useTheme } from '../context/ThemeContext';
@@ -86,10 +86,10 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, onLogout }) => {
             </NavLink>
           ))}
 
-          {/* --- BOTÓN UPGRADE (NUEVO) --- */}
+          {/* BOTÓN UPGRADE */}
           <div className="pt-4 mt-2">
             <button 
-                onClick={() => navigate('/settings')} // O abre el modal de precios directo
+                onClick={() => navigate('/settings')} 
                 className="w-full relative overflow-hidden group bg-gradient-to-r from-amber-100 to-amber-200 dark:from-amber-900/40 dark:to-amber-800/40 border border-amber-200 dark:border-amber-700/50 rounded-xl p-3 shadow-sm hover:shadow-md transition-all"
             >
                 <div className="flex items-center justify-between relative z-10">
@@ -103,7 +103,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, onLogout }) => {
                         </div>
                     </div>
                 </div>
-                {/* Brillo animado */}
                 <div className="absolute top-0 -left-[100%] group-hover:left-[100%] w-full h-full bg-gradient-to-r from-transparent via-white/40 to-transparent transition-all duration-1000 ease-in-out transform skew-x-12"></div>
             </button>
           </div>
@@ -150,8 +149,10 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, onLogout }) => {
             <span>Cerrar Sesión</span>
           </button>
 
+          {/* --- PROTECCIÓN LEGAL NOM-024 --- */}
           <div className="mt-4 text-[10px] text-slate-400 text-center leading-tight opacity-70 hover:opacity-100 transition-opacity">
-            <p className="font-bold">Clasificación: Software de Gestión (EHR)</p>
+            <p className="font-bold">Clasificación: Asistente de Transcripción</p>
+            <p className="text-[9px] mt-0.5 opacity-80">No sustituye al Expediente Legal (NOM-024)</p>
             <NavLink to="/terms" className="underline hover:text-brand-teal mt-1 block">
                 Términos y Responsabilidad
             </NavLink>
