@@ -58,8 +58,8 @@ const ConsultationView: React.FC = () => {
   const [isAttachmentsOpen, setIsAttachmentsOpen] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
 
-  const transcriptContainerRef = useRef<HTMLDivElement>(null); // Referencia al contenedor scrollable
-  const transcriptEndRef = useRef<HTMLDivElement>(null);
+  // REFERENCIAS PARA EL SCROLL
+  const transcriptContainerRef = useRef<HTMLDivElement>(null); 
   const chatEndRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -101,13 +101,15 @@ const ConsultationView: React.FC = () => {
     }
   }, [selectedPatient]); 
 
-  // --- AUTO-SCROLL CORREGIDO ---
-  useEffect(() => { 
-    if (isListening && transcriptEndRef.current) {
-        transcriptEndRef.current.scrollIntoView({ behavior: "smooth", block: "end" });
+  // --- FIX: AUTO-SCROLL FUERZA BRUTA (PLAN B) ---
+  useEffect(() => {
+    if (transcriptContainerRef.current) {
+        const element = transcriptContainerRef.current;
+        // Forzamos el scroll al final matemático instantáneamente
+        element.scrollTop = element.scrollHeight;
     }
     if (transcript) localStorage.setItem('mediscribe_local_draft', transcript);
-  }, [transcript, isListening]);
+  }, [transcript, isListening]); // Se ejecuta con cada letra nueva
 
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [chatMessages, activeTab]);
 
@@ -271,7 +273,7 @@ const ConsultationView: React.FC = () => {
         </div>
         <div onClick={()=>setConsentGiven(!consentGiven)} className="flex items-center gap-2 p-3 rounded-lg border cursor-pointer select-none dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"><div className={`w-5 h-5 rounded border flex items-center justify-center ${consentGiven?'bg-green-500 border-green-500 text-white':'bg-white dark:bg-slate-700'}`}>{consentGiven&&<Check size={14}/>}</div><label className="text-xs dark:text-white cursor-pointer">Consentimiento otorgado.</label></div>
         
-        {/* --- ÁREA DE MICROFONO CON AUTO-SCROLL --- */}
+        {/* --- ÁREA DE MICROFONO CON HARD SCROLL --- */}
         <div className={`flex-1 border-2 border-dashed rounded-2xl flex flex-col p-4 relative transition-colors min-h-[300px] ${!isOnline ? 'border-amber-300 bg-amber-50 dark:bg-amber-900/10' : (isListening?'border-red-400 bg-red-50 dark:bg-red-900/10':'border-slate-200 dark:border-slate-700')}`}>
             
             {!transcript && (
@@ -292,10 +294,10 @@ const ConsultationView: React.FC = () => {
                 </div>
             )}
 
-            {/* ÁREA DE TEXTO CON CONTENEDOR SCROLLABLE */}
+            {/* CONTENEDOR SCROLLABLE (VITAL PARA EL FIX) */}
             <div 
-                className="flex-1 overflow-y-auto mb-4 relative z-10 w-full" 
-                ref={transcriptContainerRef} // Referencia al contenedor para posible uso futuro
+                className="flex-1 overflow-y-auto mb-4 relative z-10 w-full scroll-smooth" 
+                ref={transcriptContainerRef}
             >
                 <textarea 
                     className={`w-full h-full bg-transparent p-2 rounded-xl text-base leading-relaxed resize-none focus:outline-none dark:text-slate-200 ${!transcript ? 'opacity-0' : 'opacity-100'}`}
@@ -303,8 +305,6 @@ const ConsultationView: React.FC = () => {
                     onChange={(e) => setTranscript(e.target.value)}
                     placeholder="" 
                 />
-                {/* EL ANCLA INVISIBLE PARA EL SCROLL AUTOMÁTICO */}
-                <div ref={transcriptEndRef} style={{ height: 1 }} /> 
             </div>
             
             <div className="flex w-full gap-2 mt-auto flex-col xl:flex-row z-20 pt-2 border-t border-slate-200/50 dark:border-slate-700/50">
@@ -337,7 +337,7 @@ const ConsultationView: React.FC = () => {
         </div>
       </div>
       
-      {/* PANEL DERECHO (RESULTADOS) */}
+      {/* PANEL DERECHO (RESULTADOS) - SIN CAMBIOS */}
       <div className={`w-full md:w-3/4 bg-slate-100 dark:bg-slate-950 flex flex-col border-l dark:border-slate-800 ${!generatedNote?'hidden md:flex':'flex h-full'}`}>
           <div className="flex border-b dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0 items-center px-2">
              <button onClick={()=>setGeneratedNote(null)} className="md:hidden p-4 text-slate-500"><ArrowLeft/></button>
@@ -372,7 +372,7 @@ const ConsultationView: React.FC = () => {
                                 </div>
                             </div>
 
-                            {/* --- SECCIÓN DE TRANSCRIPCIÓN INTELIGENTE --- */}
+                            {/* TRANSCRIPCIÓN INTELIGENTE (CHAT) */}
                             {generatedNote.conversation_log && generatedNote.conversation_log.length > 0 && (
                                 <div className="mb-10 bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-6 border border-slate-100 dark:border-slate-800">
                                     <h4 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
@@ -408,7 +408,8 @@ const ConsultationView: React.FC = () => {
                             </div>
                         </div>
                       )}
-
+                      
+                      {/* ... Legacy Support & Patient Plan & Chat (Sin cambios) ... */}
                       {activeTab==='record' && !generatedNote.soap && generatedNote.clinicalNote && (
                           <div className="bg-white dark:bg-slate-900 p-8 rounded-xl shadow-sm h-full flex flex-col border dark:border-slate-800 overflow-hidden">
                                 <div className="bg-yellow-50 text-yellow-800 p-2 text-sm rounded mb-2 dark:bg-yellow-900/30 dark:text-yellow-200">Formato antiguo.</div>
