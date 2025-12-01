@@ -4,7 +4,7 @@ import {
   MessageSquare, User, Send, Edit2, Check, ArrowLeft, 
   Stethoscope, Trash2, WifiOff, Save, Share2, Download, Printer,
   Paperclip, Calendar, Clock, UserCircle, Activity, ClipboardList, Brain, FileSignature, Keyboard,
-  Quote, AlertTriangle // Agregado AlertTriangle para visualización de riesgos
+  Quote, AlertTriangle, ChevronDown, ChevronUp // Agregados iconos para el acordeón
 } from 'lucide-react';
 
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition'; 
@@ -57,7 +57,9 @@ const ConsultationView: React.FC = () => {
   const [isAttachmentsOpen, setIsAttachmentsOpen] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
 
-  // MODIFICACIÓN 1: Referencia directa al textarea para scroll pasivo
+  // NUEVO ESTADO: Controla si la alerta de riesgo está expandida o colapsada
+  const [isRiskExpanded, setIsRiskExpanded] = useState(false);
+
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const transcriptEndRef = useRef<HTMLDivElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -90,20 +92,20 @@ const ConsultationView: React.FC = () => {
     return () => { mounted = false; };
   }, [setTranscript]); 
 
-  // --- REGLA DE NEGOCIO: LIMPIEZA AUTOMÁTICA AL CAMBIAR PACIENTE ---
+  // Reset del estado de expansión de riesgo al cambiar de paciente o limpiar
   useEffect(() => {
     if (selectedPatient) {
         if (transcript && confirm("¿Desea limpiar el dictado anterior para el nuevo paciente?")) {
             resetTranscript();
             setGeneratedNote(null);
+            setIsRiskExpanded(false); // Reset al limpiar
         } else if (!transcript) {
             setGeneratedNote(null);
+            setIsRiskExpanded(false);
         }
     }
   }, [selectedPatient]); 
 
-  // MODIFICACIÓN 2: Lógica de Scroll Pasivo (High Performance)
-  // Reemplazamos scrollIntoView por manipulación de scrollTop en el textarea
   useEffect(() => { 
     if (isListening && textareaRef.current) {
         textareaRef.current.scrollTop = textareaRef.current.scrollHeight;
@@ -132,7 +134,7 @@ const ConsultationView: React.FC = () => {
   };
 
   const handleClearTranscript = () => {
-      if(confirm("¿Borrar borrador permanentemente?")) { resetTranscript(); localStorage.removeItem('mediscribe_local_draft'); setGeneratedNote(null); }
+      if(confirm("¿Borrar borrador permanentemente?")) { resetTranscript(); localStorage.removeItem('mediscribe_local_draft'); setGeneratedNote(null); setIsRiskExpanded(false); }
   };
 
   const handleGenerate = async () => {
@@ -164,6 +166,7 @@ const ConsultationView: React.FC = () => {
 
       setGeneratedNote(response);
       setEditableInstructions(response.patientInstructions || '');
+      setIsRiskExpanded(false); // Inicia colapsado por defecto para ahorrar espacio
       setActiveTab('record');
       
       const chatWelcome = historyContext ? `Nota generada con análisis evolutivo. ¿Dudas?` : `Nota de primera vez generada. ¿Dudas?`;
@@ -186,7 +189,6 @@ const ConsultationView: React.FC = () => {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) throw new Error("Sesión expirada");
         
-        // Soporte híbrido para notas nuevas (soap) y viejas (clinicalNote)
         const summaryToSave = generatedNote.soap 
             ? `FECHA: ${new Date().toLocaleDateString()}\nS: ${generatedNote.soap.subjective}\nO: ${generatedNote.soap.objective}\nA: ${generatedNote.soap.assessment}\nP: ${generatedNote.soap.plan}\n\nPLAN PACIENTE:\n${editableInstructions}`
             : (generatedNote.clinicalNote + "\n\nPLAN PACIENTE:\n" + editableInstructions);
@@ -197,7 +199,7 @@ const ConsultationView: React.FC = () => {
         });
         if (error) throw error;
         toast.success("Guardado en expediente");
-        resetTranscript(); localStorage.removeItem('mediscribe_local_draft'); setGeneratedNote(null); setEditableInstructions(''); setSelectedPatient(null); setConsentGiven(false);
+        resetTranscript(); localStorage.removeItem('mediscribe_local_draft'); setGeneratedNote(null); setEditableInstructions(''); setSelectedPatient(null); setConsentGiven(false); setIsRiskExpanded(false);
     } catch (e:any) { toast.error(e.message); } finally { setIsSaving(false); }
   };
 
@@ -249,7 +251,7 @@ const ConsultationView: React.FC = () => {
   return (
     <div className="flex flex-col md:flex-row h-[calc(100vh-64px)] bg-slate-100 dark:bg-slate-950 relative">
       
-      {/* PANEL IZQUIERDO (CONTROLES 25%) */}
+      {/* PANEL IZQUIERDO (CONTROLES) */}
       <div className={`w-full md:w-1/4 p-4 flex flex-col gap-4 border-r dark:border-slate-800 bg-white dark:bg-slate-900 overflow-y-auto ${generatedNote ? 'hidden md:flex' : 'flex'}`}>
         <div className="flex justify-between items-center">
             <h2 className="text-xl font-bold dark:text-white flex items-center gap-2">
@@ -274,7 +276,6 @@ const ConsultationView: React.FC = () => {
         </div>
         <div onClick={()=>setConsentGiven(!consentGiven)} className="flex items-center gap-2 p-3 rounded-lg border cursor-pointer select-none dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"><div className={`w-5 h-5 rounded border flex items-center justify-center ${consentGiven?'bg-green-500 border-green-500 text-white':'bg-white dark:bg-slate-700'}`}>{consentGiven&&<Check size={14}/>}</div><label className="text-xs dark:text-white cursor-pointer">Consentimiento otorgado.</label></div>
         
-        {/* --- ÁREA DE MICROFONO EXPANDIDA Y MEJORADA --- */}
         <div className={`flex-1 border-2 border-dashed rounded-2xl flex flex-col items-center justify-center p-4 relative transition-colors min-h-[300px] ${!isOnline ? 'border-amber-300 bg-amber-50 dark:bg-amber-900/10' : (isListening?'border-red-400 bg-red-50 dark:bg-red-900/10':'border-slate-200 dark:border-slate-700')}`}>
             
             {!transcript && (
@@ -295,7 +296,6 @@ const ConsultationView: React.FC = () => {
                 </div>
             )}
 
-            {/* MODIFICACIÓN 3: Textarea con ref vinculada para auto-scroll */}
             <textarea 
                 ref={textareaRef}
                 className={`w-full flex-1 bg-transparent p-2 rounded-xl text-base leading-relaxed resize-none focus:outline-none dark:text-slate-200 z-10 custom-scrollbar ${!transcript ? 'opacity-0' : 'opacity-100'}`}
@@ -307,7 +307,6 @@ const ConsultationView: React.FC = () => {
             <div ref={transcriptEndRef}/>
             
             <div className="flex w-full gap-2 mt-auto flex-col xl:flex-row z-20 pt-4">
-                
                 <button 
                     onClick={handleToggleRecording} 
                     disabled={!isOnline || !consentGiven || (!isAPISupported && !isListening)} 
@@ -337,7 +336,7 @@ const ConsultationView: React.FC = () => {
         </div>
       </div>
       
-      {/* PANEL DERECHO (RESULTADOS 75% - ESTILO EMR) */}
+      {/* PANEL DERECHO (RESULTADOS) */}
       <div className={`w-full md:w-3/4 bg-slate-100 dark:bg-slate-950 flex flex-col border-l dark:border-slate-800 ${!generatedNote?'hidden md:flex':'flex h-full'}`}>
           <div className="flex border-b dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0 items-center px-2">
              <button onClick={()=>setGeneratedNote(null)} className="md:hidden p-4 text-slate-500"><ArrowLeft/></button>
@@ -354,38 +353,61 @@ const ConsultationView: React.FC = () => {
                  <div className="min-h-full flex flex-col max-w-4xl mx-auto w-full gap-4 relative pb-8">
                       {activeTab==='record' && generatedNote.soap && (
                         <div className="bg-white dark:bg-slate-900 rounded-sm shadow-lg border border-slate-200 dark:border-slate-800 p-8 md:p-12 min-h-full h-fit pb-32 animate-fade-in-up relative">
-                            <div className="sticky top-0 z-20 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm border-b border-slate-100 dark:border-slate-800 pb-4 mb-8 -mx-2 px-2 flex justify-between items-start">
-                                <div>
-                                    <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Nota de Evolución</h1>
-                                    <p className="text-sm text-slate-500 dark:text-slate-400 uppercase tracking-wide">{selectedSpecialty}</p>
-                                    
-                                    {/* MODIFICACIÓN 4: VISUALIZACIÓN DE RIESGO */}
-                                    {generatedNote.risk_analysis && (
-                                        <div className={`mt-2 inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold border ${
-                                            generatedNote.risk_analysis.level === 'Alto' ? 'bg-red-100 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-300' :
-                                            generatedNote.risk_analysis.level === 'Medio' ? 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300' :
-                                            'bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-300'
-                                        }`}>
-                                            <AlertTriangle size={12}/>
-                                            Riesgo {generatedNote.risk_analysis.level}: {generatedNote.risk_analysis.reason}
-                                        </div>
-                                    )}
-
-                                    <div className="flex items-center gap-4 text-xs text-slate-400 mt-1">
-                                            <span className="flex items-center gap-1"><Calendar size={12}/> {new Date().toLocaleDateString()}</span>
+                            <div className="sticky top-0 z-20 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm border-b border-slate-100 dark:border-slate-800 pb-4 mb-8 -mx-2 px-2 flex flex-col gap-2">
+                                <div className="flex justify-between items-start">
+                                    <div>
+                                        <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Nota de Evolución</h1>
+                                        <p className="text-sm text-slate-500 dark:text-slate-400 uppercase tracking-wide">{selectedSpecialty}</p>
+                                    </div>
+                                    <div className="flex flex-col items-end gap-2">
+                                        <button onClick={handleSaveConsultation} disabled={isSaving} className="bg-brand-teal text-white px-4 py-2 rounded-lg font-bold flex gap-2 hover:bg-teal-600 shadow-md transition-all disabled:opacity-70 text-sm items-center">
+                                                {isSaving?<RefreshCw className="animate-spin" size={16}/>:<Save size={16}/>} Guardar
+                                        </button>
                                     </div>
                                 </div>
-                                <div className="flex flex-col items-end gap-2">
-                                    <button onClick={handleSaveConsultation} disabled={isSaving} className="bg-brand-teal text-white px-4 py-2 rounded-lg font-bold flex gap-2 hover:bg-teal-600 shadow-md transition-all disabled:opacity-70 text-sm items-center">
-                                            {isSaving?<RefreshCw className="animate-spin" size={16}/>:<Save size={16}/>} Guardar
-                                    </button>
-                                    <div className="text-xs font-bold text-slate-800 dark:text-slate-200">
-                                            {selectedPatient?.name || "Paciente no registrado"}
+
+                                {/* MODIFICACIÓN DE UX: COMPONENTE DE RIESGO COLAPSABLE */}
+                                {generatedNote.risk_analysis && (
+                                    <div 
+                                      onClick={() => setIsRiskExpanded(!isRiskExpanded)}
+                                      className={`mt-2 w-full rounded-xl border cursor-pointer transition-all duration-300 overflow-hidden ${
+                                          generatedNote.risk_analysis.level === 'Alto' ? 'bg-red-50 border-red-200' :
+                                          generatedNote.risk_analysis.level === 'Medio' ? 'bg-amber-50 border-amber-200' :
+                                          'bg-green-50 border-green-200'
+                                      }`}
+                                    >
+                                        {/* CABECERA DE LA ALERTA (SIEMPRE VISIBLE, COMPACTA) */}
+                                        <div className={`p-3 flex justify-between items-center ${
+                                            generatedNote.risk_analysis.level === 'Alto' ? 'text-red-700' :
+                                            generatedNote.risk_analysis.level === 'Medio' ? 'text-amber-700' :
+                                            'text-green-700'
+                                        }`}>
+                                            <div className="flex items-center gap-2 font-bold text-sm">
+                                                <AlertTriangle size={16}/>
+                                                <span>Riesgo {generatedNote.risk_analysis.level}</span>
+                                                {!isRiskExpanded && <span className="opacity-70 font-normal text-xs ml-2">(Toca para ver detalles)</span>}
+                                            </div>
+                                            {isRiskExpanded ? <ChevronUp size={16}/> : <ChevronDown size={16}/>}
+                                        </div>
+
+                                        {/* CONTENIDO EXPANDIBLE (DETALLES) */}
+                                        <div className={`px-4 pb-4 text-sm leading-relaxed transition-all duration-300 ${
+                                            generatedNote.risk_analysis.level === 'Alto' ? 'text-red-800' :
+                                            generatedNote.risk_analysis.level === 'Medio' ? 'text-amber-800' :
+                                            'text-green-800'
+                                        } ${isRiskExpanded ? 'block animate-fade-in' : 'hidden'}`}>
+                                            <hr className={`mb-2 opacity-20 border-current`}/>
+                                            {generatedNote.risk_analysis.reason}
+                                        </div>
                                     </div>
+                                )}
+
+                                <div className="text-xs font-bold text-slate-800 dark:text-slate-200 self-end">
+                                    {selectedPatient?.name || "Paciente no registrado"}
                                 </div>
                             </div>
 
-                            {/* --- TRANSCRIPCIÓN INTELIGENTE (CHAT VISUAL) --- */}
+                            {/* CHAT VISUAL */}
                             {generatedNote.conversation_log && generatedNote.conversation_log.length > 0 && (
                                 <div className="mb-10 bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-6 border border-slate-100 dark:border-slate-800">
                                     <h4 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
@@ -410,7 +432,6 @@ const ConsultationView: React.FC = () => {
                                 </div>
                             )}
                             
-                            {/* SECCIÓN SOAP ESTÁNDAR */}
                             <div className="space-y-8">
                                 <div><h4 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2"><Activity size={14} className="text-blue-500"/> Subjetivo</h4><div className="text-slate-800 dark:text-slate-200 leading-7 text-base pl-1"><FormattedText content={generatedNote.soap.subjective} /></div></div>
                                 <hr className="border-slate-100 dark:border-slate-800" />
@@ -423,7 +444,6 @@ const ConsultationView: React.FC = () => {
                         </div>
                       )}
 
-                      {/* ... (Resto del renderizado sin cambios) ... */}
                       {activeTab==='record' && !generatedNote.soap && generatedNote.clinicalNote && (
                           <div className="bg-white dark:bg-slate-900 p-8 rounded-xl shadow-sm h-full flex flex-col border dark:border-slate-800 overflow-hidden">
                                 <div className="bg-yellow-50 text-yellow-800 p-2 text-sm rounded mb-2 dark:bg-yellow-900/30 dark:text-yellow-200">Formato antiguo.</div>
