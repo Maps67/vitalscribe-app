@@ -1,3 +1,4 @@
+// Archivo: src/components/ConsultationView.tsx
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   Mic, Square, RefreshCw, FileText, Search, X, 
@@ -100,8 +101,15 @@ const ConsultationView: React.FC = () => {
     }
   }, [selectedPatient]); 
 
+  // --- AUTO-SCROLL INTELIGENTE ---
+  // Cada vez que cambie el transcript, forzamos el scroll hacia abajo
   useEffect(() => { 
-    if (isListening && transcriptEndRef.current) transcriptEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    if (isListening && transcriptEndRef.current) {
+        // Usamos un pequeño timeout para asegurar que el DOM se actualizó
+        setTimeout(() => {
+             transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        }, 100);
+    }
     if (transcript) localStorage.setItem('mediscribe_local_draft', transcript);
   }, [transcript, isListening]);
 
@@ -268,8 +276,8 @@ const ConsultationView: React.FC = () => {
         </div>
         <div onClick={()=>setConsentGiven(!consentGiven)} className="flex items-center gap-2 p-3 rounded-lg border cursor-pointer select-none dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"><div className={`w-5 h-5 rounded border flex items-center justify-center ${consentGiven?'bg-green-500 border-green-500 text-white':'bg-white dark:bg-slate-700'}`}>{consentGiven&&<Check size={14}/>}</div><label className="text-xs dark:text-white cursor-pointer">Consentimiento otorgado.</label></div>
         
-        {/* --- ÁREA DE MICROFONO EXPANDIDA Y MEJORADA --- */}
-        <div className={`flex-1 border-2 border-dashed rounded-2xl flex flex-col items-center justify-center p-4 relative transition-colors min-h-[300px] ${!isOnline ? 'border-amber-300 bg-amber-50 dark:bg-amber-900/10' : (isListening?'border-red-400 bg-red-50 dark:bg-red-900/10':'border-slate-200 dark:border-slate-700')}`}>
+        {/* --- ÁREA DE MICROFONO EXPANDIDA Y MEJORADA CON AUTO-SCROLL --- */}
+        <div className={`flex-1 border-2 border-dashed rounded-2xl flex flex-col p-4 relative transition-colors min-h-[300px] ${!isOnline ? 'border-amber-300 bg-amber-50 dark:bg-amber-900/10' : (isListening?'border-red-400 bg-red-50 dark:bg-red-900/10':'border-slate-200 dark:border-slate-700')}`}>
             
             {/* Si no estamos grabando y no hay texto, mostramos el microfono grande para invitar */}
             {!transcript && (
@@ -291,18 +299,20 @@ const ConsultationView: React.FC = () => {
                 </div>
             )}
 
-            {/* ÁREA DE TEXTO GIGANTE Y LEGIBLE */}
-            <textarea 
-                className={`w-full flex-1 bg-transparent p-2 rounded-xl text-base leading-relaxed resize-none focus:outline-none dark:text-slate-200 z-10 ${!transcript ? 'opacity-0' : 'opacity-100'}`}
-                value={transcript}
-                onChange={(e) => setTranscript(e.target.value)}
-                placeholder="" 
-            />
-            
-            <div ref={transcriptEndRef}/>
+            {/* ÁREA DE TEXTO GIGANTE Y LEGIBLE CON AUTO-SCROLL */}
+            <div className="flex-1 overflow-y-auto mb-4 relative z-10">
+                <textarea 
+                    className={`w-full h-full bg-transparent p-2 rounded-xl text-base leading-relaxed resize-none focus:outline-none dark:text-slate-200 ${!transcript ? 'opacity-0' : 'opacity-100'}`}
+                    value={transcript}
+                    onChange={(e) => setTranscript(e.target.value)}
+                    placeholder="" 
+                />
+                {/* EL ANCLA INVISIBLE PARA EL SCROLL AUTOMÁTICO */}
+                <div ref={transcriptEndRef} className="h-1" /> 
+            </div>
             
             {/* BOTONES DE CONTROL */}
-            <div className="flex w-full gap-2 mt-auto flex-col xl:flex-row z-20 pt-4">
+            <div className="flex w-full gap-2 mt-auto flex-col xl:flex-row z-20 pt-2 border-t border-slate-200/50 dark:border-slate-700/50">
                 
                 <button 
                     onClick={handleToggleRecording} 
@@ -368,7 +378,7 @@ const ConsultationView: React.FC = () => {
                                 </div>
                             </div>
 
-                            {/* --- NUEVA SECCIÓN: TRANSCRIPCIÓN INTELIGENTE (CHAT VISUAL) --- */}
+                            {/* --- SECCIÓN DE TRANSCRIPCIÓN INTELIGENTE --- */}
                             {generatedNote.conversation_log && generatedNote.conversation_log.length > 0 && (
                                 <div className="mb-10 bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-6 border border-slate-100 dark:border-slate-800">
                                     <h4 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
@@ -393,7 +403,6 @@ const ConsultationView: React.FC = () => {
                                 </div>
                             )}
                             
-                            {/* SECCIÓN SOAP ESTÁNDAR */}
                             <div className="space-y-8">
                                 <div><h4 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2"><Activity size={14} className="text-blue-500"/> Subjetivo</h4><div className="text-slate-800 dark:text-slate-200 leading-7 text-base pl-1"><FormattedText content={generatedNote.soap.subjective} /></div></div>
                                 <hr className="border-slate-100 dark:border-slate-800" />
@@ -441,28 +450,28 @@ const ConsultationView: React.FC = () => {
                       )}
                  </div>
              )}
-          </div>
-      </div>
+         </div>
+     </div>
 
-      {isAttachmentsOpen && selectedPatient && (
-        <div className="fixed inset-0 z-50 flex justify-end">
-            <div className="absolute inset-0 bg-black/30 backdrop-blur-sm transition-opacity" onClick={() => setIsAttachmentsOpen(false)} />
-            <div className="relative w-full max-w-2xl bg-white dark:bg-slate-900 h-full shadow-2xl p-4 flex flex-col border-l dark:border-slate-800 animate-slide-in-right">
-                <div className="flex justify-between items-center mb-4 pb-2 border-b dark:border-slate-800">
-                    <div><h3 className="font-bold text-lg dark:text-white flex items-center gap-2"><Paperclip size={20} className="text-brand-teal"/> Expediente Digital</h3><p className="text-xs text-slate-500">Paciente: {selectedPatient.name}</p></div>
-                    <button onClick={() => setIsAttachmentsOpen(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors"><X size={20} className="text-slate-500"/></button>
-                </div>
-                <div className="flex-1 overflow-y-auto flex flex-col gap-4">
-                    <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-lg"><p className="text-xs font-bold text-slate-500 mb-2 uppercase">Agregar archivo:</p><UploadMedico preSelectedPatient={selectedPatient} onUploadComplete={() => { toast.success("Archivo agregado."); }} /></div>
-                    <div className="flex-1"><p className="text-xs font-bold text-slate-500 mb-2 uppercase">Historial:</p><DoctorFileGallery patientId={selectedPatient.id} /></div>
-                </div>
-            </div>
-        </div>
-      )}
+     {isAttachmentsOpen && selectedPatient && (
+       <div className="fixed inset-0 z-50 flex justify-end">
+           <div className="absolute inset-0 bg-black/30 backdrop-blur-sm transition-opacity" onClick={() => setIsAttachmentsOpen(false)} />
+           <div className="relative w-full max-w-2xl bg-white dark:bg-slate-900 h-full shadow-2xl p-4 flex flex-col border-l dark:border-slate-800 animate-slide-in-right">
+               <div className="flex justify-between items-center mb-4 pb-2 border-b dark:border-slate-800">
+                   <div><h3 className="font-bold text-lg dark:text-white flex items-center gap-2"><Paperclip size={20} className="text-brand-teal"/> Expediente Digital</h3><p className="text-xs text-slate-500">Paciente: {selectedPatient.name}</p></div>
+                   <button onClick={() => setIsAttachmentsOpen(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors"><X size={20} className="text-slate-500"/></button>
+               </div>
+               <div className="flex-1 overflow-y-auto flex flex-col gap-4">
+                   <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-lg"><p className="text-xs font-bold text-slate-500 mb-2 uppercase">Agregar archivo:</p><UploadMedico preSelectedPatient={selectedPatient} onUploadComplete={() => { toast.success("Archivo agregado."); }} /></div>
+                   <div className="flex-1"><p className="text-xs font-bold text-slate-500 mb-2 uppercase">Historial:</p><DoctorFileGallery patientId={selectedPatient.id} /></div>
+               </div>
+           </div>
+       </div>
+     )}
 
-      {isAppointmentModalOpen && <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"><div className="bg-white dark:bg-slate-900 rounded-2xl p-6 max-w-sm w-full animate-fade-in-up"><h3 className="font-bold text-lg mb-4 dark:text-white">Agendar Seguimiento</h3><input type="datetime-local" className="w-full border dark:border-slate-700 p-3 rounded-xl mb-6 bg-slate-50 dark:bg-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-brand-teal" value={nextApptDate} onChange={e=>setNextApptDate(e.target.value)}/><div className="flex justify-end gap-3"><button onClick={()=>setIsAppointmentModalOpen(false)} className="text-slate-500 font-medium">Cancelar</button><button onClick={handleConfirmAppointment} className="bg-brand-teal text-white px-4 py-2 rounded-xl font-bold">Confirmar</button></div></div></div>}
-      {isQuickRxModalOpen && selectedPatient && doctorProfile && <QuickRxModal isOpen={isQuickRxModalOpen} onClose={()=>setIsQuickRxModalOpen(false)} initialTranscript={transcript} patientName={selectedPatient.name} doctorProfile={doctorProfile}/>}
-    </div>
-  );
+     {isAppointmentModalOpen && <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"><div className="bg-white dark:bg-slate-900 rounded-2xl p-6 max-w-sm w-full animate-fade-in-up"><h3 className="font-bold text-lg mb-4 dark:text-white">Agendar Seguimiento</h3><input type="datetime-local" className="w-full border dark:border-slate-700 p-3 rounded-xl mb-6 bg-slate-50 dark:bg-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-brand-teal" value={nextApptDate} onChange={e=>setNextApptDate(e.target.value)}/><div className="flex justify-end gap-3"><button onClick={()=>setIsAppointmentModalOpen(false)} className="text-slate-500 font-medium">Cancelar</button><button onClick={handleConfirmAppointment} className="bg-brand-teal text-white px-4 py-2 rounded-xl font-bold">Confirmar</button></div></div></div>}
+     {isQuickRxModalOpen && selectedPatient && doctorProfile && <QuickRxModal isOpen={isQuickRxModalOpen} onClose={()=>setIsQuickRxModalOpen(false)} initialTranscript={transcript} patientName={selectedPatient.name} doctorProfile={doctorProfile}/>}
+   </div>
+ );
 };
 export default ConsultationView;
