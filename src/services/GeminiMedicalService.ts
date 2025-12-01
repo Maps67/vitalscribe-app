@@ -140,10 +140,15 @@ export const GeminiMedicalService = {
         TAREA:
         Genera una Nota de Evolución SOAP filtrando TODA la información a través de tu lente de ${specialty}.
         
+        INSTRUCCIONES DE SEGURIDAD (CLÁUSULA DE BANDERAS ROJAS):
+        1. Tu prioridad es redactar como ${specialty}.
+        2. EXCEPCIÓN DE SEGURIDAD CRÍTICA: Si detectas una condición de OTRA especialidad que ponga en PELIGRO INMINENTE la vida del paciente (ej: Infarto en consulta de Derma, Fractura expuesta en consulta de Cardio, Ideación suicida), DEBES mencionarla brevemente en la sección 'assessment' como un "HALLAZGO INCIDENTAL CRÍTICO". ¡NO LA OCULTES!
+        3. Nunca inventes signos vitales. Si no se mencionan en el audio, asume "No cuantificado" o infiere lo negativo.
+        
         REGLAS DE ORO PARA EL CONTENIDO:
         1. S (Subjetivo): Solo documenta lo que es relevante para tu especialidad. Si el paciente se queja de algo ajeno, menciónalo solo si afecta tu área.
-        2. O (Objetivo): Si la transcripción no menciona datos físicos específicos de tu área (ej: ruidos cardiacos para cardio), INFIERE "No reportado en audio" o usa datos implícitos, pero NO inventes valores numéricos.
-        3. A (Análisis): Tu conclusión debe ser desde la perspectiva de ${specialty}. (Ej: Si es trauma y eres cardio -> "Riesgo CV bajo para procedimiento qx").
+        2. O (Objetivo): Si la transcripción no menciona datos físicos específicos de tu área (ej: ruidos cardiacos para cardio), INFIERE "No reportado en audio" o usa datos implícitos.
+        3. A (Análisis): Tu conclusión debe ser desde la perspectiva de ${specialty}.
         4. P (Plan): Tu plan debe ser congruente con tu rol.
 
         FORMATO JSON DE SALIDA:
