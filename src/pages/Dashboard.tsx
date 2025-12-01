@@ -5,10 +5,10 @@ import {
   Calendar, MapPin, ChevronRight, Sun, Moon, Bell, CloudRain, Cloud, 
   ShieldCheck, Upload, X, Bot, Mic, Square, Loader2, CheckCircle2,
   Stethoscope, UserCircle, ArrowRight, AlertTriangle, FileText,
-  Clock, TrendingUp, UserPlus, Zap, Activity, LogOut
+  Clock, TrendingUp, UserPlus, Zap, Activity, LogOut, Check, Ban, CalendarClock
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { format, isToday, isTomorrow, parseISO, startOfDay, endOfDay, addDays } from 'date-fns';
+import { format, isToday, isTomorrow, parseISO, startOfDay, endOfDay, addDays, isBefore } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { getTimeOfDayGreeting } from '../utils/greetingUtils';
 import { toast } from 'sonner';
@@ -30,7 +30,7 @@ interface DashboardAppointment {
   };
 }
 
-// --- BOTÓN ASISTENTE PEQUEÑO ---
+// --- BOTÓN ASISTENTE PEQUEÑO (HEADER) ---
 const AssistantButtonSmall = ({ onClick }: { onClick: () => void }) => (
   <button 
     onClick={onClick}
@@ -41,7 +41,7 @@ const AssistantButtonSmall = ({ onClick }: { onClick: () => void }) => (
   </button>
 );
 
-// --- RELOJ PC ---
+// --- COMPONENTE RELOJ ELEGANTE (PC) ---
 const LiveClockDesktop = () => {
   const [time, setTime] = useState(new Date());
   useEffect(() => {
@@ -65,7 +65,7 @@ const LiveClockDesktop = () => {
   );
 };
 
-// --- RELOJ MÓVIL ---
+// --- COMPONENTE RELOJ (MOVIL) ---
 const LiveClockMobile = ({ isDark }: { isDark: boolean }) => {
     const [time, setTime] = useState(new Date());
     useEffect(() => {
@@ -234,7 +234,7 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete }: { isOpen: boolean
   );
 };
 
-// --- WIDGETS ---
+// --- WIDGETS AUXILIARES ---
 const RoiWidget = () => (
   <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-100 dark:border-slate-800 shadow-sm relative overflow-hidden group">
     <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
@@ -288,7 +288,7 @@ const QuickActions = ({ navigate }: { navigate: any }) => (
   </div>
 );
 
-// --- DASHBOARD ---
+// --- DASHBOARD PRINCIPAL ---
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const [doctorName, setDoctorName] = useState<string>('');
@@ -297,12 +297,18 @@ const Dashboard: React.FC = () => {
   const [weather, setWeather] = useState({ temp: '--', code: 0 });
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [isAssistantOpen, setIsAssistantOpen] = useState(false);
-  
-  const now = new Date();
+  const [now, setNow] = useState(new Date()); // Estado para reloj reactivo de citas
+
   const hour = now.getHours();
   const isNight = hour >= 19 || hour < 6;
   const dateStr = now.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' });
   const dynamicGreeting = useMemo(() => getTimeOfDayGreeting(doctorName), [doctorName]);
+
+  // Reloj interno para actualizar estados de "Vencido" cada minuto
+  useEffect(() => {
+    const interval = setInterval(() => setNow(new Date()), 60000);
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     if ("geolocation" in navigator) {
@@ -330,11 +336,9 @@ const Dashboard: React.FC = () => {
   };
 
   const antiFatigueBg = "bg-[#F2F9F7] dark:bg-slate-950"; 
-  
-  // CORRECCIÓN AQUÍ: Quitamos la línea negra eliminando borders y shadows molestos
   const mobileHeroStyle = isNight 
     ? { bg: "bg-gradient-to-br from-slate-900 to-teal-950 border border-white/5", text: "text-teal-100", darkText: false }
-    : { bg: "bg-gradient-to-br from-[#CDEDE0] to-[#A0DBC6] border-0 shadow-md", text: "text-teal-900", darkText: true };
+    : { bg: "bg-gradient-to-br from-[#CDEDE0] to-[#A0DBC6] border border-white/5", text: "text-teal-900", darkText: true };
 
   const panoramicGradient = isNight
     ? "bg-gradient-to-r from-slate-900 via-teal-900 to-emerald-950" 
@@ -360,23 +364,10 @@ const Dashboard: React.FC = () => {
                   .gte('start_time', todayStart.toISOString())
                   .lte('start_time', nextWeekEnd.toISOString())
                   .order('start_time', { ascending: true })
-                  .limit(10);
+                  .limit(20); // Aumenté límite para ver más
 
               let { data: aptsData, error } = await query;
-
-              if (error || !aptsData) {
-                  const fallbackQuery = supabase
-                      .from('appointments')
-                      .select(`id, title, start_time, status, patient:patients (name)`)
-                      .eq('user_id', user.id)
-                      .gte('start_time', todayStart.toISOString())
-                      .lte('start_time', nextWeekEnd.toISOString())
-                      .order('start_time', { ascending: true })
-                      .limit(10);
-                  const res = await fallbackQuery;
-                  if (!res.error) aptsData = res.data;
-              }
-
+              
               if (aptsData) {
                   const formattedApts: DashboardAppointment[] = aptsData.map((item: any) => ({
                       id: item.id,
@@ -389,6 +380,18 @@ const Dashboard: React.FC = () => {
               }
           }
       } catch (e) { console.error(e); } finally { setLoading(false); }
+  };
+
+  // --- NUEVA FUNCIÓN: ACTUALIZAR ESTADO DE CITA ---
+  const handleUpdateStatus = async (id: string, newStatus: 'completed' | 'cancelled') => {
+      try {
+          const { error } = await supabase.from('appointments').update({ status: newStatus }).eq('id', id);
+          if (error) throw error;
+          toast.success(newStatus === 'completed' ? "Consulta realizada ✅" : "Cita marcada como no asistida");
+          fetchData(); // Recargar lista
+      } catch (e) {
+          toast.error("Error al actualizar");
+      }
   };
 
   useEffect(() => {
@@ -406,7 +409,10 @@ const Dashboard: React.FC = () => {
     return format(date, 'EEEE d', { locale: es });
   };
 
-  const groupedAppointments = appointments.reduce((acc, apt) => {
+  // FILTRO DE CITAS ACTIVAS (Ocultamos las completadas/canceladas de la vista principal para limpiar)
+  const activeAppointments = appointments.filter(a => a.status === 'scheduled');
+
+  const groupedAppointments = activeAppointments.reduce((acc, apt) => {
     const day = getDayLabel(apt.start_time);
     if (!acc[day]) acc[day] = [];
     acc[day].push(apt);
@@ -422,6 +428,7 @@ const Dashboard: React.FC = () => {
   return (
     <div className={`min-h-screen ${antiFatigueBg} font-sans w-full overflow-x-hidden flex flex-col relative transition-colors duration-500`}>
       
+      {/* HEADER MÓVIL */}
       <div className="md:hidden px-5 pt-6 pb-4 flex justify-between items-center bg-white dark:bg-slate-900 sticky top-0 z-30 border-b border-gray-100 dark:border-slate-800 shadow-sm w-full">
         <div className="flex items-center gap-3">
             <img src="/pwa-192x192.png" alt="Logo" className="w-9 h-9 rounded-lg object-cover shadow-sm" />
@@ -441,6 +448,7 @@ const Dashboard: React.FC = () => {
         </div>
       </div>
 
+      {/* HEADER ESCRITORIO */}
       <div className="hidden md:block px-8 pt-8 pb-4 w-full max-w-7xl mx-auto">
          <div className="flex justify-between items-center">
             <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Tablero Principal</h1>
@@ -451,8 +459,10 @@ const Dashboard: React.FC = () => {
          </div>
       </div>
 
+      {/* CONTENIDO PRINCIPAL */}
       <div className="flex-1 p-4 md:p-8 space-y-6 animate-fade-in-up w-full max-w-7xl mx-auto pb-32 md:pb-8">
         
+        {/* SALUDO */}
         <div className="flex justify-between items-end">
             <div className="mt-1">
                 <div className="flex items-center gap-3 mb-1">
@@ -474,7 +484,7 @@ const Dashboard: React.FC = () => {
             </button>
         </div>
 
-        {/* VERSIÓN MÓVIL (FIXED: SIN LÍNEA NEGRA) */}
+        {/* VERSIÓN MÓVIL (COLOR #CDEDE0 ADAPTADO) */}
         <div className="md:hidden">
             <div className={`${mobileHeroStyle.bg} ${mobileHeroStyle.text} rounded-3xl p-6 shadow-lg relative overflow-hidden flex justify-between items-center transition-all duration-500 w-full min-h-[140px]`}>
                 <div className="relative z-10 flex-1">
@@ -491,9 +501,7 @@ const Dashboard: React.FC = () => {
                             <p className="text-xs font-medium opacity-90">Hoy</p>
                         </div>
                     </div>
-                    
                     <LiveClockMobile isDark={!mobileHeroStyle.darkText} />
-                    
                     <button 
                         onClick={() => setIsAssistantOpen(true)} 
                         className={`mt-4 py-2.5 px-4 w-full justify-center group flex items-center gap-3 backdrop-blur-md border rounded-full transition-all active:scale-95 shadow-sm hover:shadow-lg ${mobileHeroStyle.darkText ? 'bg-teal-900/10 border-teal-900/20 hover:bg-teal-900/20' : 'bg-white/10 border-white/20 hover:bg-white/20'}`}
@@ -509,6 +517,7 @@ const Dashboard: React.FC = () => {
             </div>
         </div>
 
+        {/* VERSIÓN PC: PANORÁMICO */}
         <div className={`hidden md:flex ${panoramicGradient} rounded-[2rem] shadow-xl h-56 relative overflow-hidden transition-all duration-1000 border border-slate-200/20`}>
             <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-[0.03]"></div>
             <div className="w-1/3 p-8 flex flex-col justify-between relative z-10 border-r border-white/5">
@@ -562,6 +571,7 @@ const Dashboard: React.FC = () => {
             </div>
         </div>
 
+        {/* AGENDA Y WIDGETS */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2 space-y-6">
                 <button onClick={() => setIsUploadModalOpen(true)} className="md:hidden w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-4 rounded-xl flex items-center justify-between shadow-sm active:scale-95 transition-transform">
@@ -589,13 +599,13 @@ const Dashboard: React.FC = () => {
 
                     {loading ? (
                         <div className="p-8 text-center text-slate-400 text-sm animate-pulse bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800">Sincronizando agenda...</div>
-                    ) : appointments.length === 0 ? (
+                    ) : activeAppointments.length === 0 ? (
                         <div className="bg-white dark:bg-slate-900 rounded-2xl p-8 text-center border border-dashed border-gray-200 dark:border-slate-800 shadow-sm">
                             <div className="w-12 h-12 bg-slate-50 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-3">
                                 <Calendar size={20} className="text-slate-400"/>
                             </div>
-                            <p className="text-slate-600 dark:text-slate-300 font-medium text-sm">Tu agenda está libre.</p>
-                            <p className="text-slate-400 text-xs mt-1 mb-4">No hay citas programadas para los próximos 7 días.</p>
+                            <p className="text-slate-600 dark:text-slate-300 font-medium text-sm">Todo listo por hoy.</p>
+                            <p className="text-slate-400 text-xs mt-1 mb-4">No tienes citas pendientes o vencidas.</p>
                             <button onClick={() => navigate('/consultation')} className="w-full bg-slate-800 dark:bg-slate-700 text-white py-3 rounded-xl font-bold text-sm shadow-sm hover:bg-slate-700 transition-colors flex items-center justify-center gap-2">
                                 <Stethoscope size={16}/> Iniciar Consulta
                             </button>
@@ -606,37 +616,83 @@ const Dashboard: React.FC = () => {
                                 <div key={day} className="animate-fade-in-up">
                                     <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 ml-1">{day}</h4>
                                     <div className="grid gap-3">
-                                        {dayApts.map((apt) => (
+                                        {dayApts.map((apt) => {
+                                            // DETECCIÓN DE CITA VENCIDA
+                                            const aptDate = parseISO(apt.start_time);
+                                            const isOverdue = isBefore(aptDate, now) && isToday(aptDate);
+                                            
+                                            return (
                                             <div 
                                                 key={apt.id} 
-                                                onClick={() => navigate('/calendar')}
-                                                className="group bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-md hover:border-brand-teal/30 transition-all cursor-pointer flex items-center gap-4"
+                                                className={`group bg-white dark:bg-slate-800 p-4 rounded-xl border shadow-sm hover:shadow-md transition-all flex flex-col gap-3
+                                                    ${isOverdue 
+                                                        ? 'border-orange-200 dark:border-orange-900/50 bg-orange-50/30 dark:bg-orange-900/10' 
+                                                        : 'border-slate-100 dark:border-slate-800 hover:border-brand-teal/30'
+                                                    }
+                                                `}
                                             >
-                                                <div className="flex flex-col items-center justify-center h-14 w-16 bg-slate-50 dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700 group-hover:bg-teal-50 dark:group-hover:bg-teal-900/20 transition-colors">
-                                                    <span className="text-[10px] font-bold text-slate-400 uppercase">Hora</span>
-                                                    <span className="text-sm font-bold text-slate-900 dark:text-white">{formatTime(apt.start_time)}</span>
-                                                </div>
-                                                <div className="flex-1 min-w-0">
-                                                    <h4 className="font-bold text-slate-800 dark:text-white text-base truncate group-hover:text-brand-teal transition-colors">
-                                                        {apt.patient?.name || "Sin nombre"}
-                                                    </h4>
-                                                    <div className="flex items-center gap-2 text-xs text-slate-500 mt-1">
-                                                        <UserCircle size={12}/>
-                                                        <span className="truncate">{apt.title || 'Consulta General'}</span>
-                                                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${
-                                                            apt.status === 'completed' ? 'bg-green-100 text-green-700' : 
-                                                            apt.status === 'cancelled' ? 'bg-red-100 text-red-700' : 
-                                                            'bg-blue-100 text-blue-700'
-                                                        }`}>
-                                                            {apt.status === 'scheduled' ? 'Confirmada' : apt.status}
-                                                        </span>
+                                                <div className="flex items-center gap-4 cursor-pointer" onClick={() => navigate('/calendar')}>
+                                                    <div className={`flex flex-col items-center justify-center h-14 w-16 rounded-lg border transition-colors
+                                                        ${isOverdue 
+                                                            ? 'bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-900/40 dark:text-orange-300 dark:border-orange-800' 
+                                                            : 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white'
+                                                        }
+                                                    `}>
+                                                        <span className="text-[10px] font-bold uppercase opacity-70">Hora</span>
+                                                        <span className="text-sm font-bold">{formatTime(apt.start_time)}</span>
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <h4 className="font-bold text-slate-800 dark:text-white text-base truncate group-hover:text-brand-teal transition-colors">
+                                                            {apt.patient?.name || "Sin nombre"}
+                                                        </h4>
+                                                        <div className="flex items-center gap-2 text-xs mt-1">
+                                                            <UserCircle size={12} className="text-slate-400"/>
+                                                            <span className="truncate text-slate-500">{apt.title || 'Consulta General'}</span>
+                                                            
+                                                            {/* BADGE DE ESTADO */}
+                                                            {isOverdue ? (
+                                                                <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase bg-orange-100 text-orange-700 flex items-center gap-1">
+                                                                    <Clock size={10}/> Vencida
+                                                                </span>
+                                                            ) : (
+                                                                <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase bg-blue-100 text-blue-700">
+                                                                    Confirmada
+                                                                </span>
+                                                            )}
+                                                        </div>
                                                     </div>
                                                 </div>
-                                                <div className="hidden md:block p-2 bg-slate-50 dark:bg-slate-800 rounded-full text-slate-300 group-hover:text-brand-teal transition-colors">
-                                                    <ChevronRight size={18} />
-                                                </div>
+
+                                                {/* BARRA DE ACCIONES RÁPIDAS (SOLO SI ESTÁ VENCIDA) */}
+                                                {isOverdue && (
+                                                    <div className="flex items-center gap-2 pt-2 border-t border-orange-100 dark:border-orange-900/30 animate-in slide-in-from-top-2">
+                                                        <p className="text-xs text-orange-600 dark:text-orange-400 font-bold flex-1">¿Qué pasó?</p>
+                                                        
+                                                        <button 
+                                                            onClick={() => handleUpdateStatus(apt.id, 'completed')}
+                                                            className="flex items-center gap-1 px-3 py-1.5 bg-green-100 hover:bg-green-200 text-green-700 rounded-lg text-xs font-bold transition-colors"
+                                                        >
+                                                            <Check size={12} /> Realizada
+                                                        </button>
+                                                        
+                                                        <button 
+                                                            onClick={() => handleUpdateStatus(apt.id, 'cancelled')}
+                                                            className="flex items-center gap-1 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-xs font-bold transition-colors"
+                                                        >
+                                                            <Ban size={12} /> No llegó
+                                                        </button>
+                                                        
+                                                        <button 
+                                                            onClick={() => navigate('/calendar')}
+                                                            className="flex items-center gap-1 px-3 py-1.5 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg text-xs font-bold transition-colors"
+                                                        >
+                                                            <CalendarClock size={12} /> Mover
+                                                        </button>
+                                                    </div>
+                                                )}
                                             </div>
-                                        ))}
+                                            );
+                                        })}
                                     </div>
                                 </div>
                             ))}
