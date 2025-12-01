@@ -5,7 +5,7 @@ import {
   Calendar, MapPin, ChevronRight, Sun, Moon, Bell, CloudRain, Cloud, 
   ShieldCheck, Upload, X, Bot, Mic, Square, Loader2, CheckCircle2,
   Stethoscope, UserCircle, ArrowRight, AlertTriangle, FileText,
-  Clock, TrendingUp, UserPlus, Zap, Activity, LogOut // <--- ÍCONOS NECESARIOS AGREGADOS
+  Clock, TrendingUp, UserPlus, Zap, Activity, LogOut
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { format, isToday, isTomorrow, parseISO, startOfDay, endOfDay, addDays } from 'date-fns';
@@ -30,7 +30,7 @@ interface DashboardAppointment {
   };
 }
 
-// --- BOTÓN ASISTENTE PEQUEÑO (HEADER) ---
+// --- BOTÓN ASISTENTE PEQUEÑO ---
 const AssistantButtonSmall = ({ onClick }: { onClick: () => void }) => (
   <button 
     onClick={onClick}
@@ -41,7 +41,7 @@ const AssistantButtonSmall = ({ onClick }: { onClick: () => void }) => (
   </button>
 );
 
-// --- COMPONENTE RELOJ ELEGANTE (PC) ---
+// --- RELOJ PC ---
 const LiveClockDesktop = () => {
   const [time, setTime] = useState(new Date());
   useEffect(() => {
@@ -65,7 +65,7 @@ const LiveClockDesktop = () => {
   );
 };
 
-// --- COMPONENTE RELOJ (MOVIL) ---
+// --- RELOJ MÓVIL ---
 const LiveClockMobile = ({ isDark }: { isDark: boolean }) => {
     const [time, setTime] = useState(new Date());
     useEffect(() => {
@@ -234,7 +234,7 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete }: { isOpen: boolean
   );
 };
 
-// --- NUEVOS WIDGETS (ROI & QUICK ACTIONS) ---
+// --- WIDGETS ---
 const RoiWidget = () => (
   <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-100 dark:border-slate-800 shadow-sm relative overflow-hidden group">
     <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
@@ -288,7 +288,7 @@ const QuickActions = ({ navigate }: { navigate: any }) => (
   </div>
 );
 
-// --- DASHBOARD PRINCIPAL ---
+// --- DASHBOARD ---
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const [doctorName, setDoctorName] = useState<string>('');
@@ -331,10 +331,10 @@ const Dashboard: React.FC = () => {
 
   const antiFatigueBg = "bg-[#F2F9F7] dark:bg-slate-950"; 
   
-  // CORRECCIÓN VISUAL: Agregado border-white/5 para eliminar línea negra
+  // CORRECCIÓN AQUÍ: Quitamos la línea negra eliminando borders y shadows molestos
   const mobileHeroStyle = isNight 
     ? { bg: "bg-gradient-to-br from-slate-900 to-teal-950 border border-white/5", text: "text-teal-100", darkText: false }
-    : { bg: "bg-gradient-to-br from-[#CDEDE0] to-[#A0DBC6] border border-white/5", text: "text-teal-900", darkText: true };
+    : { bg: "bg-gradient-to-br from-[#CDEDE0] to-[#A0DBC6] border-0 shadow-md", text: "text-teal-900", darkText: true };
 
   const panoramicGradient = isNight
     ? "bg-gradient-to-r from-slate-900 via-teal-900 to-emerald-950" 
@@ -422,7 +422,6 @@ const Dashboard: React.FC = () => {
   return (
     <div className={`min-h-screen ${antiFatigueBg} font-sans w-full overflow-x-hidden flex flex-col relative transition-colors duration-500`}>
       
-      {/* HEADER MÓVIL */}
       <div className="md:hidden px-5 pt-6 pb-4 flex justify-between items-center bg-white dark:bg-slate-900 sticky top-0 z-30 border-b border-gray-100 dark:border-slate-800 shadow-sm w-full">
         <div className="flex items-center gap-3">
             <img src="/pwa-192x192.png" alt="Logo" className="w-9 h-9 rounded-lg object-cover shadow-sm" />
@@ -442,7 +441,6 @@ const Dashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* HEADER ESCRITORIO */}
       <div className="hidden md:block px-8 pt-8 pb-4 w-full max-w-7xl mx-auto">
          <div className="flex justify-between items-center">
             <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Tablero Principal</h1>
@@ -453,10 +451,8 @@ const Dashboard: React.FC = () => {
          </div>
       </div>
 
-      {/* CONTENIDO PRINCIPAL */}
       <div className="flex-1 p-4 md:p-8 space-y-6 animate-fade-in-up w-full max-w-7xl mx-auto pb-32 md:pb-8">
         
-        {/* SALUDO */}
         <div className="flex justify-between items-end">
             <div className="mt-1">
                 <div className="flex items-center gap-3 mb-1">
@@ -478,7 +474,7 @@ const Dashboard: React.FC = () => {
             </button>
         </div>
 
-        {/* VERSIÓN MÓVIL (CON CORRECCIÓN DE BORDE) */}
+        {/* VERSIÓN MÓVIL (FIXED: SIN LÍNEA NEGRA) */}
         <div className="md:hidden">
             <div className={`${mobileHeroStyle.bg} ${mobileHeroStyle.text} rounded-3xl p-6 shadow-lg relative overflow-hidden flex justify-between items-center transition-all duration-500 w-full min-h-[140px]`}>
                 <div className="relative z-10 flex-1">
@@ -513,13 +509,8 @@ const Dashboard: React.FC = () => {
             </div>
         </div>
 
-        {/* VERSIÓN PC: PANORÁMICO Y GRID NUEVO */}
         <div className={`hidden md:flex ${panoramicGradient} rounded-[2rem] shadow-xl h-56 relative overflow-hidden transition-all duration-1000 border border-slate-200/20`}>
-            {/* ... (Contenido PC igual, oculto para brevedad, pero SÍ ESTÁ EN EL CÓDIGO COMPLETO ARRIBA) ... */}
-            {/* NOTA: El código de arriba YA INCLUYE la versión PC completa. No falta nada. */}
-            
             <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-[0.03]"></div>
-
             <div className="w-1/3 p-8 flex flex-col justify-between relative z-10 border-r border-white/5">
                 <div className="flex justify-between items-start">
                     <div className={`flex items-center gap-2 ${leftTextColor}`}>
@@ -535,25 +526,22 @@ const Dashboard: React.FC = () => {
                     <p className={`text-sm font-bold ${isNight ? 'text-slate-400' : 'text-teal-700/70'} mt-1`}>Temperatura</p>
                 </div>
             </div>
-
             <div className="w-1/3 flex items-center justify-center relative z-10">
                 <LiveClockDesktop />
                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-white/10 rounded-full blur-[80px] pointer-events-none"></div>
             </div>
-
             <div className="w-1/3 p-8 relative z-10 flex flex-col justify-between text-right border-l border-white/5">
                 <div className="flex justify-end items-center gap-2 mb-2">
                     <span className="text-[10px] font-bold uppercase tracking-widest text-teal-200/80">Pulso del Día</span>
                     <Activity size={14} className="text-teal-300 animate-pulse" />
                 </div>
-
                 <div className="flex items-center justify-end gap-6">
                     <div className="text-right">
                         <div className="text-4xl font-bold text-white leading-none">{pendingCount}</div>
                         <div className="text-xs text-teal-200 font-medium">Pendientes</div>
                     </div>
                     <div className="relative w-16 h-16">
-                         <svg className="w-full h-full transform -rotate-90">
+                        <svg className="w-full h-full transform -rotate-90">
                             <circle cx="32" cy="32" r="28" stroke="currentColor" strokeWidth="6" fill="transparent" className="text-teal-900/50" />
                             <circle cx="32" cy="32" r="28" stroke="currentColor" strokeWidth="6" fill="transparent" 
                                 strokeDasharray={175} 
@@ -567,14 +555,13 @@ const Dashboard: React.FC = () => {
                         </div>
                     </div>
                 </div>
-                 <div className="mt-auto pt-4 flex items-center justify-end gap-2 text-teal-100/70 text-xs">
+                <div className="mt-auto pt-4 flex items-center justify-end gap-2 text-teal-100/70 text-xs">
                     <LogOut size={12} />
                     <span>Salida est: {format(addDays(new Date(), 0).setHours(new Date().getHours() + (pendingCount * 0.5)), 'h:mm a')}</span>
                 </div>
             </div>
         </div>
 
-        {/* GRID (AGENDA + WIDGETS) */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2 space-y-6">
                 <button onClick={() => setIsUploadModalOpen(true)} className="md:hidden w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-4 rounded-xl flex items-center justify-between shadow-sm active:scale-95 transition-transform">
