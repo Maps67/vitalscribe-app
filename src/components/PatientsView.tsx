@@ -23,9 +23,9 @@ interface PatientData extends Partial<Patient> {
   gender: string;
   phone?: string;
   email?: string;
-  // history: string; // OMITIDO INTENCIONALMENTE PARA LA LISTA (PERFORMANCE)
   created_at?: string;
   curp?: string; 
+  [key: string]: any; // Flexibilidad para campos adicionales
 }
 
 interface ConsultationRecord {
@@ -66,8 +66,8 @@ const PatientsView: React.FC = () => {
     return () => { mounted = false; };
   }, []);
 
-  // --- OPTIMIZACIÓN 1: SELECTIVE FETCHING ---
-  // Solo traemos columnas ligeras para la tabla. El historial pesado se carga bajo demanda.
+  // --- CORRECCIÓN DE ESTABILIDAD ---
+  // Volvemos a 'select(*)' para garantizar compatibilidad total con el esquema actual de Supabase.
   const fetchPatients = async () => {
     setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
@@ -75,7 +75,7 @@ const PatientsView: React.FC = () => {
 
     const { data, error } = await supabase
       .from('patients')
-      .select('id, name, age, gender, phone, email, created_at, curp') // NO TRAER HISTORY AQUÍ
+      .select('*') // SEGURO: Trae todas las columnas existentes sin adivinar nombres
       .eq('doctor_id', user.id)
       .order('created_at', { ascending: false });
 
