@@ -73,41 +73,47 @@ export const GeminiMedicalService = {
       const currentDate = now.toLocaleDateString('es-MX', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
       const currentTime = now.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
 
-      // Sanitización básica para evitar romper el prompt con comillas
+      // Sanitización para evitar errores JSON en el prompt
       const cleanTranscript = transcript.replace(/"/g, "'").trim();
 
+      // INGENIERÍA DE PROMPT AVANZADA: ADAPTACIÓN DE PERSONA SEGÚN ESPECIALIDAD
       const prompt = `
-        ACTÚA COMO: Asistente Clínico Senior experto en documentación médica (SOAP).
-        CONTEXTO: 
-        - Fecha: ${currentDate} ${currentTime}
-        - Especialidad: ${specialty}
-        - Historial Previo: "${patientHistory}"
+        ACTÚA COMO: Médico Especialista en "${specialty}".
+        OBJETIVO: Generar una nota de evolución clínica (SOAP) precisa, utilizando el vocabulario técnico, las abreviaturas estándar y el enfoque clínico propios de la ${specialty}.
         
-        TRANSCRIPCIÓN BRUTA (AUDIO SIN FORMATO):
+        CONTEXTO ACTUAL: 
+        - Fecha: ${currentDate} ${currentTime}
+        - Historial Previo Relevante: "${patientHistory}"
+        
+        TRANSCRIPCIÓN BRUTA (AUDIO):
         "${cleanTranscript}"
 
-        TAREA CRÍTICA (DIARIZACIÓN SEMÁNTICA):
-        1. Analiza el texto y reconstruye el diálogo separando lógicamente quién habla.
-        2. Identifica al 'Médico' (quien pregunta, diagnostica, receta) y al 'Paciente' (quien responde, se queja de síntomas).
-        3. Genera la nota SOAP estructurada basada en este diálogo.
+        TAREA 1: DIARIZACIÓN SEMÁNTICA
+        - Identifica y separa quién es el 'Médico' y quién es el 'Paciente' basándote en el contexto de la conversación.
 
-        FORMATO JSON DE RESPUESTA OBLIGATORIO:
+        TAREA 2: ESTRUCTURACIÓN SOAP (${specialty})
+        - Subjetivo: Describe el padecimiento actual con la semiología propia de ${specialty}.
+        - Objetivo: Reporta hallazgos físicos relevantes. Si no se mencionan, infiere "No explorado" o lo que el audio sugiera.
+        - Análisis: Diagnóstico presuntivo o diferencial con terminología de ${specialty}.
+        - Plan: Tratamiento farmacológico y no farmacológico.
+
+        FORMATO JSON OBLIGATORIO:
         { 
           "conversation_log": [
-            { "speaker": "Médico", "text": "Frase exacta o reconstruida..." },
-            { "speaker": "Paciente", "text": "Frase exacta o reconstruida..." }
+            { "speaker": "Médico", "text": "..." },
+            { "speaker": "Paciente", "text": "..." }
           ], 
           "soap": { 
-            "subjective": "Narrativa detallada de síntomas (S)", 
-            "objective": "Signos vitales y hallazgos físicos (O) o 'No reportado'", 
-            "assessment": "Diagnóstico presuntivo o análisis clínico (A)", 
-            "plan": "Plan de tratamiento, estudios y medicación (P)", 
-            "suggestions": ["Sugerencia 1", "Sugerencia 2"] 
+            "subjective": "...", 
+            "objective": "...", 
+            "assessment": "...", 
+            "plan": "...", 
+            "suggestions": ["Sugerencia clínica 1", "Sugerencia clínica 2"] 
           }, 
-          "patientInstructions": "Instrucciones claras y empáticas para el paciente (Nivel de lectura de 6to grado)", 
+          "patientInstructions": "Instrucciones para el paciente (Lenguaje claro, nivel 6to grado)", 
           "risk_analysis": { 
             "level": "Bajo" | "Medio" | "Alto", 
-            "reason": "Justificación breve del riesgo detectado" 
+            "reason": "..." 
           } 
         }
       `;
@@ -134,18 +140,10 @@ export const GeminiMedicalService = {
       const { data, error } = await supabase.functions.invoke('gemini-proxy', {
         body: {
           prompt: `
-            ACTÚA COMO: Farmacéutico experto y corrector ortográfico.
-            TAREA: Analizar texto dictado, corregir nombres de medicamentos mal escritos fonéticamente y estructurar la receta.
-
-            EJEMPLOS DE CORRECCIÓN:
-            - Entrada: "La proxeno cada 12 horas" -> Salida: [{"drug": "Naproxeno", "details": "500mg (Sugerido)", "frequency": "Cada 12 horas", "duration": "", "notes": ""}]
-            - Entrada: "Para setamol 500" -> Salida: [{"drug": "Paracetamol", "details": "500mg", "frequency": "", "duration": "", "notes": ""}]
-            
-            TEXTO A PROCESAR: "${cleanText}"
-
-            FORMATO DE RESPUESTA OBLIGATORIO:
-            Devuelve ÚNICAMENTE un array JSON válido. Sin markdown.
-            Estructura: [{"drug": "string", "details": "string", "frequency": "string", "duration": "string", "notes": "string"}]
+            ACTÚA COMO: Farmacéutico experto.
+            TAREA: Analizar texto y extraer medicamentos.
+            TEXTO: "${cleanText}"
+            RESPUESTA JSON ARRAY: [{"drug": "Nombre", "details": "Dosis", "frequency": "Frecuencia", "duration": "Duración", "notes": "Notas"}]
           `
         }
       });
@@ -171,7 +169,6 @@ export const GeminiMedicalService = {
       }
     } catch (e) { console.warn("Fallo IA en receta", e); }
 
-    // MODO RESCATE
     return [{
       drug: cleanText, 
       details: "Revisar dosis (Transcripción directa)",
