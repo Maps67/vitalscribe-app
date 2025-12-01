@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useLayoutEffect, useState } from 'react';
 
 type Theme = 'light' | 'dark';
 
@@ -10,33 +10,79 @@ interface ThemeContextType {
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // 1. Verificar preferencia guardada o del sistema
-  const [theme, setTheme] = useState<Theme>(() => {
+  const [theme, setTheme] = useState<Theme>('light');
+
+  // --- 1. DETECCIÓN SÍNCRONA (Evita el "Flash" blanco) ---
+  useLayoutEffect(() => {
+    // Verificar si estamos en el navegador
     if (typeof window !== 'undefined') {
       const savedTheme = localStorage.getItem('theme') as Theme;
-      if (savedTheme) return savedTheme;
-      return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      
+      // Prioridad: 1. LocalStorage, 2. Sistema
+      const initialTheme = savedTheme || (systemPrefersDark ? 'dark' : 'light');
+      setTheme(initialTheme);
+      applyTheme(initialTheme);
     }
-    return 'light';
-  });
+  }, []);
 
-  // 2. Aplicar la clase 'dark' al HTML
-  useEffect(() => {
+  // --- 2. APLICACIÓN PROFUNDA DEL TEMA ---
+  const applyTheme = (newTheme: Theme) => {
     const root = window.document.documentElement;
-    if (theme === 'dark') {
-      root.classList.add('dark');
-    } else {
-      root.classList.remove('dark');
-    }
-    localStorage.setItem('theme', theme);
-  }, [theme]);
+    
+    // Remover la clase contraria para asegurar limpieza
+    root.classList.remove('light', 'dark');
+    root.classList.add(newTheme);
+    
+    // CRÍTICO: Informar al navegador para que adapte inputs, scrollbars y selects nativos
+    root.style.colorScheme = newTheme; 
+    
+    localStorage.setItem('theme', newTheme);
+  };
 
+  // --- 3. LISTENER DE SISTEMA (Reactividad) ---
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    
+    const handleChange = () => {
+      // Solo cambiamos si el usuario NO ha guardado una preferencia manual explícita
+      if (!localStorage.getItem('theme')) {
+        const newSystemTheme = mediaQuery.matches ? 'dark' : 'light';
+        setTheme(newSystemTheme);
+        applyTheme(newSystemTheme);
+      }
+    };
+
+    mediaQuery.addEventListener('change', handleChange);
+    return () => mediaQuery.removeEventListener('change', handleChange);
+  }, []);
+
+  // --- 4. FUNCIÓN DE TOGGLE ---
   const toggleTheme = () => {
-    setTheme((prev) => (prev === 'light' ? 'dark' : 'light'));
+    setTheme((prev) => {
+      const newTheme = prev === 'light' ? 'dark' : 'light';
+      applyTheme(newTheme);
+      return newTheme;
+    });
   };
 
   return (
     <ThemeContext.Provider value={{ theme, toggleTheme }}>
+      {/* Script anti-flicker para inyección temprana (Opcional pero recomendado en PWAs) */}
+      <script
+        dangerouslySetInnerHTML={{
+          __html: `
+            (function() {
+              try {
+                var localTheme = localStorage.getItem('theme');
+                var supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+                if (!localTheme && supportDarkMode) document.documentElement.classList.add('dark');
+                if (localTheme === 'dark') document.documentElement.classList.add('dark');
+              } catch (e) {}
+            })();
+          `,
+        }}
+      />
       {children}
     </ThemeContext.Provider>
   );
