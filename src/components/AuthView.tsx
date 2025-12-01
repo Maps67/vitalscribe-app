@@ -44,8 +44,7 @@ const AuthView: React.FC<AuthProps> = ({
 
   // --- DETECTOR DE RECUPERACIÓN (MEJORADO) ---
   useEffect(() => {
-    // 1. CHEQUEO DE URL (PRIORIDAD ALTA): Detectar si venimos de un link de correo
-    // Los links de Supabase suelen ser: .../#access_token=xyz&type=recovery
+    // 1. CHEQUEO DE URL (PRIORIDAD ALTA)
     const hash = window.location.hash;
     const isRecoveryHash = hash && hash.includes('type=recovery');
 
@@ -64,10 +63,9 @@ const AuthView: React.FC<AuthProps> = ({
         setIsRecovering(false);
         setIsRegistering(false);
       } else if (event === 'SIGNED_IN') {
-        // CRÍTICO: Si estamos en modo reset (por URL), NO ejecutar onLoginSuccess todavía
-        // Solo ejecutar login si NO es una recuperación
+        // Si no estamos reseteando password, permitimos el login normal
         if (!isResettingPassword && !isRecoveryHash) {
-           // Dejamos que el usuario fluya normal si no es recuperación
+           // Flujo normal
         }
       }
     });
@@ -93,7 +91,7 @@ const AuthView: React.FC<AuthProps> = ({
 
     try {
       if (isRegistering) {
-        // ... (Validaciones de registro igual que antes) ...
+        // VALIDACIONES DE REGISTRO
         const cedulaLimpia = formData.cedula.trim();
         const esNumerica = /^\d+$/.test(cedulaLimpia);
         if (!esNumerica || (cedulaLimpia.length < 7 || cedulaLimpia.length > 8)) {
@@ -132,13 +130,14 @@ const AuthView: React.FC<AuthProps> = ({
         toast.success("Cuenta creada exitosamente.");
 
       } else {
-        // INICIO DE SESIÓN NORMAL
+        // INICIO DE SESIÓN
         const { error } = await supabase.auth.signInWithPassword({
             email: formData.email,
             password: formData.password,
         });
         if (error) throw error;
-        // Solo redirigir si NO estamos en medio de un reset
+        
+        // Bloqueo de redirección si es reset
         if (onLoginSuccess && !isResettingPassword) onLoginSuccess();
       }
     } catch (error: any) {
@@ -151,12 +150,11 @@ const AuthView: React.FC<AuthProps> = ({
     }
   };
 
-  // --- RECUPERACIÓN (OLVIDÉ MI CLAVE) ---
+  // --- RECUPERACIÓN ---
   const handleRecoveryRequest = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
-      // Forzamos la redirección a la URL base actual
       const { error } = await supabase.auth.resetPasswordForEmail(formData.email, {
         redirectTo: window.location.origin, 
       });
@@ -171,7 +169,7 @@ const AuthView: React.FC<AuthProps> = ({
     }
   };
 
-  // --- RESETEO (NUEVA CLAVE) ---
+  // --- ACTUALIZAR PASSWORD ---
   const handlePasswordUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -186,10 +184,8 @@ const AuthView: React.FC<AuthProps> = ({
       if (error) throw error;
       toast.success("Contraseña actualizada exitosamente.");
       
-      // Limpiamos el hash de la URL para evitar bucles
       window.history.replaceState(null, '', window.location.pathname);
 
-      // AHORA SÍ dejamos pasar al usuario
       if (onPasswordResetSuccess) {
         onPasswordResetSuccess();
       } else if (onLoginSuccess) {
@@ -205,7 +201,7 @@ const AuthView: React.FC<AuthProps> = ({
     }
   };
 
-  // VISTA: MENSAJE DE VERIFICACIÓN ENVIADA
+  // VISTA: VERIFICACIÓN ENVIADA
   if (verificationSent) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 animate-fade-in-up">
@@ -219,7 +215,7 @@ const AuthView: React.FC<AuthProps> = ({
     );
   }
 
-  // VISTA: MENSAJE DE RECUPERACIÓN ENVIADA
+  // VISTA: RECUPERACIÓN ENVIADA
   if (recoverySent) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 animate-fade-in-up">
@@ -266,7 +262,6 @@ const AuthView: React.FC<AuthProps> = ({
 
         <div className="w-full max-w-md space-y-8 animate-fade-in-up">
           
-          {/* VISTA 1: RESETEAR CONTRASEÑA */}
           {isResettingPassword ? (
              <>
                <div className="text-center">
@@ -289,7 +284,6 @@ const AuthView: React.FC<AuthProps> = ({
               </form>
              </>
           ) : isRecovering ? (
-             // VISTA 2: SOLICITAR RECUPERACIÓN
              <>
                <div className="text-center lg:text-left">
                 <button onClick={() => setIsRecovering(false)} className="mb-4 text-slate-500 hover:text-slate-700 flex items-center gap-2 text-sm font-medium transition-colors"><ArrowLeft size={16} /> Volver</button>
@@ -310,7 +304,6 @@ const AuthView: React.FC<AuthProps> = ({
               </form>
              </>
           ) : (
-             // VISTA 3: LOGIN / REGISTRO
              <>
                <div className="text-center lg:text-left">
                  <h2 className="text-3xl font-bold text-slate-900">{isRegistering ? 'Alta de Médico' : 'Bienvenido de nuevo'}</h2>
@@ -326,4 +319,41 @@ const AuthView: React.FC<AuthProps> = ({
                        <div className="grid grid-cols-2 gap-4">
                            <div>
                                <label className="block text-sm font-medium text-slate-700 mb-1">Especialidad</label>
-                               <div className="relative"><Stethoscope size={1
+                               <div className="relative"><Stethoscope size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" /><input className="block w-full pl-10 p-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-brand-teal" value={formData.specialty} onChange={e => setFormData({...formData, specialty: e.target.value})} placeholder="General"/></div>
+                           </div>
+                           <div>
+                               <label className="block text-sm font-medium text-slate-700 mb-1">Cédula</label>
+                               <div className="relative"><FileBadge size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" /><input required type="text" className="block w-full pl-10 p-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-brand-teal" value={formData.cedula} onChange={e => { const val = e.target.value.replace(/[^0-9]/g, ''); setFormData({...formData, cedula: val}); }} maxLength={8} placeholder="8 Dígitos"/></div>
+                           </div>
+                       </div>
+                   </div>
+                 )}
+                 <div className="space-y-4">
+                     <div>
+                         <label className="block text-sm font-medium text-slate-700 mb-1">Correo</label>
+                         <div className="relative"><div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400"><Mail size={18} /></div><input required type="email" className="block w-full pl-10 p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-teal outline-none" placeholder="doctor@hospital.com" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})}/></div>
+                     </div>
+                     <div>
+                         <label className="block text-sm font-medium text-slate-700 mb-1">Contraseña</label>
+                         <div className="relative"><div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400"><Lock size={18} /></div><input required type={showPassword ? "text" : "password"} className="block w-full pl-10 p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-teal outline-none" placeholder="••••••••" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})}/>
+                         <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button></div>
+                         {!isRegistering && (<div className="flex justify-end mt-2"><button type="button" onClick={() => setIsRecovering(true)} className="text-xs font-medium text-brand-teal hover:text-teal-700">¿Olvidaste tu contraseña?</button></div>)}
+                         {isRegistering && <p className="text-[10px] text-slate-400 mt-1 pl-1 flex items-center gap-1"><AlertTriangle size={10}/> Requiere: 8+ car, 1 Mayus, 1 Num, 1 Símbolo.</p>}
+                     </div>
+                 </div>
+                 {isRegistering && (<div className="flex items-start gap-3 bg-blue-50 p-3 rounded-lg border border-blue-100"><input type="checkbox" required className="mt-1 w-4 h-4 text-brand-teal rounded cursor-pointer" checked={formData.termsAccepted} onChange={e => setFormData({...formData, termsAccepted: e.target.checked})}/><label className="text-xs text-slate-600">Acepto la verificación de mi <strong>Cédula Profesional</strong>. Datos falsos suspenden la cuenta.</label></div>)}
+                 <button type="submit" disabled={loading} className="w-full flex justify-center items-center gap-2 py-3 px-4 border border-transparent rounded-xl shadow-lg text-sm font-bold text-white bg-brand-teal hover:bg-teal-600 transition-all disabled:opacity-50">{loading ? <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div> : <>{isRegistering ? 'Registrarse' : 'Iniciar Sesión'} <ArrowRight size={20} /></>}</button>
+               </form>
+               <div className="text-center"><button type="button" onClick={() => setIsRegistering(!isRegistering)} className="text-sm font-medium text-brand-teal hover:text-teal-700">{isRegistering ? '¿Ya tienes cuenta? Inicia sesión' : '¿Eres nuevo? Crea tu cuenta'}</button></div>
+             </>
+          )}
+          <div className="mt-8 pt-6 border-t border-slate-100 text-center text-xs text-slate-400">
+            &copy; {new Date().getFullYear()} MediScribe AI <span className="text-slate-300">v4.0</span>. Desarrollado por <span className="font-bold text-slate-500">PixelArte Studio</span>.
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default AuthView;
