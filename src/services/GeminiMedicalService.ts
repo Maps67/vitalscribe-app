@@ -73,47 +73,52 @@ export const GeminiMedicalService = {
       const currentDate = now.toLocaleDateString('es-MX', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
       const currentTime = now.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
 
-      // Sanitización para evitar errores JSON en el prompt
       const cleanTranscript = transcript.replace(/"/g, "'").trim();
 
-      // INGENIERÍA DE PROMPT AVANZADA: ADAPTACIÓN DE PERSONA SEGÚN ESPECIALIDAD
+      // --- INGENIERÍA DE PROMPT: HIPER-ESPECIALIZACIÓN ---
+      // Inyectamos la variable ${specialty} en cada sección crítica del SOAP
+      // para forzar el vocabulario y criterio clínico específico.
+      
       const prompt = `
-        ACTÚA COMO: Médico Especialista en "${specialty}".
-        OBJETIVO: Generar una nota de evolución clínica (SOAP) precisa, utilizando el vocabulario técnico, las abreviaturas estándar y el enfoque clínico propios de la ${specialty}.
+        ROL: Eres un Médico Especialista en ${specialty} de alto nivel.
+        OBJETIVO: Convertir una transcripción de consulta en una Nota de Evolución Técnica perfecta.
         
-        CONTEXTO ACTUAL: 
+        CONTEXTO: 
         - Fecha: ${currentDate} ${currentTime}
-        - Historial Previo Relevante: "${patientHistory}"
+        - Especialidad Activa: ${specialty}
+        - Historial: "${patientHistory}"
         
-        TRANSCRIPCIÓN BRUTA (AUDIO):
+        TRANSCRIPCIÓN (AUDIO):
         "${cleanTranscript}"
 
-        TAREA 1: DIARIZACIÓN SEMÁNTICA
-        - Identifica y separa quién es el 'Médico' y quién es el 'Paciente' basándote en el contexto de la conversación.
+        INSTRUCCIONES DE PROCESAMIENTO ESTRICTAS:
+        1. Identifica hablantes (Médico vs Paciente).
+        2. Traduce el lenguaje coloquial del paciente a TERMINOLOGÍA MÉDICA PROPIA DE ${specialty}.
+           (Ejemplo: Si la especialidad es Traumatología y el paciente dice "me duele el huesito del tobillo", tú escribes "Maleolo externo doloroso a la palpación").
+        
+        ESTRUCTURA SOAP A GENERAR (ENFOQUE ${specialty}):
+        - S (Subjetivo): Sintomatología narrada usando jerga técnica de ${specialty}.
+        - O (Objetivo): Enfócate en hallazgos físicos relevantes para ${specialty}. Si no se mencionan, infiere lo negativo o "No explorado".
+        - A (Análisis): Diagnóstico principal y diferenciales usando clasificaciones o escalas propias de ${specialty} si aplica.
+        - P (Plan): Tratamiento farmacológico, estudios de gabinete sugeridos para ${specialty} y recomendaciones.
 
-        TAREA 2: ESTRUCTURACIÓN SOAP (${specialty})
-        - Subjetivo: Describe el padecimiento actual con la semiología propia de ${specialty}.
-        - Objetivo: Reporta hallazgos físicos relevantes. Si no se mencionan, infiere "No explorado" o lo que el audio sugiera.
-        - Análisis: Diagnóstico presuntivo o diferencial con terminología de ${specialty}.
-        - Plan: Tratamiento farmacológico y no farmacológico.
-
-        FORMATO JSON OBLIGATORIO:
+        FORMATO JSON DE SALIDA:
         { 
           "conversation_log": [
             { "speaker": "Médico", "text": "..." },
             { "speaker": "Paciente", "text": "..." }
           ], 
           "soap": { 
-            "subjective": "...", 
-            "objective": "...", 
-            "assessment": "...", 
-            "plan": "...", 
-            "suggestions": ["Sugerencia clínica 1", "Sugerencia clínica 2"] 
+            "subjective": "Texto técnico...", 
+            "objective": "Texto técnico...", 
+            "assessment": "Texto técnico...", 
+            "plan": "Texto técnico...", 
+            "suggestions": ["Sugerencia específica 1", "Sugerencia específica 2"] 
           }, 
-          "patientInstructions": "Instrucciones para el paciente (Lenguaje claro, nivel 6to grado)", 
+          "patientInstructions": "Explicación para el paciente en lenguaje sencillo (Nivel primaria) pero enfocado a su patología.", 
           "risk_analysis": { 
             "level": "Bajo" | "Medio" | "Alto", 
-            "reason": "..." 
+            "reason": "Justificación clínica basada en criterios de ${specialty}" 
           } 
         }
       `;
