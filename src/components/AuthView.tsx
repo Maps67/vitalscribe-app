@@ -1,4 +1,3 @@
-// Archivo: src/components/AuthView.tsx
 import React, { useState, useEffect } from 'react';
 import { 
   Mail, Lock, User, Stethoscope, ArrowRight, AlertCircle, 
@@ -141,9 +140,11 @@ const AuthView: React.FC<AuthProps> = ({
     e.preventDefault();
     setLoading(true);
     try {
+      // MEJORA APLICADA: Redirección explícita para asegurar flujo correcto
       const { error } = await supabase.auth.resetPasswordForEmail(formData.email, {
-        redirectTo: window.location.origin + '/#type=recovery', // Hash crítico para App.tsx
+        redirectTo: `${window.location.origin}/update-password`, 
       });
+      
       if (error) throw error;
       setRecoverySent(true);
       toast.success("Correo de recuperación enviado.");
