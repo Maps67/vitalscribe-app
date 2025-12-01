@@ -15,7 +15,7 @@ interface AuthProps {
 }
 
 const AuthView: React.FC<AuthProps> = ({ 
-  authService, // Mantenemos compatibilidad aunque usemos supabase directo
+  authService, 
   onLoginSuccess, 
   forceResetMode = false, 
   onPasswordResetSuccess 
@@ -38,14 +38,31 @@ const AuthView: React.FC<AuthProps> = ({
     newPassword: '',
     fullName: '',
     specialty: 'Medicina General',
-    cedula: '', // Cambié licenseNumber por cedula para consistencia
+    cedula: '', 
     termsAccepted: false 
   });
 
+  // --- CORRECCIÓN CRÍTICA: DETECTOR DE EVENTOS DE RECUPERACIÓN ---
   useEffect(() => {
+    // 1. Si viene forzado por props (navegación interna)
     if (forceResetMode) {
       setIsResettingPassword(true);
     }
+
+    // 2. Escuchar el evento de Supabase cuando se carga la app desde el link del correo
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        // ¡BINGO! El usuario vino del correo de "Recuperar Contraseña"
+        setIsResettingPassword(true);
+        setIsRecovering(false); // Aseguramos limpiar otros estados
+        setIsRegistering(false);
+      }
+    });
+
+    // Limpieza del listener
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
   }, [forceResetMode]);
 
   // --- VALIDADOR DE CONTRASEÑA ---
@@ -140,9 +157,10 @@ const AuthView: React.FC<AuthProps> = ({
     e.preventDefault();
     setLoading(true);
     try {
-      // MEJORA APLICADA: Redirección explícita para asegurar flujo correcto
+      // NOTA: redirectTo debe apuntar a la URL donde vive ESTE componente AuthView.
+      // Generalmente es la raíz (/) o /login
       const { error } = await supabase.auth.resetPasswordForEmail(formData.email, {
-        redirectTo: `${window.location.origin}/update-password`, 
+        redirectTo: window.location.origin, 
       });
       
       if (error) throw error;
@@ -168,10 +186,14 @@ const AuthView: React.FC<AuthProps> = ({
         password: formData.newPassword 
       });
       if (error) throw error;
-      toast.success("Contraseña actualizada exitosamente.");
+      toast.success("Contraseña actualizada exitosamente. Iniciando sesión...");
       
+      // Importante: Después de actualizar, supabase suele dejar la sesión iniciada.
+      // Disparamos el éxito para entrar a la app.
       if (onPasswordResetSuccess) {
         onPasswordResetSuccess();
+      } else if (onLoginSuccess) {
+        onLoginSuccess();
       } else {
         setIsResettingPassword(false);
         setIsRecovering(false);
@@ -246,13 +268,13 @@ const AuthView: React.FC<AuthProps> = ({
 
         <div className="w-full max-w-md space-y-8 animate-fade-in-up">
           
-          {/* VISTA 1: RESETEAR CONTRASEÑA (Desde Link) */}
+          {/* VISTA 1: RESETEAR CONTRASEÑA (Detectada por evento PASSWORD_RECOVERY) */}
           {isResettingPassword ? (
              <>
                <div className="text-center">
                 <div className="w-16 h-16 bg-brand-teal/10 text-brand-teal rounded-full flex items-center justify-center mx-auto mb-4"><CheckCircle2 size={32} /></div>
                 <h2 className="text-3xl font-bold text-slate-900">Nueva Contraseña</h2>
-                <p className="mt-2 text-slate-500">Por seguridad, establezca una nueva clave fuerte.</p>
+                <p className="mt-2 text-slate-500">El enlace es válido. Establezca su nueva clave.</p>
               </div>
               <form className="space-y-5" onSubmit={handlePasswordUpdate}>
                 <div>
