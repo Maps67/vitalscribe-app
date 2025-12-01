@@ -1,6 +1,9 @@
+// Archivo: src/components/PatientsView.tsx
 import React, { useState, useEffect } from 'react';
 import { 
-  Search, UserPlus, FileText, Trash2, Edit2, Eye, Calendar, Share2, Download, FolderOpen, Paperclip, MoreVertical, X, FileCode, Phone, Pill 
+  Search, UserPlus, FileText, Trash2, Edit2, Eye, Calendar, 
+  Share2, Download, FolderOpen, Paperclip, MoreVertical, X, 
+  FileCode, Phone, Pill 
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Patient, DoctorProfile } from '../types';
@@ -15,14 +18,14 @@ import { InsightsPanel } from './InsightsPanel';
 
 interface PatientData extends Partial<Patient> {
   id: string;
-  name: string; // Usamos 'name' directamente
+  name: string; // Usamos 'name' correctamente
   age: number | string; 
   gender: string;
   phone?: string;
   email?: string;
   history?: string;
   created_at?: string;
-  curp?: string;
+  curp?: string; // Agregado por si acaso
 }
 
 interface ConsultationRecord {
@@ -36,6 +39,7 @@ const PatientsView: React.FC = () => {
   const [patients, setPatients] = useState<PatientData[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
     
+  // Estados de Modales
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isGalleryOpen, setIsGalleryOpen] = useState(false);
@@ -59,7 +63,6 @@ const PatientsView: React.FC = () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
-    // Seleccionamos 'name' explícitamente para evitar confusiones
     const { data, error } = await supabase
       .from('patients')
       .select('*')
@@ -85,7 +88,7 @@ const PatientsView: React.FC = () => {
   const handleViewHistory = async (patient: PatientData) => {
       setViewingPatient(patient);
       setIsHistoryOpen(true);
-      setIsGalleryOpen(false); 
+      setIsGalleryOpen(false); // Por defecto abre historial
       setLoadingHistory(true);
       setPatientHistory([]); 
 
@@ -97,6 +100,13 @@ const PatientsView: React.FC = () => {
           console.error(error);
           toast.error("Error al cargar el expediente");
       } finally { setLoadingHistory(false); }
+  };
+
+  // NUEVA FUNCIÓN: Abrir directamente la galería
+  const handleOpenFiles = (patient: PatientData) => {
+      // Reutilizamos la lógica de historial pero forzamos la galería abierta
+      handleViewHistory(patient); 
+      setIsGalleryOpen(true);
   };
 
   const handleShareNoteWhatsApp = (consultation: ConsultationRecord) => {
@@ -166,14 +176,12 @@ const PatientsView: React.FC = () => {
     if (phone) window.open(`tel:${phone}`, '_self');
   };
 
-  // Búsqueda corregida usando 'name'
   const filteredPatients = patients.filter(p => 
     (p.name || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
     (p.email || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const renderNoteContent = (summary: string) => { return <FormattedText content={summary} />; };
-
 
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto pb-24 md:pb-6">
@@ -189,9 +197,10 @@ const PatientsView: React.FC = () => {
           <div className="relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} /><input type="text" placeholder="Buscar paciente..." className="w-full pl-10 pr-4 py-3 bg-transparent border-none rounded-xl text-slate-700 dark:text-slate-200 focus:ring-0 placeholder:text-slate-400" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div>
       </div>
 
-      {/* --- VISTA ESCRITORIO (TABLA) --- */}
-      <div className="hidden md:block bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
-        <div className="overflow-x-auto">
+      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+        
+        {/* --- VISTA ESCRITORIO (TABLA ORIGINAL) --- */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50 dark:bg-slate-900/50 text-slate-500 dark:text-slate-400 text-xs uppercase"><th className="p-4 font-bold">Nombre</th><th className="p-4 font-bold">Edad/Sexo</th><th className="p-4 font-bold">Contacto</th><th className="p-4 font-bold text-center">Acciones</th></tr>
@@ -205,16 +214,17 @@ const PatientsView: React.FC = () => {
                       </div>
                       <div>
                         <p className="font-bold text-slate-800 dark:text-white">{patient.name || 'Sin Nombre'}</p>
-                        <p className="text-xs text-slate-400">{patient.curp || `ID: ${patient.id.slice(0,6)}`}</p>
+                        <p className="text-xs text-slate-400">ID: {patient.id.slice(0,8)}</p>
                       </div>
                   </td>
                   <td className="p-4 text-sm text-slate-600 dark:text-slate-300">{patient.age} años • {patient.gender}</td>
                   <td className="p-4 text-sm text-slate-600 dark:text-slate-300"><p>{patient.phone || 'Sin teléfono'}</p><p className="text-xs text-slate-400">{patient.email}</p></td>
                   <td className="p-4 relative text-center">
+                    {/* Botones de escritorio */}
                     <div className="flex justify-center gap-2">
-                         <button onClick={() => handleViewHistory(patient)} className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg" title="Expediente"><Eye size={18}/></button>
-                         <button onClick={() => setSelectedPatientForRx(patient)} className="p-2 text-teal-600 hover:bg-teal-50 rounded-lg" title="Receta"><Pill size={18}/></button>
-                         <button onClick={() => openEditModal(patient)} className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg" title="Editar"><Edit2 size={18}/></button>
+                        <button onClick={() => handleViewHistory(patient)} className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg" title="Expediente"><Eye size={18}/></button>
+                        <button onClick={() => setSelectedPatientForRx(patient)} className="p-2 text-teal-600 hover:bg-teal-50 rounded-lg" title="Receta"><Pill size={18}/></button>
+                        <button onClick={() => openEditModal(patient)} className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg" title="Editar"><Edit2 size={18}/></button>
                     </div>
                   </td>
                 </tr>
@@ -222,66 +232,73 @@ const PatientsView: React.FC = () => {
             </tbody>
           </table>
         </div>
-      </div>
 
-      {/* --- VISTA MÓVIL (DISEÑO NUEVO - WHATSAPP STYLE) --- */}
-      <div className="md:hidden grid grid-cols-1 gap-3">
-         {filteredPatients.map(patient => (
-            <div key={patient.id} className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm active:scale-[0.99] transition-transform relative overflow-hidden">
-                <div className="flex items-center justify-between">
-                    {/* IZQUIERDA: DATOS (Click abre expediente) */}
-                    <div className="flex items-center gap-3 overflow-hidden flex-1" onClick={() => handleViewHistory(patient)}>
-                        <div className="h-12 w-12 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 font-bold text-lg shrink-0 border border-slate-200 dark:border-slate-600">
+        {/* --- VISTA MÓVIL (NUEVA CON 4 BOTONES) --- */}
+        <div className="md:hidden">
+             {filteredPatients.map(patient => (
+                <div key={patient.id} className="p-4 border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors relative">
+                    
+                    {/* Fila Superior: Info */}
+                    <div className="flex items-center gap-3 cursor-pointer" onClick={() => handleViewHistory(patient)}>
+                        <div className="w-12 h-12 rounded-full bg-teal-50 dark:bg-teal-900/20 text-brand-teal dark:text-teal-400 flex items-center justify-center font-bold text-lg shrink-0 border border-teal-100 dark:border-teal-900/50">
                             {getInitials(patient.name)}
                         </div>
-                        <div className="min-w-0">
-                            <h3 className="font-bold text-slate-900 dark:text-white text-base truncate pr-2">
-                                {patient.name || 'Sin Nombre'}
-                            </h3>
-                            <p className="text-xs text-slate-500 dark:text-slate-400 truncate flex items-center gap-1">
-                                <span>{patient.age || '?'} años</span> • <span>{patient.gender || '-'}</span>
-                            </p>
+                        <div className="min-w-0 flex-1">
+                            <h3 className="font-bold text-slate-900 dark:text-white truncate text-base">{patient.name || 'Sin Nombre'}</h3>
+                            <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+                                <span>{patient.age ? `${patient.age} años` : 'N/A'}</span> • <span>{patient.gender || '-'}</span>
+                            </div>
                         </div>
                     </div>
 
-                    {/* DERECHA: BOTONES FLOTANTES (Llamar, Receta, Menú) */}
-                    <div className="flex items-center gap-2 ml-2">
-                        {patient.phone && (
-                            <button onClick={() => handleCall(patient.phone)} className="w-10 h-10 rounded-full bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 flex items-center justify-center border border-green-100 dark:border-green-800 active:bg-green-200">
-                                <Phone size={20} />
-                            </button>
-                        )}
+                    {/* Fila Inferior: Botones de Acción (Los 4 Fantásticos) */}
+                    <div className="flex justify-between mt-4 px-2">
                         
-                        <button onClick={() => setSelectedPatientForRx(patient)} className="w-10 h-10 rounded-full bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 flex items-center justify-center border border-purple-100 dark:border-purple-800 active:bg-purple-200">
-                            <Pill size={20} />
+                        {/* 1. LLAMAR */}
+                        <button 
+                            onClick={() => handleCall(patient.phone)} 
+                            className={`flex flex-col items-center gap-1 ${!patient.phone && 'opacity-30'}`}
+                            disabled={!patient.phone}
+                        >
+                            <div className="w-10 h-10 rounded-full bg-green-50 text-green-600 flex items-center justify-center border border-green-100">
+                                <Phone size={20} />
+                            </div>
+                            <span className="text-[10px] font-medium text-slate-500">Llamar</span>
                         </button>
 
-                        {/* Menú desplegable para Editar/Borrar */}
-                        <div className="relative">
-                            <button onClick={() => setShowActionsId(showActionsId === patient.id ? null : patient.id)} className="w-8 h-8 flex items-center justify-center text-slate-300 hover:text-slate-600">
-                                <MoreVertical size={20} />
-                            </button>
-                            
-                            {showActionsId === patient.id && (
-                                <>
-                                    <div className="fixed inset-0 z-10" onClick={() => setShowActionsId(null)}></div>
-                                    <div className="absolute right-0 top-8 w-40 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl py-1 z-20 animate-fade-in-up">
-                                        <button onClick={() => {openEditModal(patient); setShowActionsId(null);}} className="flex items-center gap-2 w-full px-4 py-3 text-sm text-blue-600 hover:bg-slate-50 dark:hover:bg-slate-800"><Edit2 size={16}/> Editar</button>
-                                        <hr className="border-slate-100 dark:border-slate-800"/>
-                                        <button onClick={() => {handleDelete(patient.id); setShowActionsId(null);}} className="flex items-center gap-2 w-full px-4 py-3 text-sm text-red-600 hover:bg-slate-50 dark:hover:bg-slate-800"><Trash2 size={16}/> Eliminar</button>
-                                    </div>
-                                </>
-                            )}
-                        </div>
+                        {/* 2. ARCHIVOS (NUEVO) */}
+                        <button onClick={() => handleOpenFiles(patient)} className="flex flex-col items-center gap-1">
+                            <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center border border-blue-100">
+                                <Paperclip size={20} />
+                            </div>
+                            <span className="text-[10px] font-medium text-slate-500">Archivos</span>
+                        </button>
+
+                        {/* 3. EXPEDIENTE */}
+                        <button onClick={() => handleViewHistory(patient)} className="flex flex-col items-center gap-1">
+                            <div className="w-10 h-10 rounded-full bg-teal-50 text-brand-teal flex items-center justify-center border border-teal-100">
+                                <Eye size={20} />
+                            </div>
+                            <span className="text-[10px] font-medium text-slate-500">Expediente</span>
+                        </button>
+
+                         {/* 4. EDITAR */}
+                         <button onClick={() => openEditModal(patient)} className="flex flex-col items-center gap-1">
+                            <div className="w-10 h-10 rounded-full bg-slate-50 text-slate-500 flex items-center justify-center border border-slate-100">
+                                <Edit2 size={20} />
+                            </div>
+                            <span className="text-[10px] font-medium text-slate-500">Editar</span>
+                        </button>
                     </div>
+
                 </div>
-            </div>
-         ))}
+             ))}
+        </div>
+        
+        {filteredPatients.length === 0 && <div className="p-10 text-center text-slate-400">No se encontraron pacientes.</div>}
       </div>
 
-      {filteredPatients.length === 0 && <div className="p-10 text-center text-slate-400">No se encontraron pacientes.</div>}
-
-      {/* MODALES (Funcionales) */}
+      {/* MODALES */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-0 md:p-4 backdrop-blur-sm">
           <div className="bg-white dark:bg-slate-900 w-full md:max-w-4xl h-full md:h-[90vh] md:rounded-2xl shadow-2xl overflow-hidden animate-fade-in-up flex flex-col">
@@ -293,7 +310,6 @@ const PatientsView: React.FC = () => {
                         const { data: { user } } = await supabase.auth.getUser();
                         if (!user) return;
                         const fullHistoryJSON = JSON.stringify({ background: data.pathological, lifestyle: data.nonPathological, family: data.family, obgyn: data.obgyn, admin: { insurance: data.insurance, rfc: data.rfc, invoice: data.invoice, type: data.patientType, referral: data.referral }, legacyNote: data.allergies });
-                        // USAMOS 'name' AQUÍ TAMBIÉN
                         const patientPayload = { name: data.name, age: parseInt(data.age) || 0, gender: data.gender, phone: data.phone, email: data.email, history: fullHistoryJSON, doctor_id: user.id };
                         if (editingPatient) { const { error } = await supabase.from('patients').update(patientPayload).eq('id', editingPatient.id); if (error) throw error; toast.success('Expediente actualizado'); } else { const { error } = await supabase.from('patients').insert([patientPayload]); if (error) throw error; toast.success('Nuevo expediente creado'); }
                         setIsModalOpen(false); setEditingPatient(null); fetchPatients();
