@@ -68,13 +68,60 @@ export const GeminiMedicalService = {
       const modelName = await this.getBestAvailableModel(); 
       const genAI = new GoogleGenerativeAI(API_KEY);
       const model = genAI.getGenerativeModel({ model: modelName, generationConfig: { responseMimeType: "application/json" } });
+      
       const now = new Date();
       const currentDate = now.toLocaleDateString('es-MX', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
       const currentTime = now.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
-      const prompt = `ACTÚA COMO: Asistente Clínico. DATOS: FECHA ${currentDate} ${currentTime}. HISTORIAL: "${patientHistory}". TRANSCRIPCIÓN: "${transcript}". 
-      FORMATO JSON: { "conversation_log": [], "soap": { "subjective": "", "objective": "", "assessment": "", "plan": "", "suggestions": [] }, "patientInstructions": "", "risk_analysis": { "level": "Bajo", "reason": "" } }`;
+
+      // Sanitización básica para evitar romper el prompt con comillas
+      const cleanTranscript = transcript.replace(/"/g, "'").trim();
+
+      const prompt = `
+        ACTÚA COMO: Asistente Clínico Senior experto en documentación médica (SOAP).
+        CONTEXTO: 
+        - Fecha: ${currentDate} ${currentTime}
+        - Especialidad: ${specialty}
+        - Historial Previo: "${patientHistory}"
+        
+        TRANSCRIPCIÓN BRUTA (AUDIO SIN FORMATO):
+        "${cleanTranscript}"
+
+        TAREA CRÍTICA (DIARIZACIÓN SEMÁNTICA):
+        1. Analiza el texto y reconstruye el diálogo separando lógicamente quién habla.
+        2. Identifica al 'Médico' (quien pregunta, diagnostica, receta) y al 'Paciente' (quien responde, se queja de síntomas).
+        3. Genera la nota SOAP estructurada basada en este diálogo.
+
+        FORMATO JSON DE RESPUESTA OBLIGATORIO:
+        { 
+          "conversation_log": [
+            { "speaker": "Médico", "text": "Frase exacta o reconstruida..." },
+            { "speaker": "Paciente", "text": "Frase exacta o reconstruida..." }
+          ], 
+          "soap": { 
+            "subjective": "Narrativa detallada de síntomas (S)", 
+            "objective": "Signos vitales y hallazgos físicos (O) o 'No reportado'", 
+            "assessment": "Diagnóstico presuntivo o análisis clínico (A)", 
+            "plan": "Plan de tratamiento, estudios y medicación (P)", 
+            "suggestions": ["Sugerencia 1", "Sugerencia 2"] 
+          }, 
+          "patientInstructions": "Instrucciones claras y empáticas para el paciente (Nivel de lectura de 6to grado)", 
+          "risk_analysis": { 
+            "level": "Bajo" | "Medio" | "Alto", 
+            "reason": "Justificación breve del riesgo detectado" 
+          } 
+        }
+      `;
+
       const result = await model.generateContent(prompt);
-      return JSON.parse(result.response.text()) as GeminiResponse;
+      const textResponse = result.response.text();
+      
+      try {
+        return JSON.parse(textResponse) as GeminiResponse;
+      } catch (parseError) {
+        console.error("Error parseando JSON de Gemini:", textResponse);
+        throw new Error("La IA generó un formato inválido. Intente de nuevo.");
+      }
+
     } catch (error) { throw error; }
   },
 
