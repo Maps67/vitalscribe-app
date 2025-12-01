@@ -42,24 +42,36 @@ const AuthView: React.FC<AuthProps> = ({
     termsAccepted: false 
   });
 
-  // --- CORRECCIÓN CRÍTICA: DETECTOR DE EVENTOS DE RECUPERACIÓN ---
+  // --- DETECTOR DE RECUPERACIÓN (MEJORADO) ---
   useEffect(() => {
-    // 1. Si viene forzado por props (navegación interna)
-    if (forceResetMode) {
+    // 1. CHEQUEO DE URL (PRIORIDAD ALTA): Detectar si venimos de un link de correo
+    // Los links de Supabase suelen ser: .../#access_token=xyz&type=recovery
+    const hash = window.location.hash;
+    const isRecoveryHash = hash && hash.includes('type=recovery');
+
+    if (forceResetMode || isRecoveryHash) {
+      console.log("Modo Recuperación Detectado por URL/Props");
       setIsResettingPassword(true);
+      setIsRecovering(false);
+      setIsRegistering(false);
     }
 
-    // 2. Escuchar el evento de Supabase cuando se carga la app desde el link del correo
+    // 2. LISTENER DE EVENTOS (RESPALDO)
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'PASSWORD_RECOVERY') {
-        // ¡BINGO! El usuario vino del correo de "Recuperar Contraseña"
+        console.log("Evento PASSWORD_RECOVERY detectado");
         setIsResettingPassword(true);
-        setIsRecovering(false); // Aseguramos limpiar otros estados
+        setIsRecovering(false);
         setIsRegistering(false);
+      } else if (event === 'SIGNED_IN') {
+        // CRÍTICO: Si estamos en modo reset (por URL), NO ejecutar onLoginSuccess todavía
+        // Solo ejecutar login si NO es una recuperación
+        if (!isResettingPassword && !isRecoveryHash) {
+           // Dejamos que el usuario fluya normal si no es recuperación
+        }
       }
     });
 
-    // Limpieza del listener
     return () => {
       authListener.subscription.unsubscribe();
     };
@@ -81,9 +93,7 @@ const AuthView: React.FC<AuthProps> = ({
 
     try {
       if (isRegistering) {
-        // VALIDACIONES DE SEGURIDAD (REGISTRO)
-        
-        // 1. Cédula
+        // ... (Validaciones de registro igual que antes) ...
         const cedulaLimpia = formData.cedula.trim();
         const esNumerica = /^\d+$/.test(cedulaLimpia);
         if (!esNumerica || (cedulaLimpia.length < 7 || cedulaLimpia.length > 8)) {
@@ -91,35 +101,24 @@ const AuthView: React.FC<AuthProps> = ({
              setLoading(false); return;
         }
 
-        // 2. Contraseña Fuerte
         const passError = validatePasswordStrength(formData.password);
-        if (passError) {
-            toast.error(passError);
-            setLoading(false); return;
-        }
+        if (passError) { toast.error(passError); setLoading(false); return; }
 
-        // 3. Términos
         if (!formData.termsAccepted) {
             toast.error("Debe aceptar la verificación de su cédula profesional.");
             setLoading(false); return;
         }
 
-        // CREAR CUENTA
         const { data, error } = await supabase.auth.signUp({
           email: formData.email,
           password: formData.password,
           options: {
-            data: { 
-                full_name: formData.fullName, 
-                specialty: formData.specialty, 
-                cedula: cedulaLimpia 
-            },
+            data: { full_name: formData.fullName, specialty: formData.specialty, cedula: cedulaLimpia },
           },
         });
 
         if (error) throw error;
 
-        // CREAR PERFIL
         if (data.user) {
             await supabase.from('profiles').insert({
                 id: data.user.id,
@@ -129,18 +128,18 @@ const AuthView: React.FC<AuthProps> = ({
                 email: formData.email
             });
         }
-
         setVerificationSent(true);
         toast.success("Cuenta creada exitosamente.");
 
       } else {
-        // INICIO DE SESIÓN
+        // INICIO DE SESIÓN NORMAL
         const { error } = await supabase.auth.signInWithPassword({
             email: formData.email,
             password: formData.password,
         });
         if (error) throw error;
-        if (onLoginSuccess) onLoginSuccess();
+        // Solo redirigir si NO estamos en medio de un reset
+        if (onLoginSuccess && !isResettingPassword) onLoginSuccess();
       }
     } catch (error: any) {
       console.error(error);
@@ -157,8 +156,7 @@ const AuthView: React.FC<AuthProps> = ({
     e.preventDefault();
     setLoading(true);
     try {
-      // NOTA: redirectTo debe apuntar a la URL donde vive ESTE componente AuthView.
-      // Generalmente es la raíz (/) o /login
+      // Forzamos la redirección a la URL base actual
       const { error } = await supabase.auth.resetPasswordForEmail(formData.email, {
         redirectTo: window.location.origin, 
       });
@@ -186,10 +184,12 @@ const AuthView: React.FC<AuthProps> = ({
         password: formData.newPassword 
       });
       if (error) throw error;
-      toast.success("Contraseña actualizada exitosamente. Iniciando sesión...");
+      toast.success("Contraseña actualizada exitosamente.");
       
-      // Importante: Después de actualizar, supabase suele dejar la sesión iniciada.
-      // Disparamos el éxito para entrar a la app.
+      // Limpiamos el hash de la URL para evitar bucles
+      window.history.replaceState(null, '', window.location.pathname);
+
+      // AHORA SÍ dejamos pasar al usuario
       if (onPasswordResetSuccess) {
         onPasswordResetSuccess();
       } else if (onLoginSuccess) {
@@ -236,7 +236,7 @@ const AuthView: React.FC<AuthProps> = ({
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col lg:flex-row font-sans">
       
-      {/* IZQUIERDA: IMAGEN Y BRANDING */}
+      {/* IZQUIERDA: BRANDING */}
       <div className="hidden lg:flex lg:w-1/2 bg-slate-900 text-white flex-col justify-center p-12 relative overflow-hidden">
         <div className="absolute top-0 left-0 w-full h-full opacity-40">
             <img src="https://images.unsplash.com/photo-1622253692010-333f2da6031d?q=80&w=1964&auto=format&fit=crop" className="w-full h-full object-cover grayscale" alt="Medical Tech" />
@@ -260,21 +260,19 @@ const AuthView: React.FC<AuthProps> = ({
 
       {/* DERECHA: FORMULARIO */}
       <div className="flex-1 flex items-center justify-center p-6 relative bg-white dark:bg-slate-950">
-        
-        {/* Botón Manual */}
         <a href="/manual.html" target="_blank" rel="noopener noreferrer" className="absolute top-8 right-8 flex items-center gap-2 text-sm font-medium text-slate-500 hover:text-brand-teal transition-colors bg-slate-50 px-4 py-2 rounded-full border border-slate-200 shadow-sm hover:shadow-md">
           <BookOpen className="w-4 h-4" /> Manual de Usuario
         </a>
 
         <div className="w-full max-w-md space-y-8 animate-fade-in-up">
           
-          {/* VISTA 1: RESETEAR CONTRASEÑA (Detectada por evento PASSWORD_RECOVERY) */}
+          {/* VISTA 1: RESETEAR CONTRASEÑA */}
           {isResettingPassword ? (
              <>
                <div className="text-center">
                 <div className="w-16 h-16 bg-brand-teal/10 text-brand-teal rounded-full flex items-center justify-center mx-auto mb-4"><CheckCircle2 size={32} /></div>
                 <h2 className="text-3xl font-bold text-slate-900">Nueva Contraseña</h2>
-                <p className="mt-2 text-slate-500">El enlace es válido. Establezca su nueva clave.</p>
+                <p className="mt-2 text-slate-500">Recuperación exitosa. Ingrese su nueva clave.</p>
               </div>
               <form className="space-y-5" onSubmit={handlePasswordUpdate}>
                 <div>
@@ -328,41 +326,4 @@ const AuthView: React.FC<AuthProps> = ({
                        <div className="grid grid-cols-2 gap-4">
                            <div>
                                <label className="block text-sm font-medium text-slate-700 mb-1">Especialidad</label>
-                               <div className="relative"><Stethoscope size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" /><input className="block w-full pl-10 p-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-brand-teal" value={formData.specialty} onChange={e => setFormData({...formData, specialty: e.target.value})} placeholder="General"/></div>
-                           </div>
-                           <div>
-                               <label className="block text-sm font-medium text-slate-700 mb-1">Cédula</label>
-                               <div className="relative"><FileBadge size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" /><input required type="text" className="block w-full pl-10 p-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-brand-teal" value={formData.cedula} onChange={e => { const val = e.target.value.replace(/[^0-9]/g, ''); setFormData({...formData, cedula: val}); }} maxLength={8} placeholder="8 Dígitos"/></div>
-                           </div>
-                       </div>
-                   </div>
-                 )}
-                 <div className="space-y-4">
-                     <div>
-                         <label className="block text-sm font-medium text-slate-700 mb-1">Correo</label>
-                         <div className="relative"><div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400"><Mail size={18} /></div><input required type="email" className="block w-full pl-10 p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-teal outline-none" placeholder="doctor@hospital.com" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})}/></div>
-                     </div>
-                     <div>
-                         <label className="block text-sm font-medium text-slate-700 mb-1">Contraseña</label>
-                         <div className="relative"><div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400"><Lock size={18} /></div><input required type={showPassword ? "text" : "password"} className="block w-full pl-10 p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-teal outline-none" placeholder="••••••••" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})}/>
-                         <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button></div>
-                         {!isRegistering && (<div className="flex justify-end mt-2"><button type="button" onClick={() => setIsRecovering(true)} className="text-xs font-medium text-brand-teal hover:text-teal-700">¿Olvidaste tu contraseña?</button></div>)}
-                         {isRegistering && <p className="text-[10px] text-slate-400 mt-1 pl-1 flex items-center gap-1"><AlertTriangle size={10}/> Requiere: 8+ car, 1 Mayus, 1 Num, 1 Símbolo.</p>}
-                     </div>
-                 </div>
-                 {isRegistering && (<div className="flex items-start gap-3 bg-blue-50 p-3 rounded-lg border border-blue-100"><input type="checkbox" required className="mt-1 w-4 h-4 text-brand-teal rounded cursor-pointer" checked={formData.termsAccepted} onChange={e => setFormData({...formData, termsAccepted: e.target.checked})}/><label className="text-xs text-slate-600">Acepto la verificación de mi <strong>Cédula Profesional</strong>. Datos falsos suspenden la cuenta.</label></div>)}
-                 <button type="submit" disabled={loading} className="w-full flex justify-center items-center gap-2 py-3 px-4 border border-transparent rounded-xl shadow-lg text-sm font-bold text-white bg-brand-teal hover:bg-teal-600 transition-all disabled:opacity-50">{loading ? <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div> : <>{isRegistering ? 'Registrarse' : 'Iniciar Sesión'} <ArrowRight size={20} /></>}</button>
-               </form>
-               <div className="text-center"><button type="button" onClick={() => setIsRegistering(!isRegistering)} className="text-sm font-medium text-brand-teal hover:text-teal-700">{isRegistering ? '¿Ya tienes cuenta? Inicia sesión' : '¿Eres nuevo? Crea tu cuenta'}</button></div>
-             </>
-          )}
-          <div className="mt-8 pt-6 border-t border-slate-100 text-center text-xs text-slate-400">
-            &copy; {new Date().getFullYear()} MediScribe AI <span className="text-slate-300">v4.0</span>. Desarrollado por <span className="font-bold text-slate-500">PixelArte Studio</span>.
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-export default AuthView;
+                               <div className="relative"><Stethoscope size={1
