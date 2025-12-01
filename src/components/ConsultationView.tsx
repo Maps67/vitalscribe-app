@@ -5,7 +5,7 @@ import {
   MessageSquare, User, Send, Edit2, Check, ArrowLeft, 
   Stethoscope, Trash2, WifiOff, Save, Share2, Download, Printer,
   Paperclip, Calendar, Clock, UserCircle, Activity, ClipboardList, Brain, FileSignature, Keyboard,
-  Quote // Nuevo icono para la transcripción
+  Quote 
 } from 'lucide-react';
 
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition'; 
@@ -58,6 +58,7 @@ const ConsultationView: React.FC = () => {
   const [isAttachmentsOpen, setIsAttachmentsOpen] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
 
+  const transcriptContainerRef = useRef<HTMLDivElement>(null); // Referencia al contenedor scrollable
   const transcriptEndRef = useRef<HTMLDivElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -89,7 +90,6 @@ const ConsultationView: React.FC = () => {
     return () => { mounted = false; };
   }, [setTranscript]); 
 
-  // --- REGLA DE NEGOCIO: LIMPIEZA AUTOMÁTICA AL CAMBIAR PACIENTE ---
   useEffect(() => {
     if (selectedPatient) {
         if (transcript && confirm("¿Desea limpiar el dictado anterior para el nuevo paciente?")) {
@@ -101,14 +101,10 @@ const ConsultationView: React.FC = () => {
     }
   }, [selectedPatient]); 
 
-  // --- AUTO-SCROLL INTELIGENTE ---
-  // Cada vez que cambie el transcript, forzamos el scroll hacia abajo
+  // --- AUTO-SCROLL CORREGIDO ---
   useEffect(() => { 
     if (isListening && transcriptEndRef.current) {
-        // Usamos un pequeño timeout para asegurar que el DOM se actualizó
-        setTimeout(() => {
-             transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-        }, 100);
+        transcriptEndRef.current.scrollIntoView({ behavior: "smooth", block: "end" });
     }
     if (transcript) localStorage.setItem('mediscribe_local_draft', transcript);
   }, [transcript, isListening]);
@@ -188,7 +184,6 @@ const ConsultationView: React.FC = () => {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) throw new Error("Sesión expirada");
         
-        // Soporte híbrido para notas nuevas (soap) y viejas (clinicalNote)
         const summaryToSave = generatedNote.soap 
             ? `FECHA: ${new Date().toLocaleDateString()}\nS: ${generatedNote.soap.subjective}\nO: ${generatedNote.soap.objective}\nA: ${generatedNote.soap.assessment}\nP: ${generatedNote.soap.plan}\n\nPLAN PACIENTE:\n${editableInstructions}`
             : (generatedNote.clinicalNote + "\n\nPLAN PACIENTE:\n" + editableInstructions);
@@ -251,7 +246,7 @@ const ConsultationView: React.FC = () => {
   return (
     <div className="flex flex-col md:flex-row h-[calc(100vh-64px)] bg-slate-100 dark:bg-slate-950 relative">
       
-      {/* PANEL IZQUIERDO (CONTROLES 25%) */}
+      {/* PANEL IZQUIERDO (CONTROLES) */}
       <div className={`w-full md:w-1/4 p-4 flex flex-col gap-4 border-r dark:border-slate-800 bg-white dark:bg-slate-900 overflow-y-auto ${generatedNote ? 'hidden md:flex' : 'flex'}`}>
         <div className="flex justify-between items-center">
             <h2 className="text-xl font-bold dark:text-white flex items-center gap-2">
@@ -276,10 +271,9 @@ const ConsultationView: React.FC = () => {
         </div>
         <div onClick={()=>setConsentGiven(!consentGiven)} className="flex items-center gap-2 p-3 rounded-lg border cursor-pointer select-none dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"><div className={`w-5 h-5 rounded border flex items-center justify-center ${consentGiven?'bg-green-500 border-green-500 text-white':'bg-white dark:bg-slate-700'}`}>{consentGiven&&<Check size={14}/>}</div><label className="text-xs dark:text-white cursor-pointer">Consentimiento otorgado.</label></div>
         
-        {/* --- ÁREA DE MICROFONO EXPANDIDA Y MEJORADA CON AUTO-SCROLL --- */}
+        {/* --- ÁREA DE MICROFONO CON AUTO-SCROLL --- */}
         <div className={`flex-1 border-2 border-dashed rounded-2xl flex flex-col p-4 relative transition-colors min-h-[300px] ${!isOnline ? 'border-amber-300 bg-amber-50 dark:bg-amber-900/10' : (isListening?'border-red-400 bg-red-50 dark:bg-red-900/10':'border-slate-200 dark:border-slate-700')}`}>
             
-            {/* Si no estamos grabando y no hay texto, mostramos el microfono grande para invitar */}
             {!transcript && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none opacity-50">
                     <div className={`w-20 h-20 rounded-full flex items-center justify-center mb-4 ${!isOnline ? 'bg-amber-100 text-amber-500' : 'bg-slate-100 dark:bg-slate-800 text-slate-300'}`}>
@@ -291,7 +285,6 @@ const ConsultationView: React.FC = () => {
                 </div>
             )}
 
-            {/* MENSAJE DE AYUDA OFFLINE */}
             {!isOnline && (
                 <div className="relative w-full z-10 bg-white/80 dark:bg-slate-800/80 p-2 rounded-lg text-xs text-center text-amber-700 dark:text-amber-400 mb-2 border border-amber-200 dark:border-amber-800">
                     <Keyboard size={14} className="inline mr-1"/>
@@ -299,8 +292,11 @@ const ConsultationView: React.FC = () => {
                 </div>
             )}
 
-            {/* ÁREA DE TEXTO GIGANTE Y LEGIBLE CON AUTO-SCROLL */}
-            <div className="flex-1 overflow-y-auto mb-4 relative z-10">
+            {/* ÁREA DE TEXTO CON CONTENEDOR SCROLLABLE */}
+            <div 
+                className="flex-1 overflow-y-auto mb-4 relative z-10 w-full" 
+                ref={transcriptContainerRef} // Referencia al contenedor para posible uso futuro
+            >
                 <textarea 
                     className={`w-full h-full bg-transparent p-2 rounded-xl text-base leading-relaxed resize-none focus:outline-none dark:text-slate-200 ${!transcript ? 'opacity-0' : 'opacity-100'}`}
                     value={transcript}
@@ -308,12 +304,10 @@ const ConsultationView: React.FC = () => {
                     placeholder="" 
                 />
                 {/* EL ANCLA INVISIBLE PARA EL SCROLL AUTOMÁTICO */}
-                <div ref={transcriptEndRef} className="h-1" /> 
+                <div ref={transcriptEndRef} style={{ height: 1 }} /> 
             </div>
             
-            {/* BOTONES DE CONTROL */}
             <div className="flex w-full gap-2 mt-auto flex-col xl:flex-row z-20 pt-2 border-t border-slate-200/50 dark:border-slate-700/50">
-                
                 <button 
                     onClick={handleToggleRecording} 
                     disabled={!isOnline || !consentGiven || (!isAPISupported && !isListening)} 
@@ -343,7 +337,7 @@ const ConsultationView: React.FC = () => {
         </div>
       </div>
       
-      {/* PANEL DERECHO (RESULTADOS 75% - ESTILO EMR) */}
+      {/* PANEL DERECHO (RESULTADOS) */}
       <div className={`w-full md:w-3/4 bg-slate-100 dark:bg-slate-950 flex flex-col border-l dark:border-slate-800 ${!generatedNote?'hidden md:flex':'flex h-full'}`}>
           <div className="flex border-b dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0 items-center px-2">
              <button onClick={()=>setGeneratedNote(null)} className="md:hidden p-4 text-slate-500"><ArrowLeft/></button>
