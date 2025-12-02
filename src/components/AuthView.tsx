@@ -30,7 +30,7 @@ const AuthView: React.FC<AuthProps> = ({
   const [verificationSent, setVerificationSent] = useState(false);
   const [recoverySent, setRecoverySent] = useState(false);
 
-  // DATOS DEL FORMULARIO (Restaurados)
+  // DATOS DEL FORMULARIO
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -41,7 +41,7 @@ const AuthView: React.FC<AuthProps> = ({
     termsAccepted: false 
   });
 
-  // Efecto para activar modo reset si el padre lo dicta (desde /update-password)
+  // Efecto: Si la página padre dice "Modo Reset", obedecemos
   useEffect(() => {
     if (forceResetMode) {
       setIsResettingPassword(true);
@@ -50,7 +50,6 @@ const AuthView: React.FC<AuthProps> = ({
     }
   }, [forceResetMode]);
 
-  // VALIDADOR DE FUERZA
   const validatePasswordStrength = (pass: string): string | null => {
     if (pass.length < 8) return "La contraseña debe tener al menos 8 caracteres.";
     if (!/[A-Z]/.test(pass)) return "La contraseña debe incluir al menos una Mayúscula.";
@@ -59,18 +58,14 @@ const AuthView: React.FC<AuthProps> = ({
     return null;
   };
 
-  // --- LOGIN / REGISTRO ---
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     try {
       if (isRegistering) {
-        // VALIDACIONES DE REGISTRO
         const cedulaLimpia = formData.cedula.trim();
-        const esNumerica = /^\d+$/.test(cedulaLimpia);
-        
-        if (!esNumerica || (cedulaLimpia.length < 7 || cedulaLimpia.length > 8)) {
+        if (!/^\d+$/.test(cedulaLimpia) || cedulaLimpia.length < 7 || cedulaLimpia.length > 8) {
              toast.error("Cédula inválida. Debe tener 7 u 8 dígitos numéricos.");
              setLoading(false); return;
         }
@@ -83,22 +78,16 @@ const AuthView: React.FC<AuthProps> = ({
             setLoading(false); return;
         }
 
-        // CREAR CUENTA
         const { data, error } = await supabase.auth.signUp({
           email: formData.email,
           password: formData.password,
           options: {
-            data: { 
-                full_name: formData.fullName, 
-                specialty: formData.specialty, 
-                cedula: cedulaLimpia 
-            },
+            data: { full_name: formData.fullName, specialty: formData.specialty, cedula: cedulaLimpia },
           },
         });
 
         if (error) throw error;
 
-        // CREAR PERFIL
         if (data.user) {
             await supabase.from('profiles').insert({
                 id: data.user.id,
@@ -112,14 +101,13 @@ const AuthView: React.FC<AuthProps> = ({
         toast.success("Cuenta creada exitosamente.");
 
       } else {
-        // INICIO DE SESIÓN
         const { error } = await supabase.auth.signInWithPassword({
             email: formData.email,
             password: formData.password,
         });
         if (error) throw error;
-        
-        if (onLoginSuccess) onLoginSuccess();
+        // Solo redirigimos si NO estamos en modo reset
+        if (onLoginSuccess && !isResettingPassword) onLoginSuccess();
       }
     } catch (error: any) {
       console.error(error);
@@ -131,12 +119,14 @@ const AuthView: React.FC<AuthProps> = ({
     }
   };
 
-  // --- RECUPERACIÓN (ARREGLADO CON REDIRECCIÓN FIJA) ---
+  // --- CORRECCIÓN CRÍTICA: REDIRECCIÓN ---
   const handleRecoveryRequest = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
+      // Apuntamos a la ruta dedicada que creamos en el Paso 1
       const redirectUrl = `${window.location.origin}/update-password`;
+      
       const { error } = await supabase.auth.resetPasswordForEmail(formData.email, {
         redirectTo: redirectUrl, 
       });
@@ -151,7 +141,6 @@ const AuthView: React.FC<AuthProps> = ({
     }
   };
 
-  // --- ACTUALIZAR PASSWORD ---
   const handlePasswordUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     const passError = validatePasswordStrength(formData.newPassword);
@@ -175,7 +164,7 @@ const AuthView: React.FC<AuthProps> = ({
     }
   };
 
-  // VISTAS DE ESTADO INTERMEDIO
+  // VISTAS INTERMEDIAS (Mantenemos diseño limpio)
   if (verificationSent) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 animate-fade-in-up">
@@ -202,11 +191,11 @@ const AuthView: React.FC<AuthProps> = ({
     );
   }
 
-  // --- RENDERIZADO PRINCIPAL (Split Screen Recuperado) ---
+  // --- LAYOUT ORIGINAL RESTAURADO (SPLIT SCREEN) ---
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col lg:flex-row font-sans">
       
-      {/* IZQUIERDA: IMAGEN Y BRANDING (RESTAURADO) */}
+      {/* IZQUIERDA: IMAGEN Y BRANDING */}
       <div className="hidden lg:flex lg:w-1/2 bg-slate-900 text-white flex-col justify-center p-12 relative overflow-hidden">
         <div className="absolute top-0 left-0 w-full h-full opacity-40">
             <img src="https://images.unsplash.com/photo-1622253692010-333f2da6031d?q=80&w=1964&auto=format&fit=crop" className="w-full h-full object-cover grayscale" alt="Medical Tech" />
@@ -297,7 +286,7 @@ const AuthView: React.FC<AuthProps> = ({
                            </div>
                            <div>
                                <label className="block text-sm font-medium text-slate-700 mb-1">Cédula</label>
-                               <div className="relative"><FileBadge size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" /><input required type="text" className="block w-full pl-10 p-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-brand-teal" value={formData.cedula} onChange={e => { const val = e.target.value.replace(/[^0-9]/g, ''); setFormData({...formData, cedula: val}); }} maxLength={8} placeholder="8 Dígitos"/></div>
+                               <div className="relative"><FileBadge size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" /><input required type="text" className="block w-full pl-10 p-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-brand-teal" value={formData.cedula} onChange={e => setFormData({...formData, cedula: e.target.value.replace(/\D/g,'')})} maxLength={8}/></div>
                            </div>
                        </div>
                    </div>

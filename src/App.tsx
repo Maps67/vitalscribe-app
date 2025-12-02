@@ -22,7 +22,7 @@ import SplashScreen from './components/SplashScreen';
 import MobileTabBar from './components/MobileTabBar';
 import TermsOfService from './pages/TermsOfService';
 import { TrialMonitor } from './components/TrialMonitor';
-// Importamos la nueva página
+// PÁGINA NUEVA
 import UpdatePassword from './pages/UpdatePassword';
 
 interface MainLayoutProps {
@@ -76,8 +76,7 @@ const App: React.FC = () => {
   const [isClosing, setIsClosing] = useState(false);
   const [closingName, setClosingName] = useState('');
 
-  // DETECCIÓN SÍNCRONA DE RUTA DE RECUPERACIÓN
-  // Si estamos en /update-password, esa es la verdad absoluta.
+  // DETECCIÓN SÍNCRONA
   const isUpdatePasswordRoute = window.location.pathname === '/update-password';
 
   useEffect(() => {
@@ -139,18 +138,18 @@ const App: React.FC = () => {
 
   // --- LÓGICA DE RENDERIZADO MAESTRA ---
   
-  // CASO 1: RECUPERACIÓN DE CONTRASEÑA (Prioridad Absoluta)
+  // 1. RUTA DE RECUPERACIÓN (Prioridad Absoluta)
+  // Renderiza la página UpdatePassword que usa AuthView con tu diseño bonito.
   if (isUpdatePasswordRoute) {
       return (
         <ThemeProvider>
             <Toaster position="top-center" richColors />
-            {/* Si hay sesión, UpdatePassword la usará para actualizar. Si no, AuthView mostrará error o pedirá login */}
             <UpdatePassword onSuccess={() => window.location.href = '/'} />
         </ThemeProvider>
       );
   }
 
-  // CASO 2: NO LOGUEADO -> PANTALLA DE ACCESO
+  // 2. NO LOGUEADO -> PANTALLA DE ACCESO (Tu AuthView con diseño)
   if (!session) {
     return (
       <ThemeProvider>
@@ -161,7 +160,7 @@ const App: React.FC = () => {
     );
   }
 
-  // CASO 3: LOGUEADO Y RUTA NORMAL -> APP COMPLETA
+  // 3. LOGUEADO Y RUTA NORMAL -> APP
   return (
     <ThemeProvider>
       <BrowserRouter>
