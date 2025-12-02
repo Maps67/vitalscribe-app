@@ -2,10 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { 
   Search, UserPlus, FileText, Trash2, Edit2, Eye, Calendar, 
   Share2, Download, FolderOpen, Paperclip, MoreVertical, X, 
-  FileCode, Phone, Pill, ChevronDown, ChevronUp, AlertTriangle, MessageCircle 
+  FileCode, Phone, Pill, ChevronDown, ChevronUp, AlertTriangle, MessageCircle, Sparkles // Agregado Sparkles
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { Patient, DoctorProfile } from '../types';
+import { Patient, DoctorProfile, PatientInsight } from '../types'; // Importamos PatientInsight
 import { toast } from 'sonner';
 import QuickRxModal from './QuickRxModal';
 import FormattedText from './FormattedText'; 
@@ -13,9 +13,8 @@ import { pdf } from '@react-pdf/renderer';
 import PrescriptionPDF from './PrescriptionPDF';
 import { DoctorFileGallery } from './DoctorFileGallery';
 import { PatientWizard } from './PatientWizard';
-
-// IMPORTACIÓN CRÍTICA: Aseguramos que esto coincida con el export del paso 1
 import { InsightsPanel } from './InsightsPanel'; 
+import { GeminiMedicalService } from '../services/GeminiMedicalService'; // Importamos el servicio para el 360
 
 interface PatientData extends Partial<Patient> {
   id: string;
@@ -40,6 +39,7 @@ const PatientsView: React.FC = () => {
   const [patients, setPatients] = useState<PatientData[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
     
+  // Estados de Modales
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isGalleryOpen, setIsGalleryOpen] = useState(false);
@@ -52,7 +52,14 @@ const PatientsView: React.FC = () => {
   const [patientHistory, setPatientHistory] = useState<ConsultationRecord[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
 
+  // Estado para expandir tarjeta en móvil (Acordeón)
   const [expandedPatientId, setExpandedPatientId] = useState<string | null>(null);
+
+  // --- ESTADOS PARA INSIGHTS 360 (NUEVO EN ESTA VISTA) ---
+  const [isInsightsOpen, setIsInsightsOpen] = useState(false);
+  const [patientInsights, setPatientInsights] = useState<PatientInsight | null>(null);
+  const [isLoadingInsights, setIsLoadingInsights] = useState(false);
+  const [analyzingPatientName, setAnalyzingPatientName] = useState('');
 
   useEffect(() => {
     fetchPatients();
@@ -83,6 +90,41 @@ const PatientsView: React.FC = () => {
         const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single();
         if (data) setDoctorProfile(data as DoctorProfile);
     }
+  };
+
+  // --- FUNCIÓN PARA CARGAR INSIGHTS 360 DESDE LA TABLA ---
+  const handleLoadInsights = async (patient: PatientData) => {
+      setAnalyzingPatientName(patient.name);
+      setIsInsightsOpen(true);
+      setPatientInsights(null); // Reset anterior
+      setIsLoadingInsights(true);
+
+      try {
+          // 1. Obtener historial de consultas
+          const { data: history } = await supabase
+            .from('consultations')
+            .select('summary, created_at')
+            .eq('patient_id', patient.id)
+            .order('created_at', { ascending: false })
+            .limit(5);
+          
+          const consultationsText = history?.map(h => `[Fecha: ${new Date(h.created_at).toLocaleDateString()}] ${h.summary}`) || [];
+          
+          // 2. Llamar a la IA
+          const analysis = await GeminiMedicalService.generatePatient360Analysis(
+              patient.name, 
+              patient.history || "No registrado", 
+              consultationsText
+          );
+          
+          setPatientInsights(analysis);
+      } catch (error) {
+          toast.error("Error analizando historial.");
+          console.error(error);
+          setIsInsightsOpen(false);
+      } finally {
+          setIsLoadingInsights(false);
+      }
   };
 
   const handleViewHistory = async (patient: PatientData) => {
@@ -142,6 +184,18 @@ const PatientsView: React.FC = () => {
           ).toBlob();
           window.open(URL.createObjectURL(blob), '_blank');
       } catch (e) { toast.error("Error generando PDF"); }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('¿Estás seguro de eliminar este paciente y todo su historial?')) return;
+    try {
+      const { error } = await supabase.from('patients').delete().eq('id', id);
+      if (error) throw error;
+      toast.success('Paciente eliminado');
+      fetchPatients();
+    } catch (error) {
+      toast.error('Error al eliminar');
+    }
   };
 
   const openEditModal = (patient: PatientData) => {
@@ -212,18 +266,21 @@ const PatientsView: React.FC = () => {
 
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto pb-24 md:pb-6">
+      
+      {/* HEADER */}
       <div className="flex justify-between items-center mb-6">
         <div><h1 className="text-2xl font-bold text-slate-800 dark:text-white">Pacientes</h1><p className="text-slate-500 dark:text-slate-400 text-sm">Directorio clínico</p></div>
         <button onClick={() => { setEditingPatient(null); setIsModalOpen(true); }} className="bg-brand-teal hover:bg-teal-600 text-white px-4 py-2 rounded-xl font-bold flex items-center gap-2 transition-all shadow-lg shadow-teal-500/20 active:scale-95"><UserPlus size={20} /> <span className="hidden sm:inline">Nuevo</span></button>
       </div>
 
+      {/* BUSCADOR */}
       <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 mb-4">
           <div className="relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} /><input type="text" placeholder="Buscar paciente por nombre..." className="w-full pl-10 pr-4 py-3 bg-transparent border-none rounded-xl text-slate-700 dark:text-slate-200 focus:ring-0 placeholder:text-slate-400" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div>
       </div>
 
       <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
         
-        {/* TABLA ESCRITORIO */}
+        {/* ESCRITORIO */}
         <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
@@ -255,9 +312,13 @@ const PatientsView: React.FC = () => {
                   </td>
                   <td className="p-4 relative text-center">
                     <div className="flex justify-center gap-2">
+                         {/* BOTÓN NUEVO: 360 */}
+                         <button onClick={() => handleLoadInsights(patient)} className="p-2 text-indigo-500 hover:bg-indigo-50 rounded-lg transition-colors" title="Balance 360°"><Sparkles size={18}/></button>
+                         
                          <button onClick={() => handleViewHistory(patient)} className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors" title="Expediente"><Eye size={18}/></button>
                          <button onClick={() => setSelectedPatientForRx(patient)} className="p-2 text-teal-600 hover:bg-teal-50 rounded-lg transition-colors" title="Receta"><Pill size={18}/></button>
                          <button onClick={() => openEditModal(patient)} className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors" title="Editar"><Edit2 size={18}/></button>
+                         <button onClick={() => handleDelete(patient.id)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors" title="Eliminar"><Trash2 size={18}/></button>
                     </div>
                   </td>
                 </tr>
@@ -266,7 +327,7 @@ const PatientsView: React.FC = () => {
           </table>
         </div>
 
-        {/* VISTA MÓVIL */}
+        {/* MÓVIL */}
         <div className="md:hidden divide-y divide-slate-100 dark:divide-slate-700">
              {filteredPatients.map(patient => {
                 const isExpanded = expandedPatientId === patient.id;
@@ -295,6 +356,14 @@ const PatientsView: React.FC = () => {
 
                     {isExpanded && (
                         <div className="px-4 animate-fade-in-down">
+                            {/* BOTÓN 360 MÓVIL */}
+                            <button 
+                                onClick={(e) => { e.stopPropagation(); handleLoadInsights(patient); }}
+                                className="w-full mb-2 py-2 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-800 rounded-xl text-xs font-bold flex items-center justify-center gap-2 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors"
+                            >
+                                <Sparkles size={16} /> Ver Balance Clínico 360°
+                            </button>
+
                             <div className="grid grid-cols-4 gap-2 mb-3">
                                 <button onClick={(e) => { e.stopPropagation(); handleCall(patient.phone); }} disabled={!patient.phone} className={`flex flex-col items-center justify-center py-2 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl shadow-sm active:scale-95 transition-all ${!patient.phone && 'opacity-50 grayscale'}`}>
                                     <Phone size={18} className="text-slate-600 dark:text-slate-300 mb-1" /><span className="text-[9px] font-bold text-slate-500 dark:text-slate-400">Llamar</span>
@@ -309,9 +378,14 @@ const PatientsView: React.FC = () => {
                                     <Pill size={18} className="text-teal-500 mb-1" /><span className="text-[9px] font-bold text-slate-500 dark:text-slate-400">Receta</span>
                                 </button>
                             </div>
-                            <button onClick={(e) => { e.stopPropagation(); openEditModal(patient); }} className="w-full py-2.5 bg-slate-100 dark:bg-slate-700/50 text-xs font-bold text-slate-600 dark:text-slate-300 rounded-lg flex items-center justify-center gap-2 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
-                                <Edit2 size={14} /> Editar Datos Completos
-                            </button>
+                            <div className="flex gap-2">
+                                <button onClick={(e) => { e.stopPropagation(); openEditModal(patient); }} className="flex-1 py-2.5 bg-slate-100 dark:bg-slate-700/50 text-xs font-bold text-slate-600 dark:text-slate-300 rounded-lg flex items-center justify-center gap-2 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
+                                    <Edit2 size={14} /> Editar Datos
+                                </button>
+                                <button onClick={(e) => { e.stopPropagation(); handleDelete(patient.id); }} className="px-4 py-2.5 bg-red-50 dark:bg-red-900/20 text-xs font-bold text-red-600 dark:text-red-400 rounded-lg flex items-center justify-center gap-2 hover:bg-red-100 transition-colors">
+                                    <Trash2 size={14} />
+                                </button>
+                            </div>
                         </div>
                     )}
                 </div>
@@ -365,7 +439,15 @@ const PatientsView: React.FC = () => {
 
                         const patientPayload = { name: data.name, age: parseInt(data.age) || 0, gender: data.gender, phone: data.phone, email: data.email, history: fullHistoryJSON, doctor_id: user.id };
 
-                        if (editingPatient) { const { error } = await supabase.from('patients').update(patientPayload).eq('id', editingPatient.id); if (error) throw error; toast.success('Expediente actualizado'); } else { const { error } = await supabase.from('patients').insert([patientPayload]); if (error) throw error; toast.success('Nuevo expediente creado'); }
+                        if (editingPatient) { 
+                            const { error } = await supabase.from('patients').update(patientPayload).eq('id', editingPatient.id); 
+                            if (error) throw error; 
+                            toast.success('Expediente actualizado'); 
+                        } else { 
+                            const { error } = await supabase.from('patients').insert([patientPayload]); 
+                            if (error) throw error; 
+                            toast.success('Nuevo expediente creado'); 
+                        }
                         
                         setIsModalOpen(false); setEditingPatient(null); fetchPatients();
                     } catch (e) { toast.error("Error al guardar expediente"); }
@@ -416,8 +498,14 @@ const PatientsView: React.FC = () => {
         </div>
       )}
 
-      {/* COMPONENTE DE COMPATIBILIDAD VACÍO PARA EVITAR ERROR SI SE LLAMA SIN DATOS */}
-      <InsightsPanel isOpen={false} onClose={() => {}} data={null} patientName={""} loading={false} />
+      {/* COMPONENTE INSIGHTS 360 */}
+      <InsightsPanel 
+        isOpen={isInsightsOpen} 
+        onClose={() => setIsInsightsOpen(false)} 
+        insights={patientInsights} 
+        isLoading={isLoadingInsights}
+        patientName={analyzingPatientName}
+      />
       
       {selectedPatientForRx && doctorProfile && <QuickRxModal isOpen={!!selectedPatientForRx} onClose={() => setSelectedPatientForRx(null)} initialTranscript="" patientName={selectedPatientForRx.name} doctorProfile={doctorProfile} />}
     </div>
