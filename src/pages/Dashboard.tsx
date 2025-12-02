@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { 
   Calendar, MapPin, ChevronRight, Sun, Moon, Bell, CloudRain, Cloud, 
   ShieldCheck, Upload, X, Bot, Mic, Square, Loader2, CheckCircle2,
-  Stethoscope, UserCircle, AlertTriangle, FileText,
+  Stethoscope, UserCircle, ArrowRight, AlertTriangle, FileText,
   Clock, TrendingUp, UserPlus, Zap, Activity, LogOut,
   CalendarX, RefreshCcw, UserX, Trash2, MoreHorizontal
 } from 'lucide-react';
@@ -13,7 +13,6 @@ import { es } from 'date-fns/locale';
 import { getTimeOfDayGreeting } from '../utils/greetingUtils';
 import { toast } from 'sonner';
 
-// --- IMPORTACIONES V4.0 ---
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
 import { AssistantService } from '../services/AssistantService';
 import { AgentResponse } from '../services/GeminiAgent';
@@ -348,7 +347,6 @@ const Dashboard: React.FC = () => {
               const todayStart = startOfDay(new Date()); 
               const nextWeekEnd = endOfDay(addDays(new Date(), 7));
 
-              // FIX: TRAEMOS 'history' PARA DETECTAR ALERGIAS
               let query = supabase
                   .from('appointments')
                   .select(`id, title, start_time, status, patient:patients (name, history)`)
@@ -434,14 +432,11 @@ const Dashboard: React.FC = () => {
   const completedCount = todayAppointments.filter(a => a.status === 'completed').length;
   const progressPercent = Math.round((completedCount / totalToday) * 100);
 
-  // --- DETECTOR DE ALERTAS CRÍTICAS ---
   const getCriticalTags = (historyJSON: string | undefined) => {
     if (!historyJSON) return null;
     try {
         const h = JSON.parse(historyJSON);
-        // Buscamos alergias en la estructura nueva y en la vieja (legacyNote)
         const allergies = h.allergies || h.legacyNote;
-        // Limpiamos el string
         const cleanAllergies = allergies?.replace(/^alergia[s]?\s*[:]\s*/i, '') || '';
         const hasCritical = cleanAllergies && cleanAllergies.length > 2 && !cleanAllergies.toLowerCase().includes("negada");
 
@@ -532,13 +527,8 @@ const Dashboard: React.FC = () => {
                             <p className="text-xs font-medium opacity-90">Hoy</p>
                         </div>
                     </div>
-                    
                     <LiveClockMobile isDark={!mobileHeroStyle.darkText} />
-                    
-                    <button 
-                        onClick={() => setIsAssistantOpen(true)} 
-                        className={`mt-4 py-2.5 px-4 w-full justify-center group flex items-center gap-3 backdrop-blur-md border rounded-full transition-all active:scale-95 shadow-sm hover:shadow-lg ${mobileHeroStyle.darkText ? 'bg-teal-900/10 border-teal-900/20 hover:bg-teal-900/20' : 'bg-white/10 border-white/20 hover:bg-white/20'}`}
-                    >
+                    <button onClick={() => setIsAssistantOpen(true)} className={`mt-4 py-2.5 px-4 w-full justify-center group flex items-center gap-3 backdrop-blur-md border rounded-full transition-all active:scale-95 shadow-sm hover:shadow-lg ${mobileHeroStyle.darkText ? 'bg-teal-900/10 border-teal-900/20 hover:bg-teal-900/20' : 'bg-white/10 border-white/20 hover:bg-white/20'}`}>
                         <Bot size={18} className={mobileHeroStyle.darkText ? "text-teal-900" : "text-white"} />
                         <span className={`font-bold text-xs tracking-wide ${mobileHeroStyle.darkText ? "text-teal-900" : "text-white"}`}>Asistente Inteligente V4</span>
                     </button>
@@ -550,11 +540,10 @@ const Dashboard: React.FC = () => {
             </div>
         </div>
 
-        {/* VERSIÓN PC - SIN BORDE IZQUIERDO */}
-        <div className={`hidden md:flex ${panoramicGradient} rounded-[2rem] shadow-xl h-56 relative overflow-hidden transition-all duration-1000 border border-slate-200/20`}>
+        {/* VERSIÓN PC - BORDE ELIMINADO AQUÍ */}
+        <div className={`hidden md:flex ${panoramicGradient} rounded-[2rem] shadow-xl h-56 relative overflow-hidden transition-all duration-1000`}>
             <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-[0.03]"></div>
 
-            {/* SE ELIMINÓ 'border-r border-white/5' DE ESTE DIV */}
             <div className="w-1/3 p-8 flex flex-col justify-between relative z-10">
                 <div className="flex justify-between items-start">
                     <div className={`flex items-center gap-2 ${leftTextColor}`}>
@@ -576,7 +565,7 @@ const Dashboard: React.FC = () => {
                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-white/10 rounded-full blur-[80px] pointer-events-none"></div>
             </div>
 
-            <div className="w-1/3 p-8 relative z-10 flex flex-col justify-between text-right border-l border-white/5">
+            <div className="w-1/3 p-8 relative z-10 flex flex-col justify-between text-right">
                 <div className="flex justify-end items-center gap-2 mb-2">
                     <span className="text-[10px] font-bold uppercase tracking-widest text-teal-200/80">Pulso del Día</span>
                     <Activity size={14} className="text-teal-300 animate-pulse" />
@@ -643,7 +632,7 @@ const Dashboard: React.FC = () => {
                             </div>
                             <p className="text-slate-600 dark:text-slate-300 font-medium text-sm">Tu agenda está libre.</p>
                             <p className="text-slate-400 text-xs mt-1 mb-4">No hay citas programadas para los próximos 7 días.</p>
-                            <button onClick={() => navigate('/consultation')} className="w-full bg-slate-800 dark:bg-slate-700 text-white py-3 rounded-xl font-bold text-sm shadow-sm hover:bg-slate-700 transition-colors flex items-center justify-center gap-2">
+                            <button onClick={() => navigate('/consultation')} className="w-full bg-slate-800 dark:bg-slate-700 text-white py-3 rounded-xl font-bold text-sm shadow-sm hover:bg-slate-700 transition-colors flex items-center justify-center gap-2 mt-4">
                                 <Stethoscope size={16}/> Iniciar Consulta
                             </button>
                         </div>
@@ -657,7 +646,7 @@ const Dashboard: React.FC = () => {
                                             const isOverdue = isPast(parseISO(apt.start_time)) && apt.status === 'scheduled';
                                             const aptDate = parseISO(apt.start_time);
                                             
-                                            // --- LÓGICA DE VISUALIZACIÓN (SMART LABELING) ---
+                                            // LÓGICA DE VISUALIZACIÓN DE NOMBRE CORREGIDA
                                             const displayName = apt.patient?.name || apt.title || "Cita sin nombre";
                                             const displaySubtitle = apt.patient?.name 
                                                 ? (apt.title && apt.title !== apt.patient.name ? apt.title : 'Consulta General') 
@@ -670,7 +659,6 @@ const Dashboard: React.FC = () => {
                                                 <div className={`bg-white dark:bg-slate-900 rounded-2xl p-4 shadow-sm border transition-all ${isOverdue ? 'border-amber-200 dark:border-amber-900/40 bg-amber-50/30 dark:bg-amber-900/10' : 'border-slate-100 dark:border-slate-800 hover:shadow-md hover:border-slate-200 dark:hover:border-slate-700'}`} onClick={!isOverdue ? () => navigate('/calendar') : undefined}>
                                                     <div className="flex justify-between items-start mb-2">
                                                         <div className="flex flex-col">
-                                                            {/* NOMBRE CORREGIDO Y ALERTA DE RIESGO */}
                                                             <h4 className="font-bold text-slate-800 dark:text-white text-base leading-tight group-hover:text-brand-teal transition-colors">
                                                                 {displayName}
                                                             </h4>
@@ -687,7 +675,6 @@ const Dashboard: React.FC = () => {
                                                     </div>
 
                                                     {isOverdue ? (
-                                                        // --- NUEVO DISEÑO DE ALERTA ESTÉTICA ---
                                                         <div className="mt-3">
                                                             <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-100 dark:border-amber-800/50 flex items-center gap-3 mb-3">
                                                                 <div className="bg-amber-100 dark:bg-amber-800/50 p-2 rounded-full text-amber-600 dark:text-amber-400">
