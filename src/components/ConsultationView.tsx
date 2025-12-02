@@ -4,7 +4,7 @@ import {
   MessageSquare, User, Send, Edit2, Check, ArrowLeft, 
   Stethoscope, Trash2, WifiOff, Save, Share2, Download, Printer,
   Paperclip, Calendar, Clock, UserCircle, Activity, ClipboardList, Brain, FileSignature, Keyboard,
-  Quote, AlertTriangle, ChevronDown, ChevronUp, Sparkles // Agregado Sparkles
+  Quote, AlertTriangle, ChevronDown, ChevronUp, Sparkles, PenLine // Agregado PenLine
 } from 'lucide-react';
 
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition'; 
@@ -19,7 +19,7 @@ import { AppointmentService } from '../services/AppointmentService';
 import QuickRxModal from './QuickRxModal';
 import { DoctorFileGallery } from './DoctorFileGallery';
 import { UploadMedico } from './UploadMedico';
-import { InsightsPanel } from './InsightsPanel'; // Importamos el panel
+import { InsightsPanel } from './InsightsPanel';
 
 type TabType = 'record' | 'patient' | 'chat';
 
@@ -99,7 +99,7 @@ const ConsultationView: React.FC = () => {
 
   useEffect(() => {
     if (selectedPatient) {
-        setPatientInsights(null); // Reset insights al cambiar paciente
+        setPatientInsights(null);
         if (transcript && confirm("¿Desea limpiar el dictado anterior para el nuevo paciente?")) {
             resetTranscript();
             setGeneratedNote(null);
@@ -142,16 +142,30 @@ const ConsultationView: React.FC = () => {
       if(confirm("¿Borrar borrador permanentemente?")) { resetTranscript(); localStorage.removeItem('mediscribe_local_draft'); setGeneratedNote(null); setIsRiskExpanded(false); }
   };
 
+  // --- FUNCIÓN DE EDICIÓN EN TIEMPO REAL (HITL) ---
+  const handleSoapChange = (section: 'subjective' | 'objective' | 'assessment' | 'plan', value: string) => {
+      if (!generatedNote || !generatedNote.soap) return;
+      setGeneratedNote(prev => {
+          if (!prev || !prev.soap) return prev;
+          return {
+              ...prev,
+              soap: {
+                  ...prev.soap,
+                  [section]: value
+              }
+          };
+      });
+  };
+
   // --- FUNCIÓN PARA CARGAR INSIGHTS 360 ---
   const handleLoadInsights = async () => {
       if (!selectedPatient) return toast.error("Seleccione un paciente primero.");
       
       setIsInsightsOpen(true);
-      if (patientInsights) return; // Si ya los tenemos, solo abrimos el modal
+      if (patientInsights) return;
 
       setIsLoadingInsights(true);
       try {
-          // 1. Obtener últimas 5 consultas
           const { data: history } = await supabase
             .from('consultations')
             .select('summary, created_at')
@@ -161,7 +175,6 @@ const ConsultationView: React.FC = () => {
           
           const consultationsText = history?.map(h => `[Fecha: ${new Date(h.created_at).toLocaleDateString()}] ${h.summary}`) || [];
           
-          // 2. Llamar a la IA
           const analysis = await GeminiMedicalService.generatePatient360Analysis(
               selectedPatient.name, 
               selectedPatient.history || "No registrado", 
@@ -218,7 +231,7 @@ const ConsultationView: React.FC = () => {
       
       const chatWelcome = historyContext ? `Nota generada con análisis evolutivo. ¿Dudas?` : `Nota de primera vez generada. ¿Dudas?`;
       setChatMessages([{ role: 'model', text: chatWelcome }]);
-      toast.success("Análisis completado");
+      toast.success("Análisis completado. Revise y edite si es necesario.");
 
     } catch (e) { 
         console.error("Error generating note:", e);
@@ -237,6 +250,7 @@ const ConsultationView: React.FC = () => {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) throw new Error("Sesión expirada");
         
+        // Guardamos la versión EDITADA por el médico
         const summaryToSave = generatedNote.soap 
             ? `FECHA: ${new Date().toLocaleDateString()}\nS: ${generatedNote.soap.subjective}\nO: ${generatedNote.soap.objective}\nA: ${generatedNote.soap.assessment}\nP: ${generatedNote.soap.plan}\n\nPLAN PACIENTE:\n${editableInstructions}`
             : (generatedNote.clinicalNote + "\n\nPLAN PACIENTE:\n" + editableInstructions);
@@ -337,7 +351,6 @@ const ConsultationView: React.FC = () => {
         <div className="bg-indigo-50 dark:bg-indigo-900/20 p-3 rounded-lg border border-indigo-100 dark:border-indigo-800">
             <div className="flex justify-between items-center mb-1">
                 <label className="text-xs font-bold text-indigo-600 dark:text-indigo-300 uppercase flex gap-1"><Stethoscope size={14}/> Especialidad</label>
-                {/* BOTÓN INSIGHTS 360 */}
                 {selectedPatient && (
                     <button 
                         onClick={handleLoadInsights} 
@@ -420,7 +433,7 @@ const ConsultationView: React.FC = () => {
         </div>
       </div>
       
-      {/* PANEL DERECHO (RESULTADOS) */}
+      {/* PANEL DERECHO (RESULTADOS 75%) */}
       <div className={`w-full md:w-3/4 bg-slate-100 dark:bg-slate-950 flex flex-col border-l dark:border-slate-800 ${!generatedNote?'hidden md:flex':'flex h-full'}`}>
           <div className="flex border-b dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0 items-center px-2">
              <button onClick={()=>setGeneratedNote(null)} className="md:hidden p-4 text-slate-500"><ArrowLeft/></button>
@@ -488,7 +501,6 @@ const ConsultationView: React.FC = () => {
                                 </div>
                             </div>
 
-                            {/* CHAT VISUAL */}
                             {generatedNote.conversation_log && generatedNote.conversation_log.length > 0 && (
                                 <div className="mb-10 bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-6 border border-slate-100 dark:border-slate-800">
                                     <h4 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
@@ -513,14 +525,47 @@ const ConsultationView: React.FC = () => {
                                 </div>
                             )}
                             
+                            {/* SECCIÓN SOAP EDITABLE (Human in the Loop) */}
                             <div className="space-y-8">
-                                <div><h4 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2"><Activity size={14} className="text-blue-500"/> Subjetivo</h4><div className="text-slate-800 dark:text-slate-200 leading-7 text-base pl-1"><FormattedText content={generatedNote.soap.subjective} /></div></div>
+                                <div className="group relative">
+                                    <h4 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2"><Activity size={14} className="text-blue-500"/> Subjetivo <PenLine size={12} className="opacity-0 group-hover:opacity-50"/></h4>
+                                    <textarea 
+                                        className="w-full bg-transparent text-slate-800 dark:text-slate-200 leading-7 text-base pl-1 resize-none overflow-hidden outline-none focus:ring-1 focus:ring-blue-200 rounded p-1 transition-all"
+                                        value={generatedNote.soap.subjective}
+                                        onChange={(e) => handleSoapChange('subjective', e.target.value)}
+                                        ref={(el) => { if(el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; }}}
+                                    />
+                                </div>
                                 <hr className="border-slate-100 dark:border-slate-800" />
-                                <div><h4 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2"><ClipboardList size={14} className="text-green-500"/> Objetivo</h4><div className="text-slate-800 dark:text-slate-200 leading-7 text-base pl-1"><FormattedText content={generatedNote.soap.objective || "Sin hallazgos contributivos."} /></div></div>
+                                <div className="group relative">
+                                    <h4 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2"><ClipboardList size={14} className="text-green-500"/> Objetivo <PenLine size={12} className="opacity-0 group-hover:opacity-50"/></h4>
+                                    <textarea 
+                                        className="w-full bg-transparent text-slate-800 dark:text-slate-200 leading-7 text-base pl-1 resize-none overflow-hidden outline-none focus:ring-1 focus:ring-green-200 rounded p-1 transition-all"
+                                        value={generatedNote.soap.objective}
+                                        onChange={(e) => handleSoapChange('objective', e.target.value)}
+                                        ref={(el) => { if(el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; }}}
+                                    />
+                                </div>
                                 <hr className="border-slate-100 dark:border-slate-800" />
-                                <div><h4 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2"><Brain size={14} className="text-amber-500"/> Análisis y Diagnóstico</h4><div className="text-slate-800 dark:text-slate-200 leading-7 text-base pl-1"><FormattedText content={generatedNote.soap.assessment} /></div></div>
+                                <div className="group relative">
+                                    <h4 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2"><Brain size={14} className="text-amber-500"/> Análisis y Diagnóstico <PenLine size={12} className="opacity-0 group-hover:opacity-50"/></h4>
+                                    <textarea 
+                                        className="w-full bg-transparent text-slate-800 dark:text-slate-200 leading-7 text-base pl-1 resize-none overflow-hidden outline-none focus:ring-1 focus:ring-amber-200 rounded p-1 transition-all"
+                                        value={generatedNote.soap.assessment}
+                                        onChange={(e) => handleSoapChange('assessment', e.target.value)}
+                                        ref={(el) => { if(el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; }}}
+                                    />
+                                </div>
                                 <hr className="border-slate-100 dark:border-slate-800" />
-                                <div><h4 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2"><FileSignature size={14} className="text-purple-500"/> Plan Médico</h4><div className="text-slate-800 dark:text-slate-200 leading-7 text-base pl-1"><FormattedText content={generatedNote.soap.plan} /></div></div>
+                                <div className="group relative">
+                                    <h4 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2"><FileSignature size={14} className="text-purple-500"/> Plan Médico <PenLine size={12} className="opacity-0 group-hover:opacity-50"/></h4>
+                                    <textarea 
+                                        className="w-full bg-transparent text-slate-800 dark:text-slate-200 leading-7 text-base pl-1 resize-none overflow-hidden outline-none focus:ring-1 focus:ring-purple-200 rounded p-1 transition-all"
+                                        value={generatedNote.soap.plan}
+                                        onChange={(e) => handleSoapChange('plan', e.target.value)}
+                                        ref={(el) => { if(el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; }}}
+                                    />
+                                </div>
                             </div>
                         </div>
                       )}
@@ -579,12 +624,11 @@ const ConsultationView: React.FC = () => {
         </div>
       )}
 
-      {/* MODALES */}
       {isAppointmentModalOpen && <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"><div className="bg-white dark:bg-slate-900 rounded-2xl p-6 max-w-sm w-full animate-fade-in-up"><h3 className="font-bold text-lg mb-4 dark:text-white">Agendar Seguimiento</h3><input type="datetime-local" className="w-full border dark:border-slate-700 p-3 rounded-xl mb-6 bg-slate-50 dark:bg-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-brand-teal" value={nextApptDate} onChange={e=>setNextApptDate(e.target.value)}/><div className="flex justify-end gap-3"><button onClick={()=>setIsAppointmentModalOpen(false)} className="text-slate-500 font-medium">Cancelar</button><button onClick={handleConfirmAppointment} className="bg-brand-teal text-white px-4 py-2 rounded-xl font-bold">Confirmar</button></div></div></div>}
       
       {isQuickRxModalOpen && selectedPatient && doctorProfile && <QuickRxModal isOpen={isQuickRxModalOpen} onClose={()=>setIsQuickRxModalOpen(false)} initialTranscript={transcript} patientName={selectedPatient.name} doctorProfile={doctorProfile}/>}
       
-      {/* INSIGHTS PANEL (NUEVO) */}
+      {/* INSIGHTS PANEL */}
       {selectedPatient && (
         <InsightsPanel 
             isOpen={isInsightsOpen}
