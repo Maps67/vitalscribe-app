@@ -4,7 +4,7 @@ import {
   MessageSquare, User, Send, Edit2, Check, ArrowLeft, 
   Stethoscope, Trash2, WifiOff, Save, Share2, Download, Printer,
   Paperclip, Calendar, Clock, UserCircle, Activity, ClipboardList, Brain, FileSignature, Keyboard,
-  Quote, AlertTriangle, ChevronDown, ChevronUp, Sparkles, PenLine // Agregado PenLine
+  Quote, AlertTriangle, ChevronDown, ChevronUp, Sparkles, PenLine
 } from 'lucide-react';
 
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition'; 
@@ -45,7 +45,10 @@ const ConsultationView: React.FC = () => {
   const [generatedNote, setGeneratedNote] = useState<GeminiResponse | null>(null);
   const [consentGiven, setConsentGiven] = useState(false);
   const [activeTab, setActiveTab] = useState<TabType>('record');
+  
+  // ESTADO INICIAL: Medicina General (Fallback)
   const [selectedSpecialty, setSelectedSpecialty] = useState('Medicina General');
+  
   const [editableInstructions, setEditableInstructions] = useState('');
   const [isEditingInstructions, setIsEditingInstructions] = useState(false);
   const [isAppointmentModalOpen, setIsAppointmentModalOpen] = useState(false);
@@ -84,10 +87,22 @@ const ConsultationView: React.FC = () => {
       try {
         const { data: patientsData } = await supabase.from('patients').select('*').order('created_at', { ascending: false });
         if (mounted && patientsData) setPatients(patientsData);
+        
         const { data: { user } } = await supabase.auth.getUser();
         if (user && mounted) {
           const { data: profileData } = await supabase.from('profiles').select('*').eq('id', user.id).single();
-          if (profileData) setDoctorProfile(profileData as DoctorProfile);
+          if (profileData) {
+              setDoctorProfile(profileData as DoctorProfile);
+              // --- SMART DEFAULT: AUTO-SELECCIÓN DE ESPECIALIDAD ---
+              // Si el médico tiene especialidad registrada, la ponemos por defecto.
+              if (profileData.specialty && SPECIALTIES.includes(profileData.specialty)) {
+                  setSelectedSpecialty(profileData.specialty);
+              } else if (profileData.specialty) {
+                  // Si no está en la lista pero existe, la agregamos visualmente o la seteamos igual
+                  // Para este caso, forzamos el set aunque no esté en el array (HTML select lo manejará o mostrará el valor)
+                  setSelectedSpecialty(profileData.specialty);
+              }
+          }
         }
       } catch (e) {}
     };
@@ -250,7 +265,6 @@ const ConsultationView: React.FC = () => {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) throw new Error("Sesión expirada");
         
-        // Guardamos la versión EDITADA por el médico
         const summaryToSave = generatedNote.soap 
             ? `FECHA: ${new Date().toLocaleDateString()}\nS: ${generatedNote.soap.subjective}\nO: ${generatedNote.soap.objective}\nA: ${generatedNote.soap.assessment}\nP: ${generatedNote.soap.plan}\n\nPLAN PACIENTE:\n${editableInstructions}`
             : (generatedNote.clinicalNote + "\n\nPLAN PACIENTE:\n" + editableInstructions);
@@ -525,7 +539,6 @@ const ConsultationView: React.FC = () => {
                                 </div>
                             )}
                             
-                            {/* SECCIÓN SOAP EDITABLE (Human in the Loop) */}
                             <div className="space-y-8">
                                 <div className="group relative">
                                     <h4 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2"><Activity size={14} className="text-blue-500"/> Subjetivo <PenLine size={12} className="opacity-0 group-hover:opacity-50"/></h4>
