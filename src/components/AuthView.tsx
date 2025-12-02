@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   Mail, Lock, User, Stethoscope, ArrowRight, AlertTriangle, 
   KeyRound, ArrowLeft, CheckCircle2, BookOpen,
-  Eye, EyeOff, FileBadge, Loader2
+  Eye, EyeOff, FileBadge, Loader2, HelpCircle
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
@@ -119,12 +119,12 @@ const AuthView: React.FC<AuthProps> = ({
     }
   };
 
-  // --- CORRECCIÓN CRÍTICA: REDIRECCIÓN ---
+  // --- LÓGICA DE RECUPERACIÓN BLINDADA ---
   const handleRecoveryRequest = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
-      // Apuntamos a la ruta dedicada que creamos en el Paso 1
+      // Redirección a la "Habitación Segura"
       const redirectUrl = `${window.location.origin}/update-password`;
       
       const { error } = await supabase.auth.resetPasswordForEmail(formData.email, {
@@ -164,7 +164,7 @@ const AuthView: React.FC<AuthProps> = ({
     }
   };
 
-  // VISTAS INTERMEDIAS (Mantenemos diseño limpio)
+  // VISTAS INTERMEDIAS
   if (verificationSent) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 animate-fade-in-up">
@@ -191,7 +191,7 @@ const AuthView: React.FC<AuthProps> = ({
     );
   }
 
-  // --- LAYOUT ORIGINAL RESTAURADO (SPLIT SCREEN) ---
+  // --- RENDERIZADO PRINCIPAL ---
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col lg:flex-row font-sans">
       
@@ -219,9 +219,18 @@ const AuthView: React.FC<AuthProps> = ({
 
       {/* DERECHA: FORMULARIO */}
       <div className="flex-1 flex items-center justify-center p-6 relative bg-white dark:bg-slate-950">
-        <a href="/manual.html" target="_blank" rel="noopener noreferrer" className="absolute top-8 right-8 flex items-center gap-2 text-sm font-medium text-slate-500 hover:text-brand-teal transition-colors bg-slate-50 px-4 py-2 rounded-full border border-slate-200 shadow-sm hover:shadow-md">
-          <BookOpen className="w-4 h-4" /> Manual de Usuario
+        
+        {/* --- BOTÓN DEL MANUAL: Ubicación Estratégica (Top Right) --- */}
+        <a 
+            href="/manual.html" 
+            target="_blank" 
+            rel="noopener noreferrer" 
+            className="absolute top-6 right-6 flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-brand-teal transition-colors bg-slate-50 hover:bg-white px-4 py-2 rounded-full border border-slate-200 shadow-sm hover:shadow-md"
+        >
+          <BookOpen className="w-4 h-4" />
+          <span>Manual de Usuario</span>
         </a>
+        {/* ---------------------------------------------------------- */}
 
         <div className="w-full max-w-md space-y-8 animate-fade-in-up">
           
