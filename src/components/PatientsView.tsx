@@ -1,9 +1,8 @@
-// Archivo: src/components/PatientsView.tsx
 import React, { useState, useEffect } from 'react';
 import { 
   Search, UserPlus, FileText, Trash2, Edit2, Eye, Calendar, 
   Share2, Download, FolderOpen, Paperclip, MoreVertical, X, 
-  FileCode, Phone, Pill, ChevronDown, ChevronUp 
+  FileCode, Phone, Pill, ChevronDown, ChevronUp, AlertTriangle, MessageCircle 
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Patient, DoctorProfile } from '../types';
@@ -13,8 +12,7 @@ import FormattedText from './FormattedText';
 import { pdf } from '@react-pdf/renderer';
 import PrescriptionPDF from './PrescriptionPDF';
 import { DoctorFileGallery } from './DoctorFileGallery';
-import { PatientWizard } from './PatientWizard';
-import { InsightsPanel } from './InsightsPanel'; 
+import { PatientWizard } from './PatientWizard'; // Asumo que este componente ya existe o lo crearemos/mejoraremos
 
 interface PatientData extends Partial<Patient> {
   id: string;
@@ -23,7 +21,7 @@ interface PatientData extends Partial<Patient> {
   gender: string;
   phone?: string;
   email?: string;
-  history?: string;
+  history?: string; // JSON Stringified
   created_at?: string;
   curp?: string; 
 }
@@ -112,6 +110,7 @@ const PatientsView: React.FC = () => {
       if (!viewingPatient) return;
       const drName = doctorProfile?.full_name || 'su médico';
       let content = consultation.summary;
+      // Limpieza básica si es JSON
       if (content.trim().startsWith('{')) { 
           try { content = `Resumen de consulta del día ${new Date(consultation.created_at).toLocaleDateString()}.`; } catch {}
       }
@@ -175,11 +174,18 @@ const PatientsView: React.FC = () => {
     if (phone) window.open(`tel:${phone}`, '_self');
   };
 
+  const handleWhatsAppDirect = (phone: string | undefined) => {
+      if (!phone) return;
+      const cleanPhone = phone.replace(/\D/g, '');
+      if (cleanPhone.length < 10) return toast.error("Número inválido");
+      window.open(`https://wa.me/${cleanPhone}`, '_blank');
+  };
+
   const toggleExpand = (id: string) => {
     if (expandedPatientId === id) {
-        setExpandedPatientId(null); // Cerrar si ya está abierto
+        setExpandedPatientId(null); 
     } else {
-        setExpandedPatientId(id); // Abrir nuevo
+        setExpandedPatientId(id); 
     }
   };
 
@@ -189,6 +195,34 @@ const PatientsView: React.FC = () => {
   );
 
   const renderNoteContent = (summary: string) => { return <FormattedText content={summary} />; };
+
+  // --- PARSEADOR DE HISTORIAL (CRITICAL TAGS) ---
+  const getCriticalTags = (historyJSON: string | undefined) => {
+      if (!historyJSON) return null;
+      try {
+          const history = JSON.parse(historyJSON);
+          // Buscamos alergias y crónicos en la estructura
+          const allergies = history.legacyNote?.match(/alergia[s]?\s*[:]\s*([^.,\n]+)/i)?.[1] || history.allergies;
+          const chronic = history.background; // Asumiendo que antecedentes patológicos están aquí
+          
+          if (!allergies && !chronic) return null;
+
+          return (
+              <div className="flex flex-wrap gap-1 mt-1">
+                  {allergies && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700 border border-red-200">
+                          <AlertTriangle size={10} className="mr-1"/> {allergies.substring(0, 15)}...
+                      </span>
+                  )}
+                  {chronic && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-700 border border-blue-200">
+                          Cron: {chronic.substring(0, 15)}...
+                      </span>
+                  )}
+              </div>
+          );
+      } catch (e) { return null; }
+  };
 
 
   return (
@@ -202,36 +236,46 @@ const PatientsView: React.FC = () => {
 
       {/* BUSCADOR */}
       <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 mb-4">
-          <div className="relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} /><input type="text" placeholder="Buscar paciente..." className="w-full pl-10 pr-4 py-3 bg-transparent border-none rounded-xl text-slate-700 dark:text-slate-200 focus:ring-0 placeholder:text-slate-400" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div>
+          <div className="relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} /><input type="text" placeholder="Buscar paciente por nombre..." className="w-full pl-10 pr-4 py-3 bg-transparent border-none rounded-xl text-slate-700 dark:text-slate-200 focus:ring-0 placeholder:text-slate-400" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div>
       </div>
 
       <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
         
-        {/* --- VISTA ESCRITORIO (TABLA) --- */}
+        {/* --- VISTA ESCRITORIO (TABLA MEJORADA) --- */}
         <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-slate-50 dark:bg-slate-900/50 text-slate-500 dark:text-slate-400 text-xs uppercase"><th className="p-4 font-bold">Nombre</th><th className="p-4 font-bold">Edad/Sexo</th><th className="p-4 font-bold">Contacto</th><th className="p-4 font-bold text-center">Acciones</th></tr>
+              <tr className="bg-slate-50 dark:bg-slate-900/50 text-slate-500 dark:text-slate-400 text-xs uppercase"><th className="p-4 font-bold">Nombre / Alertas</th><th className="p-4 font-bold">Edad/Sexo</th><th className="p-4 font-bold">Contacto</th><th className="p-4 font-bold text-center">Acciones</th></tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
               {filteredPatients.map(patient => (
                 <tr key={patient.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors group">
-                  <td className="p-4 flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-teal-100 text-brand-teal flex items-center justify-center font-bold text-sm">
-                        {getInitials(patient.name)}
-                      </div>
-                      <div>
-                        <p className="font-bold text-slate-800 dark:text-white">{patient.name || 'Sin Nombre'}</p>
-                        <p className="text-xs text-slate-400">ID: {patient.id.slice(0,8)}</p>
+                  <td className="p-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-teal-50 text-brand-teal flex items-center justify-center font-bold text-sm border border-teal-100">
+                            {getInitials(patient.name)}
+                        </div>
+                        <div>
+                            <p className="font-bold text-slate-800 dark:text-white leading-tight">{patient.name || 'Sin Nombre'}</p>
+                            {getCriticalTags(patient.history)}
+                        </div>
                       </div>
                   </td>
                   <td className="p-4 text-sm text-slate-600 dark:text-slate-300">{patient.age} años • {patient.gender}</td>
-                  <td className="p-4 text-sm text-slate-600 dark:text-slate-300"><p>{patient.phone || 'Sin teléfono'}</p><p className="text-xs text-slate-400">{patient.email}</p></td>
+                  <td className="p-4 text-sm">
+                      <div className="flex items-center gap-2">
+                          <span className="text-slate-600 dark:text-slate-300">{patient.phone || 'S/N'}</span>
+                          {patient.phone && (
+                              <button onClick={() => handleWhatsAppDirect(patient.phone)} className="text-green-500 hover:text-green-600 bg-green-50 p-1 rounded-full"><MessageCircle size={14}/></button>
+                          )}
+                      </div>
+                      <p className="text-xs text-slate-400 mt-0.5">{patient.email}</p>
+                  </td>
                   <td className="p-4 relative text-center">
                     <div className="flex justify-center gap-2">
-                         <button onClick={() => handleViewHistory(patient)} className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg" title="Expediente"><Eye size={18}/></button>
-                         <button onClick={() => setSelectedPatientForRx(patient)} className="p-2 text-teal-600 hover:bg-teal-50 rounded-lg" title="Receta"><Pill size={18}/></button>
-                         <button onClick={() => openEditModal(patient)} className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg" title="Editar"><Edit2 size={18}/></button>
+                         <button onClick={() => handleViewHistory(patient)} className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors" title="Expediente"><Eye size={18}/></button>
+                         <button onClick={() => setSelectedPatientForRx(patient)} className="p-2 text-teal-600 hover:bg-teal-50 rounded-lg transition-colors" title="Receta"><Pill size={18}/></button>
+                         <button onClick={() => openEditModal(patient)} className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors" title="Editar"><Edit2 size={18}/></button>
                     </div>
                   </td>
                 </tr>
@@ -240,25 +284,21 @@ const PatientsView: React.FC = () => {
           </table>
         </div>
 
-        {/* --- VISTA MÓVIL (LISTA COMPACTA EXPANDIBLE) --- */}
+        {/* --- VISTA MÓVIL (TARJETAS EXPANDIBLES MEJORADAS) --- */}
         <div className="md:hidden divide-y divide-slate-100 dark:divide-slate-700">
              {filteredPatients.map(patient => {
                 const isExpanded = expandedPatientId === patient.id;
-                
                 return (
-                <div key={patient.id} className={`transition-all duration-300 ${isExpanded ? 'bg-slate-50 dark:bg-slate-800/50 pb-2' : 'bg-white dark:bg-slate-800'}`}>
+                <div key={patient.id} className={`transition-all duration-300 ${isExpanded ? 'bg-slate-50 dark:bg-slate-800/50 pb-3' : 'bg-white dark:bg-slate-800'}`}>
                     
-                    {/* FILA COMPACTA (SIEMPRE VISIBLE) */}
                     <div 
-                        className="p-4 flex items-center gap-3 cursor-pointer active:bg-slate-100 dark:active:bg-slate-700/50 transition-colors"
+                        className="p-4 flex items-start gap-3 cursor-pointer active:bg-slate-100 dark:active:bg-slate-700/50 transition-colors"
                         onClick={() => toggleExpand(patient.id)}
                     >
-                        {/* Avatar Pequeño y Elegante */}
-                        <div className="w-10 h-10 rounded-full bg-teal-50 dark:bg-teal-900/20 text-brand-teal dark:text-teal-400 flex items-center justify-center font-bold text-sm shrink-0 border border-teal-100 dark:border-teal-900/50">
+                        <div className="w-10 h-10 rounded-full bg-teal-50 dark:bg-teal-900/20 text-brand-teal dark:text-teal-400 flex items-center justify-center font-bold text-sm shrink-0 border border-teal-100 dark:border-teal-900/50 mt-1">
                             {getInitials(patient.name)}
                         </div>
                         
-                        {/* Info Esencial */}
                         <div className="flex-1 min-w-0">
                             <div className="flex justify-between items-center">
                                 <h3 className="font-bold text-slate-900 dark:text-white text-sm truncate pr-2">
@@ -269,57 +309,54 @@ const PatientsView: React.FC = () => {
                             <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5">
                                 {patient.age ? `${patient.age} años` : 'Edad N/A'} • {patient.gender || '-'}
                             </p>
+                            {/* TAGS CRÍTICOS EN MÓVIL */}
+                            <div className="mt-1">{getCriticalTags(patient.history)}</div>
                         </div>
                     </div>
 
-                    {/* PANEL DE HERRAMIENTAS (SOLO VISIBLE AL EXPANDIR) */}
                     {isExpanded && (
-                        <div className="px-4 pb-2 animate-fade-in-down">
-                            <div className="grid grid-cols-4 gap-2">
-                                {/* 1. LLAMAR */}
+                        <div className="px-4 animate-fade-in-down">
+                            <div className="grid grid-cols-4 gap-2 mb-3">
                                 <button 
                                     onClick={(e) => { e.stopPropagation(); handleCall(patient.phone); }} 
                                     disabled={!patient.phone}
                                     className={`flex flex-col items-center justify-center py-2 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl shadow-sm active:scale-95 transition-all ${!patient.phone && 'opacity-50 grayscale'}`}
                                 >
-                                    <Phone size={18} className="text-green-600 dark:text-green-400 mb-1" />
-                                    <span className="text-[9px] font-bold text-slate-600 dark:text-slate-300">Llamar</span>
+                                    <Phone size={18} className="text-slate-600 dark:text-slate-300 mb-1" />
+                                    <span className="text-[9px] font-bold text-slate-500 dark:text-slate-400">Llamar</span>
                                 </button>
 
-                                {/* 2. ARCHIVOS */}
                                 <button 
-                                    onClick={(e) => { e.stopPropagation(); handleOpenFiles(patient); }}
-                                    className="flex flex-col items-center justify-center py-2 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl shadow-sm active:scale-95 transition-all"
+                                    onClick={(e) => { e.stopPropagation(); handleWhatsAppDirect(patient.phone); }}
+                                    disabled={!patient.phone}
+                                    className={`flex flex-col items-center justify-center py-2 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl shadow-sm active:scale-95 transition-all ${!patient.phone && 'opacity-50 grayscale'}`}
                                 >
-                                    <Paperclip size={18} className="text-blue-600 dark:text-blue-400 mb-1" />
-                                    <span className="text-[9px] font-bold text-slate-600 dark:text-slate-300">Archivos</span>
+                                    <MessageCircle size={18} className="text-green-500 mb-1" />
+                                    <span className="text-[9px] font-bold text-slate-500 dark:text-slate-400">WhatsApp</span>
                                 </button>
 
-                                {/* 3. EXPEDIENTE */}
                                 <button 
                                     onClick={(e) => { e.stopPropagation(); handleViewHistory(patient); }}
                                     className="flex flex-col items-center justify-center py-2 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl shadow-sm active:scale-95 transition-all"
                                 >
-                                    <Eye size={18} className="text-brand-teal dark:text-teal-400 mb-1" />
-                                    <span className="text-[9px] font-bold text-slate-600 dark:text-slate-300">Ver</span>
+                                    <Eye size={18} className="text-purple-500 mb-1" />
+                                    <span className="text-[9px] font-bold text-slate-500 dark:text-slate-400">Expediente</span>
                                 </button>
 
-                                {/* 4. RECETA */}
                                 <button 
                                     onClick={(e) => { e.stopPropagation(); setSelectedPatientForRx(patient); }}
                                     className="flex flex-col items-center justify-center py-2 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl shadow-sm active:scale-95 transition-all"
                                 >
-                                    <Pill size={18} className="text-purple-600 dark:text-purple-400 mb-1" />
-                                    <span className="text-[9px] font-bold text-slate-600 dark:text-slate-300">Receta</span>
+                                    <Pill size={18} className="text-teal-500 mb-1" />
+                                    <span className="text-[9px] font-bold text-slate-500 dark:text-slate-400">Receta</span>
                                 </button>
                             </div>
 
-                            {/* Botón de Editar secundario */}
                             <button 
                                 onClick={(e) => { e.stopPropagation(); openEditModal(patient); }}
-                                className="w-full mt-2 py-2 text-xs font-medium text-slate-400 hover:text-slate-600 flex items-center justify-center gap-1"
+                                className="w-full py-2.5 bg-slate-100 dark:bg-slate-700/50 text-xs font-bold text-slate-600 dark:text-slate-300 rounded-lg flex items-center justify-center gap-2 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
                             >
-                                <Edit2 size={12} /> Editar Datos del Paciente
+                                <Edit2 size={14} /> Editar Datos Completos
                             </button>
                         </div>
                     )}
@@ -331,21 +368,80 @@ const PatientsView: React.FC = () => {
         {filteredPatients.length === 0 && <div className="p-10 text-center text-slate-400">No se encontraron pacientes.</div>}
       </div>
 
-      {/* MODALES */}
+      {/* MODAL DE EDICIÓN AVANZADA (PatientWizard) */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-0 md:p-4 backdrop-blur-sm">
           <div className="bg-white dark:bg-slate-900 w-full md:max-w-4xl h-full md:h-[90vh] md:rounded-2xl shadow-2xl overflow-hidden animate-fade-in-up flex flex-col">
             <PatientWizard 
-                initialData={editingPatient ? { name: editingPatient.name, age: editingPatient.age?.toString(), gender: editingPatient.gender, phone: editingPatient.phone, email: editingPatient.email } : undefined}
+                initialData={editingPatient ? { 
+                    name: editingPatient.name, 
+                    age: editingPatient.age?.toString(), 
+                    gender: editingPatient.gender, 
+                    phone: editingPatient.phone, 
+                    email: editingPatient.email,
+                    // Intentamos recuperar datos del JSON history
+                    ...(() => {
+                        try {
+                            const h = JSON.parse(editingPatient.history || '{}');
+                            return {
+                                pathological: h.background,
+                                nonPathological: h.lifestyle,
+                                family: h.family,
+                                allergies: h.legacyNote || h.allergies, // Soporte retroactivo
+                                obgyn: h.obgyn,
+                                insurance: h.admin?.insurance,
+                                rfc: h.admin?.rfc,
+                                patientType: h.admin?.type
+                            };
+                        } catch { return {}; }
+                    })()
+                } : undefined}
                 onClose={() => setIsModalOpen(false)}
                 onSave={async (data) => {
                     try {
                         const { data: { user } } = await supabase.auth.getUser();
                         if (!user) return;
-                        const fullHistoryJSON = JSON.stringify({ background: data.pathological, lifestyle: data.nonPathological, family: data.family, obgyn: data.obgyn, admin: { insurance: data.insurance, rfc: data.rfc, invoice: data.invoice, type: data.patientType, referral: data.referral }, legacyNote: data.allergies });
-                        const patientPayload = { name: data.name, age: parseInt(data.age) || 0, gender: data.gender, phone: data.phone, email: data.email, history: fullHistoryJSON, doctor_id: user.id };
-                        if (editingPatient) { const { error } = await supabase.from('patients').update(patientPayload).eq('id', editingPatient.id); if (error) throw error; toast.success('Expediente actualizado'); } else { const { error } = await supabase.from('patients').insert([patientPayload]); if (error) throw error; toast.success('Nuevo expediente creado'); }
-                        setIsModalOpen(false); setEditingPatient(null); fetchPatients();
+                        
+                        // EMPAQUETADO JSON ESTRUCTURADO (NOM-004)
+                        const fullHistoryJSON = JSON.stringify({ 
+                            background: data.pathological, // APP
+                            lifestyle: data.nonPathological, // APNP
+                            family: data.family, // AHF
+                            obgyn: data.obgyn, // AGO
+                            allergies: data.allergies, // ALERTAS
+                            admin: { 
+                                insurance: data.insurance, 
+                                rfc: data.rfc, 
+                                invoice: data.invoice, 
+                                type: data.patientType, 
+                                referral: data.referral 
+                            }, 
+                            legacyNote: data.allergies // Backup
+                        });
+
+                        const patientPayload = { 
+                            name: data.name, 
+                            age: parseInt(data.age) || 0, 
+                            gender: data.gender, 
+                            phone: data.phone, 
+                            email: data.email, 
+                            history: fullHistoryJSON, 
+                            doctor_id: user.id 
+                        };
+
+                        if (editingPatient) { 
+                            const { error } = await supabase.from('patients').update(patientPayload).eq('id', editingPatient.id); 
+                            if (error) throw error; 
+                            toast.success('Expediente actualizado'); 
+                        } else { 
+                            const { error } = await supabase.from('patients').insert([patientPayload]); 
+                            if (error) throw error; 
+                            toast.success('Nuevo expediente creado'); 
+                        }
+                        
+                        setIsModalOpen(false); 
+                        setEditingPatient(null); 
+                        fetchPatients();
                     } catch (e) { toast.error("Error al guardar expediente"); }
                 }}
             />
