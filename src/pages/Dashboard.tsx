@@ -5,7 +5,7 @@ import {
   ShieldCheck, Upload, X, Bot, Mic, Square, Loader2, CheckCircle2,
   Stethoscope, UserCircle, ArrowRight, AlertTriangle, FileText,
   Clock, TrendingUp, UserPlus, Zap, Activity, LogOut,
-  CalendarX, RefreshCcw, UserX, Trash2 // Iconos optimizados para acciones
+  CalendarX, RefreshCcw, UserX, Trash2, MoreHorizontal // Iconos actualizados
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { format, isToday, isTomorrow, parseISO, startOfDay, endOfDay, addDays, isPast, addMinutes } from 'date-fns';
@@ -30,7 +30,6 @@ interface DashboardAppointment {
   };
 }
 
-// --- BOTÓN ASISTENTE PEQUEÑO (HEADER) ---
 const AssistantButtonSmall = ({ onClick }: { onClick: () => void }) => (
   <button 
     onClick={onClick}
@@ -41,7 +40,6 @@ const AssistantButtonSmall = ({ onClick }: { onClick: () => void }) => (
   </button>
 );
 
-// --- COMPONENTE RELOJ ELEGANTE (PC) ---
 const LiveClockDesktop = () => {
   const [time, setTime] = useState(new Date());
   useEffect(() => {
@@ -65,7 +63,6 @@ const LiveClockDesktop = () => {
   );
 };
 
-// --- COMPONENTE RELOJ (MOVIL) ---
 const LiveClockMobile = ({ isDark }: { isDark: boolean }) => {
     const [time, setTime] = useState(new Date());
     useEffect(() => {
@@ -85,7 +82,6 @@ const LiveClockMobile = ({ isDark }: { isDark: boolean }) => {
     );
 };
 
-// --- MODAL ASISTENTE ---
 const AssistantModal = ({ isOpen, onClose, onActionComplete }: { isOpen: boolean; onClose: () => void; onActionComplete: () => void }) => {
   const { isListening, transcript, startListening, stopListening, resetTranscript } = useSpeechRecognition();
   const [status, setStatus] = useState<'idle' | 'listening' | 'processing' | 'confirming'>('idle');
@@ -234,7 +230,6 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete }: { isOpen: boolean
   );
 };
 
-// --- NUEVOS WIDGETS (ROI & QUICK ACTIONS) ---
 const RoiWidget = () => (
   <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-100 dark:border-slate-800 shadow-sm relative overflow-hidden group">
     <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
@@ -266,7 +261,7 @@ const QuickActions = ({ navigate }: { navigate: any }) => (
           </div>
           <div className="text-left">
               <p className="font-bold text-sm">Nueva Consulta IA</p>
-              <p className="text--[10px] text-teal-100 opacity-90">Grabar y transcribir</p>
+              <p className="text-[10px] text-teal-100 opacity-90">Grabar y transcribir</p>
           </div>
       </button>
 
@@ -396,7 +391,6 @@ const Dashboard: React.FC = () => {
     return () => window.removeEventListener('focus', fetchData);
   }, []);
 
-  // --- ACCIONES RÁPIDAS PARA CITAS VENCIDAS ---
   const handleQuickAction = async (action: 'reschedule' | 'noshow' | 'cancel', apt: DashboardAppointment) => {
     try {
         if (action === 'noshow') {
@@ -408,7 +402,6 @@ const Dashboard: React.FC = () => {
                 toast.success("Cita cancelada");
             } else return;
         } else if (action === 'reschedule') {
-            // Lógica simple: mover a mañana misma hora
             const newDate = addDays(parseISO(apt.start_time), 1);
             await supabase.from('appointments').update({ start_time: newDate.toISOString() }).eq('id', apt.id);
             toast.success("Reagendada para mañana");
@@ -473,10 +466,8 @@ const Dashboard: React.FC = () => {
          </div>
       </div>
 
-      {/* CONTENIDO PRINCIPAL */}
       <div className="flex-1 p-4 md:p-8 space-y-6 animate-fade-in-up w-full max-w-7xl mx-auto pb-32 md:pb-8">
         
-        {/* SALUDO */}
         <div className="flex justify-between items-end">
             <div className="mt-1">
                 <div className="flex items-center gap-3 mb-1">
@@ -498,7 +489,7 @@ const Dashboard: React.FC = () => {
             </button>
         </div>
 
-        {/* VERSIÓN MÓVIL (CON CORRECCIÓN DE BORDE) */}
+        {/* VERSIÓN MÓVIL */}
         <div className="md:hidden">
             <div className={`${mobileHeroStyle.bg} ${mobileHeroStyle.text} rounded-3xl p-6 shadow-lg relative overflow-hidden flex justify-between items-center transition-all duration-500 w-full min-h-[140px]`}>
                 <div className="relative z-10 flex-1">
@@ -533,7 +524,7 @@ const Dashboard: React.FC = () => {
             </div>
         </div>
 
-        {/* VERSIÓN PC: PANORÁMICO Y GRID NUEVO */}
+        {/* VERSIÓN PC */}
         <div className={`hidden md:flex ${panoramicGradient} rounded-[2rem] shadow-xl h-56 relative overflow-hidden transition-all duration-1000 border border-slate-200/20`}>
             <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-[0.03]"></div>
 
@@ -591,7 +582,6 @@ const Dashboard: React.FC = () => {
             </div>
         </div>
 
-        {/* GRID (AGENDA + WIDGETS) */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2 space-y-6">
                 <button onClick={() => setIsUploadModalOpen(true)} className="md:hidden w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-4 rounded-xl flex items-center justify-between shadow-sm active:scale-95 transition-transform">
@@ -673,27 +663,34 @@ const Dashboard: React.FC = () => {
                                                         )}
                                                     </div>
                                                     
-                                                    {/* MEJORA VISUAL: BOTONES DE ACCIÓN RÁPIDA CON ICONOS CLAROS */}
+                                                    {/* --- REDISEÑO RADICAL DEL BLOQUE DE ACCIÓN --- */}
                                                     {isOverdue && (
-                                                        <div className="flex gap-2 mt-3 border-t border-slate-100 dark:border-slate-700 pt-3 w-full">
+                                                        <div className="grid grid-cols-3 gap-2 mt-4 pt-3 border-t border-slate-100 dark:border-slate-700 w-full">
+                                                            {/* Botón 1: Reagendar (Azul - Éxito/Flow) */}
                                                             <button 
                                                                 onClick={(e) => { e.stopPropagation(); handleQuickAction('reschedule', apt); }}
-                                                                className="flex-1 flex items-center justify-center gap-2 py-2 bg-slate-50 hover:bg-slate-100 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300 text-xs font-bold rounded-lg transition-colors border border-slate-200 dark:border-slate-600"
+                                                                className="flex flex-col items-center justify-center p-2 rounded-lg bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/20 dark:hover:bg-blue-900/40 text-blue-700 dark:text-blue-300 transition-all active:scale-95"
                                                             >
-                                                                <RefreshCcw size={14}/> Reagendar
+                                                                <RefreshCcw size={18} className="mb-1"/> 
+                                                                <span className="text-[10px] font-bold">Reagendar</span>
                                                             </button>
+
+                                                            {/* Botón 2: No Show (Ámbar - Advertencia) */}
                                                             <button 
                                                                 onClick={(e) => { e.stopPropagation(); handleQuickAction('noshow', apt); }}
-                                                                className="flex-1 flex items-center justify-center gap-2 py-2 bg-amber-50 hover:bg-amber-100 dark:bg-amber-900/20 dark:hover:bg-amber-900/40 text-amber-700 dark:text-amber-400 text-xs font-bold rounded-lg transition-colors border border-amber-200 dark:border-amber-800"
+                                                                className="flex flex-col items-center justify-center p-2 rounded-lg bg-amber-50 hover:bg-amber-100 dark:bg-amber-900/20 dark:hover:bg-amber-900/40 text-amber-700 dark:text-amber-400 transition-all active:scale-95"
                                                             >
-                                                                <UserX size={14}/> No Asistió
+                                                                <UserX size={18} className="mb-1"/> 
+                                                                <span className="text-[10px] font-bold">No Asistió</span>
                                                             </button>
+
+                                                            {/* Botón 3: Cancelar (Rojo - Destructivo) */}
                                                             <button 
                                                                 onClick={(e) => { e.stopPropagation(); handleQuickAction('cancel', apt); }}
-                                                                className="px-3 py-2 bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/40 text-red-600 dark:text-red-400 rounded-lg transition-colors border border-red-200 dark:border-red-800"
-                                                                title="Cancelar Cita"
+                                                                className="flex flex-col items-center justify-center p-2 rounded-lg bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/40 text-red-600 dark:text-red-400 transition-all active:scale-95"
                                                             >
-                                                                <CalendarX size={16}/>
+                                                                <CalendarX size={18} className="mb-1"/> 
+                                                                <span className="text-[10px] font-bold">Cancelar</span>
                                                             </button>
                                                         </div>
                                                     )}
