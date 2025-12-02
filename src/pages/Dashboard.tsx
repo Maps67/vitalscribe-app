@@ -3,17 +3,16 @@ import { useNavigate } from 'react-router-dom';
 import { 
   Calendar, MapPin, ChevronRight, Sun, Moon, Bell, CloudRain, Cloud, 
   ShieldCheck, Upload, X, Bot, Mic, Square, Loader2, CheckCircle2,
-  Stethoscope, UserCircle, AlertTriangle, FileText,
+  Stethoscope, UserCircle, ArrowRight, AlertTriangle, FileText,
   Clock, TrendingUp, UserPlus, Zap, Activity, LogOut,
-  CalendarX, RefreshCcw, UserX, MoreVertical
+  CalendarX, RefreshCcw, UserX, Trash2, MoreHorizontal
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { format, isToday, isTomorrow, parseISO, startOfDay, endOfDay, addDays, isPast } from 'date-fns';
+import { format, isToday, isTomorrow, parseISO, startOfDay, endOfDay, addDays, isPast, addMinutes } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { getTimeOfDayGreeting } from '../utils/greetingUtils';
 import { toast } from 'sonner';
 
-// --- IMPORTACIONES V4.0 ---
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
 import { AssistantService } from '../services/AssistantService';
 import { AgentResponse } from '../services/GeminiAgent';
@@ -27,6 +26,7 @@ interface DashboardAppointment {
   status: string;
   patient?: {
     name: string;
+    history?: string; // Agregado para leer alergias
   };
 }
 
@@ -325,12 +325,15 @@ const Dashboard: React.FC = () => {
   };
 
   const antiFatigueBg = "bg-[#F2F9F7] dark:bg-slate-950"; 
+  
   const mobileHeroStyle = isNight 
     ? { bg: "bg-gradient-to-br from-slate-900 to-teal-950 border border-white/5", text: "text-teal-100", darkText: false }
     : { bg: "bg-gradient-to-br from-[#CDEDE0] to-[#A0DBC6] border border-white/5", text: "text-teal-900", darkText: true };
+
   const panoramicGradient = isNight
     ? "bg-gradient-to-r from-slate-900 via-teal-900 to-emerald-950" 
     : "bg-gradient-to-r from-emerald-50 via-teal-500 to-teal-800";
+
   const leftTextColor = isNight ? "text-slate-300" : "text-teal-800";
 
   const fetchData = async () => {
@@ -338,14 +341,16 @@ const Dashboard: React.FC = () => {
           const { data: { user } } = await supabase.auth.getUser();
           if (user) {
               const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', user.id).single();
-              setDoctorName(`Dr. ${profile?.full_name?.split(' ')[0] || 'Colega'}`);
+              const rawName = profile?.full_name?.split(' ')[0] || 'Colega';
+              setDoctorName(`Dr. ${rawName}`);
 
               const todayStart = startOfDay(new Date()); 
               const nextWeekEnd = endOfDay(addDays(new Date(), 7));
 
+              // FIX: CONSULTAR EL HISTORIAL DEL PACIENTE TAMBIÉN (Para las alergias)
               let query = supabase
                   .from('appointments')
-                  .select(`id, title, start_time, status, patient:patients (name)`)
+                  .select(`id, title, start_time, status, patient:patients (name, history)`)
                   .eq('doctor_id', user.id)
                   .gte('start_time', todayStart.toISOString())
                   .lte('start_time', nextWeekEnd.toISOString())
@@ -354,11 +359,10 @@ const Dashboard: React.FC = () => {
 
               let { data: aptsData, error } = await query;
 
-              // Fallback for user_id legacy
               if (error || !aptsData) {
                   const fallbackQuery = supabase
                       .from('appointments')
-                      .select(`id, title, start_time, status, patient:patients (name)`)
+                      .select(`id, title, start_time, status, patient:patients (name, history)`)
                       .eq('user_id', user.id)
                       .gte('start_time', todayStart.toISOString())
                       .lte('start_time', nextWeekEnd.toISOString())
@@ -369,13 +373,14 @@ const Dashboard: React.FC = () => {
               }
 
               if (aptsData) {
-                  setAppointments(aptsData.map((item: any) => ({
+                  const formattedApts: DashboardAppointment[] = aptsData.map((item: any) => ({
                       id: item.id,
                       title: item.title,
                       start_time: item.start_time,
                       status: item.status,
                       patient: item.patient
-                  })));
+                  }));
+                  setAppointments(formattedApts);
               }
           }
       } catch (e) { console.error(e); } finally { setLoading(false); }
@@ -406,6 +411,8 @@ const Dashboard: React.FC = () => {
     } catch (e) { toast.error("Error al actualizar cita"); }
   };
 
+  const formatTime = (isoString: string) => format(parseISO(isoString), 'h:mm a', { locale: es });
+  
   const getDayLabel = (isoString: string) => {
     const date = parseISO(isoString);
     if (isToday(date)) return 'Hoy';
@@ -422,12 +429,38 @@ const Dashboard: React.FC = () => {
 
   const todayAppointments = appointments.filter(a => isToday(parseISO(a.start_time)));
   const pendingCount = todayAppointments.filter(a => a.status === 'scheduled').length;
-  const progressPercent = Math.round((todayAppointments.filter(a => a.status === 'completed').length / (todayAppointments.length || 1)) * 100);
+  const totalToday = todayAppointments.length || 1; 
+  const completedCount = todayAppointments.filter(a => a.status === 'completed').length;
+  const progressPercent = Math.round((completedCount / totalToday) * 100);
+
+  // --- FUNCIÓN PARSEADORA DE ALERTAS ---
+  const getCriticalTags = (historyJSON: string | undefined) => {
+    if (!historyJSON) return null;
+    try {
+        const h = JSON.parse(historyJSON);
+        // Priorizamos el campo 'allergies' estructurado del nuevo Wizard
+        const allergies = h.allergies || h.legacyNote;
+        // Limpieza simple si viene sucio
+        const cleanAllergies = allergies?.replace(/^alergia[s]?\s*[:]\s*/i, '') || '';
+        const hasCritical = cleanAllergies && cleanAllergies.length > 2; // Evitar strings vacíos
+
+        if (!hasCritical) return null;
+
+        return (
+            <div className="mt-1 flex flex-wrap gap-1">
+                <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700 border border-red-200 animate-pulse">
+                    <AlertTriangle size={10} className="mr-1"/> 
+                    {cleanAllergies.length > 20 ? cleanAllergies.substring(0, 20) + '...' : cleanAllergies}
+                </span>
+            </div>
+        );
+    } catch (e) { return null; }
+  };
 
   return (
     <div className={`min-h-screen ${antiFatigueBg} font-sans w-full overflow-x-hidden flex flex-col relative transition-colors duration-500`}>
       
-      {/* --- HEADER (Sin cambios) --- */}
+      {/* HEADER MÓVIL */}
       <div className="md:hidden px-5 pt-6 pb-4 flex justify-between items-center bg-white dark:bg-slate-900 sticky top-0 z-30 border-b border-gray-100 dark:border-slate-800 shadow-sm w-full">
         <div className="flex items-center gap-3">
             <img src="/pwa-192x192.png" alt="Logo" className="w-9 h-9 rounded-lg object-cover shadow-sm" />
@@ -447,6 +480,7 @@ const Dashboard: React.FC = () => {
         </div>
       </div>
 
+      {/* HEADER ESCRITORIO */}
       <div className="hidden md:block px-8 pt-8 pb-4 w-full max-w-7xl mx-auto">
          <div className="flex justify-between items-center">
             <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Tablero Principal</h1>
@@ -459,7 +493,6 @@ const Dashboard: React.FC = () => {
 
       <div className="flex-1 p-4 md:p-8 space-y-6 animate-fade-in-up w-full max-w-7xl mx-auto pb-32 md:pb-8">
         
-        {/* --- HERO SECTION (Sin cambios significativos) --- */}
         <div className="flex justify-between items-end">
             <div className="mt-1">
                 <div className="flex items-center gap-3 mb-1">
@@ -474,12 +507,14 @@ const Dashboard: React.FC = () => {
                     {dynamicGreeting.message}
                 </p>
             </div>
+            
             <button onClick={() => setIsUploadModalOpen(true)} className="hidden md:flex bg-brand-teal text-white px-4 py-2 rounded-xl font-bold items-center gap-2 shadow-lg hover:bg-teal-600 transition-transform active:scale-95">
-              <Upload size={18} /> <span>Subir Archivos</span>
+              <Upload size={18} />
+              <span>Subir Archivos</span>
             </button>
         </div>
 
-        {/* Hero Móvil */}
+        {/* VERSIÓN MÓVIL */}
         <div className="md:hidden">
             <div className={`${mobileHeroStyle.bg} ${mobileHeroStyle.text} rounded-3xl p-6 shadow-lg relative overflow-hidden flex justify-between items-center transition-all duration-500 w-full min-h-[140px]`}>
                 <div className="relative z-10 flex-1">
@@ -509,9 +544,8 @@ const Dashboard: React.FC = () => {
             </div>
         </div>
 
-        {/* Hero PC */}
+        {/* VERSIÓN PC */}
         <div className={`hidden md:flex ${panoramicGradient} rounded-[2rem] shadow-xl h-56 relative overflow-hidden transition-all duration-1000 border border-slate-200/20`}>
-            {/* ... (Contenido Hero PC igual que antes) ... */}
             <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-[0.03]"></div>
             <div className="w-1/3 p-8 flex flex-col justify-between relative z-10 border-r border-white/5">
                 <div className="flex justify-between items-start">
@@ -563,7 +597,7 @@ const Dashboard: React.FC = () => {
                 <section className="w-full">
                     <div className="flex justify-between items-center mb-4 px-1">
                         <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                            <Calendar className="text-brand-teal" size={20}/> Agenda
+                            <Calendar className="text-brand-teal" size={20}/> Próximos Pacientes
                         </h3>
                         {appointments.length > 0 && <button onClick={() => navigate('/calendar')} className="text-brand-teal text-xs font-bold uppercase tracking-wide bg-teal-50 dark:bg-teal-900/20 px-3 py-1.5 rounded-full active:scale-95 transition-transform">Ver Todo</button>}
                     </div>
@@ -581,8 +615,6 @@ const Dashboard: React.FC = () => {
                             {Object.entries(groupedAppointments).map(([day, dayApts]) => (
                                 <div key={day} className="animate-fade-in-up">
                                     <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 ml-1">{day}</h4>
-                                    
-                                    {/* --- REDISEÑO 2.0: TIMELINE VERTICAL FLUIDO --- */}
                                     <div className="relative pl-6 border-l-2 border-slate-100 dark:border-slate-800 ml-3 space-y-6">
                                         {dayApts.map((apt) => {
                                             const isOverdue = isPast(parseISO(apt.start_time)) && apt.status === 'scheduled';
@@ -590,65 +622,37 @@ const Dashboard: React.FC = () => {
                                             
                                             return (
                                             <div key={apt.id} className="relative group">
-                                                {/* Punto de Tiempo (Timeline Dot) */}
-                                                <div className={`absolute -left-[31px] mt-1.5 h-3.5 w-3.5 rounded-full border-4 border-slate-50 dark:border-slate-950 shadow-sm z-10 ${
-                                                    isOverdue ? 'bg-amber-500' : 
-                                                    apt.status === 'completed' ? 'bg-green-500' : 'bg-brand-teal'
-                                                }`}></div>
+                                                <div className={`absolute -left-[31px] mt-1.5 h-3.5 w-3.5 rounded-full border-4 border-slate-50 dark:border-slate-950 shadow-sm z-10 ${isOverdue ? 'bg-amber-500' : apt.status === 'completed' ? 'bg-green-500' : 'bg-brand-teal'}`}></div>
 
-                                                <div 
-                                                    className={`bg-white dark:bg-slate-900 rounded-2xl p-4 shadow-sm border transition-all ${
-                                                        isOverdue 
-                                                            ? 'border-amber-200 dark:border-amber-900/40 bg-amber-50/30 dark:bg-amber-900/10' 
-                                                            : 'border-slate-100 dark:border-slate-800 hover:shadow-md hover:border-slate-200 dark:hover:border-slate-700'
-                                                    }`}
-                                                    onClick={!isOverdue ? () => navigate('/calendar') : undefined}
-                                                >
+                                                <div className={`bg-white dark:bg-slate-900 rounded-2xl p-4 shadow-sm border transition-all ${isOverdue ? 'border-amber-200 dark:border-amber-900/40 bg-amber-50/30 dark:bg-amber-900/10' : 'border-slate-100 dark:border-slate-800 hover:shadow-md hover:border-slate-200 dark:hover:border-slate-700'}`} onClick={!isOverdue ? () => navigate('/calendar') : undefined}>
                                                     <div className="flex justify-between items-start mb-2">
                                                         <div className="flex flex-col">
                                                             <h4 className="font-bold text-slate-800 dark:text-white text-base leading-tight group-hover:text-brand-teal transition-colors">
                                                                 {apt.patient?.name || "Sin nombre"}
                                                             </h4>
+                                                            {/* INYECCIÓN: ALERTA DE RIESGO EN DASHBOARD */}
+                                                            {getCriticalTags(apt.patient?.history)}
+                                                            
                                                             <span className="text-xs text-slate-500 font-medium mt-0.5">{apt.title || 'Consulta General'}</span>
                                                         </div>
                                                         <div className="text-right">
-                                                            <p className="text-lg font-black text-slate-900 dark:text-white leading-none tracking-tight">
-                                                                {format(aptDate, 'h:mm')}
-                                                            </p>
+                                                            <p className="text-lg font-black text-slate-900 dark:text-white leading-none tracking-tight">{format(aptDate, 'h:mm')}</p>
                                                             <p className="text-[10px] font-bold text-slate-400 uppercase">{format(aptDate, 'a')}</p>
                                                         </div>
                                                     </div>
 
-                                                    {/* PANEL DE ACCIONES VENCIDAS (Integrado) */}
                                                     {isOverdue ? (
                                                         <div className="mt-3 pt-3 border-t border-amber-200/50 dark:border-amber-800/30">
-                                                            <p className="text-[10px] font-bold text-amber-700 uppercase tracking-wide mb-2 flex items-center gap-1">
-                                                                <AlertTriangle size={10}/> Atención Requerida
-                                                            </p>
+                                                            <p className="text-[10px] font-bold text-amber-700 uppercase tracking-wide mb-2 flex items-center gap-1"><AlertTriangle size={10}/> Atención Requerida</p>
                                                             <div className="grid grid-cols-3 gap-2">
-                                                                <button onClick={(e) => {e.stopPropagation(); handleQuickAction('reschedule', apt)}} className="flex flex-col items-center justify-center p-2 rounded-xl bg-white border border-slate-200 shadow-sm hover:bg-slate-50 active:scale-95 transition-all text-blue-600">
-                                                                    <RefreshCcw size={18} className="mb-1"/>
-                                                                    <span className="text-[9px] font-bold">Reagendar</span>
-                                                                </button>
-                                                                <button onClick={(e) => {e.stopPropagation(); handleQuickAction('noshow', apt)}} className="flex flex-col items-center justify-center p-2 rounded-xl bg-white border border-slate-200 shadow-sm hover:bg-slate-50 active:scale-95 transition-all text-amber-600">
-                                                                    <UserX size={18} className="mb-1"/>
-                                                                    <span className="text-[9px] font-bold">No Vino</span>
-                                                                </button>
-                                                                <button onClick={(e) => {e.stopPropagation(); handleQuickAction('cancel', apt)}} className="flex flex-col items-center justify-center p-2 rounded-xl bg-white border border-slate-200 shadow-sm hover:bg-red-50 hover:border-red-100 active:scale-95 transition-all text-red-500">
-                                                                    <CalendarX size={18} className="mb-1"/>
-                                                                    <span className="text-[9px] font-bold">Cancelar</span>
-                                                                </button>
+                                                                <button onClick={(e) => {e.stopPropagation(); handleQuickAction('reschedule', apt)}} className="flex flex-col items-center justify-center p-2 rounded-xl bg-white border border-slate-200 shadow-sm hover:bg-slate-50 active:scale-95 transition-all text-blue-600"><RefreshCcw size={18} className="mb-1"/><span className="text-[9px] font-bold">Reagendar</span></button>
+                                                                <button onClick={(e) => {e.stopPropagation(); handleQuickAction('noshow', apt)}} className="flex flex-col items-center justify-center p-2 rounded-xl bg-white border border-slate-200 shadow-sm hover:bg-slate-50 active:scale-95 transition-all text-amber-600"><UserX size={18} className="mb-1"/><span className="text-[9px] font-bold">No Vino</span></button>
+                                                                <button onClick={(e) => {e.stopPropagation(); handleQuickAction('cancel', apt)}} className="flex flex-col items-center justify-center p-2 rounded-xl bg-white border border-slate-200 shadow-sm hover:bg-red-50 hover:border-red-100 active:scale-95 transition-all text-red-500"><CalendarX size={18} className="mb-1"/><span className="text-[9px] font-bold">Cancelar</span></button>
                                                             </div>
                                                         </div>
                                                     ) : (
                                                         <div className="flex items-center gap-2 mt-2">
-                                                            <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase border ${
-                                                                apt.status === 'completed' ? 'bg-green-50 text-green-700 border-green-100' : 
-                                                                apt.status === 'cancelled' ? 'bg-red-50 text-red-700 border-red-100' : 
-                                                                'bg-blue-50 text-blue-700 border-blue-100'
-                                                            }`}>
-                                                                {apt.status === 'scheduled' ? 'Confirmada' : apt.status}
-                                                            </span>
+                                                            <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase border ${apt.status === 'completed' ? 'bg-green-50 text-green-700 border-green-100' : apt.status === 'cancelled' ? 'bg-red-50 text-red-700 border-red-100' : 'bg-blue-50 text-blue-700 border-blue-100'}`}>{apt.status === 'scheduled' ? 'Confirmada' : apt.status}</span>
                                                         </div>
                                                     )}
                                                 </div>
@@ -656,7 +660,6 @@ const Dashboard: React.FC = () => {
                                             );
                                         })}
                                     </div>
-                                    {/* --- FIN REDISEÑO --- */}
                                 </div>
                             ))}
                         </div>
