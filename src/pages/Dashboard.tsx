@@ -230,28 +230,38 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete }: { isOpen: boolean
   );
 };
 
-const RoiWidget = () => (
-  <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-100 dark:border-slate-800 shadow-sm relative overflow-hidden group">
-    <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
-        <TrendingUp size={80} className="text-teal-500" />
+// --- WIDGET ROI DINÁMICO (MODIFICADO) ---
+const RoiWidget = ({ completedCount }: { completedCount: number }) => {
+  // MÉTRICA: 15 minutos ahorrados por consulta promedio usando IA vs manual
+  const minutesSaved = completedCount * 15;
+  const hoursSaved = (minutesSaved / 60).toFixed(1);
+  
+  // MÉTRICA: Si una consulta dura 20 min, ¿cuántas "extra" caben en el tiempo ahorrado?
+  const extraConsults = Math.floor(minutesSaved / 20);
+
+  return (
+    <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-100 dark:border-slate-800 shadow-sm relative overflow-hidden group">
+      <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
+          <TrendingUp size={80} className="text-teal-500" />
+      </div>
+      <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+          <Clock size={14} /> Tiempo Ahorrado (Histórico)
+      </h3>
+      <div className="flex items-baseline gap-2 mb-2">
+          <span className="text-4xl font-black text-slate-900 dark:text-white">{hoursSaved}</span>
+          <span className="text-sm font-bold text-slate-500 dark:text-slate-400">Horas</span>
+      </div>
+      <div className="bg-teal-50 dark:bg-teal-900/20 rounded-lg p-2 flex items-center gap-2 border border-teal-100 dark:border-teal-800/30">
+          <div className="bg-teal-500 rounded-full p-1">
+              <Zap size={10} className="text-white" fill="currentColor" />
+          </div>
+          <p className="text-xs font-medium text-teal-700 dark:text-teal-300">
+              Equivale a <span className="font-bold">{extraConsults} consultas extra</span> ganadas.
+          </p>
+      </div>
     </div>
-    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-        <Clock size={14} /> Tiempo Ahorrado (Semanal)
-    </h3>
-    <div className="flex items-baseline gap-2 mb-2">
-        <span className="text-4xl font-black text-slate-900 dark:text-white">4.5</span>
-        <span className="text-sm font-bold text-slate-500 dark:text-slate-400">Horas</span>
-    </div>
-    <div className="bg-teal-50 dark:bg-teal-900/20 rounded-lg p-2 flex items-center gap-2 border border-teal-100 dark:border-teal-800/30">
-        <div className="bg-teal-500 rounded-full p-1">
-            <Zap size={10} className="text-white" fill="currentColor" />
-        </div>
-        <p className="text-xs font-medium text-teal-700 dark:text-teal-300">
-            Equivale a <span className="font-bold">12 consultas extra</span> ganadas.
-        </p>
-    </div>
-  </div>
-);
+  );
+};
 
 const QuickActions = ({ navigate }: { navigate: any }) => (
   <div className="grid grid-cols-1 gap-3">
@@ -292,6 +302,9 @@ const Dashboard: React.FC = () => {
   const [weather, setWeather] = useState({ temp: '--', code: 0 });
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [isAssistantOpen, setIsAssistantOpen] = useState(false);
+  
+  // ESTADO NUEVO: Conteo histórico de consultas (MODIFICADO)
+  const [totalConsultations, setTotalConsultations] = useState(0);
   
   const now = new Date();
   const hour = now.getHours();
@@ -343,6 +356,14 @@ const Dashboard: React.FC = () => {
               const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', user.id).single();
               const rawName = profile?.full_name?.split(' ')[0] || 'Colega';
               setDoctorName(`Dr. ${rawName}`);
+
+              // 1. Obtener total histórico para el Widget ROI (MODIFICADO)
+              const { count } = await supabase
+                  .from('consultations')
+                  .select('*', { count: 'exact', head: true })
+                  .eq('doctor_id', user.id);
+              
+              setTotalConsultations(count || 0);
 
               const todayStart = startOfDay(new Date()); 
               const nextWeekEnd = endOfDay(addDays(new Date(), 7));
@@ -527,8 +548,13 @@ const Dashboard: React.FC = () => {
                             <p className="text-xs font-medium opacity-90">Hoy</p>
                         </div>
                     </div>
+                    
                     <LiveClockMobile isDark={!mobileHeroStyle.darkText} />
-                    <button onClick={() => setIsAssistantOpen(true)} className={`mt-4 py-2.5 px-4 w-full justify-center group flex items-center gap-3 backdrop-blur-md border rounded-full transition-all active:scale-95 shadow-sm hover:shadow-lg ${mobileHeroStyle.darkText ? 'bg-teal-900/10 border-teal-900/20 hover:bg-teal-900/20' : 'bg-white/10 border-white/20 hover:bg-white/20'}`}>
+                    
+                    <button 
+                        onClick={() => setIsAssistantOpen(true)} 
+                        className={`mt-4 py-2.5 px-4 w-full justify-center group flex items-center gap-3 backdrop-blur-md border rounded-full transition-all active:scale-95 shadow-sm hover:shadow-lg ${mobileHeroStyle.darkText ? 'bg-teal-900/10 border-teal-900/20 hover:bg-teal-900/20' : 'bg-white/10 border-white/20 hover:bg-white/20'}`}
+                    >
                         <Bot size={18} className={mobileHeroStyle.darkText ? "text-teal-900" : "text-white"} />
                         <span className={`font-bold text-xs tracking-wide ${mobileHeroStyle.darkText ? "text-teal-900" : "text-white"}`}>Asistente Inteligente V4</span>
                     </button>
@@ -540,11 +566,11 @@ const Dashboard: React.FC = () => {
             </div>
         </div>
 
-        {/* VERSIÓN PC - BORDE ELIMINADO AQUÍ */}
-        <div className={`hidden md:flex ${panoramicGradient} rounded-[2rem] shadow-xl h-56 relative overflow-hidden transition-all duration-1000`}>
+        {/* VERSIÓN PC */}
+        <div className={`hidden md:flex ${panoramicGradient} rounded-[2rem] shadow-xl h-56 relative overflow-hidden transition-all duration-1000 border border-slate-200/20`}>
             <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-[0.03]"></div>
 
-            <div className="w-1/3 p-8 flex flex-col justify-between relative z-10">
+            <div className="w-1/3 p-8 flex flex-col justify-between relative z-10 border-r border-white/5">
                 <div className="flex justify-between items-start">
                     <div className={`flex items-center gap-2 ${leftTextColor}`}>
                         <MapPin size={16} />
@@ -565,7 +591,7 @@ const Dashboard: React.FC = () => {
                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-white/10 rounded-full blur-[80px] pointer-events-none"></div>
             </div>
 
-            <div className="w-1/3 p-8 relative z-10 flex flex-col justify-between text-right">
+            <div className="w-1/3 p-8 relative z-10 flex flex-col justify-between text-right border-l border-white/5">
                 <div className="flex justify-end items-center gap-2 mb-2">
                     <span className="text-[10px] font-bold uppercase tracking-widest text-teal-200/80">Pulso del Día</span>
                     <Activity size={14} className="text-teal-300 animate-pulse" />
@@ -646,7 +672,6 @@ const Dashboard: React.FC = () => {
                                             const isOverdue = isPast(parseISO(apt.start_time)) && apt.status === 'scheduled';
                                             const aptDate = parseISO(apt.start_time);
                                             
-                                            // LÓGICA DE VISUALIZACIÓN DE NOMBRE CORREGIDA
                                             const displayName = apt.patient?.name || apt.title || "Cita sin nombre";
                                             const displaySubtitle = apt.patient?.name 
                                                 ? (apt.title && apt.title !== apt.patient.name ? apt.title : 'Consulta General') 
@@ -663,10 +688,7 @@ const Dashboard: React.FC = () => {
                                                                 {displayName}
                                                             </h4>
                                                             {getCriticalTags(apt.patient?.history)}
-                                                            
-                                                            <span className="text-xs text-slate-500 font-medium mt-0.5">
-                                                                {displaySubtitle}
-                                                            </span>
+                                                            <span className="text-xs text-slate-500 font-medium mt-0.5">{displaySubtitle}</span>
                                                         </div>
                                                         <div className="text-right">
                                                             <p className="text-lg font-black text-slate-900 dark:text-white leading-none tracking-tight">{format(aptDate, 'h:mm')}</p>
@@ -685,7 +707,6 @@ const Dashboard: React.FC = () => {
                                                                     <p className="text-[10px] text-amber-600 dark:text-amber-400">Cita vencida sin finalizar.</p>
                                                                 </div>
                                                             </div>
-                                                            
                                                             <div className="grid grid-cols-3 gap-2">
                                                                 <button onClick={(e) => {e.stopPropagation(); handleQuickAction('reschedule', apt)}} className="flex flex-col items-center justify-center p-2 rounded-xl bg-white border border-slate-200 shadow-sm hover:bg-slate-50 active:scale-95 transition-all text-blue-600"><RefreshCcw size={18} className="mb-1"/><span className="text-[9px] font-bold">Reagendar</span></button>
                                                                 <button onClick={(e) => {e.stopPropagation(); handleQuickAction('noshow', apt)}} className="flex flex-col items-center justify-center p-2 rounded-xl bg-white border border-slate-200 shadow-sm hover:bg-slate-50 active:scale-95 transition-all text-amber-600"><UserX size={18} className="mb-1"/><span className="text-[9px] font-bold">No Vino</span></button>
@@ -710,7 +731,7 @@ const Dashboard: React.FC = () => {
             </div>
 
             <div className="hidden lg:block space-y-6">
-                <RoiWidget />
+                <RoiWidget completedCount={totalConsultations} /> {/* UPDATED PROP PASSING */}
                 <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 ml-1">Accesos Rápidos</h3>
                 <QuickActions navigate={navigate} />
             </div>
