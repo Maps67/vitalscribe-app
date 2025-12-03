@@ -74,6 +74,9 @@ const AuthView: React.FC<AuthProps> = ({
 
     try {
       if (isRegistering) {
+        // --- INICIO LÓGICA DE REGISTRO CORREGIDA ---
+        
+        // 1. Validaciones
         const cedulaLimpia = formData.cedula.trim();
         if (!/^\d+$/.test(cedulaLimpia) || cedulaLimpia.length < 7 || cedulaLimpia.length > 8) {
              toast.error("Cédula inválida. Debe tener 7 u 8 dígitos numéricos.");
@@ -88,7 +91,7 @@ const AuthView: React.FC<AuthProps> = ({
             setLoading(false); return;
         }
 
-        // CREAR CUENTA
+        // 2. CREAR CUENTA EN AUTH (Sistema de Usuarios)
         const { data, error } = await supabase.auth.signUp({
           email: formData.email,
           password: formData.password,
@@ -104,26 +107,46 @@ const AuthView: React.FC<AuthProps> = ({
 
         if (error) throw error;
 
-        // CREAR PERFIL
+        // 3. GUARDAR DATOS EN LA BASE DE DATOS (Doble Inserción: Profiles + Doctors)
         if (data.user) {
-            // Verificamos si ya existe para no duplicar (idempotencia)
+            
+            // A) Insertar en tabla 'profiles' (Columna correcta: license_number)
             const { error: profileError } = await supabase.from('profiles').insert({
                 id: data.user.id,
                 full_name: formData.fullName,
                 specialty: formData.specialty,
-                cedula: cedulaLimpia,
+                license_number: cedulaLimpia, // CORREGIDO: Usamos el nombre real de la columna en BD
                 email: formData.email
             });
             
-            // Si el error es que ya existe, lo ignoramos (el usuario pudo haber reintentado)
+            // Ignoramos error 23505 (duplicado) por si el usuario reintenta
             if (profileError && profileError.code !== '23505') {
                 console.error("Error creando perfil:", profileError);
+                toast.error("Usuario creado, pero error al guardar perfil.");
+            }
+
+            // B) Insertar en tabla 'doctors' (Columna correcta: license_id)
+            const { error: doctorError } = await supabase.from('doctors').insert({
+                id: data.user.id,
+                full_name: formData.fullName,
+                specialty: formData.specialty,
+                license_id: cedulaLimpia,    // CORREGIDO: Usamos el nombre real de la columna en BD
+                email: formData.email,
+                is_verified: false           // Entra como no verificado por defecto
+            });
+
+            if (doctorError && doctorError.code !== '23505') {
+                 console.error("Error creando registro médico:", doctorError);
+                 // No bloqueamos el flujo, es mejor tener la cuenta creada y arreglar datos luego
             }
         }
+        
         setVerificationSent(true);
-        toast.success("Cuenta creada. Revise su correo.");
+        toast.success("Cuenta creada exitosamente. Revise su correo.");
+        // --- FIN LÓGICA DE REGISTRO ---
 
       } else {
+        // LÓGICA DE LOGIN
         const { error } = await supabase.auth.signInWithPassword({
             email: formData.email,
             password: formData.password,
@@ -314,21 +337,19 @@ const AuthView: React.FC<AuthProps> = ({
                            <div className="relative"><User size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" /><input required type="text" className="block w-full pl-10 p-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-brand-teal" value={formData.fullName} onChange={e => setFormData({...formData, fullName: e.target.value})} placeholder="Dr. Juan Pérez"/></div>
                        </div>
                        <div className="grid grid-cols-2 gap-4">
-                           {/* --- CAMBIO: SELECTOR DE ESPECIALIDAD (NORMALIZACIÓN) --- */}
                            <div>
                                <label className="block text-sm font-medium text-slate-700 mb-1">Especialidad</label>
                                <div className="relative">
                                    <Stethoscope size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                                    <select 
-                                       className="block w-full pl-10 p-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-brand-teal appearance-none bg-white text-slate-700 cursor-pointer text-sm" 
-                                       value={formData.specialty} 
-                                       onChange={e => setFormData({...formData, specialty: e.target.value})}
+                                           className="block w-full pl-10 p-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-brand-teal appearance-none bg-white text-slate-700 cursor-pointer text-sm" 
+                                           value={formData.specialty} 
+                                           onChange={e => setFormData({...formData, specialty: e.target.value})}
                                    >
-                                       {SPECIALTIES.map(s => <option key={s} value={s}>{s}</option>)}
+                                           {SPECIALTIES.map(s => <option key={s} value={s}>{s}</option>)}
                                    </select>
                                </div>
                            </div>
-                           {/* -------------------------------------------------------- */}
                            <div>
                                <label className="block text-sm font-medium text-slate-700 mb-1">Cédula</label>
                                <div className="relative"><FileBadge size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" /><input required type="text" className="block w-full pl-10 p-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-brand-teal" value={formData.cedula} onChange={e => setFormData({...formData, cedula: e.target.value.replace(/\D/g,'')})} maxLength={8}/></div>
