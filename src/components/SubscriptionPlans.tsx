@@ -1,4 +1,3 @@
-// Archivo: src/components/SubscriptionPlans.tsx
 import { useState } from 'react';
 
 export const SubscriptionPlans = () => {
@@ -51,7 +50,11 @@ export const SubscriptionPlans = () => {
 
       <div className="grid md:grid-cols-2 gap-8">
         {/* PLAN ESTÁNDAR */}
-        <div className="border border-slate-200 rounded-2xl p-8 hover:border-teal-500 transition-all relative group">
+        <div className="border-2 border-teal-500 rounded-2xl p-8 relative group bg-teal-50/30">
+          <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-teal-500 text-white px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide">
+            Acceso Beta
+          </div>
+          
           <h3 className="text-lg font-bold text-slate-900">Médico Independiente</h3>
           <p className="text-sm text-slate-500 mb-6">Para consultorios privados.</p>
           
@@ -81,10 +84,11 @@ export const SubscriptionPlans = () => {
           </ul>
 
           <button
-            onClick={() => handleSubscribe(billingCycle === 'monthly' ? 'Mensual' : 'Anual')}
-            className="w-full py-3 px-4 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl transition-colors shadow-lg shadow-slate-900/10"
+            disabled={true}
+            className="w-full py-3 px-4 bg-green-100 text-green-700 border border-green-200 font-bold rounded-xl cursor-default flex items-center justify-center gap-2"
           >
-            Suscribirme Ahora
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            Desbloqueado
           </button>
         </div>
 
