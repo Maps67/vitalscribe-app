@@ -58,5 +58,37 @@ export const AppointmentService = {
       .eq('id', id);
 
     if (error) throw error;
+  },
+
+  // --- NUEVO: CIERRE DE CICLO AUTOMÁTICO ---
+  // Busca si el paciente tiene cita hoy y la marca como completada
+  async markAppointmentAsCompleted(patientId: string): Promise<void> {
+    try {
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
+        const todayEnd = new Date();
+        todayEnd.setHours(23, 59, 59, 999);
+
+        // 1. Buscar cita ABIERTA de HOY para este paciente
+        const { data, error } = await supabase
+            .from('appointments')
+            .select('id')
+            .eq('patient_id', patientId)
+            .eq('status', 'scheduled') // Solo las pendientes
+            .gte('start_time', todayStart.toISOString())
+            .lte('start_time', todayEnd.toISOString())
+            .limit(1);
+
+        if (error) throw error;
+
+        // 2. Si existe, ciérrala
+        if (data && data.length > 0) {
+            const appointmentId = data[0].id;
+            await this.updateAppointment(appointmentId, { status: 'completed' });
+            console.log(`✅ Cierre de ciclo: Cita ${appointmentId} completada automáticamente.`);
+        }
+    } catch (e) {
+        console.warn("No se pudo autocompletar la cita en agenda (No crítico).", e);
+    }
   }
 };
