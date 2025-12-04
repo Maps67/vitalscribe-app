@@ -316,14 +316,15 @@ const SettingsView: React.FC = () => {
 
       </form>
       
-      {/* --- INYECCIÓN DE PLANES DE SUSCRIPCIÓN --- */}
-      <div className="mb-10">
+      {/* --- INYECCIÓN DE PLANES DE SUSCRIPCIÓN (OCULTO POR AHORA) --- */}
+      {/* <div className="mb-10">
         <h3 className="text-xl font-bold text-slate-800 dark:text-white mb-4 flex items-center gap-2">
             <ShieldCheck className="text-brand-teal"/> Mi Suscripción
         </h3>
         <SubscriptionPlans />
       </div>
-      {/* ------------------------------------------- */}
+      */}
+      {/* ------------------------------------------------------------- */}
       
       <div className="p-4 bg-amber-50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-800/50 rounded-xl flex gap-3 items-start">
          <ShieldCheck className="text-amber-600 shrink-0" size={20} />
