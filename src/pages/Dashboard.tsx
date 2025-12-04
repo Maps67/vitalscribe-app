@@ -5,7 +5,7 @@ import {
   ShieldCheck, Upload, X, Bot, Mic, Square, Loader2, CheckCircle2,
   Stethoscope, UserCircle, ArrowRight, AlertTriangle, FileText,
   Clock, TrendingUp, UserPlus, Zap, Activity, LogOut,
-  CalendarX, RefreshCcw, UserX, Trash2, MoreHorizontal
+  CalendarX, RefreshCcw, UserX, Trash2, MoreHorizontal, AlertCircle // AlertCircle nuevo
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { format, isToday, isTomorrow, parseISO, startOfDay, endOfDay, addDays, isPast, addMinutes } from 'date-fns';
@@ -230,13 +230,9 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete }: { isOpen: boolean
   );
 };
 
-// --- WIDGET ROI DINÁMICO (MODIFICADO) ---
 const RoiWidget = ({ completedCount }: { completedCount: number }) => {
-  // MÉTRICA: 15 minutos ahorrados por consulta promedio usando IA vs manual
   const minutesSaved = completedCount * 15;
   const hoursSaved = (minutesSaved / 60).toFixed(1);
-  
-  // MÉTRICA: Si una consulta dura 20 min, ¿cuántas "extra" caben en el tiempo ahorrado?
   const extraConsults = Math.floor(minutesSaved / 20);
 
   return (
@@ -293,7 +289,6 @@ const QuickActions = ({ navigate }: { navigate: any }) => (
   </div>
 );
 
-// --- DASHBOARD PRINCIPAL ---
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const [doctorName, setDoctorName] = useState<string>('');
@@ -303,7 +298,6 @@ const Dashboard: React.FC = () => {
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [isAssistantOpen, setIsAssistantOpen] = useState(false);
   
-  // ESTADO NUEVO: Conteo histórico de consultas (MODIFICADO)
   const [totalConsultations, setTotalConsultations] = useState(0);
   
   const now = new Date();
@@ -357,7 +351,6 @@ const Dashboard: React.FC = () => {
               const rawName = profile?.full_name?.split(' ')[0] || 'Colega';
               setDoctorName(`Dr. ${rawName}`);
 
-              // 1. Obtener total histórico para el Widget ROI (MODIFICADO)
               const { count } = await supabase
                   .from('consultations')
                   .select('*', { count: 'exact', head: true })
@@ -567,10 +560,9 @@ const Dashboard: React.FC = () => {
         </div>
 
         {/* VERSIÓN PC */}
-        <div className={`hidden md:flex ${panoramicGradient} rounded-[2rem] shadow-xl h-56 relative overflow-hidden transition-all duration-1000 border border-slate-200/20`}>
+        <div className={`hidden md:flex ${panoramicGradient} rounded-[2rem] shadow-xl h-56 relative overflow-hidden transition-all duration-1000`}>
             <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-[0.03]"></div>
 
-            {/* COLUMNA IZQUIERDA: Borde eliminado (border-r border-white/5) */}
             <div className="w-1/3 p-8 flex flex-col justify-between relative z-10">
                 <div className="flex justify-between items-start">
                     <div className={`flex items-center gap-2 ${leftTextColor}`}>
@@ -592,7 +584,6 @@ const Dashboard: React.FC = () => {
                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-white/10 rounded-full blur-[80px] pointer-events-none"></div>
             </div>
 
-            {/* COLUMNA DERECHA: Borde eliminado (border-l border-white/5) */}
             <div className="w-1/3 p-8 relative z-10 flex flex-col justify-between text-right">
                 <div className="flex justify-end items-center gap-2 mb-2">
                     <span className="text-[10px] font-bold uppercase tracking-widest text-teal-200/80">Pulso del Día</span>
@@ -605,7 +596,7 @@ const Dashboard: React.FC = () => {
                         <div className="text-xs text-teal-200 font-medium">Pendientes</div>
                     </div>
                     <div className="relative w-16 h-16">
-                          <svg className="w-full h-full transform -rotate-90">
+                         <svg className="w-full h-full transform -rotate-90">
                             <circle cx="32" cy="32" r="28" stroke="currentColor" strokeWidth="6" fill="transparent" className="text-teal-900/50" />
                             <circle cx="32" cy="32" r="28" stroke="currentColor" strokeWidth="6" fill="transparent" 
                                 strokeDasharray={175} 
@@ -699,20 +690,43 @@ const Dashboard: React.FC = () => {
                                                     </div>
 
                                                     {isOverdue ? (
+                                                        // --- MODIFICACIÓN UX: TARJETA DE ALERTA ESTÉTICA ---
                                                         <div className="mt-3">
-                                                            <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-100 dark:border-amber-800/50 flex items-center gap-3 mb-3">
-                                                                <div className="bg-amber-100 dark:bg-amber-800/50 p-2 rounded-full text-amber-600 dark:text-amber-400">
-                                                                    <AlertTriangle size={16} />
-                                                                </div>
-                                                                <div>
-                                                                    <p className="text-xs font-bold text-amber-800 dark:text-amber-300 uppercase">Atención Requerida</p>
-                                                                    <p className="text-[10px] text-amber-600 dark:text-amber-400">Cita vencida sin finalizar.</p>
-                                                                </div>
+                                                            {/* Encabezado de alerta refinado */}
+                                                            <div className="flex items-center gap-2 mb-3 px-2">
+                                                                <div className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse"></div>
+                                                                <span className="text-[10px] font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wide">
+                                                                    Acción Requerida
+                                                                </span>
                                                             </div>
+
                                                             <div className="grid grid-cols-3 gap-2">
-                                                                <button onClick={(e) => {e.stopPropagation(); handleQuickAction('reschedule', apt)}} className="flex flex-col items-center justify-center p-2 rounded-xl bg-white border border-slate-200 shadow-sm hover:bg-slate-50 active:scale-95 transition-all text-blue-600"><RefreshCcw size={18} className="mb-1"/><span className="text-[9px] font-bold">Reagendar</span></button>
-                                                                <button onClick={(e) => {e.stopPropagation(); handleQuickAction('noshow', apt)}} className="flex flex-col items-center justify-center p-2 rounded-xl bg-white border border-slate-200 shadow-sm hover:bg-slate-50 active:scale-95 transition-all text-amber-600"><UserX size={18} className="mb-1"/><span className="text-[9px] font-bold">No Vino</span></button>
-                                                                <button onClick={(e) => {e.stopPropagation(); handleQuickAction('cancel', apt)}} className="flex flex-col items-center justify-center p-2 rounded-xl bg-white border border-slate-200 shadow-sm hover:bg-red-50 hover:border-red-100 active:scale-95 transition-all text-red-500"><CalendarX size={18} className="mb-1"/><span className="text-[9px] font-bold">Cancelar</span></button>
+                                                                {/* BOTÓN REAGENDAR (AZUL PÍLDORA) */}
+                                                                <button 
+                                                                    onClick={(e) => {e.stopPropagation(); handleQuickAction('reschedule', apt)}} 
+                                                                    className="flex flex-col items-center justify-center py-2 px-1 rounded-xl bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/20 dark:hover:bg-blue-900/40 border border-blue-100 dark:border-blue-800 transition-all active:scale-95 group"
+                                                                >
+                                                                    <RefreshCcw size={18} className="text-blue-600 dark:text-blue-400 mb-1 group-hover:rotate-180 transition-transform duration-500"/>
+                                                                    <span className="text-[9px] font-bold text-blue-700 dark:text-blue-300">Reagendar</span>
+                                                                </button>
+
+                                                                {/* BOTÓN NO VINO (ÁMBAR PÍLDORA) */}
+                                                                <button 
+                                                                    onClick={(e) => {e.stopPropagation(); handleQuickAction('noshow', apt)}} 
+                                                                    className="flex flex-col items-center justify-center py-2 px-1 rounded-xl bg-amber-50 hover:bg-amber-100 dark:bg-amber-900/20 dark:hover:bg-amber-900/40 border border-amber-100 dark:border-amber-800 transition-all active:scale-95 group"
+                                                                >
+                                                                    <UserX size={18} className="text-amber-600 dark:text-amber-400 mb-1"/>
+                                                                    <span className="text-[9px] font-bold text-amber-700 dark:text-amber-300">No Vino</span>
+                                                                </button>
+
+                                                                {/* BOTÓN CANCELAR (ROJO PÍLDORA) */}
+                                                                <button 
+                                                                    onClick={(e) => {e.stopPropagation(); handleQuickAction('cancel', apt)}} 
+                                                                    className="flex flex-col items-center justify-center py-2 px-1 rounded-xl bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/40 border border-red-100 dark:border-red-800 transition-all active:scale-95 group"
+                                                                >
+                                                                    <Trash2 size={18} className="text-red-600 dark:text-red-400 mb-1 group-hover:shake"/>
+                                                                    <span className="text-[9px] font-bold text-red-700 dark:text-red-300">Cancelar</span>
+                                                                </button>
                                                             </div>
                                                         </div>
                                                     ) : (
@@ -733,7 +747,7 @@ const Dashboard: React.FC = () => {
             </div>
 
             <div className="hidden lg:block space-y-6">
-                <RoiWidget completedCount={totalConsultations} /> {/* UPDATED PROP PASSING */}
+                <RoiWidget completedCount={totalConsultations} />
                 <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 ml-1">Accesos Rápidos</h3>
                 <QuickActions navigate={navigate} />
             </div>
