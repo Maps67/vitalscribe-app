@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { useLocation } from 'react-router-dom'; // <--- NUEVO: Para recibir datos del Dashboard
+import { useLocation } from 'react-router-dom'; 
 import { 
   Mic, Square, RefreshCw, FileText, Search, X, 
   MessageSquare, User, Send, Edit2, Check, ArrowLeft, 
   Stethoscope, Trash2, WifiOff, Save, Share2, Download, Printer,
   Paperclip, Calendar, Clock, UserCircle, Activity, ClipboardList, Brain, FileSignature, Keyboard,
-  Quote, AlertTriangle, ChevronDown, ChevronUp, Sparkles, PenLine
+  Quote, AlertTriangle, ChevronDown, ChevronUp, Sparkles, PenLine, UserPlus
 } from 'lucide-react';
 
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition'; 
@@ -35,9 +35,9 @@ const SPECIALTIES = [
 
 const ConsultationView: React.FC = () => {
   const { isListening, transcript, startListening, stopListening, resetTranscript, setTranscript, isAPISupported } = useSpeechRecognition();
-  const location = useLocation(); // <--- HOOK DE NAVEGACIÓN
+  const location = useLocation(); 
   
-  const [patients, setPatients] = useState<Patient[]>([]);
+  const [patients, setPatients] = useState<any[]>([]); // Usamos any para permitir la estructura híbrida (Pacientes + Fantasmas)
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [doctorProfile, setDoctorProfile] = useState<DoctorProfile | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null); 
@@ -92,9 +92,41 @@ const ConsultationView: React.FC = () => {
         if (mounted) {
             setCurrentUserId(user.id); 
 
+            // 1. Cargar Pacientes Registrados
             const { data: patientsData } = await supabase.from('patients').select('*').order('created_at', { ascending: false });
+            
+            // 2. Cargar Citas "Fantasmas" (Sin ID de paciente vinculado) - PUENTE DE DATOS
+            // Buscamos citas futuras o recientes que solo tengan nombre (title) pero no patient_id
+            const today = new Date();
+            today.setHours(0,0,0,0);
+            
+            const { data: ghostAppointments } = await supabase
+                .from('appointments')
+                .select('id, title, start_time')
+                .is('patient_id', null)
+                .eq('doctor_id', user.id)
+                .neq('status', 'cancelled')
+                .gte('start_time', today.toISOString()) 
+                .limit(20);
+
             const loadedPatients = patientsData || [];
-            setPatients(loadedPatients);
+            
+            // 3. Mezclar Datos: Convertimos citas fantasmas en objetos seleccionables
+            let combinedList = [...loadedPatients];
+            
+            if (ghostAppointments && ghostAppointments.length > 0) {
+                const ghosts = ghostAppointments.map(apt => ({
+                    id: `ghost_${apt.id}`, // ID temporal
+                    name: apt.title,
+                    isGhost: true, // Bandera para detectar que requiere registro lazy
+                    appointmentId: apt.id,
+                    created_at: apt.start_time
+                }));
+                // Agregamos los fantasmas al inicio para que se vean primero si coinciden
+                combinedList = [...ghosts, ...loadedPatients];
+            }
+
+            setPatients(combinedList);
             
             const { data: profileData } = await supabase.from('profiles').select('*').eq('id', user.id).single();
             if (profileData) {
@@ -105,29 +137,25 @@ const ConsultationView: React.FC = () => {
                 }
             }
 
-            // --- LÓGICA DE PUENTE (DASHBOARD -> CONSULTA) ---
+            // --- LÓGICA DE PUENTE (DASHBOARD -> CONSULTA VIA STATE) ---
             if (location.state?.patientName) {
                 const incomingName = location.state.patientName;
-                // Buscamos si el paciente existe en la lista cargada
                 const existingPatient = loadedPatients.find((p: any) => p.name.toLowerCase() === incomingName.toLowerCase());
 
                 if (existingPatient) {
                     setSelectedPatient(existingPatient);
                     toast.success(`Paciente cargado: ${incomingName}`);
                 } else {
-                    // Si no existe (cita manual), creamos un objeto temporal para permitir la consulta
                     const tempPatient: any = { 
                         id: 'temp_' + Date.now(), 
                         name: incomingName,
-                        isTemporary: true // Marca para saber que debemos crearlo al guardar
+                        isTemporary: true 
                     };
                     setSelectedPatient(tempPatient);
                     toast.info(`Consulta para: ${incomingName} (No registrado)`);
                 }
-                // Limpiamos el estado para no recargar al refrescar
                 window.history.replaceState({}, document.title);
             } else {
-                // Carga de borrador normal si no viene del dashboard
                 const savedDraft = localStorage.getItem(`draft_${user.id}`); 
                 if (savedDraft && !transcript) { 
                     setTranscript(savedDraft); 
@@ -139,12 +167,11 @@ const ConsultationView: React.FC = () => {
     };
     loadInitialData();
     return () => { mounted = false; };
-  }, [setTranscript, location.state]); // Agregamos location.state
+  }, [setTranscript, location.state]); 
 
   useEffect(() => {
     if (selectedPatient) {
         setPatientInsights(null);
-        // Si es temporal, no preguntamos por limpiar borrador anterior
         const isTemp = (selectedPatient as any).isTemporary;
 
         if (!isTemp && transcript && confirm("¿Desea limpiar el dictado anterior para el nuevo paciente?")) {
@@ -174,6 +201,51 @@ const ConsultationView: React.FC = () => {
     if (!searchTerm) return [];
     return patients.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()));
   }, [patients, searchTerm]);
+
+  // --- LÓGICA DE SELECCIÓN INTELIGENTE (LAZY REGISTRATION) ---
+  const handleSelectPatient = async (patient: any) => {
+      // Caso 1: Es una Cita Fantasma (Viene de Agenda/Dashboard sin ID de paciente)
+      if (patient.isGhost) {
+          const loadingToast = toast.loading("Registrando paciente desde la cita...");
+          try {
+              if (!currentUserId) throw new Error("No autenticado");
+
+              // 1. Crear el paciente en la BD automáticamente
+              const { data: newPatient, error: createError } = await supabase.from('patients').insert({
+                  name: patient.name,
+                  doctor_id: currentUserId,
+                  history: JSON.stringify({ created_via: 'appointment_bridge', linked_appointment_id: patient.appointmentId })
+              }).select().single();
+
+              if (createError) throw createError;
+
+              // 2. Vincular la cita huérfana al nuevo paciente
+              await supabase.from('appointments').update({ patient_id: newPatient.id }).eq('id', patient.appointmentId);
+
+              // 3. Actualizar la lista local para que ya no sea fantasma
+              setPatients(prev => {
+                  const filtered = prev.filter(p => p.id !== patient.id); // Quitar el fantasma
+                  return [newPatient, ...filtered]; // Poner el real
+              });
+
+              setSelectedPatient(newPatient);
+              toast.dismiss(loadingToast);
+              toast.success(`Paciente ${newPatient.name} registrado y vinculado.`);
+
+          } catch (error) {
+              console.error(error);
+              toast.dismiss(loadingToast);
+              toast.error("Error al registrar paciente automático.");
+              // Fallback: lo cargamos como temporal para no bloquear al médico
+              setSelectedPatient({ ...patient, id: 'temp_' + Date.now(), isTemporary: true });
+          }
+      } 
+      // Caso 2: Paciente Normal
+      else {
+          setSelectedPatient(patient);
+      }
+      setSearchTerm('');
+  };
 
   const handleToggleRecording = () => {
     if (!isOnline) {
@@ -259,7 +331,6 @@ const ConsultationView: React.FC = () => {
 
     try {
       let historyContext = "";
-      // Solo buscamos historial si NO es temporal
       if (selectedPatient && !(selectedPatient as any).isTemporary) {
           const { data: historyData } = await supabase.from('consultations').select('created_at, summary').eq('patient_id', selectedPatient.id).order('created_at', { ascending: false }).limit(3);
           if (historyData && historyData.length > 0) {
@@ -305,7 +376,6 @@ const ConsultationView: React.FC = () => {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) throw new Error("Sesión expirada");
         
-        // --- LÓGICA DE CREACIÓN ON-THE-FLY ---
         let finalPatientId = selectedPatient.id;
         if ((selectedPatient as any).isTemporary) {
             const { data: newPatient, error: createError } = await supabase.from('patients').insert({
@@ -323,7 +393,6 @@ const ConsultationView: React.FC = () => {
             ? `FECHA: ${new Date().toLocaleDateString()}\nS: ${generatedNote.soap.subjective}\nO: ${generatedNote.soap.objective}\nA: ${generatedNote.soap.assessment}\nP: ${generatedNote.soap.plan}\n\nPLAN PACIENTE:\n${editableInstructions}`
             : (generatedNote.clinicalNote + "\n\nPLAN PACIENTE:\n" + editableInstructions);
 
-        // --- CERRAR CICLO AGENDA ---
         await AppointmentService.markAppointmentAsCompleted(finalPatientId);
 
         const payload = {
@@ -439,7 +508,16 @@ const ConsultationView: React.FC = () => {
                 <Search className="text-slate-400 mr-2" size={18}/><input placeholder="Buscar paciente..." className="w-full bg-transparent outline-none dark:text-white text-sm" value={selectedPatient?selectedPatient.name:searchTerm} onChange={(e)=>{setSearchTerm(e.target.value);setSelectedPatient(null)}}/>
                 {selectedPatient && <button onClick={()=>{setSelectedPatient(null);setSearchTerm('')}}><X size={16}/></button>}
             </div>
-            {searchTerm && !selectedPatient && <div className="absolute top-full left-0 w-full bg-white dark:bg-slate-800 border rounded-b-lg shadow-lg z-40 max-h-48 overflow-y-auto">{filteredPatients.map(p=><div key={p.id} onClick={()=>{setSelectedPatient(p);setSearchTerm('')}} className="p-3 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer border-b dark:border-slate-700 dark:text-white text-sm">{p.name}</div>)}</div>}
+            {searchTerm && !selectedPatient && (
+                <div className="absolute top-full left-0 w-full bg-white dark:bg-slate-800 border rounded-b-lg shadow-lg z-40 max-h-48 overflow-y-auto">
+                    {filteredPatients.map(p => (
+                        <div key={p.id} onClick={() => handleSelectPatient(p)} className="p-3 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer border-b dark:border-slate-700 dark:text-white text-sm flex items-center justify-between">
+                            <span>{p.name}</span>
+                            {p.isGhost && <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full flex items-center gap-1"><Calendar size={10}/> Cita sin registro</span>}
+                        </div>
+                    ))}
+                </div>
+            )}
         </div>
         <div onClick={()=>setConsentGiven(!consentGiven)} className="flex items-center gap-2 p-3 rounded-lg border cursor-pointer select-none dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"><div className={`w-5 h-5 rounded border flex items-center justify-center ${consentGiven?'bg-green-500 border-green-500 text-white':'bg-white dark:bg-slate-700'}`}>{consentGiven&&<Check size={14}/>}</div><label className="text-xs dark:text-white cursor-pointer">Consentimiento otorgado.</label></div>
         
