@@ -7,7 +7,7 @@ import {
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
 
-// LISTA MAESTRA DE ESPECIALIDADES (NORMALIZACIÓN)
+// LISTA MAESTRA DE ESPECIALIDADES
 const SPECIALTIES = [
   "Medicina General", "Cardiología", "Cirugía General", "Cirugía de Columna", "Cirugía de Mano", 
   "Cirugía Oncológica", "Cirugía Pediátrica", "Cirugía Plástica y Reconstructiva", "Dermatología", 
@@ -29,29 +29,25 @@ const AuthView: React.FC<AuthProps> = ({
   forceResetMode = false, 
   onPasswordResetSuccess 
 }) => {
-  // ESTADOS DE FLUJO
   const [isRegistering, setIsRegistering] = useState(false);
   const [isRecovering, setIsRecovering] = useState(false);
   const [isResettingPassword, setIsResettingPassword] = useState(forceResetMode);
   
-  // ESTADOS DE UI
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [verificationSent, setVerificationSent] = useState(false);
   const [recoverySent, setRecoverySent] = useState(false);
 
-  // DATOS DEL FORMULARIO
   const [formData, setFormData] = useState({
     email: '',
     password: '',
     newPassword: '',
     fullName: '',
-    specialty: 'Medicina General', // Valor por defecto válido de la lista
+    specialty: 'Medicina General',
     cedula: '', 
     termsAccepted: false 
   });
 
-  // Efecto: Si la página padre dice "Modo Reset", obedecemos
   useEffect(() => {
     if (forceResetMode) {
       setIsResettingPassword(true);
@@ -74,7 +70,7 @@ const AuthView: React.FC<AuthProps> = ({
 
     try {
       if (isRegistering) {
-        // --- INICIO LÓGICA DE REGISTRO CORREGIDA ---
+        // --- REGISTRO SIMPLIFICADO Y CORREGIDO ---
         
         // 1. Validaciones
         const cedulaLimpia = formData.cedula.trim();
@@ -91,8 +87,11 @@ const AuthView: React.FC<AuthProps> = ({
             setLoading(false); return;
         }
 
-        // 2. CREAR CUENTA EN AUTH (Sistema de Usuarios)
-        const { data, error } = await supabase.auth.signUp({
+        // 2. CREAR CUENTA 
+        // Nota: Ya NO intentamos guardar en 'profiles' manualmente aquí.
+        // El Trigger 'handle_new_user_automatizado' en la base de datos lo hará por nosotros
+        // usando los metadatos que enviamos aquí abajo (data: { ... }).
+        const { error } = await supabase.auth.signUp({
           email: formData.email,
           password: formData.password,
           options: {
@@ -106,53 +105,17 @@ const AuthView: React.FC<AuthProps> = ({
         });
 
         if (error) throw error;
-
-        // 3. GUARDAR DATOS EN LA BASE DE DATOS (Doble Inserción: Profiles + Doctors)
-        if (data.user) {
-            
-            // A) Insertar en tabla 'profiles' (Columna correcta: license_number)
-            const { error: profileError } = await supabase.from('profiles').insert({
-                id: data.user.id,
-                full_name: formData.fullName,
-                specialty: formData.specialty,
-                license_number: cedulaLimpia, // CORREGIDO: Usamos el nombre real de la columna en BD
-                email: formData.email
-            });
-            
-            // Ignoramos error 23505 (duplicado) por si el usuario reintenta
-            if (profileError && profileError.code !== '23505') {
-                console.error("Error creando perfil:", profileError);
-                toast.error("Usuario creado, pero error al guardar perfil.");
-            }
-
-            // B) Insertar en tabla 'doctors' (Columna correcta: license_id)
-            const { error: doctorError } = await supabase.from('doctors').insert({
-                id: data.user.id,
-                full_name: formData.fullName,
-                specialty: formData.specialty,
-                license_id: cedulaLimpia,    // CORREGIDO: Usamos el nombre real de la columna en BD
-                email: formData.email,
-                is_verified: false           // Entra como no verificado por defecto
-            });
-
-            if (doctorError && doctorError.code !== '23505') {
-                 console.error("Error creando registro médico:", doctorError);
-                 // No bloqueamos el flujo, es mejor tener la cuenta creada y arreglar datos luego
-            }
-        }
         
         setVerificationSent(true);
         toast.success("Cuenta creada exitosamente. Revise su correo.");
-        // --- FIN LÓGICA DE REGISTRO ---
 
       } else {
-        // LÓGICA DE LOGIN
+        // --- INICIO DE SESIÓN (Sin Cambios) ---
         const { error } = await supabase.auth.signInWithPassword({
             email: formData.email,
             password: formData.password,
         });
         if (error) throw error;
-        // Solo redirigimos si NO estamos en modo reset
         if (onLoginSuccess && !isResettingPassword) onLoginSuccess();
       }
     } catch (error: any) {
@@ -166,18 +129,14 @@ const AuthView: React.FC<AuthProps> = ({
     }
   };
 
-  // --- LÓGICA DE RECUPERACIÓN BLINDADA ---
   const handleRecoveryRequest = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
-      // Redirección a la "Habitación Segura"
       const redirectUrl = `${window.location.origin}/update-password`;
-      
       const { error } = await supabase.auth.resetPasswordForEmail(formData.email, {
         redirectTo: redirectUrl, 
       });
-      
       if (error) throw error;
       setRecoverySent(true);
       toast.success("Correo de recuperación enviado.");
@@ -192,18 +151,13 @@ const AuthView: React.FC<AuthProps> = ({
     e.preventDefault();
     const passError = validatePasswordStrength(formData.newPassword);
     if (passError) return toast.error(passError);
-
     setLoading(true);
     try {
-      const { error } = await supabase.auth.updateUser({ 
-        password: formData.newPassword 
-      });
+      const { error } = await supabase.auth.updateUser({ password: formData.newPassword });
       if (error) throw error;
       toast.success("Contraseña actualizada exitosamente.");
-      
       if (onPasswordResetSuccess) onPasswordResetSuccess();
       else if (onLoginSuccess) onLoginSuccess();
-      
     } catch (error: any) {
       toast.error("Error al actualizar: " + error.message);
     } finally {
@@ -211,7 +165,7 @@ const AuthView: React.FC<AuthProps> = ({
     }
   };
 
-  // VISTAS INTERMEDIAS
+  // --- RENDERIZADO (Sin cambios visuales) ---
   if (verificationSent) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 animate-fade-in-up">
@@ -239,11 +193,8 @@ const AuthView: React.FC<AuthProps> = ({
     );
   }
 
-  // --- RENDERIZADO PRINCIPAL ---
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col lg:flex-row font-sans">
-      
-      {/* IZQUIERDA: IMAGEN Y BRANDING */}
       <div className="hidden lg:flex lg:w-1/2 bg-slate-900 text-white flex-col justify-center p-12 relative overflow-hidden">
         <div className="absolute top-0 left-0 w-full h-full opacity-40">
             <img src="https://images.unsplash.com/photo-1622253692010-333f2da6031d?q=80&w=1964&auto=format&fit=crop" className="w-full h-full object-cover grayscale" alt="Medical Tech" />
@@ -265,10 +216,7 @@ const AuthView: React.FC<AuthProps> = ({
         </div>
       </div>
 
-      {/* DERECHA: FORMULARIO */}
       <div className="flex-1 flex items-center justify-center p-6 relative bg-white dark:bg-slate-950">
-        
-        {/* --- BOTÓN DEL MANUAL --- */}
         <a 
             href="/manual.html" 
             target="_blank" 
@@ -278,10 +226,8 @@ const AuthView: React.FC<AuthProps> = ({
           <BookOpen className="w-4 h-4" />
           <span>Manual de Usuario</span>
         </a>
-        {/* ---------------------- */}
 
         <div className="w-full max-w-md space-y-8 animate-fade-in-up">
-          
           {isResettingPassword ? (
              <>
                <div className="text-center lg:text-left">
