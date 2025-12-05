@@ -181,7 +181,8 @@ const SettingsView: React.FC = () => {
                 <div className="p-4 bg-slate-50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-700 font-bold text-slate-700 dark:text-slate-200 flex items-center gap-2">
                     <User size={18} className="text-brand-teal"/> Identidad Profesional
                 </div>
-                <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* FIX VISUAL: Aumentado gap-4 a gap-6 para evitar solapamiento vertical en móviles */}
+                <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="col-span-2">
                         <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Nombre Completo</label>
                         <input type="text" required value={fullName} onChange={e => setFullName(e.target.value)} className="w-full p-3 border border-slate-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-brand-teal outline-none dark:bg-slate-900 dark:text-white" placeholder="Dr. Juan Pérez" />
@@ -189,11 +190,13 @@ const SettingsView: React.FC = () => {
                     <div>
                         <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Especialidad</label>
                         <div className="flex items-center border border-slate-200 dark:border-slate-700 rounded-lg px-3 bg-white dark:bg-slate-900 focus-within:ring-2 focus-within:ring-brand-teal relative">
-                            <Stethoscope size={16} className="text-slate-400 mr-2 pointer-events-none"/>
+                            {/* FIX VISUAL: shrink-0 para que el icono no se aplaste */}
+                            <Stethoscope size={16} className="text-slate-400 mr-2 pointer-events-none shrink-0"/>
+                            {/* FIX VISUAL: flex-1 y min-w-0 para que el select ocupe el espacio restante sin montarse */}
                             <select
                                 value={specialty}
                                 onChange={e => setSpecialty(e.target.value)}
-                                className="w-full py-3 outline-none bg-transparent dark:text-white appearance-none cursor-pointer"
+                                className="flex-1 w-full py-3 outline-none bg-transparent dark:text-white appearance-none cursor-pointer min-w-0"
                             >
                                 {SPECIALTIES.map(s => (
                                     <option key={s} value={s} className="text-slate-800 dark:text-slate-200 dark:bg-slate-800">
@@ -206,15 +209,15 @@ const SettingsView: React.FC = () => {
                     <div>
                         <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Cédula Prof.</label>
                         <div className="flex items-center border border-slate-200 dark:border-slate-700 rounded-lg px-3 bg-white dark:bg-slate-900 focus-within:ring-2 focus-within:ring-brand-teal">
-                            <Hash size={16} className="text-slate-400 mr-2"/>
-                            <input type="text" required value={license} onChange={e => setLicense(e.target.value)} className="w-full py-3 outline-none bg-transparent dark:text-white" placeholder="12345678" />
+                            <Hash size={16} className="text-slate-400 mr-2 shrink-0"/>
+                            <input type="text" required value={license} onChange={e => setLicense(e.target.value)} className="flex-1 w-full py-3 outline-none bg-transparent dark:text-white min-w-0" placeholder="12345678" />
                         </div>
                     </div>
                     <div className="col-span-2">
                         <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Universidad / Institución</label>
                         <div className="flex items-center border border-slate-200 dark:border-slate-700 rounded-lg px-3 bg-white dark:bg-slate-900 focus-within:ring-2 focus-within:ring-brand-teal">
-                            <BookOpen size={16} className="text-slate-400 mr-2"/>
-                            <input type="text" required value={university} onChange={e => setUniversity(e.target.value)} className="w-full py-3 outline-none bg-transparent dark:text-white" placeholder="Ej. UNAM" />
+                            <BookOpen size={16} className="text-slate-400 mr-2 shrink-0"/>
+                            <input type="text" required value={university} onChange={e => setUniversity(e.target.value)} className="flex-1 w-full py-3 outline-none bg-transparent dark:text-white min-w-0" placeholder="Ej. UNAM" />
                         </div>
                     </div>
                 </div>
@@ -224,21 +227,22 @@ const SettingsView: React.FC = () => {
                 <div className="p-4 bg-slate-50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-700 font-bold text-slate-700 dark:text-slate-200 flex items-center gap-2">
                     <MapPin size={18} className="text-brand-teal"/> Contacto y Web
                 </div>
-                <div className="p-6 space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* FIX VISUAL: Aumentado gap a 6 */}
+                <div className="p-6 space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div>
                             <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Teléfono Consultorio</label>
                             <div className="flex items-center border border-slate-200 dark:border-slate-700 rounded-lg px-3 bg-white dark:bg-slate-900 focus-within:ring-2 focus-within:ring-brand-teal">
-                                <Phone size={16} className="text-slate-400 mr-2"/>
-                                <input type="text" value={phone} onChange={e => setPhone(e.target.value)} className="w-full py-3 outline-none bg-transparent dark:text-white" placeholder="55 1234 5678" />
+                                <Phone size={16} className="text-slate-400 mr-2 shrink-0"/>
+                                <input type="text" value={phone} onChange={e => setPhone(e.target.value)} className="flex-1 w-full py-3 outline-none bg-transparent dark:text-white min-w-0" placeholder="55 1234 5678" />
                             </div>
                         </div>
                         
                         <div>
                             <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Tarjeta Digital / Web</label>
                             <div className="flex items-center border border-slate-200 dark:border-slate-700 rounded-lg px-3 bg-white dark:bg-slate-900 focus-within:ring-2 focus-within:ring-brand-teal">
-                                <Globe size={16} className="text-slate-400 mr-2"/>
-                                <input type="url" value={websiteUrl} onChange={e => setWebsiteUrl(e.target.value)} className="w-full py-3 outline-none bg-transparent dark:text-white" placeholder="https://misitio.com" />
+                                <Globe size={16} className="text-slate-400 mr-2 shrink-0"/>
+                                <input type="url" value={websiteUrl} onChange={e => setWebsiteUrl(e.target.value)} className="flex-1 w-full py-3 outline-none bg-transparent dark:text-white min-w-0" placeholder="https://misitio.com" />
                             </div>
                         </div>
                     </div>
