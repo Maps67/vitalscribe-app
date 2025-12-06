@@ -1,10 +1,4 @@
-export interface ChatMessage {
-  role: 'user' | 'model';
-  text: string;
-}
-
-import { GoogleGenerativeAI } from "@google/generative-ai";
-import { supabase } from '../lib/supabase'; 
+import { supabase } from '../lib/supabase';
 import { PatientInsight } from '../types';
 
 export interface SoapNote {
@@ -42,13 +36,7 @@ export interface FollowUpMessage {
   message: string;
 }
 
-// --- CAMBIO APLICADO AQUÍ: Estandarización de nombre de variable ---
-const API_KEY = import.meta.env.VITE_GOOGLE_GENAI_API_KEY || "";
-
-if (!API_KEY) console.error("Falta la VITE_GOOGLE_GENAI_API_KEY en el archivo .env");
-// ------------------------------------------------------------------
-
-// --- MOTOR DE PERFILES CLÍNICOS ---
+// --- MOTOR DE PERFILES CLÍNICOS (Se mantiene en frontend para flexibilidad) ---
 const getSpecialtyPromptConfig = (specialty: string) => {
   const configs: Record<string, any> = {
     "Cardiología": {
@@ -93,27 +81,9 @@ const getSpecialtyPromptConfig = (specialty: string) => {
 
 export const GeminiMedicalService = {
 
-  async getBestAvailableModel(): Promise<string> {
-    try {
-      const listUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${API_KEY}`;
-      const response = await fetch(listUrl);
-      if (!response.ok) return "gemini-1.5-flash"; 
-      const data = await response.json();
-      const validModels = (data.models || []).filter((m: any) => m.supportedGenerationMethods?.includes("generateContent"));
-      if (validModels.length === 0) return "gemini-1.5-flash";
-      const flashModel = validModels.find((m: any) => m.name.includes("flash"));
-      if (flashModel) return flashModel.name.replace('models/', '');
-      return validModels[0].name.replace('models/', '');
-    } catch (error) { return "gemini-1.5-flash"; }
-  },
-
-  // --- FUNCIÓN PRINCIPAL: NOTA CLÍNICA (CON ESCUDO LEGAL) ---
+  // --- FUNCIÓN PRINCIPAL: NOTA CLÍNICA (VÍA EDGE FUNCTION) ---
   async generateClinicalNote(transcript: string, specialty: string = "Medicina General", patientHistory: string = ""): Promise<GeminiResponse> {
     try {
-      const modelName = await this.getBestAvailableModel(); 
-      const genAI = new GoogleGenerativeAI(API_KEY);
-      const model = genAI.getGenerativeModel({ model: modelName, generationConfig: { responseMimeType: "application/json" } });
-      
       const now = new Date();
       const currentDate = now.toLocaleDateString('es-MX', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
       const currentTime = now.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
@@ -121,6 +91,7 @@ export const GeminiMedicalService = {
       const cleanTranscript = transcript.replace(/"/g, "'").trim();
       const profile = getSpecialtyPromptConfig(specialty);
 
+      // Construimos el prompt aquí, pero lo enviamos a la Bóveda para procesar
       const prompt = `
         ROL DEL SISTEMA (HÍBRIDO):
         Actúas como "MediScribe AI", un asistente de documentación clínica administrativa.
@@ -168,26 +139,35 @@ export const GeminiMedicalService = {
         }
       `;
 
-      const result = await model.generateContent(prompt);
-      const textResponse = result.response.text();
+      // 🔥 LLAMADA A LA BÓVEDA (Edge Function)
+      const { data, error } = await supabase.functions.invoke('gemini-proxy', {
+        body: { prompt }
+      });
+
+      if (error) throw new Error(`Error Edge Function: ${error.message}`);
+      if (!data || !data.result) throw new Error("La IA no devolvió resultados.");
+
+      const rawText = data.result;
+
+      // Limpieza y parseo del JSON
+      const cleanJson = rawText.replace(/```json/g, "").replace(/```/g, "").trim();
       
       try {
-        return JSON.parse(textResponse) as GeminiResponse;
+        return JSON.parse(cleanJson) as GeminiResponse;
       } catch (parseError) {
-        throw new Error("Error de formato IA.");
+        console.error("Texto fallido:", rawText);
+        throw new Error("Error de formato IA (JSON inválido).");
       }
 
-    } catch (error) { throw error; }
+    } catch (error: any) { 
+        console.error("Error completo:", error);
+        throw error; 
+    }
   },
 
-  // --- NUEVA FUNCIÓN: BALANCE CLÍNICO 360 (INSIGHTS) ---
+  // --- BALANCE CLÍNICO 360 (VÍA EDGE FUNCTION) ---
   async generatePatient360Analysis(patientName: string, historySummary: string, consultations: string[]): Promise<PatientInsight> {
       try {
-        const modelName = await this.getBestAvailableModel();
-        const genAI = new GoogleGenerativeAI(API_KEY);
-        const model = genAI.getGenerativeModel({ model: modelName, generationConfig: { responseMimeType: "application/json" } });
-
-        // Si no hay consultas previas, la IA debe saberlo
         const contextText = consultations.length > 0 
             ? consultations.join("\n\n--- SIGUIENTE CONSULTA (CRONOLÓGICA) ---\n\n")
             : "No hay consultas previas registradas en el sistema.";
@@ -216,9 +196,14 @@ export const GeminiMedicalService = {
             }
         `;
 
-        const result = await model.generateContent(prompt);
-        const textResponse = result.response.text();
-        return JSON.parse(textResponse) as PatientInsight;
+        // 🔥 LLAMADA A LA BÓVEDA
+        const { data, error } = await supabase.functions.invoke('gemini-proxy', {
+            body: { prompt }
+        });
+
+        if (error) throw error;
+        const cleanJson = data.result.replace(/```json/g, "").replace(/```/g, "").trim();
+        return JSON.parse(cleanJson) as PatientInsight;
 
       } catch (e) { 
           console.error("Error generating 360 insights:", e);
@@ -226,19 +211,25 @@ export const GeminiMedicalService = {
       }
   },
 
-  // --- MÉTODOS AUXILIARES ---
+  // --- EXTRAER MEDICAMENTOS (VÍA EDGE FUNCTION) ---
   async extractMedications(text: string): Promise<MedicationItem[]> {
     const cleanText = text.replace(/["“”]/g, "").trim(); 
     if (!cleanText) return [];
     try {
+      // 🔥 LLAMADA A LA BÓVEDA
       const { data, error } = await supabase.functions.invoke('gemini-proxy', {
         body: {
           prompt: `ACTÚA COMO: Farmacéutico. TAREA: Extraer medicamentos. TEXTO: "${cleanText}". JSON ARRAY: [{"drug": "Nombre", "details": "Dosis", "frequency": "Frecuencia", "duration": "Duración", "notes": "Notas"}]`
         }
       });
-      if (!error && data) {
-        let cleanJson = data.result || data;
+
+      if (!error && data && data.result) {
+        let cleanJson = data.result;
         if (typeof cleanJson !== 'string') cleanJson = JSON.stringify(cleanJson);
+        
+        // Limpieza de Markdown
+        cleanJson = cleanJson.replace(/```json/g, "").replace(/```/g, "").trim();
+
         const firstBracket = cleanJson.indexOf('[');
         const lastBracket = cleanJson.lastIndexOf(']');
         if (firstBracket !== -1 && lastBracket !== -1) {
@@ -251,21 +242,25 @@ export const GeminiMedicalService = {
     return [{ drug: cleanText, details: "Revisar dosis", frequency: "", duration: "", notes: "" }];
   },
 
-  async generatePatientInsights(patientName: string, historySummary: string, consultations: string[]): Promise<PatientInsight> {
-      return this.generatePatient360Analysis(patientName, historySummary, consultations);
-  },
-
+  // --- CHAT CONTEXTUAL (VÍA EDGE FUNCTION) ---
   async chatWithContext(context: string, userMessage: string): Promise<string> {
     try {
-        const modelName = await this.getBestAvailableModel();
-        const URL = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${API_KEY}`;
         const prompt = `CONTEXTO: ${context}. PREGUNTA: "${userMessage}". RESPUESTA BREVE Y PROFESIONAL:`;
-        const response = await fetch(URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) });
-        const data = await response.json();
-        return data.candidates?.[0]?.content?.parts?.[0]?.text || "Error.";
+        
+        // 🔥 LLAMADA A LA BÓVEDA
+        const { data, error } = await supabase.functions.invoke('gemini-proxy', {
+            body: { prompt }
+        });
+
+        if (error || !data) return "Error de conexión.";
+        return data.result;
     } catch (e) { return "Error chat"; }
   },
 
+  // Helpers de compatibilidad
+  async generatePatientInsights(patientName: string, historySummary: string, consultations: string[]): Promise<PatientInsight> {
+      return this.generatePatient360Analysis(patientName, historySummary, consultations);
+  },
   async generateQuickRxJSON(transcript: string, patientName: string): Promise<MedicationItem[]> { return this.extractMedications(transcript); },
   async generatePrescriptionOnly(transcript: string): Promise<string> { return "Use extractMedications."; },
   async generateFollowUpPlan(patientName: string, clinicalNote: string, instructions: string): Promise<FollowUpMessage[]> { return []; }
