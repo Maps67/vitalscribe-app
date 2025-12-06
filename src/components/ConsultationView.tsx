@@ -42,7 +42,6 @@ const ConsultationView: React.FC = () => {
   const [doctorProfile, setDoctorProfile] = useState<DoctorProfile | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null); 
   
-  // NUEVO ESTADO: Para rastrear qué cita estamos atendiendo
   const [linkedAppointmentId, setLinkedAppointmentId] = useState<string | null>(null);
 
   const [isProcessing, setIsProcessing] = useState(false);
@@ -71,6 +70,10 @@ const ConsultationView: React.FC = () => {
   const [isInsightsOpen, setIsInsightsOpen] = useState(false);
   const [patientInsights, setPatientInsights] = useState<PatientInsight | null>(null);
   const [isLoadingInsights, setIsLoadingInsights] = useState(false);
+
+  // --- KPI: CRONÓMETRO REAL ---
+  // Guardamos la hora exacta en que se cargó el paciente
+  const startTimeRef = useRef<Date | null>(null);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const transcriptEndRef = useRef<HTMLDivElement>(null);
@@ -172,8 +175,12 @@ const ConsultationView: React.FC = () => {
     return () => { mounted = false; };
   }, [setTranscript, location.state]); 
 
+  // --- REINICIO DE RELOJ AL CAMBIAR PACIENTE ---
   useEffect(() => {
     if (selectedPatient) {
+        // INICIA EL CRONÓMETRO REAL
+        startTimeRef.current = new Date();
+        
         setPatientInsights(null);
         const isTemp = (selectedPatient as any).isTemporary;
 
@@ -182,7 +189,6 @@ const ConsultationView: React.FC = () => {
             if (currentUserId) localStorage.removeItem(`draft_${currentUserId}`);
             setGeneratedNote(null);
             setIsRiskExpanded(false);
-            // Si cambiamos de paciente manualmente, limpiamos el link de cita anterior a menos que sea la misma
             if (!location.state?.appointmentId) setLinkedAppointmentId(null); 
         } else if (!transcript) {
             setGeneratedNote(null);
@@ -208,9 +214,8 @@ const ConsultationView: React.FC = () => {
   }, [patients, searchTerm]);
 
   const handleSelectPatient = async (patient: any) => {
-      // Si seleccionamos un "Fantasma" (Cita sin paciente), capturamos su ID para cerrarla al guardar
       if (patient.isGhost) {
-          setLinkedAppointmentId(patient.appointmentId); // <--- VINCULACIÓN CRÍTICA
+          setLinkedAppointmentId(patient.appointmentId);
           const loadingToast = toast.loading("Registrando paciente desde la cita...");
           try {
               if (!currentUserId) throw new Error("No autenticado");
@@ -243,7 +248,6 @@ const ConsultationView: React.FC = () => {
       } 
       else {
           setSelectedPatient(patient);
-          // Si seleccionamos un paciente de la lista normal, NO hay cita vinculada por defecto (salvo que viniera del dashboard)
           if (!location.state?.appointmentId) setLinkedAppointmentId(null);
       }
       setSearchTerm('');
@@ -380,6 +384,27 @@ const ConsultationView: React.FC = () => {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) throw new Error("Sesión expirada");
         
+        // --- CÁLCULO DE TIEMPO REAL (KPI) ---
+        const endTime = new Date();
+        let timeMetrics = null;
+        if (startTimeRef.current) {
+            const durationMs = endTime.getTime() - startTimeRef.current.getTime();
+            const durationMinutes = Math.round(durationMs / 60000); // Duración real en minutos
+            
+            // BENCHMARK: Una consulta manual estándar toma 20 minutos
+            const manualBenchmark = 20; 
+            const savedMinutes = Math.max(0, manualBenchmark - durationMinutes);
+
+            timeMetrics = {
+                start_time: startTimeRef.current.toISOString(),
+                end_time: endTime.toISOString(),
+                duration_minutes: durationMinutes,
+                estimated_saved_minutes: savedMinutes,
+                benchmark_used: manualBenchmark
+            };
+        }
+        // -------------------------------------
+
         let finalPatientId = selectedPatient.id;
         if ((selectedPatient as any).isTemporary) {
             const { data: newPatient, error: createError } = await supabase.from('patients').insert({
@@ -398,11 +423,9 @@ const ConsultationView: React.FC = () => {
             : (generatedNote.clinicalNote + "\n\nPLAN PACIENTE:\n" + editableInstructions);
 
         // --- CIERRE DE CITA EXACTO ---
-        // Si tenemos un ID de cita vinculado (del Dashboard), cerramos ESA cita específica.
         if (linkedAppointmentId) {
             await supabase.from('appointments').update({ status: 'completed' }).eq('id', linkedAppointmentId);
         } else {
-            // Fallback: Intento genérico si no hay link (puede ser impreciso, pero mejor que nada)
             await AppointmentService.markAppointmentAsCompleted(finalPatientId);
         }
 
@@ -412,7 +435,11 @@ const ConsultationView: React.FC = () => {
             transcript: transcript || 'N/A', 
             summary: summaryToSave,
             status: 'completed',
-            ai_analysis_data: generatedNote, 
+            // Inyectamos las métricas de tiempo en el JSON de análisis para no romper el esquema SQL
+            ai_analysis_data: { 
+                ...generatedNote, 
+                performance_metrics: timeMetrics 
+            }, 
             legal_status: 'validated'
         };
 
@@ -420,7 +447,7 @@ const ConsultationView: React.FC = () => {
         
         if (error) throw error;
         
-        toast.success("Nota validada y guardada en expediente");
+        toast.success(`Nota guardada. Tiempo ahorrado est.: ${timeMetrics?.estimated_saved_minutes || 0} min.`);
         
         resetTranscript(); 
         if (currentUserId) localStorage.removeItem(`draft_${currentUserId}`); 
@@ -430,7 +457,8 @@ const ConsultationView: React.FC = () => {
         setConsentGiven(false); 
         setIsRiskExpanded(false);
         setPatientInsights(null);
-        setLinkedAppointmentId(null); // Limpiar el vínculo
+        setLinkedAppointmentId(null);
+        startTimeRef.current = null; // Reset del cronómetro
 
     } catch (e:any) { 
         console.error("Error guardando:", e);
@@ -590,7 +618,7 @@ const ConsultationView: React.FC = () => {
                         </div>
                       )}
                       {activeTab==='record' && !generatedNote.soap && generatedNote.clinicalNote && (<div className="bg-white dark:bg-slate-900 p-8 rounded-xl shadow-sm h-full flex flex-col border dark:border-slate-800 overflow-hidden"><div className="bg-yellow-50 text-yellow-800 p-2 text-sm rounded mb-2 dark:bg-yellow-900/30 dark:text-yellow-200">Formato antiguo.</div><div className="flex-1 overflow-y-auto pr-4 custom-scrollbar"><FormattedText content={generatedNote.clinicalNote}/></div><div className="border-t dark:border-slate-800 pt-4 flex justify-end"><button onClick={handleSaveConsultation} disabled={isSaving} className="bg-brand-teal text-white px-6 py-3 rounded-xl font-bold flex gap-2 hover:bg-teal-600 shadow-lg disabled:opacity-70">{isSaving?<RefreshCw className="animate-spin"/>:<Save/>} Guardar</button></div></div>)}
-                      {activeTab==='patient' && (<div className="bg-white dark:bg-slate-900 p-6 rounded-xl shadow-sm h-full flex flex-col border dark:border-slate-800 animate-fade-in-up"><div className="flex justify-between items-center mb-4 border-b dark:border-slate-800 pb-2"><h3 className="font-bold text-lg dark:text-white flex items-center gap-2"><FileText className="text-brand-teal"/> Instrucciones</h3><div className="flex gap-2"><button onClick={handleShareWhatsApp} className="p-2 bg-green-50 text-green-600 rounded-lg hover:bg-green-100 dark:bg-green-900/20 dark:text-green-400"><Share2 size={18}/></button><button onClick={handlePrint} className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400"><Download size={18}/></button><button onClick={()=>setIsEditingInstructions(!isEditingInstructions)} className={`p-2 rounded-lg transition-colors ${isEditingInstructions ? 'bg-brand-teal text-white' : 'bg-slate-50 text-slate-600 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-300'}`}>{isEditingInstructions?<Check size={18}/>:<Edit2 size={18}/>}</button></div></div><div className="flex-1 overflow-y-auto custom-scrollbar p-1">{isEditingInstructions ? <textarea className="w-full h-full border dark:border-slate-700 p-4 rounded-lg bg-slate-50 dark:bg-slate-800 dark:text-white resize-none outline-none focus:ring-2 focus:ring-brand-teal font-medium" value={editableInstructions} onChange={e=>setEditableInstructions(e.target.value)}/> : <div className="prose dark:prose-invert max-w-none"><FormattedText content={editableInstructions}/></div>}</div></div>)}
+                      {activeTab==='patient' && (<div className="bg-white dark:bg-slate-900 p-6 rounded-xl shadow-sm h-full flex flex-col border dark:border-slate-800 animate-fade-in-up"><div className="flex-between items-center mb-4 border-b dark:border-slate-800 pb-2"><h3 className="font-bold text-lg dark:text-white flex items-center gap-2"><FileText className="text-brand-teal"/> Instrucciones</h3><div className="flex gap-2"><button onClick={handleShareWhatsApp} className="p-2 bg-green-50 text-green-600 rounded-lg hover:bg-green-100 dark:bg-green-900/20 dark:text-green-400"><Share2 size={18}/></button><button onClick={handlePrint} className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400"><Download size={18}/></button><button onClick={()=>setIsEditingInstructions(!isEditingInstructions)} className={`p-2 rounded-lg transition-colors ${isEditingInstructions ? 'bg-brand-teal text-white' : 'bg-slate-50 text-slate-600 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-300'}`}>{isEditingInstructions?<Check size={18}/>:<Edit2 size={18}/>}</button></div></div><div className="flex-1 overflow-y-auto custom-scrollbar p-1">{isEditingInstructions ? <textarea className="w-full h-full border dark:border-slate-700 p-4 rounded-lg bg-slate-50 dark:bg-slate-800 dark:text-white resize-none outline-none focus:ring-2 focus:ring-brand-teal font-medium" value={editableInstructions} onChange={e=>setEditableInstructions(e.target.value)}/> : <div className="prose dark:prose-invert max-w-none"><FormattedText content={editableInstructions}/></div>}</div></div>)}
                       {activeTab==='chat' && (<div className="bg-white dark:bg-slate-900 p-4 rounded-xl shadow-sm h-full flex flex-col border dark:border-slate-800 animate-fade-in-up"><div className="flex-1 overflow-y-auto mb-4 pr-2 custom-scrollbar">{chatMessages.map((m,i)=><div key={i} className={`p-3 mb-3 rounded-2xl max-w-[85%] text-sm shadow-sm ${m.role==='user'?'bg-brand-teal text-white self-end ml-auto rounded-tr-none':'bg-slate-100 dark:bg-slate-800 dark:text-slate-200 self-start mr-auto rounded-tl-none'}`}>{m.text}</div>)}<div ref={chatEndRef}/></div><form onSubmit={handleChatSend} className="flex gap-2 relative"><input className="flex-1 border dark:border-slate-700 p-4 pr-12 rounded-xl bg-slate-50 dark:bg-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-brand-teal shadow-sm" value={chatInput} onChange={e=>setChatInput(e.target.value)} placeholder="Pregunta..."/><button disabled={isChatting||!chatInput.trim()} className="absolute right-3 top-1/2 -translate-y-1/2 bg-brand-teal text-white p-2 rounded-lg hover:bg-teal-600 disabled:opacity-50 transition-all hover:scale-105 active:scale-95">{isChatting?<RefreshCw className="animate-spin" size={18}/>:<Send size={18}/>}</button></form></div>)}
                  </div>
              )}
