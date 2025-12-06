@@ -272,8 +272,7 @@ const QuickActions = ({ navigate }: { navigate: any }) => (
           </div>
       </button>
 
-      {/* MODIFICACIÓN: Eliminada la rejilla de 2 columnas y el botón de "Mejorar Plan" */}
-      {/* El botón de "Nuevo Paciente" ahora ocupa todo el ancho de forma natural en el grid principal */}
+      {/* ZONA LIMPIA: Sin botón amarillo */}
       <button onClick={() => navigate('/patients')} className="flex flex-col items-center justify-center p-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl hover:border-slate-300 dark:hover:border-slate-600 hover:shadow-md transition-all group">
           <div className="bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 p-2 rounded-full mb-2 group-hover:scale-110 transition-transform">
               <UserPlus size={18} />
@@ -354,12 +353,12 @@ const Dashboard: React.FC = () => {
               const todayStart = startOfDay(new Date()); 
               const nextWeekEnd = endOfDay(addDays(new Date(), 7));
 
-              // QUERY CORREGIDO: Filtrar solo 'scheduled' para eliminar completadas
+              // QUERY FILTRADO: Solo 'scheduled'
               let query = supabase
                   .from('appointments')
                   .select(`id, title, start_time, status, patient:patients (name, history)`)
                   .eq('doctor_id', user.id)
-                  .eq('status', 'scheduled') // <--- FILTRO DE LIMPIEZA
+                  .eq('status', 'scheduled') // <--- FILTRO ACTIVO
                   .gte('start_time', todayStart.toISOString())
                   .lte('start_time', nextWeekEnd.toISOString())
                   .order('start_time', { ascending: true })
@@ -372,7 +371,7 @@ const Dashboard: React.FC = () => {
                       .from('appointments')
                       .select(`id, title, start_time, status, patient:patients (name, history)`)
                       .eq('user_id', user.id)
-                      .eq('status', 'scheduled') // <--- FILTRO DE LIMPIEZA TAMBIÉN AQUÍ
+                      .eq('status', 'scheduled') // <--- FILTRO ACTIVO
                       .gte('start_time', todayStart.toISOString())
                       .lte('start_time', nextWeekEnd.toISOString())
                       .order('start_time', { ascending: true })
@@ -673,7 +672,7 @@ const Dashboard: React.FC = () => {
                                                             <div 
                                                                 onClick={(e) => {
                                                                     e.stopPropagation(); 
-                                                                    navigate('/consultation', { state: { patientName: displayName, appointmentId: apt.id } });
+                                                                    navigate('/consultation', { state: { patientName: displayName, appointmentId: apt.id } }); // <--- CORRECCIÓN AQUÍ: SE PASA EL ID
                                                                 }}
                                                                 className="group/patient flex items-center gap-2 cursor-pointer w-fit p-1 -ml-1 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-all"
                                                                 title="Clic para iniciar consulta inmediatamente"
