@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   Search, UserPlus, FileText, Trash2, Edit2, Eye, Calendar, 
   Share2, Download, FolderOpen, Paperclip, MoreVertical, X, 
-  FileCode, Phone, Pill, ChevronDown, ChevronUp, AlertTriangle, MessageCircle, Sparkles // Agregado Sparkles
+  FileCode, Phone, Pill, ChevronDown, ChevronUp, AlertTriangle, MessageCircle, Sparkles, User // Agregado User
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Patient, DoctorProfile, PatientInsight } from '../types'; // Importamos PatientInsight
@@ -26,6 +26,7 @@ interface PatientData extends Partial<Patient> {
   history?: string;
   created_at?: string;
   curp?: string; 
+  isTemporary?: boolean; // Aseguramos que la interfaz conozca esta bandera
 }
 
 interface ConsultationRecord {
@@ -80,7 +81,13 @@ const PatientsView: React.FC = () => {
       console.error("Error fetching patients:", error); 
       toast.error('Error al cargar pacientes'); 
     } else { 
-      setPatients((data as unknown as PatientData[]) || []); 
+      // Analizamos si faltan datos críticos para marcar como "incompleto" visualmente
+      const processed = (data as unknown as PatientData[]).map(p => ({
+          ...p,
+          // Si no tiene teléfono NI email, O tiene la bandera isTemporary explícita
+          isIncomplete: !p.phone && !p.email
+      }));
+      setPatients(processed || []); 
     }
   };
 
@@ -287,15 +294,22 @@ const PatientsView: React.FC = () => {
               <tr className="bg-slate-50 dark:bg-slate-900/50 text-slate-500 dark:text-slate-400 text-xs uppercase"><th className="p-4 font-bold">Nombre / Alertas</th><th className="p-4 font-bold">Edad/Sexo</th><th className="p-4 font-bold">Contacto</th><th className="p-4 font-bold text-center">Acciones</th></tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-              {filteredPatients.map(patient => (
-                <tr key={patient.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors group">
+              {filteredPatients.map(patient => {
+                // LÓGICA VISUAL: Detectar si es incompleto
+                const isIncomplete = (patient as any).isIncomplete || patient.isTemporary;
+                
+                return (
+                <tr key={patient.id} className={`hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors group ${isIncomplete ? 'bg-amber-50/50 dark:bg-amber-900/10' : ''}`}>
                   <td className="p-4">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-teal-50 text-brand-teal flex items-center justify-center font-bold text-sm border border-teal-100">
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm border ${isIncomplete ? 'bg-amber-100 text-amber-700 border-amber-200' : 'bg-teal-50 text-brand-teal border-teal-100'}`}>
                             {getInitials(patient.name)}
                         </div>
                         <div>
-                            <p className="font-bold text-slate-800 dark:text-white leading-tight">{patient.name || 'Sin Nombre'}</p>
+                            <div className="flex items-center gap-2">
+                                <p className="font-bold text-slate-800 dark:text-white leading-tight">{patient.name || 'Sin Nombre'}</p>
+                                {isIncomplete && <span className="text-[9px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded border border-amber-200 uppercase font-bold tracking-wider">Incompleto</span>}
+                            </div>
                             {getCriticalTags(patient.history)}
                         </div>
                       </div>
@@ -312,17 +326,17 @@ const PatientsView: React.FC = () => {
                   </td>
                   <td className="p-4 relative text-center">
                     <div className="flex justify-center gap-2">
-                         {/* BOTÓN NUEVO: 360 */}
-                         <button onClick={() => handleLoadInsights(patient)} className="p-2 text-indigo-500 hover:bg-indigo-50 rounded-lg transition-colors" title="Balance 360°"><Sparkles size={18}/></button>
-                         
-                         <button onClick={() => handleViewHistory(patient)} className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors" title="Expediente"><Eye size={18}/></button>
-                         <button onClick={() => setSelectedPatientForRx(patient)} className="p-2 text-teal-600 hover:bg-teal-50 rounded-lg transition-colors" title="Receta"><Pill size={18}/></button>
-                         <button onClick={() => openEditModal(patient)} className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors" title="Editar"><Edit2 size={18}/></button>
-                         <button onClick={() => handleDelete(patient.id)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors" title="Eliminar"><Trash2 size={18}/></button>
+                          {/* BOTÓN NUEVO: 360 */}
+                          <button onClick={() => handleLoadInsights(patient)} className="p-2 text-indigo-500 hover:bg-indigo-50 rounded-lg transition-colors" title="Balance 360°"><Sparkles size={18}/></button>
+                          
+                          <button onClick={() => handleViewHistory(patient)} className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors" title="Expediente"><Eye size={18}/></button>
+                          <button onClick={() => setSelectedPatientForRx(patient)} className="p-2 text-teal-600 hover:bg-teal-50 rounded-lg transition-colors" title="Receta"><Pill size={18}/></button>
+                          <button onClick={() => openEditModal(patient)} className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors" title="Editar"><Edit2 size={18}/></button>
+                          <button onClick={() => handleDelete(patient.id)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors" title="Eliminar"><Trash2 size={18}/></button>
                     </div>
                   </td>
                 </tr>
-              ))}
+              )})}
             </tbody>
           </table>
         </div>
@@ -331,20 +345,25 @@ const PatientsView: React.FC = () => {
         <div className="md:hidden divide-y divide-slate-100 dark:divide-slate-700">
              {filteredPatients.map(patient => {
                 const isExpanded = expandedPatientId === patient.id;
+                const isIncomplete = (patient as any).isIncomplete || patient.isTemporary;
+
                 return (
-                <div key={patient.id} className={`transition-all duration-300 ${isExpanded ? 'bg-slate-50 dark:bg-slate-800/50 pb-3' : 'bg-white dark:bg-slate-800'}`}>
+                <div key={patient.id} className={`transition-all duration-300 ${isExpanded ? 'bg-slate-50 dark:bg-slate-800/50 pb-3' : (isIncomplete ? 'bg-amber-50/30 dark:bg-amber-900/10' : 'bg-white dark:bg-slate-800')}`}>
                     <div 
                         className="p-4 flex items-start gap-3 cursor-pointer active:bg-slate-100 dark:active:bg-slate-700/50 transition-colors"
                         onClick={() => toggleExpand(patient.id)}
                     >
-                        <div className="w-10 h-10 rounded-full bg-teal-50 dark:bg-teal-900/20 text-brand-teal dark:text-teal-400 flex items-center justify-center font-bold text-sm shrink-0 border border-teal-100 dark:border-teal-900/50 mt-1">
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shrink-0 border mt-1 ${isIncomplete ? 'bg-amber-100 text-amber-700 border-amber-200' : 'bg-teal-50 dark:bg-teal-900/20 text-brand-teal dark:text-teal-400 border-teal-100 dark:border-teal-900/50'}`}>
                             {getInitials(patient.name)}
                         </div>
                         <div className="flex-1 min-w-0">
                             <div className="flex justify-between items-center">
-                                <h3 className="font-bold text-slate-900 dark:text-white text-sm truncate pr-2">
-                                    {patient.name || 'Sin Nombre'}
-                                </h3>
+                                <div className="flex flex-col">
+                                    <h3 className="font-bold text-slate-900 dark:text-white text-sm truncate pr-2">
+                                        {patient.name || 'Sin Nombre'}
+                                    </h3>
+                                    {isIncomplete && <span className="text-[8px] bg-amber-100 text-amber-700 px-1 rounded w-fit uppercase font-bold mt-0.5">Incompleto</span>}
+                                </div>
                                 <ChevronDown size={16} className={`text-slate-400 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} />
                             </div>
                             <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5">
