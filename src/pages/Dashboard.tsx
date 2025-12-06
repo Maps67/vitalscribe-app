@@ -272,21 +272,14 @@ const QuickActions = ({ navigate }: { navigate: any }) => (
           </div>
       </button>
 
-      <div className="grid grid-cols-2 gap-3">
-          <button onClick={() => navigate('/patients')} className="flex flex-col items-center justify-center p-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl hover:border-slate-300 dark:hover:border-slate-600 hover:shadow-md transition-all group">
-              <div className="bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 p-2 rounded-full mb-2 group-hover:scale-110 transition-transform">
-                  <UserPlus size={18} />
-              </div>
-              <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Nuevo Paciente</span>
-          </button>
-
-          <button onClick={() => navigate('/settings')} className="flex flex-col items-center justify-center p-3 bg-gradient-to-br from-amber-50 to-amber-100 dark:from-amber-900/20 dark:to-amber-900/10 border border-amber-200 dark:border-amber-800 rounded-2xl hover:shadow-md transition-all group">
-              <div className="bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 p-2 rounded-full mb-2 group-hover:scale-110 transition-transform">
-                  <Bot size={18} />
-              </div>
-              <span className="text-xs font-bold text-amber-800 dark:text-amber-200">Mejorar Plan</span>
-          </button>
-      </div>
+      {/* MODIFICACIÓN: Eliminada la rejilla de 2 columnas y el botón de "Mejorar Plan" */}
+      {/* El botón de "Nuevo Paciente" ahora ocupa todo el ancho de forma natural en el grid principal */}
+      <button onClick={() => navigate('/patients')} className="flex flex-col items-center justify-center p-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl hover:border-slate-300 dark:hover:border-slate-600 hover:shadow-md transition-all group">
+          <div className="bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 p-2 rounded-full mb-2 group-hover:scale-110 transition-transform">
+              <UserPlus size={18} />
+          </div>
+          <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Nuevo Paciente</span>
+      </button>
   </div>
 );
 
@@ -680,7 +673,7 @@ const Dashboard: React.FC = () => {
                                                             <div 
                                                                 onClick={(e) => {
                                                                     e.stopPropagation(); 
-                                                                    navigate('/consultation', { state: { patientName: displayName, appointmentId: apt.id } }); // <--- CORRECCIÓN AQUÍ: SE PASA EL ID
+                                                                    navigate('/consultation', { state: { patientName: displayName, appointmentId: apt.id } });
                                                                 }}
                                                                 className="group/patient flex items-center gap-2 cursor-pointer w-fit p-1 -ml-1 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-all"
                                                                 title="Clic para iniciar consulta inmediatamente"
