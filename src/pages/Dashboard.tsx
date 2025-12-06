@@ -673,7 +673,14 @@ const Dashboard: React.FC = () => {
                                                 <div className={`bg-white dark:bg-slate-900 rounded-2xl p-4 shadow-sm border transition-all ${isOverdue ? 'border-amber-200 dark:border-amber-900/40 bg-amber-50/30 dark:bg-amber-900/10' : 'border-slate-100 dark:border-slate-800 hover:shadow-md hover:border-slate-200 dark:hover:border-slate-700'}`} onClick={!isOverdue ? () => navigate('/calendar') : undefined}>
                                                     <div className="flex justify-between items-start mb-2">
                                                         <div className="flex flex-col">
-                                                            <h4 className="font-bold text-slate-800 dark:text-white text-base leading-tight group-hover:text-brand-teal transition-colors">
+                                                            {/* MEJORA UX: Atajo directo a Consulta IA */}
+                                                            <h4 
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation(); // Evita que se dispare el evento del padre (ir al calendario)
+                                                                    navigate('/consultation', { state: { patientName: displayName } });
+                                                                }}
+                                                                className="font-bold text-slate-800 dark:text-white text-base leading-tight group-hover:text-brand-teal transition-colors cursor-pointer hover:underline"
+                                                            >
                                                                 {displayName}
                                                             </h4>
                                                             {getCriticalTags(apt.patient?.history)}
