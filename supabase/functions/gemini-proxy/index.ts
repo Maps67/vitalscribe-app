@@ -1,9 +1,8 @@
-// ARCHIVO DE RESPALDO: supabase/functions/gemini-proxy/index.ts
-// ESTADO: FUNCIONANDO (Fix Error 500 + API Key Standard)
+// ARCHIVO: supabase/functions/gemini-proxy/index.ts
+// ESTADO: v2.1 - SOPORTE RAG (Memoria Contextual)
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 
-// 1. CONEXIÓN SEGURA (Usa el nombre oficial de la nube)
 const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY')
 
 const corsHeaders = {
@@ -12,27 +11,47 @@ const corsHeaders = {
 }
 
 serve(async (req) => {
-  // 2. MANEJO DE CORS (Permite que la Web hable con el Servidor)
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
 
   try {
-    const { prompt } = await req.json()
+    // 1. AHORA RECIBIMOS TAMBIÉN EL 'HISTORY' (Opcional)
+    const { prompt, history } = await req.json()
 
-    // 3. VALIDACIÓN DE LLAVE (Evita crash si falta la key)
     if (!GEMINI_API_KEY) {
       throw new Error('La llave GEMINI_API_KEY no está configurada en el servidor.')
     }
 
-    // 4. LLAMADA A GOOGLE GEMINI (Modelo Flash 1.5)
+    // 2. CONSTRUCCIÓN DEL CEREBRO (RAG)
+    // Si hay historial, preparamos un "Expediente Virtual" para la IA.
+    let finalPrompt = prompt;
+
+    if (history && history.length > 5) {
+      console.log("🧠 RAG ACTIVADO: Inyectando historial médico...");
+      finalPrompt = `
+ACTÚA COMO UN MÉDICO EXPERTO Y USA ESTE CONTEXTO PARA TU DIAGNÓSTICO:
+
+--- HISTORIAL MÉDICO DEL PACIENTE (CONTEXTO PASADO) ---
+${history}
+-------------------------------------------------------
+
+--- CONSULTA ACTUAL (TRANSCRIPCIÓN EN VIVO) ---
+${prompt}
+-----------------------------------------------
+
+INSTRUCCIÓN: Basa tu Nota Clínica (SOAP) en la consulta actual, pero usa el historial para detectar evoluciones, recurrencias o contraindicaciones. Si el síntoma actual contradice el historial, prioriza el síntoma actual.
+      `.trim();
+    }
+
+    // 3. LLAMADA A GOOGLE GEMINI (Con el prompt aumentado)
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
+          contents: [{ parts: [{ text: finalPrompt }] }],
         }),
       }
     )
@@ -45,13 +64,11 @@ serve(async (req) => {
     const data = await response.json()
     const generatedText = data.candidates?.[0]?.content?.parts?.[0]?.text || "Error en generación."
 
-    // 5. RESPUESTA EXITOSA
     return new Response(JSON.stringify({ result: generatedText }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
 
   } catch (error) {
-    // 6. MANEJO DE ERRORES (Devuelve JSON, no explota)
     return new Response(JSON.stringify({ error: error.message }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
