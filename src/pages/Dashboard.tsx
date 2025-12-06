@@ -6,7 +6,7 @@ import {
   Stethoscope, UserCircle, ArrowRight, AlertTriangle, FileText,
   Clock, TrendingUp, UserPlus, Zap, Activity, LogOut,
   CalendarX, RefreshCcw, UserX, Trash2, MoreHorizontal, AlertCircle,
-  Repeat, Ban // Iconos para la mejora visual
+  Repeat, Ban, Play // Iconos para la mejora visual
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { format, isToday, isTomorrow, parseISO, startOfDay, endOfDay, addDays, isPast, addMinutes } from 'date-fns';
@@ -57,7 +57,6 @@ const LiveClockDesktop = () => {
             <span className="text-xl font-medium opacity-80">{format(time, 'a')}</span>
         </div>
       </div>
-      {/* LIMPIEZA VISUAL: Se eliminó border-t para evitar líneas negras */}
       <span className="text-sm font-bold uppercase tracking-[0.2em] opacity-90 mt-1 pt-1 px-4">
         {format(time, "EEEE d 'de' MMMM", { locale: es })}
       </span>
@@ -673,18 +672,27 @@ const Dashboard: React.FC = () => {
                                                 <div className={`bg-white dark:bg-slate-900 rounded-2xl p-4 shadow-sm border transition-all ${isOverdue ? 'border-amber-200 dark:border-amber-900/40 bg-amber-50/30 dark:bg-amber-900/10' : 'border-slate-100 dark:border-slate-800 hover:shadow-md hover:border-slate-200 dark:hover:border-slate-700'}`} onClick={!isOverdue ? () => navigate('/calendar') : undefined}>
                                                     <div className="flex justify-between items-start mb-2">
                                                         <div className="flex flex-col">
-                                                            {/* MEJORA UX: Atajo directo a Consulta IA */}
-                                                            <h4 
+                                                            
+                                                            {/* MEJORA UX: Gatillo Visual para Iniciar Consulta */}
+                                                            <div 
                                                                 onClick={(e) => {
-                                                                    e.stopPropagation(); // Evita que se dispare el evento del padre (ir al calendario)
+                                                                    e.stopPropagation(); 
                                                                     navigate('/consultation', { state: { patientName: displayName } });
                                                                 }}
-                                                                className="font-bold text-slate-800 dark:text-white text-base leading-tight group-hover:text-brand-teal transition-colors cursor-pointer hover:underline"
+                                                                className="group/patient flex items-center gap-2 cursor-pointer w-fit p-1 -ml-1 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-all"
+                                                                title="Clic para iniciar consulta inmediatamente"
                                                             >
-                                                                {displayName}
-                                                            </h4>
+                                                                <h4 className="font-bold text-slate-800 dark:text-white text-base leading-tight group-hover/patient:text-brand-teal transition-colors">
+                                                                    {displayName}
+                                                                </h4>
+                                                                {/* Indicador visual explícito (Icono Stethoscope) */}
+                                                                <div className="opacity-0 group-hover/patient:opacity-100 transition-opacity bg-brand-teal text-white p-1 rounded-full shadow-sm scale-75">
+                                                                     <Stethoscope size={12} />
+                                                                </div>
+                                                            </div>
+
                                                             {getCriticalTags(apt.patient?.history)}
-                                                            <span className="text-xs text-slate-500 font-medium mt-0.5">{displaySubtitle}</span>
+                                                            <span className="text-xs text-slate-500 font-medium mt-0.5 ml-1">{displaySubtitle}</span>
                                                         </div>
                                                         <div className="text-right">
                                                             <p className="text-lg font-black text-slate-900 dark:text-white leading-none tracking-tight">{format(aptDate, 'h:mm')}</p>
