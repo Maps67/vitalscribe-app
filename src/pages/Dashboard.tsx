@@ -6,7 +6,7 @@ import {
   Stethoscope, UserCircle, ArrowRight, AlertTriangle, FileText,
   Clock, TrendingUp, UserPlus, Zap, Activity, LogOut,
   CalendarX, RefreshCcw, UserX, Trash2, MoreHorizontal, AlertCircle,
-  Repeat, Ban, Play // Iconos para la mejora visual
+  Repeat, Ban, Play 
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { format, isToday, isTomorrow, parseISO, startOfDay, endOfDay, addDays, isPast, addMinutes } from 'date-fns';
@@ -361,10 +361,12 @@ const Dashboard: React.FC = () => {
               const todayStart = startOfDay(new Date()); 
               const nextWeekEnd = endOfDay(addDays(new Date(), 7));
 
+              // QUERY CORREGIDO: Filtrar solo 'scheduled' para eliminar completadas
               let query = supabase
                   .from('appointments')
                   .select(`id, title, start_time, status, patient:patients (name, history)`)
                   .eq('doctor_id', user.id)
+                  .eq('status', 'scheduled') // <--- FILTRO DE LIMPIEZA
                   .gte('start_time', todayStart.toISOString())
                   .lte('start_time', nextWeekEnd.toISOString())
                   .order('start_time', { ascending: true })
@@ -377,6 +379,7 @@ const Dashboard: React.FC = () => {
                       .from('appointments')
                       .select(`id, title, start_time, status, patient:patients (name, history)`)
                       .eq('user_id', user.id)
+                      .eq('status', 'scheduled') // <--- FILTRO DE LIMPIEZA TAMBIÉN AQUÍ
                       .gte('start_time', todayStart.toISOString())
                       .lte('start_time', nextWeekEnd.toISOString())
                       .order('start_time', { ascending: true })
