@@ -2,19 +2,20 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { PatientInsight, MedicationItem, FollowUpMessage } from '../types';
 
 // ==========================================
-// 1. CONFIGURACIÓN Y MODELOS DE RESPALDO
+// 1. CONFIGURACIÓN
 // ==========================================
 const API_KEY = import.meta.env.VITE_GEMINI_API_KEY || import.meta.env.VITE_GOOGLE_GENAI_API_KEY || "";
 
-if (!API_KEY) console.error("⛔ FATAL: API Key no encontrada en .env");
+if (!API_KEY) console.error("⛔ FATAL: API Key no encontrada. Revisa tu archivo .env");
 
-// LISTA DE INTENTOS: Si uno falla, prueba el siguiente automáticamente.
+// LISTA DE MODELOS A PROBAR (Orden de prioridad optimizado)
+// Hemos eliminado 'gemini-pro' (Legacy) porque causa error 404.
 const MODELS_TO_TRY = [
-  "gemini-1.5-flash",        // Rápido
-  "gemini-1.5-flash-001",    // Estable
-  "gemini-1.5-flash-002",    // Nuevo
-  "gemini-1.5-pro",          // Potente
-  "gemini-pro"               // Legado
+  "gemini-1.5-flash-001",    // 1. La versión numerada más estable (Suele ser la mejor opción)
+  "gemini-1.5-flash",        // 2. El alias genérico
+  "gemini-1.5-flash-002",    // 3. La versión actualizada
+  "gemini-1.5-flash-8b",     // 4. Versión ligera y rápida (Nueva)
+  "gemini-1.5-pro"           // 5. Versión potente (Respaldo final)
 ];
 
 // ==========================================
@@ -35,21 +36,33 @@ async function generateWithFailover(prompt: string): Promise<string> {
   const genAI = new GoogleGenerativeAI(API_KEY);
   let lastError: any = null;
 
+  console.log("🚀 Iniciando secuencia de conexión con IA...");
+
   for (const modelName of MODELS_TO_TRY) {
     try {
-      // console.log(`🔄 Intentando con modelo: ${modelName}...`);
+      // console.log(`Attempting: ${modelName}`);
       const model = genAI.getGenerativeModel({ model: modelName });
-      const result = await model.generateContent(prompt);
-      const text = result.response.text();
       
-      if (text) return text; // ¡Éxito!
+      // Intentamos una generación real
+      const result = await model.generateContent(prompt);
+      const response = await result.response;
+      const text = response.text();
+
+      if (text) {
+        console.log(`✅ Conexión establecida exitosamente con: ${modelName}`);
+        return text; // ¡Éxito! Retornamos inmediatamente.
+      }
     } catch (error: any) {
-      // Si falla, guardamos el error y el bucle sigue con el siguiente modelo
+      console.warn(`⚠️ Falló modelo ${modelName}. Motivo: ${error.message || 'Desconocido'}`);
       lastError = error;
+      // El bucle continúa automáticamente con el siguiente modelo de la lista
       continue;
     }
   }
-  throw lastError || new Error("Todos los modelos de IA fallaron. Verifica tu conexión.");
+
+  // Si llegamos aquí, es que TODOS fallaron.
+  console.error("❌ ERROR CRÍTICO: Ningún modelo de IA respondió.");
+  throw lastError || new Error("Servicio de IA no disponible en este momento. Intente más tarde.");
 }
 
 // ==========================================
@@ -78,7 +91,7 @@ export interface GeminiResponse {
 }
 
 // ==========================================
-// 4. MOTOR DE PERFILES CLÍNICOS (MEJORA CLAVE)
+// 4. MOTOR DE PERFILES CLÍNICOS
 // ==========================================
 const getSpecialtyPromptConfig = (specialty: string) => {
   const configs: Record<string, any> = {
@@ -136,14 +149,14 @@ export const GeminiMedicalService = {
         Actúas como "MediScribe AI", un asistente de documentación clínica administrativa.
         SIN EMBARGO, posees el conocimiento clínico profundo de un: ${profile.role}.
 
-        TU OBJETIVO: 
+        OBJETIVO: 
         Procesar la transcripción y generar una Nota de Evolución (SOAP) estructurada y técnica.
 
         CONTEXTO LEGAL Y DE SEGURIDAD (CRÍTICO):
         1. NO DIAGNOSTICAS: Eres software de gestión. Usa "Cuadro compatible con", "Probable".
         2. DETECCIÓN DE RIESGOS (TRIAJE): Tu prioridad #1 es identificar "Red Flags".
            - Si detectas peligro vital o funcional, el campo 'risk_analysis' DEBE ser 'Alto'.
-        3. FILTRADO DE RUIDO: Prioriza lo fisiológico sobre lo anecdótico.
+        3. FILTRADO: Prioriza lo fisiológico sobre lo anecdótico.
 
         LENTE CLÍNICO (${specialty}):
         - ENFOQUE: ${profile.focus}
@@ -171,7 +184,7 @@ export const GeminiMedicalService = {
         }
       `;
 
-      // USAMOS FAILOVER DIRECTO (Sin Edge Functions)
+      // USAMOS FAILOVER DIRECTO
       const rawText = await generateWithFailover(prompt);
       
       try {
