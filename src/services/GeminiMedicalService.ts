@@ -6,20 +6,63 @@ import { PatientInsight, MedicationItem, FollowUpMessage } from '../types';
 // ==========================================
 const API_KEY = import.meta.env.VITE_GEMINI_API_KEY || import.meta.env.VITE_GOOGLE_GENAI_API_KEY || "";
 
-if (!API_KEY) console.error("⛔ FATAL: API Key no encontrada. Revisa tu archivo .env");
+if (!API_KEY) console.error("⛔ FATAL: API Key no encontrada en .env");
 
-// LISTA DE SUPERVIVENCIA
-// El sistema probará en este orden exacto.
-const MODELS_TO_TRY = [
-  "gemini-1.5-flash",        // Intento 1: El estándar rápido actual
-  "gemini-1.5-pro",          // Intento 2: El potente actual
-  "gemini-pro",              // Intento 3: LA VIEJA CONFIABLE (Versión 1.0). Si todo falla, esta suele funcionar.
-  "gemini-1.0-pro"           // Intento 4: Alias alternativo de la vieja confiable
-];
+// Variable para guardar el modelo que el Radar encuentre
+let CACHED_MODEL_NAME: string | null = null;
 
 // ==========================================
-// 2. UTILIDADES
+// 2. PROTOCOLO RADAR (AUTO-DESCUBRIMIENTO RESTAURADO)
 // ==========================================
+async function getBestAvailableModel(): Promise<string> {
+  // Si ya encontramos uno bueno, lo reusamos (velocidad)
+  if (CACHED_MODEL_NAME) return CACHED_MODEL_NAME;
+
+  try {
+    console.log("📡 Radar: Escaneando modelos disponibles en Google...");
+    
+    // 1. Preguntamos a Google la lista oficial
+    const listUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${API_KEY}`;
+    const response = await fetch(listUrl);
+    
+    if (!response.ok) throw new Error(`Error API Google: ${response.status}`);
+    
+    const data = await response.json();
+    const models = data.models || [];
+
+    // 2. FILTRO DE SEGURIDAD (Esto evita el error de hoy)
+    const validModels = models.filter((m: any) => 
+      m.supportedGenerationMethods?.includes("generateContent") && // Que sirva para texto
+      !m.name.includes("experimental") && // BLOQUEAR la versión 2.5 (Causa error 429)
+      !m.name.includes("gemini-1.0") // BLOQUEAR versiones viejas
+    );
+
+    // 3. SELECCIÓN INTELIGENTE
+    // Buscamos en orden de estabilidad:
+    const stableFlash = validModels.find((m: any) => m.name.includes("gemini-1.5-flash-001")); // La más segura
+    const newFlash = validModels.find((m: any) => m.name.includes("gemini-1.5-flash-002"));    // La más nueva
+    const anyFlash = validModels.find((m: any) => m.name.includes("flash"));                    // Cualquiera flash
+    const stablePro = validModels.find((m: any) => m.name.includes("gemini-1.5-pro"));          // Pro como respaldo
+
+    // Elegimos el mejor candidato
+    const bestMatch = stableFlash || newFlash || anyFlash || stablePro;
+
+    if (bestMatch) {
+      // Limpiamos el prefijo "models/" que a veces estorba
+      CACHED_MODEL_NAME = bestMatch.name.replace("models/", "");
+      console.log(`✅ Radar: Modelo óptimo encontrado -> ${CACHED_MODEL_NAME}`);
+      return CACHED_MODEL_NAME!;
+    }
+
+    throw new Error("No se encontraron modelos válidos.");
+
+  } catch (error) {
+    console.warn("⚠️ Radar falló, usando respaldo manual.");
+    // Si el Radar falla por red, usamos el nombre exacto que suele funcionar
+    return "gemini-1.5-flash-001";
+  }
+}
+
 const cleanJSON = (text: string) => {
   let clean = text.replace(/```json/g, '').replace(/```/g, '');
   const firstCurly = clean.indexOf('{');
@@ -29,35 +72,6 @@ const cleanJSON = (text: string) => {
   }
   return clean.trim();
 };
-
-// MOTOR DE FUERZA BRUTA
-async function generateWithFailover(prompt: string): Promise<string> {
-  const genAI = new GoogleGenerativeAI(API_KEY);
-  let lastError: any = null;
-
-  for (const modelName of MODELS_TO_TRY) {
-    try {
-      // console.log(`🔄 Probando motor: ${modelName}...`);
-      const model = genAI.getGenerativeModel({ model: modelName });
-      
-      const result = await model.generateContent(prompt);
-      const response = await result.response;
-      const text = response.text();
-
-      if (text) {
-        console.log(`✅ Conectado exitosamente con: ${modelName}`);
-        return text; // ¡Funcionó! Salimos de la función con el texto.
-      }
-    } catch (error: any) {
-      console.warn(`⚠️ Falló ${modelName}. Saltando al siguiente...`);
-      lastError = error;
-      continue; // Si falla, pasamos al siguiente de la lista INMEDIATAMENTE
-    }
-  }
-
-  // Si llegamos aquí, es que ni la versión vieja funcionó.
-  throw lastError || new Error("Error crítico: Ningún modelo de IA respondió.");
-}
 
 // ==========================================
 // 3. TIPOS
@@ -107,7 +121,7 @@ const getSpecialtyPromptConfig = (specialty: string) => {
     "Pediatría": {
       role: "Pediatra",
       focus: "Desarrollo, crecimiento, hitos, alimentación y vacunación.",
-      bias: "Evalúa todo en contexto de la edad."
+      bias: "Evalúa todo en contexto de la edad. Tono para padres."
     },
     "Medicina General": {
       role: "Médico de Familia",
@@ -124,34 +138,45 @@ const getSpecialtyPromptConfig = (specialty: string) => {
 };
 
 // ==========================================
-// 5. SERVICIO PRINCIPAL
+// 5. SERVICIO PRINCIPAL (CLIENTE PURO + RADAR)
 // ==========================================
 export const GeminiMedicalService = {
 
   // --- NOTA CLÍNICA ---
   async generateClinicalNote(transcript: string, specialty: string = "Medicina General", patientHistory: string = ""): Promise<GeminiResponse> {
     try {
+      // 1. RADAR ACTIVO: Buscamos el modelo dinámicamente
+      const modelName = await getBestAvailableModel();
+      
+      const genAI = new GoogleGenerativeAI(API_KEY);
+      const model = genAI.getGenerativeModel({ 
+        model: modelName, 
+        generationConfig: { responseMimeType: "application/json" } 
+      });
+
       const now = new Date();
       const currentDate = now.toLocaleDateString('es-MX', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-      
+      const currentTime = now.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+
+      const cleanTranscript = transcript.replace(/"/g, "'").trim();
       const profile = getSpecialtyPromptConfig(specialty);
 
       const prompt = `
-        ROL: Actúas como "MediScribe AI" con conocimientos de ${profile.role}.
-        OBJETIVO: Nota SOAP Técnica.
+        ROL: Actúas como "MediScribe AI" (Asistente) con conocimientos de ${profile.role}.
+        OBJETIVO: Nota de Evolución (SOAP).
         
-        REGLAS:
-        1. NO DIAGNOSTICAS: Usa "Compatible con".
+        REGLAS LEGALES:
+        1. NO DIAGNOSTICAS: Usa "Cuadro compatible con".
         2. RIESGOS: Si hay peligro vital, 'risk_analysis' = 'Alto'.
         
-        ENFOQUE: ${profile.focus}
-        FECHA: ${currentDate}
+        ENFOQUE CLÍNICO: ${profile.focus}
+        FECHA: ${currentDate} ${currentTime}
         HISTORIAL: "${patientHistory}"
         
         TRANSCRIPCIÓN:
-        "${transcript.replace(/"/g, "'").trim()}"
+        "${cleanTranscript}"
 
-        FORMATO JSON OBLIGATORIO (TEXTO PLANO):
+        FORMATO JSON OBLIGATORIO (Sin Markdown):
         { 
           "conversation_log": [{ "speaker": "Médico", "text": "..." }, { "speaker": "Paciente", "text": "..." }], 
           "soap": { 
@@ -162,47 +187,72 @@ export const GeminiMedicalService = {
         }
       `;
 
-      const rawText = await generateWithFailover(prompt);
-      return JSON.parse(cleanJSON(rawText)) as GeminiResponse;
+      const result = await model.generateContent(prompt);
+      const textResponse = result.response.text();
+      
+      return JSON.parse(cleanJSON(textResponse)) as GeminiResponse;
 
-    } catch (error: any) {
-      console.error("❌ Error Nota Clínica:", error);
-      throw error;
+    } catch (error: any) { 
+        console.error("GeminiService Error:", error);
+        throw error; 
     }
   },
 
-  // --- BALANCE 360 ---
+  // --- BALANCE CLÍNICO 360 ---
   async generatePatient360Analysis(patientName: string, historySummary: string, consultations: string[]): Promise<PatientInsight> {
-    try {
-      const contextText = consultations.length > 0 ? consultations.join("\n\n") : "Sin historial.";
-      const prompt = `
-          ACTÚA COMO: Auditor Médico. PACIENTE: "${patientName}".
-          HISTORIAL: ${historySummary}. CONSULTAS: ${contextText}
-          JSON SALIDA: { "evolution": "...", "medication_audit": "...", "risk_flags": [], "pending_actions": [] }
-      `;
-      const rawText = await generateWithFailover(prompt);
-      return JSON.parse(cleanJSON(rawText)) as PatientInsight;
-    } catch (e) {
-      return { evolution: "No disponible", medication_audit: "", risk_flags: [], pending_actions: [] };
-    }
+      try {
+        const modelName = await getBestAvailableModel(); // Radar
+        const genAI = new GoogleGenerativeAI(API_KEY);
+        const model = genAI.getGenerativeModel({ model: modelName, generationConfig: { responseMimeType: "application/json" } });
+
+        const contextText = consultations.length > 0 
+            ? consultations.join("\n\n--- SIGUIENTE CONSULTA ---\n\n")
+            : "Sin historial previo.";
+
+        const prompt = `
+            ACTÚA COMO: Auditor Médico. PACIENTE: "${patientName}".
+            HISTORIAL: ${historySummary || "No registrados"}
+            CONSULTAS: ${contextText}
+
+            JSON SALIDA:
+            {
+              "evolution": "...", "medication_audit": "...", "risk_flags": [], "pending_actions": []
+            }
+        `;
+
+        const result = await model.generateContent(prompt);
+        return JSON.parse(cleanJSON(result.response.text())) as PatientInsight;
+      } catch (e) { 
+          return { evolution: "No disponible", medication_audit: "", risk_flags: [], pending_actions: [] };
+      }
   },
 
   // --- EXTRAER MEDICAMENTOS ---
   async extractMedications(text: string): Promise<MedicationItem[]> {
+    const cleanText = text.replace(/["“”]/g, "").trim(); 
+    if (!cleanText) return [];
     try {
-      const prompt = `ACTÚA COMO: Farmacéutico. EXTRAE: Medicamentos de "${text.replace(/"/g, "'")}". JSON ARRAY: [{"drug": "Nombre", "details": "Dosis", "frequency": "...", "duration": "...", "notes": "..."}]`;
-      const rawText = await generateWithFailover(prompt);
-      const res = JSON.parse(cleanJSON(rawText));
+      const modelName = await getBestAvailableModel(); // Radar
+      const genAI = new GoogleGenerativeAI(API_KEY);
+      const model = genAI.getGenerativeModel({ model: modelName, generationConfig: { responseMimeType: "application/json" } });
+
+      const prompt = `ACTÚA COMO: Farmacéutico. EXTRAE: Medicamentos de "${cleanText}". JSON ARRAY: [{"drug": "Nombre", "details": "Dosis", "frequency": "Frecuencia", "duration": "Duración", "notes": "Notas"}]`;
+      
+      const result = await model.generateContent(prompt);
+      const res = JSON.parse(cleanJSON(result.response.text()));
       return Array.isArray(res) ? res : [];
     } catch (e) { return []; }
   },
 
-  // --- CHAT ---
+  // --- CHAT CONTEXTUAL ---
   async chatWithContext(context: string, userMessage: string): Promise<string> {
     try {
-       const prompt = `CONTEXTO: ${context}. USUARIO: ${userMessage}. RESPUESTA:`;
-       return await generateWithFailover(prompt);
-    } catch (e) { return "Error de conexión."; }
+        const modelName = await getBestAvailableModel(); // Radar
+        const genAI = new GoogleGenerativeAI(API_KEY);
+        const model = genAI.getGenerativeModel({ model: modelName });
+        const result = await model.generateContent(`CONTEXTO: ${context}. USUARIO: ${userMessage}. RESPUESTA:`);
+        return result.response.text();
+    } catch (e) { return "Error chat"; }
   },
 
   // --- COMPATIBILIDAD ---
