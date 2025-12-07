@@ -2,7 +2,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 // Importamos interfaces locales para evitar errores de compilación
 import { GeminiResponse, PatientInsight, MedicationItem, FollowUpMessage } from '../types';
 
-console.log("🚀 V-ULTIMATE: MODO PRO (Facturación + Inteligencia Completa)");
+console.log("🚀 V-ULTIMATE: MODO PRO (Facturación + Inteligencia Completa + Memoria)");
 
 // ==========================================
 // 1. CONFIGURACIÓN ROBUSTA
@@ -12,8 +12,6 @@ const API_KEY = import.meta.env.VITE_GEMINI_API_KEY || import.meta.env.VITE_GOOG
 if (!API_KEY) console.error("⛔ FATAL: API Key no encontrada. Revisa tu archivo .env");
 
 // LISTA DE COMBATE (Failover System)
-// El sistema intentará usar el modelo principal. Si falla (por error de Google),
-// saltará automáticamente a los de respaldo para que el médico nunca se quede sin servicio.
 const MODELS_TO_TRY = [
   "gemini-1.5-flash-002",    // 1. La versión más inteligente y actual (Prioridad)
   "gemini-1.5-flash",        // 2. La versión estándar estable
@@ -37,7 +35,6 @@ const cleanJSON = (text: string) => {
 
 /**
  * MOTOR DE CONEXIÓN BLINDADO (FAILOVER)
- * Prueba modelos en cascada hasta obtener respuesta.
  */
 async function generateWithFailover(prompt: string, jsonMode: boolean = false): Promise<string> {
   const genAI = new GoogleGenerativeAI(API_KEY);
@@ -65,7 +62,6 @@ async function generateWithFailover(prompt: string, jsonMode: boolean = false): 
 
 /**
  * MOTOR DE PERFILES (PERSONALIDAD CLÍNICA)
- * Ajusta el cerebro de la IA según la especialidad.
  */
 const getSpecialtyPromptConfig = (specialty: string) => {
   const configs: Record<string, any> = {
@@ -113,9 +109,12 @@ const getSpecialtyPromptConfig = (specialty: string) => {
 // ==========================================
 export const GeminiMedicalService = {
 
-  // --- A. NOTA CLÍNICA (Con Blindaje Legal + Especialidad) ---
+  // --- A. NOTA CLÍNICA (Con Memoria de Historial) ---
   async generateClinicalNote(transcript: string, specialty: string = "Medicina General", patientHistory: string = ""): Promise<GeminiResponse> {
     try {
+      // --- DEBUG: Verificar si llega la memoria ---
+      // console.log("🧠 Memoria Inyectada:", patientHistory ? "SÍ" : "NO");
+
       const now = new Date();
       const profile = getSpecialtyPromptConfig(specialty);
 
@@ -129,16 +128,21 @@ export const GeminiMedicalService = {
         CONTEXTO LEGAL Y SEGURIDAD (CRÍTICO):
         1. NO DIAGNOSTICAS: Eres una herramienta de apoyo. Usa "Cuadro compatible con" o "Impresión diagnóstica".
         2. BANDERAS ROJAS: Si detectas riesgo vital o funcional, marca 'risk_analysis' como 'Alto' y justifica.
-        3. INTEGRIDAD: Basa tu nota SOLO en la transcripción y el historial provisto. No inventes datos.
+        3. INTEGRIDAD: Basa tu nota SOLO en la transcripción y el historial provisto.
 
         DATOS DE ENTRADA:
         - Fecha: ${now.toLocaleDateString()}
-        - Historial Previo: "${patientHistory}"
-        - Transcripción de Consulta: "${transcript.replace(/"/g, "'").trim()}"
+        
+        🔥🔥 MEMORIA DEL PACIENTE (HISTORIAL PREVIO) 🔥🔥:
+        "${patientHistory || "Sin antecedentes registrados."}"
+        -----------------------------------------------------
+
+        - Transcripción de Consulta Actual: 
+        "${transcript.replace(/"/g, "'").trim()}"
 
         GENERA JSON EXACTO (GeminiResponse):
         {
-          "clinicalNote": "Narrativa técnica y profesional de la evolución...",
+          "clinicalNote": "Narrativa técnica y profesional...",
           "soap": {
             "subjective": "Síntomas reportados (S)...",
             "objective": "Signos vitales, exploración física y hallazgos (O)...",
