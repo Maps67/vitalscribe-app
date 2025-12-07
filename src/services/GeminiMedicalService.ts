@@ -8,11 +8,11 @@ const API_KEY = import.meta.env.VITE_GEMINI_API_KEY || import.meta.env.VITE_GOOG
 
 if (!API_KEY) console.error("⛔ FATAL: API Key no encontrada en .env");
 
-// Variable para caché del Radar (evita preguntar a Google en cada clic)
+// Variable para caché del Radar
 let CACHED_MODEL: string | null = null;
 
 // ==========================================
-// 2. DEFINICIÓN DE TIPOS ESTRICTOS
+// 2. DEFINICIÓN DE TIPOS
 // ==========================================
 export interface SoapNote {
   subjective: string;
@@ -37,15 +37,13 @@ export interface GeminiResponse {
 }
 
 // ==========================================
-// 3. UTILIDADES & RADAR (Auto-Descubrimiento)
+// 3. RADAR INTELIGENTE (FILTRO ANTI-ERROR 429)
 // ==========================================
 
 async function resolveBestModel(): Promise<string> {
-  // Si ya tenemos el modelo en memoria, lo usamos directo (Velocidad)
   if (CACHED_MODEL) return CACHED_MODEL;
 
   try {
-    // Preguntamos a Google qué modelos tiene activos hoy
     const listUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${API_KEY}`;
     const response = await fetch(listUrl);
     
@@ -54,23 +52,28 @@ async function resolveBestModel(): Promise<string> {
     const data = await response.json();
     const models = data.models || [];
 
-    // Filtramos modelos que sirvan para generar texto
-    const validModels = models.filter((m: any) => m.supportedGenerationMethods?.includes("generateContent"));
+    // --- CORRECCIÓN CRÍTICA AQUÍ ---
+    // Filtramos SOLO modelos de la familia 1.5 para evitar el límite de 20 peticiones del 2.5
+    const validModels = models.filter((m: any) => 
+      m.supportedGenerationMethods?.includes("generateContent") &&
+      m.name.includes("1.5") // <--- ESTO EVITA QUE USE EL 2.5
+    );
 
-    // Prioridad: 1. Flash (Rápido), 2. Pro (Potente), 3. Cualquiera
-    const flash = validModels.find((m: any) => m.name.includes("flash"));
-    const pro = validModels.find((m: any) => m.name.includes("pro"));
+    // Prioridad: Buscamos la versión más reciente de la 1.5 Flash
+    const flash002 = validModels.find((m: any) => m.name.includes("gemini-1.5-flash-002"));
+    const flash001 = validModels.find((m: any) => m.name.includes("gemini-1.5-flash-001"));
+    const flashLegacy = validModels.find((m: any) => m.name.includes("flash"));
     
-    // Google devuelve "models/gemini-1.5-flash", el SDK a veces prefiere sin prefijo
-    const bestMatch = flash?.name || pro?.name || "models/gemini-1.5-flash";
+    // Selección en cascada (Fallback seguro)
+    const bestMatch = flash002?.name || flash001?.name || flashLegacy?.name || "models/gemini-1.5-flash";
     
     CACHED_MODEL = bestMatch.replace("models/", "");
-    console.log("📡 Radar: Modelo seleccionado ->", CACHED_MODEL);
+    console.log("📡 Radar Seguro: Modelo seleccionado ->", CACHED_MODEL);
     
     return CACHED_MODEL!;
   } catch (e) {
-    console.warn("⚠️ Radar falló, usando fallback seguro.");
-    return "gemini-1.5-flash"; // Fallback de emergencia
+    console.warn("⚠️ Radar falló, usando fallback blindado.");
+    return "gemini-1.5-flash-001"; // Fallback manual ultra seguro
   }
 }
 
@@ -85,7 +88,7 @@ const cleanJSON = (text: string) => {
 };
 
 // ==========================================
-// 4. MOTOR DE PERSONALIDAD CLÍNICA (MEJORA CLAVE)
+// 4. MOTOR DE PERSONALIDAD CLÍNICA
 // ==========================================
 const getSpecialtyPromptConfig = (specialty: string) => {
   const configs: Record<string, any> = {
@@ -130,14 +133,14 @@ const getSpecialtyPromptConfig = (specialty: string) => {
 };
 
 // ==========================================
-// 5. SERVICIO PRINCIPAL (CLIENTE PURO CON CEREBRO AVANZADO)
+// 5. SERVICIO PRINCIPAL
 // ==========================================
 export const GeminiMedicalService = {
 
   // --- NOTA CLÍNICA (SOAP) ---
   async generateClinicalNote(transcript: string, specialty: string = "Medicina General", patientHistory: string = ""): Promise<GeminiResponse> {
     try {
-      // 1. Protocolo Radar (Evita error 404)
+      // 1. Radar Seguro (Solo 1.5)
       const modelName = await resolveBestModel();
       
       const genAI = new GoogleGenerativeAI(API_KEY);
@@ -150,20 +153,20 @@ export const GeminiMedicalService = {
       const currentDate = now.toLocaleDateString('es-MX', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
       const currentTime = now.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
 
-      // 2. Inyección de Personalidad (Mejora de Inteligencia)
+      // 2. Inyección de Personalidad
       const profile = getSpecialtyPromptConfig(specialty);
 
-      // 3. Prompt Maestro v4.0 (Blindaje Legal + Rol Híbrido)
+      // 3. Prompt Maestro v4.1
       const prompt = `
         ROL DEL SISTEMA (HÍBRIDO):
         Actúas como "MediScribe AI", un asistente de documentación clínica administrativa.
         SIN EMBARGO, posees el conocimiento clínico profundo de un: ${profile.role}.
 
         TU OBJETIVO: 
-        Procesar la transcripción y generar una Nota de Evolución (SOAP) estructurada y técnica, pero manteniendo un perfil legal de "Asistente de Apoyo" (NOM-024).
+        Procesar la transcripción y generar una Nota de Evolución (SOAP) estructurada y técnica.
 
         CONTEXTO LEGAL Y DE SEGURIDAD (CRÍTICO):
-        1. NO DIAGNOSTICAS: Eres software de gestión. Nunca afirmes una enfermedad como absoluta. Usa "Cuadro compatible con", "Probable".
+        1. NO DIAGNOSTICAS: Eres software de gestión. Usa "Cuadro compatible con", "Probable".
         2. DETECCIÓN DE RIESGOS (TRIAJE): Tu prioridad #1 es identificar "Red Flags".
            - Si detectas peligro vital o funcional, el campo 'risk_analysis' DEBE ser 'Alto'.
         3. FILTRADO DE RUIDO: Prioriza lo que el paciente describe fisiológicamente sobre lo que cree tener.
@@ -201,7 +204,6 @@ export const GeminiMedicalService = {
         }
       `;
 
-      // 4. Ejecución Cliente (Sin Edge Function)
       const result = await model.generateContent(prompt);
       const textResponse = result.response.text();
       
@@ -275,14 +277,14 @@ export const GeminiMedicalService = {
     try {
        const modelName = await resolveBestModel();
        const genAI = new GoogleGenerativeAI(API_KEY);
-       const model = genAI.getGenerativeModel({ model: modelName }); // Chat no requiere JSON forzoso
+       const model = genAI.getGenerativeModel({ model: modelName });
        
        const result = await model.generateContent(`CONTEXTO: ${context}. USUARIO: ${userMessage}. RESPUESTA PROFESIONAL:`);
        return result.response.text();
     } catch (e) { return "Error de conexión con IA."; }
   },
 
-  // --- COMPATIBILIDAD (Helpers) ---
+  // --- COMPATIBILIDAD ---
   async generatePatientInsights(p: string, h: string, c: string[]): Promise<PatientInsight> { return this.generatePatient360Analysis(p, h, c); },
   async generateQuickRxJSON(t: string, p: string): Promise<MedicationItem[]> { return this.extractMedications(t); },
   async generatePrescriptionOnly(t: string): Promise<string> { return "Use extractMedications."; },
