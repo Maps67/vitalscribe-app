@@ -1,8 +1,59 @@
-import { supabase } from '../lib/supabase';
-import { PatientInsight, GeminiResponse, MedicationItem, FollowUpMessage } from '../types';
+import { GoogleGenerativeAI } from "@google/generative-ai";
+import { PatientInsight, MedicationItem, FollowUpMessage } from '../types';
 
 // ==========================================
-// 1. DEFINICIÓN DE TIPOS (Contrato de Datos)
+// 1. CONFIGURACIÓN Y MODELOS DE RESPALDO
+// ==========================================
+const API_KEY = import.meta.env.VITE_GEMINI_API_KEY || import.meta.env.VITE_GOOGLE_GENAI_API_KEY || "";
+
+if (!API_KEY) console.error("⛔ FATAL: API Key no encontrada en .env");
+
+// LISTA DE INTENTOS: Si uno falla, prueba el siguiente automáticamente.
+const MODELS_TO_TRY = [
+  "gemini-1.5-flash",        // Rápido
+  "gemini-1.5-flash-001",    // Estable
+  "gemini-1.5-flash-002",    // Nuevo
+  "gemini-1.5-pro",          // Potente
+  "gemini-pro"               // Legado
+];
+
+// ==========================================
+// 2. UTILIDADES DE CONEXIÓN ROBUSTA
+// ==========================================
+const cleanJSON = (text: string) => {
+  let clean = text.replace(/```json/g, '').replace(/```/g, '');
+  const firstCurly = clean.indexOf('{');
+  const lastCurly = clean.lastIndexOf('}');
+  if (firstCurly !== -1 && lastCurly !== -1) {
+    clean = clean.substring(firstCurly, lastCurly + 1);
+  }
+  return clean.trim();
+};
+
+// MOTOR DE CONEXIÓN (El "Tanque"): Prueba modelos hasta conectar
+async function generateWithFailover(prompt: string): Promise<string> {
+  const genAI = new GoogleGenerativeAI(API_KEY);
+  let lastError: any = null;
+
+  for (const modelName of MODELS_TO_TRY) {
+    try {
+      // console.log(`🔄 Intentando con modelo: ${modelName}...`);
+      const model = genAI.getGenerativeModel({ model: modelName });
+      const result = await model.generateContent(prompt);
+      const text = result.response.text();
+      
+      if (text) return text; // ¡Éxito!
+    } catch (error: any) {
+      // Si falla, guardamos el error y el bucle sigue con el siguiente modelo
+      lastError = error;
+      continue;
+    }
+  }
+  throw lastError || new Error("Todos los modelos de IA fallaron. Verifica tu conexión.");
+}
+
+// ==========================================
+// 3. TIPOS
 // ==========================================
 export interface SoapNote {
   subjective: string;
@@ -17,55 +68,60 @@ export interface ConversationLine {
   text: string;
 }
 
-// --- MOTOR DE PERFILES CLÍNICOS (Frontend) ---
+export interface GeminiResponse {
+  conversation_log?: ConversationLine[]; 
+  clinicalNote?: string; 
+  soap?: SoapNote; 
+  risk_analysis?: { level: 'Bajo' | 'Medio' | 'Alto', reason: string };
+  patientInstructions?: string;
+  actionItems?: any;
+}
+
+// ==========================================
+// 4. MOTOR DE PERFILES CLÍNICOS (MEJORA CLAVE)
+// ==========================================
 const getSpecialtyPromptConfig = (specialty: string) => {
   const configs: Record<string, any> = {
     "Cardiología": {
       role: "Cardiólogo Intervencionista",
       focus: "Hemodinamia, ritmo, presión arterial, perfusión, soplos y riesgo cardiovascular.",
-      bias: "Prioriza el impacto hemodinámico. Traduce síntomas vagos a equivalentes cardiológicos.",
-      keywords: "Insuficiencia, FEVI, NYHA, Ritmo Sinusal, QT, Isquemia."
+      bias: "Prioriza el impacto hemodinámico. Traduce síntomas vagos a equivalentes cardiológicos."
     },
     "Traumatología y Ortopedia": {
       role: "Cirujano Ortopedista",
       focus: "Sistema musculoesquelético, arcos de movilidad, estabilidad, fuerza y marcha.",
-      bias: "Describe la biomecánica de la lesión.",
-      keywords: "Fractura, Esguince, Ligamento, Quirúrgico, Conservador, Neurovascular."
+      bias: "Describe la biomecánica de la lesión."
     },
     "Dermatología": {
       role: "Dermatólogo",
       focus: "Morfología de lesiones cutáneas (tipo, color, bordes), anejos y mucosas.",
-      bias: "Usa terminología dermatológica precisa.",
-      keywords: "ABCD, Fototipo, Dermatosis, Biopsia, Crioterapia."
+      bias: "Usa terminología dermatológica precisa."
     },
     "Pediatría": {
       role: "Pediatra",
       focus: "Desarrollo, crecimiento, hitos, alimentación y vacunación.",
-      bias: "Evalúa todo en contexto de la edad. Tono para padres.",
-      keywords: "Percentil, Desarrollo psicomotor, Lactancia, Esquema."
+      bias: "Evalúa todo en contexto de la edad. Tono para padres."
     },
     "Medicina General": {
       role: "Médico de Familia",
       focus: "Visión integral, semiología general y referencia.",
-      bias: "Enfoque holístico.",
-      keywords: "Sintomático, Referencia, Preventivo."
+      bias: "Enfoque holístico."
     }
   };
 
   return configs[specialty] || {
     role: `Especialista en ${specialty}`,
     focus: `Patologías de ${specialty}.`,
-    bias: `Criterios clínicos de ${specialty}.`,
-    keywords: "Términos técnicos."
+    bias: `Criterios clínicos de ${specialty}.`
   };
 };
 
 // ==========================================
-// 2. SERVICIO PRINCIPAL (CLIENTE EDGE PURO)
+// 5. SERVICIO PRINCIPAL (CLIENTE PURO)
 // ==========================================
 export const GeminiMedicalService = {
 
-  // --- GENERACIÓN DE NOTA CLÍNICA (VÍA EDGE FUNCTION) ---
+  // --- NOTA CLÍNICA ---
   async generateClinicalNote(transcript: string, specialty: string = "Medicina General", patientHistory: string = ""): Promise<GeminiResponse> {
     try {
       const now = new Date();
@@ -75,19 +131,19 @@ export const GeminiMedicalService = {
       const cleanTranscript = transcript.replace(/"/g, "'").trim();
       const profile = getSpecialtyPromptConfig(specialty);
 
-      // Prompt Maestro v3.2
       const prompt = `
         ROL DEL SISTEMA (HÍBRIDO):
-        Actúas como "MediScribe AI", un asistente de documentación clínica administrativa con el conocimiento profundo de un: ${profile.role}.
+        Actúas como "MediScribe AI", un asistente de documentación clínica administrativa.
+        SIN EMBARGO, posees el conocimiento clínico profundo de un: ${profile.role}.
 
-        OBJETIVO: 
+        TU OBJETIVO: 
         Procesar la transcripción y generar una Nota de Evolución (SOAP) estructurada y técnica.
 
         CONTEXTO LEGAL Y DE SEGURIDAD (CRÍTICO):
         1. NO DIAGNOSTICAS: Eres software de gestión. Usa "Cuadro compatible con", "Probable".
         2. DETECCIÓN DE RIESGOS (TRIAJE): Tu prioridad #1 es identificar "Red Flags".
-           - Si detectas peligro vital, 'risk_analysis' DEBE ser 'Alto'.
-        3. FILTRADO: Prioriza lo fisiológico sobre lo anecdótico.
+           - Si detectas peligro vital o funcional, el campo 'risk_analysis' DEBE ser 'Alto'.
+        3. FILTRADO DE RUIDO: Prioriza lo fisiológico sobre lo anecdótico.
 
         LENTE CLÍNICO (${specialty}):
         - ENFOQUE: ${profile.focus}
@@ -95,6 +151,7 @@ export const GeminiMedicalService = {
         
         CONTEXTO:
         - Fecha: ${currentDate} ${currentTime}
+        - Historial: "${patientHistory}"
         
         TRANSCRIPCIÓN:
         "${cleanTranscript}"
@@ -114,25 +171,13 @@ export const GeminiMedicalService = {
         }
       `;
 
-      // 🔥 LLAMADA A LA BÓVEDA (EDGE FUNCTION)
-      const { data, error } = await supabase.functions.invoke('gemini-proxy', {
-        body: { 
-          prompt: prompt,
-          history: patientHistory // Memoria RAG
-        }
-      });
-
-      if (error) throw new Error(`Error de conexión con IA: ${error.message}`);
-      if (!data || !data.result) throw new Error("La IA no devolvió una respuesta válida.");
-
-      const rawText = data.result;
-      const cleanJson = rawText.replace(/```json/g, "").replace(/```/g, "").trim();
+      // USAMOS FAILOVER DIRECTO (Sin Edge Functions)
+      const rawText = await generateWithFailover(prompt);
       
       try {
-        return JSON.parse(cleanJson) as GeminiResponse;
+        return JSON.parse(cleanJSON(rawText)) as GeminiResponse;
       } catch (parseError) {
-        console.error("Error parseando JSON de IA:", rawText);
-        throw new Error("La respuesta de la IA no tiene el formato correcto.");
+        throw new Error("La IA respondió pero el JSON es inválido.");
       }
 
     } catch (error: any) { 
@@ -141,7 +186,7 @@ export const GeminiMedicalService = {
     }
   },
 
-  // --- BALANCE CLÍNICO 360 (VÍA EDGE FUNCTION) ---
+  // --- BALANCE CLÍNICO 360 ---
   async generatePatient360Analysis(patientName: string, historySummary: string, consultations: string[]): Promise<PatientInsight> {
       try {
         const contextText = consultations.length > 0 
@@ -151,17 +196,8 @@ export const GeminiMedicalService = {
         const prompt = `
             ACTÚA COMO: Auditor Médico Senior.
             OBJETIVO: Balance Clínico 360 para "${patientName}".
-            
-            DATOS:
-            1. Antecedentes: ${historySummary || "No registrados"}
-            2. Historial Reciente:
-            ${contextText}
-
-            ANÁLISIS REQUERIDO:
-            1. EVOLUCIÓN: Trayectoria clínica (Mejoría/Deterioro).
-            2. AUDITORÍA RX: Fármacos recetados y efectividad.
-            3. RIESGOS: Banderas rojas latentes.
-            4. PENDIENTES: Acciones no cerradas.
+            HISTORIAL: ${historySummary || "No registrados"}
+            CONSULTAS: ${contextText}
 
             JSON SALIDA:
             {
@@ -172,57 +208,33 @@ export const GeminiMedicalService = {
             }
         `;
 
-        // 🔥 LLAMADA A LA BÓVEDA
-        const { data, error } = await supabase.functions.invoke('gemini-proxy', {
-            body: { prompt }
-        });
-
-        if (error) throw error;
-        const cleanJson = data.result.replace(/```json/g, "").replace(/```/g, "").trim();
-        return JSON.parse(cleanJson) as PatientInsight;
+        const rawText = await generateWithFailover(prompt);
+        return JSON.parse(cleanJSON(rawText)) as PatientInsight;
 
       } catch (e) { 
-          console.error("Error 360:", e);
-          throw e; 
+          return { evolution: "No disponible", medication_audit: "", risk_flags: [], pending_actions: [] };
       }
   },
 
-  // --- EXTRAER MEDICAMENTOS (VÍA EDGE FUNCTION) ---
+  // --- EXTRAER MEDICAMENTOS ---
   async extractMedications(text: string): Promise<MedicationItem[]> {
     const cleanText = text.replace(/["“”]/g, "").trim(); 
     if (!cleanText) return [];
     try {
-      const { data, error } = await supabase.functions.invoke('gemini-proxy', {
-        body: {
-          prompt: `ACTÚA COMO: Farmacéutico. EXTRAE: Medicamentos de "${cleanText}". JSON ARRAY: [{"drug": "Nombre", "details": "Dosis", "frequency": "Frecuencia", "duration": "Duración", "notes": "Notas"}]`
-        }
-      });
-
-      if (!error && data?.result) {
-        let cleanJson = typeof data.result === 'string' ? data.result : JSON.stringify(data.result);
-        cleanJson = cleanJson.replace(/```json/g, "").replace(/```/g, "").trim();
-
-        const first = cleanJson.indexOf('[');
-        const last = cleanJson.lastIndexOf(']');
-        if (first !== -1 && last !== -1) {
-           const parsed = JSON.parse(cleanJson.substring(first, last + 1));
-           if (Array.isArray(parsed)) return parsed;
-        }
-      }
-    } catch (e) {}
-    return [{ drug: cleanText, details: "Revisar dosis", frequency: "", duration: "", notes: "" }];
+      const prompt = `ACTÚA COMO: Farmacéutico. EXTRAE: Medicamentos de "${cleanText}". JSON ARRAY: [{"drug": "Nombre", "details": "Dosis", "frequency": "Frecuencia", "duration": "Duración", "notes": "Notas"}]`;
+      
+      const rawText = await generateWithFailover(prompt);
+      const res = JSON.parse(cleanJSON(rawText));
+      return Array.isArray(res) ? res : [];
+    } catch (e) { return []; }
   },
 
-  // --- CHAT CONTEXTUAL (VÍA EDGE FUNCTION) ---
+  // --- CHAT CONTEXTUAL ---
   async chatWithContext(context: string, userMessage: string): Promise<string> {
     try {
         const prompt = `CONTEXTO: ${context}. PREGUNTA: "${userMessage}". RESPUESTA BREVE Y PROFESIONAL:`;
-        const { data, error } = await supabase.functions.invoke('gemini-proxy', {
-            body: { prompt }
-        });
-        if (error || !data) return "Error de conexión con el Asistente.";
-        return data.result;
-    } catch (e) { return "Error chat"; }
+        return await generateWithFailover(prompt);
+    } catch (e) { return "Error de conexión con el Asistente."; }
   },
 
   // --- COMPATIBILIDAD ---
