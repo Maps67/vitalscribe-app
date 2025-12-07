@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Calendar, MapPin, ChevronRight, Sun, Moon, Bell, CloudRain, Cloud, 
@@ -6,10 +6,10 @@ import {
   Stethoscope, UserCircle, ArrowRight, AlertTriangle, FileText,
   Clock, TrendingUp, UserPlus, Zap, Activity, LogOut,
   CalendarX, RefreshCcw, UserX, Trash2, MoreHorizontal, AlertCircle,
-  Repeat, Ban // Iconos para la mejora visual
+  Repeat, Ban 
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { format, isToday, isTomorrow, parseISO, startOfDay, endOfDay, addDays, isPast, addMinutes } from 'date-fns';
+import { format, isToday, isTomorrow, parseISO, startOfDay, endOfDay, addDays, isPast } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { getTimeOfDayGreeting } from '../utils/greetingUtils';
 import { toast } from 'sonner';
@@ -20,6 +20,7 @@ import { AgentResponse } from '../services/GeminiAgent';
 import { UploadMedico } from '../components/UploadMedico';
 import { DoctorFileGallery } from '../components/DoctorFileGallery';
 
+// INTERFAZ OPTIMIZADA: Incluye campo para pre-cálculo de alertas
 interface DashboardAppointment {
   id: string;
   title: string;
@@ -29,7 +30,10 @@ interface DashboardAppointment {
     name: string;
     history?: string; 
   };
+  criticalAlert?: string | null; // Optimización de rendimiento
 }
+
+// --- SUB-COMPONENTES AUXILIARES ---
 
 const AssistantButtonSmall = ({ onClick }: { onClick: () => void }) => (
   <button 
@@ -57,7 +61,6 @@ const LiveClockDesktop = () => {
             <span className="text-xl font-medium opacity-80">{format(time, 'a')}</span>
         </div>
       </div>
-      {/* LIMPIEZA VISUAL: Se eliminó border-t para evitar líneas negras */}
       <span className="text-sm font-bold uppercase tracking-[0.2em] opacity-90 mt-1 pt-1 px-4">
         {format(time, "EEEE d 'de' MMMM", { locale: es })}
       </span>
@@ -269,7 +272,7 @@ const QuickActions = ({ navigate }: { navigate: any }) => (
           </div>
           <div className="text-left">
               <p className="font-bold text-sm">Nueva Consulta IA</p>
-              <p className="text-[10px] text-teal-100 opacity-90">Grabar y transcribir</p>
+              <p className="text-left text-[10px] text-teal-100 opacity-90">Grabar y transcribir</p>
           </div>
       </button>
 
@@ -291,6 +294,8 @@ const QuickActions = ({ navigate }: { navigate: any }) => (
   </div>
 );
 
+// --- COMPONENTE PRINCIPAL OPTIMIZADO ---
+
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const [doctorName, setDoctorName] = useState<string>('');
@@ -299,7 +304,6 @@ const Dashboard: React.FC = () => {
   const [weather, setWeather] = useState({ temp: '--', code: 0 });
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [isAssistantOpen, setIsAssistantOpen] = useState(false);
-  
   const [totalConsultations, setTotalConsultations] = useState(0);
   
   const now = new Date();
@@ -308,6 +312,7 @@ const Dashboard: React.FC = () => {
   const dateStr = now.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' });
   const dynamicGreeting = useMemo(() => getTimeOfDayGreeting(doctorName), [doctorName]);
 
+  // OPTIMIZACIÓN GEOLOCALIZACIÓN: Manejo de errores
   useEffect(() => {
     if ("geolocation" in navigator) {
         navigator.geolocation.getCurrentPosition(async (position) => {
@@ -319,7 +324,9 @@ const Dashboard: React.FC = () => {
                     temp: Math.round(data.current.temperature_2m).toString(), 
                     code: data.current.weather_code 
                 });
-            } catch (e) { console.log("Error clima", e); }
+            } catch (e) { console.log("Error clima API", e); }
+        }, (error) => {
+            console.warn("Ubicación denegada/error", error);
         });
     }
   }, []);
@@ -344,89 +351,101 @@ const Dashboard: React.FC = () => {
 
   const leftTextColor = isNight ? "text-slate-300" : "text-teal-800";
 
-  const fetchData = async () => {
+  // Helper para procesar alergias FUERA del renderizado (Mejora de Performance)
+  const extractAllergies = (historyJSON: string | undefined): string | null => {
+      if (!historyJSON) return null;
+      try {
+          const h = JSON.parse(historyJSON);
+          const allergies = h.allergies || h.legacyNote;
+          const clean = allergies?.replace(/^alergia[s]?\s*[:]\s*/i, '') || '';
+          return (clean && clean.length > 2 && !clean.toLowerCase().includes("negada")) ? clean : null;
+      } catch { return null; }
+  };
+
+  // OPTIMIZACIÓN FETCH DATA: Consulta limpia y única
+  const fetchData = useCallback(async () => {
       try {
           const { data: { user } } = await supabase.auth.getUser();
-          if (user) {
-              const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', user.id).single();
-              const rawName = profile?.full_name?.split(' ')[0] || 'Colega';
-              setDoctorName(`Dr. ${rawName}`);
+          if (!user) return;
 
-              const { count } = await supabase
-                  .from('consultations')
-                  .select('*', { count: 'exact', head: true })
-                  .eq('doctor_id', user.id);
-              
-              setTotalConsultations(count || 0);
+          const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', user.id).single();
+          const rawName = profile?.full_name?.split(' ')[0] || 'Colega';
+          setDoctorName(`Dr. ${rawName}`);
 
-              const todayStart = startOfDay(new Date()); 
-              const nextWeekEnd = endOfDay(addDays(new Date(), 7));
+          const { count } = await supabase
+              .from('consultations')
+              .select('*', { count: 'exact', head: true })
+              .eq('doctor_id', user.id);
+          setTotalConsultations(count || 0);
 
-              let query = supabase
-                  .from('appointments')
-                  .select(`id, title, start_time, status, patient:patients (name, history)`)
-                  .eq('doctor_id', user.id)
-                  .gte('start_time', todayStart.toISOString())
-                  .lte('start_time', nextWeekEnd.toISOString())
-                  .order('start_time', { ascending: true })
-                  .limit(10);
+          const todayStart = startOfDay(new Date()); 
+          const nextWeekEnd = endOfDay(addDays(new Date(), 7));
 
-              let { data: aptsData, error } = await query;
+          // Consulta optimizada (Sin fallback waterfall)
+          const { data: aptsData, error } = await supabase
+              .from('appointments')
+              .select(`id, title, start_time, status, patient:patients (name, history)`)
+              .eq('doctor_id', user.id)
+              .gte('start_time', todayStart.toISOString())
+              .lte('start_time', nextWeekEnd.toISOString())
+              .neq('status', 'cancelled') // Filtrar canceladas para limpiar vista
+              .order('start_time', { ascending: true })
+              .limit(15);
 
-              if (error || !aptsData) {
-                  const fallbackQuery = supabase
-                      .from('appointments')
-                      .select(`id, title, start_time, status, patient:patients (name, history)`)
-                      .eq('user_id', user.id)
-                      .gte('start_time', todayStart.toISOString())
-                      .lte('start_time', nextWeekEnd.toISOString())
-                      .order('start_time', { ascending: true })
-                      .limit(10);
-                  const res = await fallbackQuery;
-                  if (!res.error) aptsData = res.data;
-              }
+          if (error) throw error;
 
-              if (aptsData) {
-                  const formattedApts: DashboardAppointment[] = aptsData.map((item: any) => ({
-                      id: item.id,
-                      title: item.title,
-                      start_time: item.start_time,
-                      status: item.status,
-                      patient: item.patient
-                  }));
-                  setAppointments(formattedApts);
-              }
+          if (aptsData) {
+              const formattedApts: DashboardAppointment[] = aptsData.map((item: any) => ({
+                  id: item.id,
+                  title: item.title,
+                  start_time: item.start_time,
+                  status: item.status,
+                  patient: item.patient,
+                  // Pre-cálculo de alerta (1 vez) en lugar de en cada render (N veces)
+                  criticalAlert: extractAllergies(item.patient?.history) 
+              }));
+              setAppointments(formattedApts);
           }
-      } catch (e) { console.error(e); } finally { setLoading(false); }
-  };
+      } catch (e) { 
+          console.error("Error cargando dashboard:", e);
+      } finally { 
+          setLoading(false); 
+      }
+  }, []);
 
   useEffect(() => {
     window.addEventListener('focus', fetchData);
     fetchData();
     return () => window.removeEventListener('focus', fetchData);
-  }, []);
+  }, [fetchData]);
 
+  // SEGURIDAD: Soft Delete (Actualizar estado en lugar de borrar)
   const handleQuickAction = async (action: 'reschedule' | 'noshow' | 'cancel', apt: DashboardAppointment) => {
     try {
         if (action === 'noshow') {
-            await supabase.from('appointments').update({ status: 'cancelled', notes: 'No asistió (Marcado desde Dashboard)' }).eq('id', apt.id);
+            await supabase.from('appointments')
+                .update({ status: 'cancelled', notes: 'No asistió (Marcado desde Dashboard)' })
+                .eq('id', apt.id);
             toast.success("Marcado como inasistencia");
         } else if (action === 'cancel') {
-            if(confirm('¿Cancelar cita?')) {
-                await supabase.from('appointments').delete().eq('id', apt.id);
-                toast.success("Cita cancelada");
+            if(confirm('¿Seguro que desea cancelar esta cita?')) {
+                // CAMBIO CRÍTICO: No usamos .delete(), usamos update status
+                await supabase.from('appointments')
+                    .update({ status: 'cancelled', notes: 'Cancelada por el usuario desde Dashboard' })
+                    .eq('id', apt.id);
+                toast.success("Cita cancelada correctamente");
             } else return;
         } else if (action === 'reschedule') {
             const newDate = addDays(parseISO(apt.start_time), 1);
-            await supabase.from('appointments').update({ start_time: newDate.toISOString() }).eq('id', apt.id);
+            await supabase.from('appointments')
+                .update({ start_time: newDate.toISOString(), status: 'scheduled' })
+                .eq('id', apt.id);
             toast.success("Reagendada para mañana");
         }
         fetchData();
     } catch (e) { toast.error("Error al actualizar cita"); }
   };
 
-  const formatTime = (isoString: string) => format(parseISO(isoString), 'h:mm a', { locale: es });
-  
   const getDayLabel = (isoString: string) => {
     const date = parseISO(isoString);
     if (isToday(date)) return 'Hoy';
@@ -434,39 +453,18 @@ const Dashboard: React.FC = () => {
     return format(date, 'EEEE d', { locale: es });
   };
 
-  const groupedAppointments = appointments.reduce((acc, apt) => {
+  const groupedAppointments = useMemo(() => appointments.reduce((acc, apt) => {
     const day = getDayLabel(apt.start_time);
     if (!acc[day]) acc[day] = [];
     acc[day].push(apt);
     return acc;
-  }, {} as Record<string, DashboardAppointment[]>);
+  }, {} as Record<string, DashboardAppointment[]>), [appointments]);
 
-  const todayAppointments = appointments.filter(a => isToday(parseISO(a.start_time)));
+  const todayAppointments = useMemo(() => appointments.filter(a => isToday(parseISO(a.start_time))), [appointments]);
   const pendingCount = todayAppointments.filter(a => a.status === 'scheduled').length;
   const completedCount = todayAppointments.filter(a => a.status === 'completed').length;
   const totalToday = todayAppointments.length || 1;
   const progressPercent = Math.round((completedCount / totalToday) * 100);
-
-  const getCriticalTags = (historyJSON: string | undefined) => {
-    if (!historyJSON) return null;
-    try {
-        const h = JSON.parse(historyJSON);
-        const allergies = h.allergies || h.legacyNote;
-        const cleanAllergies = allergies?.replace(/^alergia[s]?\s*[:]\s*/i, '') || '';
-        const hasCritical = cleanAllergies && cleanAllergies.length > 2 && !cleanAllergies.toLowerCase().includes("negada");
-
-        if (!hasCritical) return null;
-
-        return (
-            <div className="mt-1 flex flex-wrap gap-1">
-                <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700 border border-red-200 animate-pulse">
-                    <AlertTriangle size={10} className="mr-1"/> 
-                    {cleanAllergies.length > 20 ? cleanAllergies.substring(0, 20) + '...' : cleanAllergies}
-                </span>
-            </div>
-        );
-    } catch (e) { return null; }
-  };
 
   return (
     <div className={`min-h-screen ${antiFatigueBg} font-sans w-full overflow-x-hidden flex flex-col relative transition-colors duration-500`}>
@@ -527,7 +525,7 @@ const Dashboard: React.FC = () => {
 
         {/* VERSIÓN MÓVIL */}
         <div className="md:hidden">
-            <div className={`${mobileHeroStyle.bg} ${mobileHeroStyle.text} rounded-3xl p-6 shadow-lg relative overflow-hidden flex justify-between items-center transition-all duration-500 w-full min-h-[140px]`}>
+             <div className={`${mobileHeroStyle.bg} ${mobileHeroStyle.text} rounded-3xl p-6 shadow-lg relative overflow-hidden flex justify-between items-center transition-all duration-500 w-full min-h-[140px]`}>
                 <div className="relative z-10 flex-1">
                     <div className="flex items-center gap-2 mb-2">
                         <div className={`backdrop-blur-md px-2 py-1 rounded-md flex items-center gap-1.5 ${mobileHeroStyle.darkText ? 'bg-teal-900/10' : 'bg-white/20'}`}>
@@ -555,7 +553,7 @@ const Dashboard: React.FC = () => {
             </div>
         </div>
 
-        {/* VERSIÓN PC (LIMPIEZA APLICADA) */}
+        {/* VERSIÓN PC */}
         <div className={`hidden md:flex ${panoramicGradient} rounded-[2rem] shadow-xl h-56 relative overflow-hidden transition-all duration-1000 border-none`}>
             <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-[0.03]"></div>
 
@@ -615,6 +613,8 @@ const Dashboard: React.FC = () => {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2 space-y-6">
+                
+                {/* Botón Móvil Upload */}
                 <button onClick={() => setIsUploadModalOpen(true)} className="md:hidden w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-4 rounded-xl flex items-center justify-between shadow-sm active:scale-95 transition-transform">
                   <div className="flex items-center gap-3">
                     <div className="bg-teal-50 dark:bg-teal-900/30 p-3 rounded-full text-brand-teal"><Upload size={20} /></div>
@@ -660,7 +660,6 @@ const Dashboard: React.FC = () => {
                                         {dayApts.map((apt) => {
                                             const isOverdue = isPast(parseISO(apt.start_time)) && apt.status === 'scheduled';
                                             const aptDate = parseISO(apt.start_time);
-                                            
                                             const displayName = apt.patient?.name || apt.title || "Cita sin nombre";
                                             const displaySubtitle = apt.patient?.name 
                                                 ? (apt.title && apt.title !== apt.patient.name ? apt.title : 'Consulta General') 
@@ -676,7 +675,14 @@ const Dashboard: React.FC = () => {
                                                             <h4 className="font-bold text-slate-800 dark:text-white text-base leading-tight group-hover:text-brand-teal transition-colors">
                                                                 {displayName}
                                                             </h4>
-                                                            {getCriticalTags(apt.patient?.history)}
+                                                            {apt.criticalAlert && (
+                                                                <div className="mt-1 flex flex-wrap gap-1">
+                                                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700 border border-red-200 animate-pulse">
+                                                                        <AlertTriangle size={10} className="mr-1"/> 
+                                                                        {apt.criticalAlert.length > 20 ? apt.criticalAlert.substring(0, 20) + '...' : apt.criticalAlert}
+                                                                    </span>
+                                                                </div>
+                                                            )}
                                                             <span className="text-xs text-slate-500 font-medium mt-0.5">{displaySubtitle}</span>
                                                         </div>
                                                         <div className="text-right">
@@ -695,27 +701,15 @@ const Dashboard: React.FC = () => {
                                                             </div>
 
                                                             <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
-                                                                <button 
-                                                                    onClick={(e) => {e.stopPropagation(); handleQuickAction('reschedule', apt)}} 
-                                                                    className="flex items-center gap-1.5 py-1.5 px-3 rounded-full bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/20 dark:hover:bg-blue-900/40 border border-blue-100 dark:border-blue-800 transition-all active:scale-95 group whitespace-nowrap"
-                                                                >
+                                                                <button onClick={(e) => {e.stopPropagation(); handleQuickAction('reschedule', apt)}} className="flex items-center gap-1.5 py-1.5 px-3 rounded-full bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/20 dark:hover:bg-blue-900/40 border border-blue-100 dark:border-blue-800 transition-all active:scale-95 group whitespace-nowrap">
                                                                     <Repeat size={14} className="text-blue-600 dark:text-blue-400 group-hover:rotate-180 transition-transform duration-500"/>
                                                                     <span className="text-[10px] font-bold text-blue-700 dark:text-blue-300">Reagendar</span>
                                                                 </button>
-
-                                                                <button 
-                                                                    onClick={(e) => {e.stopPropagation(); handleQuickAction('noshow', apt)}} 
-                                                                    className="flex items-center gap-1.5 py-1.5 px-3 rounded-full bg-amber-50 hover:bg-amber-100 dark:bg-amber-900/20 dark:hover:bg-amber-900/40 border border-amber-100 dark:border-amber-800 transition-all active:scale-95 group whitespace-nowrap"
-                                                                >
+                                                                <button onClick={(e) => {e.stopPropagation(); handleQuickAction('noshow', apt)}} className="flex items-center gap-1.5 py-1.5 px-3 rounded-full bg-amber-50 hover:bg-amber-100 dark:bg-amber-900/20 dark:hover:bg-amber-900/40 border border-amber-100 dark:border-amber-800 transition-all active:scale-95 group whitespace-nowrap">
                                                                     <UserX size={14} className="text-amber-600 dark:text-amber-400"/>
                                                                     <span className="text-[10px] font-bold text-amber-700 dark:text-amber-300">No Vino</span>
                                                                 </button>
-
-                                                                <button 
-                                                                    onClick={(e) => {e.stopPropagation(); handleQuickAction('cancel', apt)}} 
-                                                                    className="flex items-center gap-1.5 py-1.5 px-3 rounded-full bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/40 border border-red-100 dark:border-red-800 transition-all active:scale-95 group whitespace-nowrap"
-                                                                    title="Cancelar Cita"
-                                                                >
+                                                                <button onClick={(e) => {e.stopPropagation(); handleQuickAction('cancel', apt)}} className="flex items-center gap-1.5 py-1.5 px-3 rounded-full bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/40 border border-red-100 dark:border-red-800 transition-all active:scale-95 group whitespace-nowrap" title="Cancelar Cita">
                                                                     <Ban size={14} className="text-red-600 dark:text-red-400 group-hover:shake"/>
                                                                     <span className="text-[10px] font-bold text-red-700 dark:text-red-300">Cancelar</span>
                                                                 </button>
