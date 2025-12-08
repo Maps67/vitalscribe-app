@@ -213,7 +213,8 @@ const QuickDocs = ({ openModal }: { openModal: (type: 'justificante' | 'certific
     </div>
 );
 
-const ActionRadar = ({ items }: { items: PendingItem[] }) => {
+// 🔴 MODIFICACIÓN: Se agrega prop onItemClick para interactividad
+const ActionRadar = ({ items, onItemClick }: { items: PendingItem[], onItemClick: (item: PendingItem) => void }) => {
     if (items.length === 0) return (
         <div className="bg-white dark:bg-slate-900 rounded-[2rem] p-6 border border-slate-100 shadow-sm flex flex-col items-center justify-center text-center h-48">
             <CheckCircle2 size={40} className="text-green-500 mb-2 opacity-50"/>
@@ -229,7 +230,8 @@ const ActionRadar = ({ items }: { items: PendingItem[] }) => {
             </h3>
             <div className="space-y-3 max-h-60 overflow-y-auto custom-scrollbar">
                 {items.map(item => (
-                    <div key={item.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100 cursor-pointer hover:bg-white hover:shadow-md transition-all group">
+                    // 🔴 MODIFICACIÓN: Se agrega onClick
+                    <div key={item.id} onClick={() => onItemClick(item)} className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100 cursor-pointer hover:bg-white hover:shadow-md transition-all group">
                         <div className={`w-2 h-2 rounded-full ${item.type === 'note' ? 'bg-red-500' : 'bg-amber-500'}`}></div>
                         <div className="flex-1">
                             <p className="text-sm font-bold text-slate-700">{item.title}</p>
@@ -390,6 +392,23 @@ const Dashboard: React.FC = () => {
       navigate('/consultation', { state: { patientData, linkedAppointmentId: apt.id } });
   };
 
+  // 🔴 NUEVA FUNCIÓN: Manejo de clics en el Radar
+  const handleRadarClick = (item: PendingItem) => {
+      if (item.type === 'note') {
+          // Si es nota incompleta, retomamos usando el ID de la consulta existente
+          navigate('/consultation', { state: { consultationId: item.id, isResume: true } });
+      } else if (item.type === 'appt') {
+           // Si es cita atrasada, intentamos iniciarla (Extrayendo nombre del subtítulo o usando genérico)
+           const patientName = item.subtitle.split('•')[0].trim();
+           navigate('/consultation', { 
+               state: { 
+                   linkedAppointmentId: item.id,
+                   patientData: { id: 'radar_temp', name: patientName, isGhost: true } 
+               } 
+           });
+      }
+  };
+
   return (
     <div className="min-h-screen bg-[#F8FAFC] dark:bg-slate-950 font-sans w-full pb-32 md:pb-8 relative overflow-hidden">
       
@@ -463,7 +482,9 @@ const Dashboard: React.FC = () => {
 
              {/* ZONA DERECHA */}
              <div className="xl:col-span-4 flex flex-col gap-8">
-                 <ActionRadar items={pendingItems} />
+                 {/* 🔴 MODIFICACIÓN: Pasamos el handler al Radar */}
+                 <ActionRadar items={pendingItems} onItemClick={handleRadarClick} />
+                 
                  <div className="bg-white dark:bg-slate-900 rounded-[2rem] border border-slate-100 dark:border-slate-800 shadow-xl shadow-slate-200/50 dark:shadow-none flex-1 flex flex-col min-h-[400px]">
                       <div className="flex p-2 gap-2 bg-slate-50/50 border-b border-slate-100">
                           <button onClick={() => setToolsTab('notes')} className={`flex-1 py-3 rounded-xl text-xs font-bold uppercase transition-all ${toolsTab === 'notes' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400'}`}><PenLine size={14} className="inline mr-2"/> Notas</button>
