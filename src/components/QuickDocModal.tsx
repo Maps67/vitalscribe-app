@@ -60,10 +60,14 @@ export const QuickDocModal: React.FC<QuickDocModalProps> = ({ isOpen, onClose, d
             bodyText = content || "Sin prescripciones agregadas.";
         }
 
+        // 🔴 IDENTIDAD MÉDICA: PREFIJO FORZOSO 🔴
+        const rawName = doctorProfile?.full_name || '';
+        const doctorNameForced = /^(Dr\.|Dra\.)/i.test(rawName) ? rawName : `Dr. ${rawName}`;
+
         // 3. Generar el PDF usando el motor unificado
         const blob = await pdf(
             <PrescriptionPDF 
-                doctorName={doctorProfile?.full_name || 'Dr.'}
+                doctorName={doctorNameForced} // Pasamos el nombre blindado
                 specialty={doctorProfile?.specialty || 'Medicina General'}
                 license={doctorProfile?.license_number || ''}
                 university={doctorProfile?.university || ''}

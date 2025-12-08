@@ -85,6 +85,14 @@ const PrescriptionPDF: React.FC<PrescriptionPDFProps> = ({
     });
   };
 
+  // 🔴 LÓGICA DE IDENTIDAD FORZOSA (Doble Check en Render) 🔴
+  const formatDoctorName = (name: string) => {
+      if (!name) return 'Dr. ';
+      const clean = name.trim();
+      return /^(Dr\.|Dra\.)/i.test(clean) ? clean : `Dr. ${clean}`;
+  };
+  const finalDoctorName = formatDoctorName(doctorName);
+
   const isValidUrl = (url?: string) => url && (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:image'));
 
   return (
@@ -97,7 +105,8 @@ const PrescriptionPDF: React.FC<PrescriptionPDFProps> = ({
              {isValidUrl(logoUrl) && <Image src={logoUrl!} style={styles.logo} />}
           </View>
           <View style={styles.doctorInfo}>
-            <Text style={styles.doctorName}>{doctorName || 'Médico Tratante'}</Text>
+            {/* Usamos finalDoctorName aquí */}
+            <Text style={styles.doctorName}>{finalDoctorName}</Text>
             <Text style={styles.specialty}>{specialty}</Text>
             <Text style={styles.detailsLegal}>{university || 'Institución no registrada'}</Text>
             <Text style={styles.detailsLegal}>Cédula Profesional: {license || 'En trámite'}</Text>
@@ -164,7 +173,8 @@ const PrescriptionPDF: React.FC<PrescriptionPDFProps> = ({
                  <View style={{height: 40}} /> 
              )}
              <View style={styles.signatureLine} />
-             <Text style={{fontSize: 9, marginTop: 4, fontFamily: 'Helvetica-Bold'}}>{doctorName}</Text>
+             {/* Usamos finalDoctorName aquí también */}
+             <Text style={{fontSize: 9, marginTop: 4, fontFamily: 'Helvetica-Bold'}}>{finalDoctorName}</Text>
              <Text style={{fontSize: 7, marginTop: 1}}>Céd. Prof. {license}</Text>
           </View>
         </View>
