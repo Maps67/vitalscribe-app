@@ -5,8 +5,7 @@ import {
   ShieldCheck, Upload, X, Bot, Mic, Square, Loader2, CheckCircle2,
   Stethoscope, UserCircle, ArrowRight, AlertTriangle, FileText,
   Clock, TrendingUp, UserPlus, Zap, Activity, LogOut,
-  CalendarX, RefreshCcw, UserX, Trash2, MoreHorizontal, AlertCircle,
-  Repeat, Ban, PlayCircle 
+  CalendarX, Repeat, Ban, PlayCircle, PenLine, Calculator
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { format, isToday, isTomorrow, parseISO, startOfDay, endOfDay, addDays, isPast } from 'date-fns';
@@ -20,6 +19,11 @@ import { AgentResponse } from '../services/GeminiAgent';
 import { UploadMedico } from '../components/UploadMedico';
 import { DoctorFileGallery } from '../components/DoctorFileGallery';
 
+// IMPORTACIÓN DE WIDGETS
+import { QuickNotes } from '../components/QuickNotes';
+import { MedicalCalculators } from '../components/MedicalCalculators';
+
+// --- INTERFACES & TIPOS ---
 interface DashboardAppointment {
   id: string;
   title: string;
@@ -33,57 +37,7 @@ interface DashboardAppointment {
   criticalAlert?: string | null;
 }
 
-const AssistantButtonSmall = ({ onClick }: { onClick: () => void }) => (
-  <button 
-    onClick={onClick}
-    className="group flex items-center gap-2 bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 text-white px-3 py-1.5 rounded-full shadow-md hover:shadow-lg transition-all active:scale-95 border border-indigo-400/50"
-  >
-    <Bot size={16} className="text-white animate-pulse" />
-    <span className="text-xs font-bold tracking-wide">Asistente V4</span>
-  </button>
-);
-
-const LiveClockDesktop = () => {
-  const [time, setTime] = useState(new Date());
-  useEffect(() => {
-    const timer = setInterval(() => setTime(new Date()), 1000);
-    return () => clearInterval(timer);
-  }, []);
-  return (
-    <div className="flex flex-col items-center justify-center text-white h-full drop-shadow-md">
-      <div className="flex items-baseline gap-2">
-        <span className="text-7xl font-black tracking-tighter leading-none">
-            {format(time, 'h:mm')}
-        </span>
-        <div className="flex flex-col">
-            <span className="text-xl font-medium opacity-80">{format(time, 'a')}</span>
-        </div>
-      </div>
-      <span className="text-sm font-bold uppercase tracking-[0.2em] opacity-90 mt-1 pt-1 px-4">
-        {format(time, "EEEE d 'de' MMMM", { locale: es })}
-      </span>
-    </div>
-  );
-};
-
-const LiveClockMobile = ({ isDark }: { isDark: boolean }) => {
-    const [time, setTime] = useState(new Date());
-    useEffect(() => {
-      const timer = setInterval(() => setTime(new Date()), 1000);
-      return () => clearInterval(timer);
-    }, []);
-    return (
-        <div className={`flex flex-col items-start mt-3 border-t pt-2 w-full ${isDark ? 'border-white/20' : 'border-teal-800/20'}`}>
-            <div className="text-3xl font-bold tracking-widest tabular-nums leading-none flex items-baseline">
-            {format(time, 'h:mm')}
-            <span className="text-sm ml-1 font-medium opacity-60">{format(time, 'a')}</span>
-            </div>
-            <div className="text-[10px] font-medium opacity-80 uppercase tracking-widest mt-1">
-            {format(time, "EEEE d 'de' MMMM", { locale: es })}
-            </div>
-        </div>
-    );
-};
+// --- COMPONENTES UI MICRO (Para mantener limpio el código) ---
 
 const AssistantModal = ({ isOpen, onClose, onActionComplete }: { isOpen: boolean; onClose: () => void; onActionComplete: () => void }) => {
   const { isListening, transcript, startListening, stopListening, resetTranscript } = useSpeechRecognition();
@@ -233,64 +187,109 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete }: { isOpen: boolean
   );
 };
 
-const RoiWidget = ({ totalSeconds }: { totalSeconds: number }) => {
-  const hoursSaved = (totalSeconds / 3600).toFixed(1);
-  const minutesSaved = Math.round(totalSeconds / 60);
-  
-  return (
-    <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-100 dark:border-slate-800 shadow-sm relative overflow-hidden group">
-      <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
-          <TrendingUp size={80} className="text-teal-500" />
-      </div>
-      <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-          <Clock size={14} /> Tiempo Real en Consulta
-      </h3>
-      <div className="flex items-baseline gap-2 mb-2">
-          <span className="text-4xl font-black text-slate-900 dark:text-white">{hoursSaved}</span>
-          <span className="text-sm font-bold text-slate-500 dark:text-slate-400">Horas</span>
-      </div>
-      <div className="bg-teal-50 dark:bg-teal-900/20 rounded-lg p-2 flex items-center gap-2 border border-teal-100 dark:border-teal-800/30">
-          <div className="bg-teal-500 rounded-full p-1">
-              <Zap size={10} className="text-white" fill="currentColor" />
-          </div>
-          <p className="text-xs font-medium text-teal-700 dark:text-teal-300">
-              Total acumulado: <span className="font-bold">{minutesSaved} minutos</span>.
-          </p>
-      </div>
-    </div>
-  );
+// --- WIDGET CLIMA/RELOJ COMPACTO (ESTRATÉGICO) ---
+const StatusWidget = ({ weather, totalApts, pendingApts, isNight }: { weather: any, totalApts: number, pendingApts: number, isNight: boolean }) => {
+    const [time, setTime] = useState(new Date());
+    useEffect(() => { const t = setInterval(() => setTime(new Date()), 1000); return () => clearInterval(t); }, []);
+    
+    // Cálculo de progreso
+    const completed = totalApts - pendingApts;
+    const progress = totalApts > 0 ? (completed / totalApts) * 100 : 0;
+
+    return (
+        <div className="bg-white dark:bg-slate-900 rounded-3xl p-5 border border-slate-100 dark:border-slate-800 shadow-sm h-full flex flex-col justify-between relative overflow-hidden">
+             {/* Fondo sutil */}
+             <div className="absolute top-0 right-0 p-4 opacity-5"><Activity size={80} /></div>
+
+             <div className="flex justify-between items-start z-10">
+                 <div>
+                     <p className="text-3xl font-black text-slate-800 dark:text-white tracking-tight leading-none">{format(time, 'h:mm')}<span className="text-sm font-bold text-slate-400 ml-1">{format(time, 'a')}</span></p>
+                     <p className="text-xs font-bold text-slate-400 uppercase tracking-wide mt-1">{format(time, "EEEE d, MMM", { locale: es })}</p>
+                 </div>
+                 <div className="text-right">
+                    <div className="flex items-center gap-2 justify-end">
+                        {isNight ? <Moon size={20} className="text-indigo-400"/> : <Sun size={20} className="text-amber-400"/>}
+                        <span className="text-xl font-bold text-slate-700 dark:text-slate-200">{weather.temp}°</span>
+                    </div>
+                    <p className="text-[10px] text-slate-400 font-medium">CDMX</p>
+                 </div>
+             </div>
+
+             <div className="mt-4 z-10">
+                 <div className="flex justify-between text-xs font-bold mb-1.5">
+                     <span className="text-slate-500">Progreso Diario</span>
+                     <span className="text-brand-teal">{completed}/{totalApts} Pacientes</span>
+                 </div>
+                 <div className="h-2 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                     <div className="h-full bg-gradient-to-r from-teal-400 to-teal-600 transition-all duration-1000" style={{width: `${progress}%`}}></div>
+                 </div>
+             </div>
+        </div>
+    );
 };
 
-const QuickActions = ({ navigate }: { navigate: any }) => (
-  <div className="grid grid-cols-1 gap-3">
-      <button onClick={() => navigate('/consultation')} className="flex items-center gap-3 p-4 bg-gradient-to-r from-teal-500 to-teal-600 rounded-2xl text-white shadow-lg shadow-teal-500/20 hover:scale-[1.02] transition-transform group">
-          <div className="bg-white/20 p-2 rounded-lg group-hover:bg-white/30 transition-colors">
-              <Stethoscope size={20} />
-          </div>
-          <div className="text-left">
-              <p className="font-bold text-sm">Nueva Consulta IA</p>
-              <p className="text-left text-[10px] text-teal-100 opacity-90">Grabar y transcribir</p>
-          </div>
-      </button>
+// --- TARJETA "NEXT PATIENT HERO" ---
+const HeroPatientCard = ({ nextApt, onStart }: { nextApt: DashboardAppointment | null, onStart: (apt: DashboardAppointment) => void }) => {
+    if (!nextApt) return (
+        <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-3xl p-6 h-full flex flex-col justify-center items-center text-center text-white relative overflow-hidden shadow-lg border border-slate-700">
+            <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
+            <div className="bg-white/10 p-3 rounded-full mb-3 backdrop-blur-sm"><CalendarX size={24} /></div>
+            <h3 className="text-xl font-bold">Agenda Libre</h3>
+            <p className="text-slate-400 text-sm mt-1 max-w-xs">No hay citas programadas para el resto del día. ¡Buen trabajo, Doctor!</p>
+        </div>
+    );
 
-      <div className="grid grid-cols-2 gap-3">
-          <button onClick={() => navigate('/patients')} className="flex flex-col items-center justify-center p-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl hover:border-slate-300 dark:hover:border-slate-600 hover:shadow-md transition-all group">
-              <div className="bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 p-2 rounded-full mb-2 group-hover:scale-110 transition-transform">
-                  <UserPlus size={18} />
-              </div>
-              <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Nuevo Paciente</span>
-          </button>
+    const isUrgent = isPast(parseISO(nextApt.start_time));
+    
+    return (
+        <div className="bg-white dark:bg-slate-900 rounded-3xl p-0 border border-slate-200 dark:border-slate-800 shadow-md h-full flex flex-col relative overflow-hidden group hover:border-teal-200 transition-colors">
+            {/* Banner Superior */}
+            <div className={`p-4 flex justify-between items-center ${isUrgent ? 'bg-amber-50 dark:bg-amber-900/20' : 'bg-teal-50 dark:bg-teal-900/20'}`}>
+                <div className="flex items-center gap-2">
+                    <span className={`flex h-2.5 w-2.5 relative`}>
+                        <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${isUrgent ? 'bg-amber-500' : 'bg-green-500'}`}></span>
+                        <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${isUrgent ? 'bg-amber-500' : 'bg-green-500'}`}></span>
+                    </span>
+                    <span className={`text-xs font-bold uppercase tracking-wide ${isUrgent ? 'text-amber-700' : 'text-teal-700'}`}>
+                        {isUrgent ? 'Paciente en Espera' : 'Siguiente Cita'}
+                    </span>
+                </div>
+                <div className="text-right">
+                    <span className="text-2xl font-black text-slate-800 dark:text-white leading-none">{format(parseISO(nextApt.start_time), 'h:mm a')}</span>
+                </div>
+            </div>
 
-          <button onClick={() => navigate('/settings')} className="flex flex-col items-center justify-center p-3 bg-gradient-to-br from-amber-50 to-amber-100 dark:from-amber-900/20 dark:to-amber-900/10 border border-amber-200 dark:border-amber-800 rounded-2xl hover:shadow-md transition-all group">
-              <div className="bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 p-2 rounded-full mb-2 group-hover:scale-110 transition-transform">
-                  <Bot size={18} />
-              </div>
-              <span className="text-xs font-bold text-amber-800 dark:text-amber-200">Mejorar Plan</span>
-          </button>
-      </div>
-  </div>
-);
+            {/* Contenido Principal */}
+            <div className="p-6 flex-1 flex flex-col justify-center">
+                <div className="flex items-start gap-4 mb-4">
+                    <div className="w-14 h-14 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 font-bold text-xl">
+                        {nextApt.title.charAt(0)}
+                    </div>
+                    <div>
+                        <h2 className="text-2xl font-bold text-slate-900 dark:text-white leading-tight line-clamp-1">{nextApt.title}</h2>
+                        <p className="text-slate-500 text-sm flex items-center gap-1.5 mt-1">
+                            <UserCircle size={14} /> {nextApt.patient ? 'Expediente Activo' : 'Primera Vez / Sin Registro'}
+                        </p>
+                        {nextApt.criticalAlert && (
+                            <span className="inline-flex items-center mt-2 px-2 py-1 rounded text-[10px] font-bold bg-red-50 text-red-600 border border-red-100">
+                                <AlertTriangle size={10} className="mr-1"/> {nextApt.criticalAlert.substring(0,30)}...
+                            </span>
+                        )}
+                    </div>
+                </div>
 
+                <button 
+                    onClick={() => onStart(nextApt)}
+                    className="w-full py-3.5 bg-slate-900 hover:bg-black dark:bg-white dark:hover:bg-slate-200 dark:text-slate-900 text-white rounded-xl font-bold text-sm shadow-lg hover:shadow-xl active:scale-95 transition-all flex items-center justify-center gap-2 mt-auto"
+                >
+                    <PlayCircle size={18} /> INICIAR CONSULTA AHORA
+                </button>
+            </div>
+        </div>
+    );
+};
+
+// --- LAYOUT PRINCIPAL ---
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const [doctorName, setDoctorName] = useState<string>('');
@@ -300,6 +299,7 @@ const Dashboard: React.FC = () => {
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [isAssistantOpen, setIsAssistantOpen] = useState(false);
   const [totalSeconds, setTotalSeconds] = useState(0); 
+  const [toolsTab, setToolsTab] = useState<'notes' | 'calc'>('notes');
   
   const now = new Date();
   const hour = now.getHours();
@@ -307,6 +307,7 @@ const Dashboard: React.FC = () => {
   const dateStr = now.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' });
   const dynamicGreeting = useMemo(() => getTimeOfDayGreeting(doctorName), [doctorName]);
 
+  // --- LOGICA DE DATOS (INTACTA) ---
   useEffect(() => {
     if ("geolocation" in navigator) {
         navigator.geolocation.getCurrentPosition(async (position) => {
@@ -319,31 +320,9 @@ const Dashboard: React.FC = () => {
                     code: data.current.weather_code 
                 });
             } catch (e) { console.log("Error clima API", e); }
-        }, (error) => {
-            console.warn("Ubicación denegada/error", error);
-        });
+        }, (error) => { console.warn("Ubicación denegada/error", error); });
     }
   }, []);
-
-  const getWeatherIcon = (dark: boolean) => {
-      const animClass = "animate-pulse duration-[3000ms]"; 
-      if (weather.code >= 51 && weather.code <= 67) return <CloudRain size={56} className={`text-blue-300 opacity-90 ${animClass}`}/>;
-      if (weather.code >= 1 && weather.code <= 3) return <Cloud size={56} className={`${dark ? 'text-slate-200' : 'text-teal-700'} opacity-80 ${animClass}`}/>;
-      return isNight 
-        ? <Moon size={56} className={`text-indigo-200 opacity-90 ${animClass}`}/> 
-        : <Sun size={56} className={`${dark ? 'text-yellow-300' : 'text-amber-400'} opacity-90 ${animClass}`}/>;
-  };
-
-  const antiFatigueBg = "bg-[#F2F9F7] dark:bg-slate-950"; 
-  const mobileHeroStyle = isNight 
-    ? { bg: "bg-gradient-to-br from-slate-900 to-teal-950 border border-white/5", text: "text-teal-100", darkText: false }
-    : { bg: "bg-gradient-to-br from-[#CDEDE0] to-[#A0DBC6] border border-white/5", text: "text-teal-900", darkText: true };
-
-  const panoramicGradient = isNight
-    ? "bg-gradient-to-r from-slate-900 via-teal-900 to-emerald-950" 
-    : "bg-gradient-to-r from-emerald-50 via-teal-500 to-teal-800";
-
-  const leftTextColor = isNight ? "text-slate-300" : "text-teal-800";
 
   const extractAllergies = (historyJSON: string | undefined): string | null => {
       if (!historyJSON) return null;
@@ -364,11 +343,7 @@ const Dashboard: React.FC = () => {
           const rawName = profile?.full_name?.split(' ')[0] || 'Colega';
           setDoctorName(`Dr. ${rawName}`);
 
-          const { data: consultations } = await supabase
-              .from('consultations')
-              .select('real_duration_seconds')
-              .eq('doctor_id', user.id);
-          
+          const { data: consultations } = await supabase.from('consultations').select('real_duration_seconds').eq('doctor_id', user.id);
           if (consultations) {
               const sumSeconds = consultations.reduce((acc, curr) => acc + (curr.real_duration_seconds || 0), 0);
               setTotalSeconds(sumSeconds);
@@ -410,6 +385,7 @@ const Dashboard: React.FC = () => {
     return () => window.removeEventListener('focus', fetchData);
   }, [fetchData]);
 
+  // --- ACTIONS ---
   const handleQuickAction = async (action: 'reschedule' | 'noshow' | 'cancel', apt: DashboardAppointment) => {
     try {
         if (action === 'noshow') {
@@ -449,286 +425,160 @@ const Dashboard: React.FC = () => {
       });
   };
 
-  const getDayLabel = (isoString: string) => {
-    const date = parseISO(isoString);
-    if (isToday(date)) return 'Hoy';
-    if (isTomorrow(date)) return 'Mañana';
-    return format(date, 'EEEE d', { locale: es });
-  };
+  // --- DERIVED STATE ---
+  const nextPatient = useMemo(() => {
+      const scheduled = appointments.filter(a => a.status === 'scheduled');
+      return scheduled.length > 0 ? scheduled[0] : null;
+  }, [appointments]);
 
+  const todayAppointments = useMemo(() => appointments.filter(a => isToday(parseISO(a.start_time))), [appointments]);
+  
   const groupedAppointments = useMemo(() => appointments.reduce((acc, apt) => {
-    const day = getDayLabel(apt.start_time);
+    const day = isToday(parseISO(apt.start_time)) ? 'Hoy' : isTomorrow(parseISO(apt.start_time)) ? 'Mañana' : format(parseISO(apt.start_time), 'EEEE d', { locale: es });
     if (!acc[day]) acc[day] = [];
     acc[day].push(apt);
     return acc;
   }, {} as Record<string, DashboardAppointment[]>), [appointments]);
 
-  const todayAppointments = useMemo(() => appointments.filter(a => isToday(parseISO(a.start_time))), [appointments]);
-  const pendingCount = todayAppointments.filter(a => a.status === 'scheduled').length;
-
   return (
-    <div className={`min-h-screen ${antiFatigueBg} font-sans w-full overflow-x-hidden flex flex-col relative transition-colors duration-500`}>
+    <div className="min-h-screen bg-slate-50/50 dark:bg-slate-950 font-sans w-full pb-32 md:pb-8">
+      
       {/* HEADER MÓVIL */}
-      <div className="md:hidden px-5 pt-6 pb-4 flex justify-between items-center bg-white dark:bg-slate-900 sticky top-0 z-30 border-b border-gray-100 dark:border-slate-800 shadow-sm w-full">
+      <div className="md:hidden px-5 pt-6 pb-4 flex justify-between items-center bg-white dark:bg-slate-900 sticky top-0 z-30 border-b border-gray-100 dark:border-slate-800 shadow-sm">
         <div className="flex items-center gap-3">
-            <img src="/pwa-192x192.png" alt="Logo" className="w-9 h-9 rounded-lg object-cover shadow-sm" />
+            <img src="/pwa-192x192.png" alt="Logo" className="w-9 h-9 rounded-lg shadow-sm" />
             <div className="flex flex-col">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider leading-tight">{dateStr}</span>
-                <span className="font-bold text-lg text-slate-900 dark:text-white leading-tight">MediScribe AI</span>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{dateStr}</span>
+                <span className="font-bold text-lg text-slate-900 dark:text-white">MediScribe AI</span>
             </div>
         </div>
-        <div className="flex items-center gap-3">
-            <button className="text-slate-400 hover:text-brand-teal relative transition-colors">
-                <Bell size={22} />
-                <span className="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full border-2 border-white dark:border-slate-900"></span>
-            </button>
-            <div onClick={() => navigate('/settings')} className="h-9 w-9 rounded-full bg-gradient-to-tr from-teal-400 to-teal-600 flex items-center justify-center text-white font-bold text-xs shadow-md cursor-pointer border-2 border-white dark:border-slate-800">
-                {doctorName.charAt(4) || 'D'}
-            </div>
+        <div onClick={() => navigate('/settings')} className="h-9 w-9 rounded-full bg-brand-teal text-white flex items-center justify-center font-bold text-xs shadow-md">
+            {doctorName.charAt(4) || 'D'}
         </div>
       </div>
 
       {/* HEADER ESCRITORIO */}
-      <div className="hidden md:block px-8 pt-8 pb-4 w-full max-w-7xl mx-auto">
-         <div className="flex justify-between items-center">
-            <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Tablero Principal</h1>
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 dark:bg-green-900/20 rounded-full border border-green-100 dark:border-green-800/30">
-                <ShieldCheck size={16} className="text-green-600 dark:text-green-400" />
-                <span className="text-xs font-bold text-green-700 dark:text-green-300">Privacy Shield™</span>
-            </div>
+      <div className="hidden md:flex justify-between items-end px-8 pt-8 pb-6 max-w-7xl mx-auto w-full">
+         <div>
+             <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{dynamicGreeting.greeting}</h1>
+             <p className="text-slate-500 text-sm">{dynamicGreeting.message}</p>
+         </div>
+         <div className="flex gap-3">
+             <button onClick={() => setIsAssistantOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-full text-xs font-bold hover:bg-slate-700 transition-colors shadow-lg shadow-slate-900/20">
+                 <Bot size={14}/> Asistente
+             </button>
+             <button onClick={() => setIsUploadModalOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-full text-xs font-bold hover:bg-slate-50 transition-colors">
+                 <Upload size={14}/> Archivos
+             </button>
          </div>
       </div>
 
-      <div className="flex-1 p-4 md:p-8 space-y-6 animate-fade-in-up w-full max-w-7xl mx-auto pb-32 md:pb-8">
-        
-        <div className="flex justify-between items-end">
-            <div className="mt-1">
-                <div className="flex items-center gap-3 mb-1">
-                    <h1 className="text-2xl font-bold text-slate-800 dark:text-white leading-tight">
-                        {dynamicGreeting.greeting}
-                    </h1>
-                    <div className="hidden md:block">
-                        <AssistantButtonSmall onClick={() => setIsAssistantOpen(true)} />
-                    </div>
-                </div>
-                <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
-                    {dynamicGreeting.message}
-                </p>
-            </div>
-            
-            <button onClick={() => setIsUploadModalOpen(true)} className="hidden md:flex bg-brand-teal text-white px-4 py-2 rounded-xl font-bold items-center gap-2 shadow-lg hover:bg-teal-600 transition-transform active:scale-95">
-              <Upload size={18} />
-              <span>Subir Archivos</span>
-            </button>
-        </div>
+      {/* --- BENTO GRID PRINCIPAL --- */}
+      <div className="px-4 md:px-8 max-w-7xl mx-auto w-full grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          
+          {/* ZONA IZQUIERDA (OPERATIVA) - 8 COLS */}
+          <div className="lg:col-span-8 flex flex-col gap-6">
+              
+              {/* FILA SUPERIOR: HERO + STATUS */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 h-auto md:h-64">
+                  <HeroPatientCard nextApt={nextPatient} onStart={handleStartConsultation} />
+                  <StatusWidget weather={weather} totalApts={todayAppointments.length + 5} pendingApts={todayAppointments.length} isNight={isNight} />
+              </div>
 
-        {/* VERSIÓN MÓVIL */}
-        <div className="md:hidden">
-             <div className={`${mobileHeroStyle.bg} ${mobileHeroStyle.text} rounded-3xl p-6 shadow-lg relative overflow-hidden flex justify-between items-center transition-all duration-500 w-full min-h-[140px]`}>
-                <div className="relative z-10 flex-1">
-                    <div className="flex items-center gap-2 mb-2">
-                        <div className={`backdrop-blur-md px-2 py-1 rounded-md flex items-center gap-1.5 ${mobileHeroStyle.darkText ? 'bg-teal-900/10' : 'bg-white/20'}`}>
-                            <MapPin size={11} className={mobileHeroStyle.darkText ? "text-teal-900" : "text-white"}/>
-                            <span className="text-[10px] font-bold uppercase tracking-wide">Consultorio</span>
-                        </div>
-                    </div>
-                    <div className="flex items-end gap-3">
-                        <h2 className="text-5xl font-bold tracking-tighter leading-none">{weather.temp}°</h2>
-                        <div className="mb-1">
-                            <p className="text-lg font-bold leading-none">{todayAppointments.length} Citas</p>
-                            <p className="text-xs font-medium opacity-90">Hoy</p>
-                        </div>
-                    </div>
-                    <LiveClockMobile isDark={!mobileHeroStyle.darkText} />
-                    <button onClick={() => setIsAssistantOpen(true)} className={`mt-4 py-2.5 px-4 w-full justify-center group flex items-center gap-3 backdrop-blur-md border rounded-full transition-all active:scale-95 shadow-sm hover:shadow-lg ${mobileHeroStyle.darkText ? 'bg-teal-900/10 border-teal-900/20 hover:bg-teal-900/20' : 'bg-white/10 border-white/20 hover:bg-white/20'}`}>
-                        <Bot size={18} className={mobileHeroStyle.darkText ? "text-teal-900" : "text-white"} />
-                        <span className={`font-bold text-xs tracking-wide ${mobileHeroStyle.darkText ? "text-teal-900" : "text-white"}`}>Asistente Inteligente V4</span>
-                    </button>
-                </div>
-                <div className="relative z-10 transform translate-x-2 drop-shadow-lg transition-transform duration-1000">
-                    {getWeatherIcon(!mobileHeroStyle.darkText)}
-                </div>
-                <div className="absolute -right-10 -top-10 w-40 h-40 bg-white/20 rounded-full blur-3xl animate-pulse"></div>
-            </div>
-        </div>
-
-        {/* VERSIÓN PC */}
-        <div className={`hidden md:flex ${panoramicGradient} rounded-[2rem] shadow-xl h-56 relative overflow-hidden transition-all duration-1000 border-none`}>
-            <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-[0.03]"></div>
-
-            <div className="w-1/3 p-8 flex flex-col justify-between relative z-10">
-                <div className="flex justify-between items-start">
-                    <div className={`flex items-center gap-2 ${leftTextColor}`}>
-                        <MapPin size={16} />
-                        <span className="text-xs font-bold uppercase tracking-wider">Consultorio</span>
-                    </div>
-                    <div className="transform scale-110 drop-shadow-md">
-                        {getWeatherIcon(isNight)}
-                    </div>
-                </div>
-                <div>
-                    <h2 className={`text-6xl font-black ${isNight ? 'text-white' : 'text-teal-900'} tracking-tighter`}>{weather.temp}°</h2>
-                    <p className={`text-sm font-bold ${isNight ? 'text-slate-400' : 'text-teal-700/70'} mt-1`}>Temperatura</p>
-                </div>
-            </div>
-
-            <div className="w-1/3 flex items-center justify-center relative z-10">
-                <LiveClockDesktop />
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-white/10 rounded-full blur-[80px] pointer-events-none"></div>
-            </div>
-
-            <div className="w-1/3 p-8 relative z-10 flex flex-col justify-between text-right">
-                <div className="flex justify-end items-center gap-2 mb-2">
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-teal-200/80">Pulso del Día</span>
-                    <Activity size={14} className="text-teal-300 animate-pulse" />
-                </div>
-
-                <div className="flex items-center justify-end gap-6">
-                    <div className="text-right">
-                        <div className="text-4xl font-bold text-white leading-none">{pendingCount}</div>
-                        <div className="text-xs text-teal-200 font-medium">Pendientes</div>
-                    </div>
-                    <div className="relative w-16 h-16">
-                         <svg className="w-full h-full transform -rotate-90">
-                            <circle cx="32" cy="32" r="28" stroke="currentColor" strokeWidth="6" fill="transparent" className="text-teal-900/50" />
-                            <circle cx="32" cy="32" r="28" stroke="currentColor" strokeWidth="6" fill="transparent" 
-                                strokeDasharray={175} 
-                                strokeDashoffset={175 - (175 * 0) / 100} 
-                                className="text-white transition-all duration-1000 ease-out" 
-                                strokeLinecap="round"
-                            />
-                        </svg>
-                        <div className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-white">
-                            --
-                        </div>
-                    </div>
-                </div>
-                 <div className="mt-auto pt-4 flex items-center justify-end gap-2 text-teal-100/70 text-xs">
-                    <LogOut size={12} />
-                    <span>Salida est: {format(addDays(new Date(), 0).setHours(new Date().getHours() + (pendingCount * 0.5)), 'h:mm a')}</span>
-                </div>
-            </div>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 space-y-6">
-                
-                {/* Botón Móvil Upload */}
-                <button onClick={() => setIsUploadModalOpen(true)} className="md:hidden w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-4 rounded-xl flex items-center justify-between shadow-sm active:scale-95 transition-transform">
-                  <div className="flex items-center gap-3">
-                    <div className="bg-teal-50 dark:bg-teal-900/30 p-3 rounded-full text-brand-teal"><Upload size={20} /></div>
-                    <div className="text-left">
-                      <p className="font-bold text-slate-800 dark:text-white text-sm">Subir Archivos</p>
-                      <p className="text-xs text-slate-500">Gestión documental</p>
-                    </div>
+              {/* LISTA DE AGENDA (Timeline) */}
+              <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-100 dark:border-slate-800 shadow-sm min-h-[400px]">
+                  <div className="flex justify-between items-center mb-6">
+                      <h3 className="font-bold text-slate-800 dark:text-white flex items-center gap-2"><Calendar size={18} className="text-brand-teal"/> Agenda Clínica</h3>
+                      <button onClick={() => navigate('/calendar')} className="text-xs font-bold text-brand-teal hover:underline">Ver Calendario Completo</button>
                   </div>
-                  <ChevronRight size={18} className="text-slate-300" />
-                </button>
+                  
+                  {loading ? (
+                       <div className="flex justify-center p-10"><Loader2 className="animate-spin text-slate-300"/></div>
+                  ) : appointments.length === 0 ? (
+                       <div className="text-center py-12 text-slate-400">
+                           <CalendarX size={48} className="mx-auto mb-3 opacity-20"/>
+                           <p>No hay citas programadas próximamente.</p>
+                       </div>
+                  ) : (
+                      <div className="space-y-8">
+                          {Object.entries(groupedAppointments).map(([day, apts]) => (
+                              <div key={day}>
+                                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 ml-2">{day}</h4>
+                                  <div className="space-y-3">
+                                      {apts.map(apt => {
+                                          const isOverdue = isPast(parseISO(apt.start_time)) && apt.status === 'scheduled';
+                                          return (
+                                              <div key={apt.id} className="flex group">
+                                                  <div className="w-16 text-right pr-4 pt-3">
+                                                      <span className="block font-bold text-slate-700 dark:text-slate-300 text-sm">{format(parseISO(apt.start_time), 'h:mm')}</span>
+                                                      <span className="block text-[10px] text-slate-400 uppercase">{format(parseISO(apt.start_time), 'a')}</span>
+                                                  </div>
+                                                  <div className="flex-1 bg-slate-50 dark:bg-slate-800/50 rounded-xl p-3 border border-slate-100 dark:border-slate-800 flex justify-between items-center hover:shadow-md transition-all">
+                                                      <div className="flex items-center gap-3">
+                                                          <div className={`w-1 h-10 rounded-full ${isOverdue ? 'bg-amber-400' : 'bg-brand-teal'}`}></div>
+                                                          <div>
+                                                              <h5 className="font-bold text-slate-800 dark:text-white text-sm">{apt.title}</h5>
+                                                              <p className="text-xs text-slate-500">{apt.patient ? 'Paciente Registrado' : 'Cita Rápida'}</p>
+                                                          </div>
+                                                      </div>
+                                                      <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                          <button onClick={() => handleQuickAction('reschedule', apt)} className="p-2 hover:bg-white rounded-lg text-slate-400 hover:text-blue-500 transition-colors"><Repeat size={14}/></button>
+                                                          <button onClick={() => handleQuickAction('cancel', apt)} className="p-2 hover:bg-white rounded-lg text-slate-400 hover:text-red-500 transition-colors"><Ban size={14}/></button>
+                                                          <button onClick={() => handleStartConsultation(apt)} className="p-2 bg-slate-900 text-white rounded-lg hover:bg-black transition-colors"><PlayCircle size={14}/></button>
+                                                      </div>
+                                                  </div>
+                                              </div>
+                                          )
+                                      })}
+                                  </div>
+                              </div>
+                          ))}
+                      </div>
+                  )}
+              </div>
+          </div>
 
-                <section className="w-full">
-                    <div className="flex justify-between items-center mb-4 px-1">
-                        <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                            <Calendar className="text-brand-teal" size={20}/> Próximos Pacientes
-                        </h3>
-                        {appointments.length > 0 && (
-                            <button onClick={() => navigate('/calendar')} className="text-brand-teal text-xs font-bold uppercase tracking-wide bg-teal-50 dark:bg-teal-900/20 px-3 py-1.5 rounded-full active:scale-95 transition-transform">
-                                Ver Todo
-                            </button>
-                        )}
-                    </div>
+          {/* ZONA DERECHA (HERRAMIENTAS) - 4 COLS */}
+          <div className="lg:col-span-4 flex flex-col gap-6 h-full">
+              
+              {/* CONTENEDOR DE TABS */}
+              <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col h-full min-h-[500px]">
+                  <div className="flex border-b border-slate-100 dark:border-slate-800">
+                      <button 
+                        onClick={() => setToolsTab('notes')}
+                        className={`flex-1 py-4 text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-colors ${toolsTab === 'notes' ? 'bg-white dark:bg-slate-900 text-brand-teal border-b-2 border-brand-teal' : 'bg-slate-50 dark:bg-slate-950 text-slate-400'}`}
+                      >
+                          <PenLine size={14}/> Notas
+                      </button>
+                      <button 
+                        onClick={() => setToolsTab('calc')}
+                        className={`flex-1 py-4 text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-colors ${toolsTab === 'calc' ? 'bg-white dark:bg-slate-900 text-brand-teal border-b-2 border-brand-teal' : 'bg-slate-50 dark:bg-slate-950 text-slate-400'}`}
+                      >
+                          <Calculator size={14}/> Calculadora
+                      </button>
+                  </div>
+                  
+                  <div className="p-4 flex-1 bg-slate-50/30 dark:bg-slate-900/50">
+                      {toolsTab === 'notes' ? (
+                          <div className="h-full"><QuickNotes /></div>
+                      ) : (
+                          <div className="h-full"><MedicalCalculators /></div>
+                      )}
+                  </div>
+              </div>
 
-                    {loading ? (
-                        <div className="p-8 text-center text-slate-400 text-sm animate-pulse bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800">Sincronizando agenda...</div>
-                    ) : appointments.length === 0 ? (
-                        <div className="bg-white dark:bg-slate-900 rounded-2xl p-8 text-center border border-dashed border-gray-200 dark:border-slate-800 shadow-sm">
-                            <div className="w-12 h-12 bg-slate-50 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-3">
-                                <Calendar size={20} className="text-slate-400"/>
-                            </div>
-                            <p className="text-slate-600 dark:text-slate-300 font-medium text-sm">Tu agenda está libre.</p>
-                            <p className="text-slate-400 text-xs mt-1 mb-4">No hay citas programadas para los próximos 7 días.</p>
-                            <button onClick={() => navigate('/consultation')} className="w-full bg-slate-800 dark:bg-slate-700 text-white py-3 rounded-xl font-bold text-sm shadow-sm hover:bg-slate-700 transition-colors flex items-center justify-center gap-2 mt-4">
-                                <Stethoscope size={16}/> Iniciar Consulta Libre
-                            </button>
-                        </div>
-                    ) : (
-                        <div className="space-y-4">
-                            {Object.entries(groupedAppointments).map(([day, dayApts]) => (
-                                <div key={day} className="animate-fade-in-up">
-                                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 ml-1">{day}</h4>
-                                    <div className="relative pl-6 border-l-2 border-slate-100 dark:border-slate-800 ml-3 space-y-6">
-                                        {dayApts.map((apt) => {
-                                            const isOverdue = isPast(parseISO(apt.start_time)) && apt.status === 'scheduled';
-                                            const aptDate = parseISO(apt.start_time);
-                                            const displayName = apt.patient?.name || apt.title || "Cita sin nombre";
-                                            const displaySubtitle = apt.patient?.name 
-                                                ? (apt.title && apt.title !== apt.patient.name ? apt.title : 'Consulta General') 
-                                                : 'Paciente no registrado';
+              {/* BOTONES RÁPIDOS (LEGACY) */}
+              <div className="grid grid-cols-2 gap-3">
+                  <button onClick={() => navigate('/consultation')} className="p-4 bg-teal-50 dark:bg-teal-900/20 rounded-2xl flex flex-col items-center justify-center gap-2 text-teal-700 dark:text-teal-300 font-bold text-xs hover:bg-teal-100 transition-colors border border-teal-100 dark:border-teal-800">
+                      <Stethoscope size={20}/> Consulta Libre
+                  </button>
+                  <button onClick={() => navigate('/patients')} className="p-4 bg-indigo-50 dark:bg-indigo-900/20 rounded-2xl flex flex-col items-center justify-center gap-2 text-indigo-700 dark:text-indigo-300 font-bold text-xs hover:bg-indigo-100 transition-colors border border-indigo-100 dark:border-indigo-800">
+                      <UserPlus size={20}/> Nuevo Paciente
+                  </button>
+              </div>
 
-                                            return (
-                                            <div key={apt.id} className="relative group">
-                                                <div className={`absolute -left-[31px] mt-1.5 h-3.5 w-3.5 rounded-full border-4 border-slate-50 dark:border-slate-950 shadow-sm z-10 ${isOverdue ? 'bg-amber-500' : apt.status === 'completed' ? 'bg-green-500' : 'bg-brand-teal'}`}></div>
+          </div>
 
-                                                <div className={`bg-white dark:bg-slate-900 rounded-2xl p-4 shadow-sm border transition-all ${isOverdue ? 'border-amber-200 dark:border-amber-900/40 bg-amber-50/30 dark:bg-amber-900/10' : 'border-slate-100 dark:border-slate-800 hover:shadow-md hover:border-slate-200 dark:hover:border-slate-700'}`} onClick={!isOverdue ? () => navigate('/calendar') : undefined}>
-                                                    <div className="flex justify-between items-start mb-2">
-                                                        <div className="flex flex-col">
-                                                            <h4 className="font-bold text-slate-800 dark:text-white text-base leading-tight group-hover:text-brand-teal transition-colors">
-                                                                {displayName}
-                                                            </h4>
-                                                            {apt.criticalAlert && (
-                                                                <div className="mt-1 flex flex-wrap gap-1">
-                                                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700 border border-red-200 animate-pulse">
-                                                                        <AlertTriangle size={10} className="mr-1"/> 
-                                                                        {apt.criticalAlert.length > 20 ? apt.criticalAlert.substring(0, 20) + '...' : apt.criticalAlert}
-                                                                    </span>
-                                                                </div>
-                                                            )}
-                                                            <span className="text-xs text-slate-500 font-medium mt-0.5">{displaySubtitle}</span>
-                                                        </div>
-                                                        <div className="text-right">
-                                                            <p className="text-lg font-black text-slate-900 dark:text-white leading-none tracking-tight">{format(aptDate, 'h:mm')}</p>
-                                                            <p className="text-[10px] font-bold text-slate-400 uppercase">{format(aptDate, 'a')}</p>
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="mt-4 flex items-center justify-between border-t border-slate-50 dark:border-slate-800 pt-3">
-                                                        <div className="flex gap-2">
-                                                            <button onClick={(e) => {e.stopPropagation(); handleQuickAction('reschedule', apt)}} className="p-2 rounded-full bg-slate-50 hover:bg-slate-100 text-slate-500 dark:bg-slate-800 dark:hover:bg-slate-700 transition-colors" title="Reagendar">
-                                                                <Repeat size={14} />
-                                                            </button>
-                                                            <button onClick={(e) => {e.stopPropagation(); handleQuickAction('cancel', apt)}} className="p-2 rounded-full bg-slate-50 hover:bg-slate-100 text-red-400 hover:text-red-500 dark:bg-slate-800 dark:hover:bg-slate-700 transition-colors" title="Cancelar">
-                                                                <Ban size={14} />
-                                                            </button>
-                                                        </div>
-
-                                                        <button 
-                                                            onClick={(e) => {
-                                                                e.stopPropagation(); // IMPORTANTE: Evita navegación al calendario
-                                                                handleStartConsultation(apt);
-                                                            }}
-                                                            className="flex items-center gap-2 bg-brand-teal hover:bg-teal-600 text-white px-4 py-2 rounded-xl font-bold text-xs shadow-md shadow-teal-500/20 active:scale-95 transition-all"
-                                                        >
-                                                            <PlayCircle size={16} fill="currentColor" className="text-teal-800/30"/>
-                                                            INICIAR CONSULTA
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </section>
-            </div>
-
-            <div className="hidden lg:block space-y-6">
-                <RoiWidget totalSeconds={totalSeconds} />
-                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 ml-1">Accesos Rápidos</h3>
-                <QuickActions navigate={navigate} />
-            </div>
-        </div>
       </div>
 
       {isUploadModalOpen && (
