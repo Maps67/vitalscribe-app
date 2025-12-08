@@ -6,7 +6,7 @@ import {
   Stethoscope, UserCircle, ArrowRight, AlertTriangle, FileText,
   Clock, TrendingUp, UserPlus, Zap, Activity, LogOut,
   CalendarX, RefreshCcw, UserX, Trash2, MoreHorizontal, AlertCircle,
-  Repeat, Ban 
+  Repeat, Ban, PlayCircle 
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { format, isToday, isTomorrow, parseISO, startOfDay, endOfDay, addDays, isPast } from 'date-fns';
@@ -20,20 +20,18 @@ import { AgentResponse } from '../services/GeminiAgent';
 import { UploadMedico } from '../components/UploadMedico';
 import { DoctorFileGallery } from '../components/DoctorFileGallery';
 
-// INTERFAZ OPTIMIZADA: Incluye campo para pre-cálculo de alertas
 interface DashboardAppointment {
   id: string;
   title: string;
   start_time: string;
   status: string;
   patient?: {
+    id: string;
     name: string;
     history?: string; 
   };
-  criticalAlert?: string | null; // Optimización de rendimiento
+  criticalAlert?: string | null;
 }
-
-// --- SUB-COMPONENTES AUXILIARES ---
 
 const AssistantButtonSmall = ({ onClick }: { onClick: () => void }) => (
   <button 
@@ -294,8 +292,6 @@ const QuickActions = ({ navigate }: { navigate: any }) => (
   </div>
 );
 
-// --- COMPONENTE PRINCIPAL OPTIMIZADO ---
-
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const [doctorName, setDoctorName] = useState<string>('');
@@ -312,7 +308,6 @@ const Dashboard: React.FC = () => {
   const dateStr = now.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' });
   const dynamicGreeting = useMemo(() => getTimeOfDayGreeting(doctorName), [doctorName]);
 
-  // OPTIMIZACIÓN GEOLOCALIZACIÓN: Manejo de errores
   useEffect(() => {
     if ("geolocation" in navigator) {
         navigator.geolocation.getCurrentPosition(async (position) => {
@@ -351,7 +346,6 @@ const Dashboard: React.FC = () => {
 
   const leftTextColor = isNight ? "text-slate-300" : "text-teal-800";
 
-  // Helper para procesar alergias FUERA del renderizado (Mejora de Performance)
   const extractAllergies = (historyJSON: string | undefined): string | null => {
       if (!historyJSON) return null;
       try {
@@ -362,7 +356,6 @@ const Dashboard: React.FC = () => {
       } catch { return null; }
   };
 
-  // OPTIMIZACIÓN FETCH DATA: Consulta limpia y única
   const fetchData = useCallback(async () => {
       try {
           const { data: { user } } = await supabase.auth.getUser();
@@ -372,23 +365,20 @@ const Dashboard: React.FC = () => {
           const rawName = profile?.full_name?.split(' ')[0] || 'Colega';
           setDoctorName(`Dr. ${rawName}`);
 
-          const { count } = await supabase
-              .from('consultations')
-              .select('*', { count: 'exact', head: true })
-              .eq('doctor_id', user.id);
+          const { count } = await supabase.from('consultations').select('*', { count: 'exact', head: true }).eq('doctor_id', user.id);
           setTotalConsultations(count || 0);
 
           const todayStart = startOfDay(new Date()); 
           const nextWeekEnd = endOfDay(addDays(new Date(), 7));
 
-          // Consulta optimizada (Sin fallback waterfall)
           const { data: aptsData, error } = await supabase
               .from('appointments')
-              .select(`id, title, start_time, status, patient:patients (name, history)`)
+              .select(`id, title, start_time, status, patient:patients (id, name, history)`)
               .eq('doctor_id', user.id)
               .gte('start_time', todayStart.toISOString())
               .lte('start_time', nextWeekEnd.toISOString())
-              .neq('status', 'cancelled') // Filtrar canceladas para limpiar vista
+              .neq('status', 'cancelled')
+              .neq('status', 'completed')
               .order('start_time', { ascending: true })
               .limit(15);
 
@@ -401,16 +391,11 @@ const Dashboard: React.FC = () => {
                   start_time: item.start_time,
                   status: item.status,
                   patient: item.patient,
-                  // Pre-cálculo de alerta (1 vez) en lugar de en cada render (N veces)
                   criticalAlert: extractAllergies(item.patient?.history) 
               }));
               setAppointments(formattedApts);
           }
-      } catch (e) { 
-          console.error("Error cargando dashboard:", e);
-      } finally { 
-          setLoading(false); 
-      }
+      } catch (e) { console.error("Error cargando dashboard:", e); } finally { setLoading(false); }
   }, []);
 
   useEffect(() => {
@@ -419,31 +404,43 @@ const Dashboard: React.FC = () => {
     return () => window.removeEventListener('focus', fetchData);
   }, [fetchData]);
 
-  // SEGURIDAD: Soft Delete (Actualizar estado en lugar de borrar)
   const handleQuickAction = async (action: 'reschedule' | 'noshow' | 'cancel', apt: DashboardAppointment) => {
     try {
         if (action === 'noshow') {
-            await supabase.from('appointments')
-                .update({ status: 'cancelled', notes: 'No asistió (Marcado desde Dashboard)' })
-                .eq('id', apt.id);
+            await supabase.from('appointments').update({ status: 'cancelled', notes: 'No asistió (Marcado desde Dashboard)' }).eq('id', apt.id);
             toast.success("Marcado como inasistencia");
         } else if (action === 'cancel') {
             if(confirm('¿Seguro que desea cancelar esta cita?')) {
-                // CAMBIO CRÍTICO: No usamos .delete(), usamos update status
-                await supabase.from('appointments')
-                    .update({ status: 'cancelled', notes: 'Cancelada por el usuario desde Dashboard' })
-                    .eq('id', apt.id);
+                await supabase.from('appointments').update({ status: 'cancelled', notes: 'Cancelada por el usuario desde Dashboard' }).eq('id', apt.id);
                 toast.success("Cita cancelada correctamente");
             } else return;
         } else if (action === 'reschedule') {
             const newDate = addDays(parseISO(apt.start_time), 1);
-            await supabase.from('appointments')
-                .update({ start_time: newDate.toISOString(), status: 'scheduled' })
-                .eq('id', apt.id);
+            await supabase.from('appointments').update({ start_time: newDate.toISOString(), status: 'scheduled' }).eq('id', apt.id);
             toast.success("Reagendada para mañana");
         }
         fetchData();
     } catch (e) { toast.error("Error al actualizar cita"); }
+  };
+
+  const handleStartConsultation = (apt: DashboardAppointment) => {
+      const patientData = apt.patient ? {
+          id: apt.patient.id,
+          name: apt.patient.name,
+          history: apt.patient.history
+      } : {
+          id: `ghost_${apt.id}`,
+          name: apt.title,
+          isGhost: true,
+          appointmentId: apt.id
+      };
+
+      navigate('/consultation', { 
+          state: { 
+              patientData: patientData, 
+              linkedAppointmentId: apt.id 
+          } 
+      });
   };
 
   const getDayLabel = (isoString: string) => {
@@ -648,7 +645,7 @@ const Dashboard: React.FC = () => {
                             <p className="text-slate-600 dark:text-slate-300 font-medium text-sm">Tu agenda está libre.</p>
                             <p className="text-slate-400 text-xs mt-1 mb-4">No hay citas programadas para los próximos 7 días.</p>
                             <button onClick={() => navigate('/consultation')} className="w-full bg-slate-800 dark:bg-slate-700 text-white py-3 rounded-xl font-bold text-sm shadow-sm hover:bg-slate-700 transition-colors flex items-center justify-center gap-2 mt-4">
-                                <Stethoscope size={16}/> Iniciar Consulta
+                                <Stethoscope size={16}/> Iniciar Consulta Libre
                             </button>
                         </div>
                     ) : (
@@ -691,35 +688,24 @@ const Dashboard: React.FC = () => {
                                                         </div>
                                                     </div>
 
-                                                    {isOverdue ? (
-                                                        <div className="mt-3">
-                                                            <div className="flex items-center gap-2 mb-3 bg-amber-100/50 dark:bg-amber-900/30 px-3 py-1.5 rounded-lg w-fit">
-                                                                <AlertCircle size={12} className="text-amber-700 dark:text-amber-400 animate-pulse"/>
-                                                                <span className="text-[10px] font-bold text-amber-800 dark:text-amber-300 uppercase tracking-wide">
-                                                                    Acción Requerida
-                                                                </span>
-                                                            </div>
+                                                    <div className="mt-4 flex items-center justify-between border-t border-slate-50 dark:border-slate-800 pt-3">
+                                                        <div className="flex gap-2">
+                                                            <button onClick={(e) => {e.stopPropagation(); handleQuickAction('reschedule', apt)}} className="p-2 rounded-full bg-slate-50 hover:bg-slate-100 text-slate-500 dark:bg-slate-800 dark:hover:bg-slate-700 transition-colors" title="Reagendar">
+                                                                <Repeat size={14} />
+                                                            </button>
+                                                            <button onClick={(e) => {e.stopPropagation(); handleQuickAction('cancel', apt)}} className="p-2 rounded-full bg-slate-50 hover:bg-slate-100 text-red-400 hover:text-red-500 dark:bg-slate-800 dark:hover:bg-slate-700 transition-colors" title="Cancelar">
+                                                                <Ban size={14} />
+                                                            </button>
+                                                        </div>
 
-                                                            <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
-                                                                <button onClick={(e) => {e.stopPropagation(); handleQuickAction('reschedule', apt)}} className="flex items-center gap-1.5 py-1.5 px-3 rounded-full bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/20 dark:hover:bg-blue-900/40 border border-blue-100 dark:border-blue-800 transition-all active:scale-95 group whitespace-nowrap">
-                                                                    <Repeat size={14} className="text-blue-600 dark:text-blue-400 group-hover:rotate-180 transition-transform duration-500"/>
-                                                                    <span className="text-[10px] font-bold text-blue-700 dark:text-blue-300">Reagendar</span>
-                                                                </button>
-                                                                <button onClick={(e) => {e.stopPropagation(); handleQuickAction('noshow', apt)}} className="flex items-center gap-1.5 py-1.5 px-3 rounded-full bg-amber-50 hover:bg-amber-100 dark:bg-amber-900/20 dark:hover:bg-amber-900/40 border border-amber-100 dark:border-amber-800 transition-all active:scale-95 group whitespace-nowrap">
-                                                                    <UserX size={14} className="text-amber-600 dark:text-amber-400"/>
-                                                                    <span className="text-[10px] font-bold text-amber-700 dark:text-amber-300">No Vino</span>
-                                                                </button>
-                                                                <button onClick={(e) => {e.stopPropagation(); handleQuickAction('cancel', apt)}} className="flex items-center gap-1.5 py-1.5 px-3 rounded-full bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/40 border border-red-100 dark:border-red-800 transition-all active:scale-95 group whitespace-nowrap" title="Cancelar Cita">
-                                                                    <Ban size={14} className="text-red-600 dark:text-red-400 group-hover:shake"/>
-                                                                    <span className="text-[10px] font-bold text-red-700 dark:text-red-300">Cancelar</span>
-                                                                </button>
-                                                            </div>
-                                                        </div>
-                                                    ) : (
-                                                        <div className="flex items-center gap-2 mt-2">
-                                                            <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase border ${apt.status === 'completed' ? 'bg-green-50 text-green-700 border-green-100' : apt.status === 'cancelled' ? 'bg-red-50 text-red-700 border-red-100' : 'bg-blue-50 text-blue-700 border-blue-100'}`}>{apt.status === 'scheduled' ? 'Confirmada' : apt.status}</span>
-                                                        </div>
-                                                    )}
+                                                        <button 
+                                                            onClick={() => handleStartConsultation(apt)}
+                                                            className="flex items-center gap-2 bg-brand-teal hover:bg-teal-600 text-white px-4 py-2 rounded-xl font-bold text-xs shadow-md shadow-teal-500/20 active:scale-95 transition-all"
+                                                        >
+                                                            <PlayCircle size={16} fill="currentColor" className="text-teal-800/30"/>
+                                                            INICIAR CONSULTA
+                                                        </button>
+                                                    </div>
                                                 </div>
                                             </div>
                                             );
