@@ -233,18 +233,17 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete }: { isOpen: boolean
   );
 };
 
-const RoiWidget = ({ completedCount }: { completedCount: number }) => {
-  const minutesSaved = completedCount * 15;
-  const hoursSaved = (minutesSaved / 60).toFixed(1);
-  const extraConsults = Math.floor(minutesSaved / 20);
-
+const RoiWidget = ({ totalSeconds }: { totalSeconds: number }) => {
+  const hoursSaved = (totalSeconds / 3600).toFixed(1);
+  const minutesSaved = Math.round(totalSeconds / 60);
+  
   return (
     <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-100 dark:border-slate-800 shadow-sm relative overflow-hidden group">
       <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
           <TrendingUp size={80} className="text-teal-500" />
       </div>
       <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-          <Clock size={14} /> Tiempo Ahorrado (Histórico)
+          <Clock size={14} /> Tiempo Real en Consulta
       </h3>
       <div className="flex items-baseline gap-2 mb-2">
           <span className="text-4xl font-black text-slate-900 dark:text-white">{hoursSaved}</span>
@@ -255,7 +254,7 @@ const RoiWidget = ({ completedCount }: { completedCount: number }) => {
               <Zap size={10} className="text-white" fill="currentColor" />
           </div>
           <p className="text-xs font-medium text-teal-700 dark:text-teal-300">
-              Equivale a <span className="font-bold">{extraConsults} consultas extra</span> ganadas.
+              Total acumulado: <span className="font-bold">{minutesSaved} minutos</span>.
           </p>
       </div>
     </div>
@@ -300,7 +299,7 @@ const Dashboard: React.FC = () => {
   const [weather, setWeather] = useState({ temp: '--', code: 0 });
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [isAssistantOpen, setIsAssistantOpen] = useState(false);
-  const [totalConsultations, setTotalConsultations] = useState(0);
+  const [totalSeconds, setTotalSeconds] = useState(0); 
   
   const now = new Date();
   const hour = now.getHours();
@@ -365,8 +364,15 @@ const Dashboard: React.FC = () => {
           const rawName = profile?.full_name?.split(' ')[0] || 'Colega';
           setDoctorName(`Dr. ${rawName}`);
 
-          const { count } = await supabase.from('consultations').select('*', { count: 'exact', head: true }).eq('doctor_id', user.id);
-          setTotalConsultations(count || 0);
+          const { data: consultations } = await supabase
+              .from('consultations')
+              .select('real_duration_seconds')
+              .eq('doctor_id', user.id);
+          
+          if (consultations) {
+              const sumSeconds = consultations.reduce((acc, curr) => acc + (curr.real_duration_seconds || 0), 0);
+              setTotalSeconds(sumSeconds);
+          }
 
           const todayStart = startOfDay(new Date()); 
           const nextWeekEnd = endOfDay(addDays(new Date(), 7));
@@ -459,13 +465,9 @@ const Dashboard: React.FC = () => {
 
   const todayAppointments = useMemo(() => appointments.filter(a => isToday(parseISO(a.start_time))), [appointments]);
   const pendingCount = todayAppointments.filter(a => a.status === 'scheduled').length;
-  const completedCount = todayAppointments.filter(a => a.status === 'completed').length;
-  const totalToday = todayAppointments.length || 1;
-  const progressPercent = Math.round((completedCount / totalToday) * 100);
 
   return (
     <div className={`min-h-screen ${antiFatigueBg} font-sans w-full overflow-x-hidden flex flex-col relative transition-colors duration-500`}>
-      
       {/* HEADER MÓVIL */}
       <div className="md:hidden px-5 pt-6 pb-4 flex justify-between items-center bg-white dark:bg-slate-900 sticky top-0 z-30 border-b border-gray-100 dark:border-slate-800 shadow-sm w-full">
         <div className="flex items-center gap-3">
@@ -591,13 +593,13 @@ const Dashboard: React.FC = () => {
                             <circle cx="32" cy="32" r="28" stroke="currentColor" strokeWidth="6" fill="transparent" className="text-teal-900/50" />
                             <circle cx="32" cy="32" r="28" stroke="currentColor" strokeWidth="6" fill="transparent" 
                                 strokeDasharray={175} 
-                                strokeDashoffset={175 - (175 * progressPercent) / 100} 
+                                strokeDashoffset={175 - (175 * 0) / 100} 
                                 className="text-white transition-all duration-1000 ease-out" 
                                 strokeLinecap="round"
                             />
                         </svg>
                         <div className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-white">
-                            {progressPercent}%
+                            --
                         </div>
                     </div>
                 </div>
@@ -700,7 +702,7 @@ const Dashboard: React.FC = () => {
 
                                                         <button 
                                                             onClick={(e) => {
-                                                                e.stopPropagation(); // SOLUCIÓN CRÍTICA: Detiene la propagación al padre
+                                                                e.stopPropagation(); // IMPORTANTE: Evita navegación al calendario
                                                                 handleStartConsultation(apt);
                                                             }}
                                                             className="flex items-center gap-2 bg-brand-teal hover:bg-teal-600 text-white px-4 py-2 rounded-xl font-bold text-xs shadow-md shadow-teal-500/20 active:scale-95 transition-all"
@@ -722,7 +724,7 @@ const Dashboard: React.FC = () => {
             </div>
 
             <div className="hidden lg:block space-y-6">
-                <RoiWidget completedCount={totalConsultations} />
+                <RoiWidget totalSeconds={totalSeconds} />
                 <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 ml-1">Accesos Rápidos</h3>
                 <QuickActions navigate={navigate} />
             </div>

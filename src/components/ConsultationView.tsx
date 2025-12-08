@@ -37,7 +37,7 @@ const ConsultationView: React.FC = () => {
   const { isListening, transcript, startListening, stopListening, resetTranscript, setTranscript, isAPISupported } = useSpeechRecognition();
   const location = useLocation(); 
   
-  const [patients, setPatients] = useState<any[]>([]);
+  const [patients, setPatients] = useState<any[]>([]); // Usamos any para permitir la estructura híbrida (Pacientes + Fantasmas)
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [doctorProfile, setDoctorProfile] = useState<DoctorProfile | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null); 
@@ -68,8 +68,10 @@ const ConsultationView: React.FC = () => {
   const [isInsightsOpen, setIsInsightsOpen] = useState(false);
   const [patientInsights, setPatientInsights] = useState<PatientInsight | null>(null);
   const [isLoadingInsights, setIsLoadingInsights] = useState(false);
-  
+
+  // --- ESTADOS NUEVOS (INTEGRACIÓN DASHBOARD) ---
   const [linkedAppointmentId, setLinkedAppointmentId] = useState<string | null>(null);
+  const startTimeRef = useRef<number>(Date.now()); // Cronómetro invisible
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const transcriptEndRef = useRef<HTMLDivElement>(null);
@@ -81,6 +83,10 @@ const ConsultationView: React.FC = () => {
     const handleOffline = () => { setIsOnline(false); toast.warning("Sin conexión. Modo Offline activo."); };
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
+    
+    // Iniciar cronómetro al montar
+    startTimeRef.current = Date.now();
+
     return () => { window.removeEventListener('online', handleOnline); window.removeEventListener('offline', handleOffline); };
   }, []);
 
@@ -94,8 +100,10 @@ const ConsultationView: React.FC = () => {
         if (mounted) {
             setCurrentUserId(user.id); 
 
+            // 1. Cargar Pacientes Registrados
             const { data: patientsData } = await supabase.from('patients').select('*').order('created_at', { ascending: false });
             
+            // 2. Cargar Citas "Fantasmas"
             const today = new Date();
             today.setHours(0,0,0,0);
             
@@ -109,13 +117,15 @@ const ConsultationView: React.FC = () => {
                 .limit(20);
 
             const loadedPatients = patientsData || [];
+            
+            // 3. Mezclar Datos
             let combinedList = [...loadedPatients];
             
             if (ghostAppointments && ghostAppointments.length > 0) {
                 const ghosts = ghostAppointments.map(apt => ({
-                    id: `ghost_${apt.id}`,
+                    id: `ghost_${apt.id}`, // ID temporal
                     name: apt.title,
-                    isGhost: true,
+                    isGhost: true, // Bandera para detectar que requiere registro lazy
                     appointmentId: apt.id,
                     created_at: apt.start_time
                 }));
@@ -133,25 +143,32 @@ const ConsultationView: React.FC = () => {
                 }
             }
 
+            // --- LÓGICA DE PUENTE (DASHBOARD -> CONSULTA) CORREGIDA ---
             if (location.state?.patientData) {
                 const incoming = location.state.patientData;
                 
+                // Si viene como fantasma (sin ID real), lo procesamos como tal
                 if (incoming.isGhost) {
                      handleSelectPatient(incoming);
                 } else {
+                     // Paciente real - buscamos en la lista cargada para asegurar consistencia
                      const realPatient = loadedPatients.find(p => p.id === incoming.id);
                      if (realPatient) setSelectedPatient(realPatient);
-                     else setSelectedPatient(incoming);
+                     else setSelectedPatient(incoming); // Fallback si no estaba en la lista inicial
+                     
                      toast.success(`Paciente cargado: ${incoming.name}`);
                 }
 
+                // Capturar el ID de la cita para cerrar el ciclo
                 if (location.state.linkedAppointmentId) {
                     setLinkedAppointmentId(location.state.linkedAppointmentId);
                     console.log("🔗 Cita vinculada para cierre automático:", location.state.linkedAppointmentId);
                 }
                 
+                // Limpiamos el state para evitar re-lecturas erróneas al recargar
                 window.history.replaceState({}, document.title);
             }
+            // Soporte Legacy (Solo nombre) -> Walk-in
             else if (location.state?.patientName) {
                 const incomingName = location.state.patientName;
                 const existingPatient = loadedPatients.find((p: any) => p.name.toLowerCase() === incomingName.toLowerCase());
@@ -193,6 +210,7 @@ const ConsultationView: React.FC = () => {
             if (currentUserId) localStorage.removeItem(`draft_${currentUserId}`);
             setGeneratedNote(null);
             setIsRiskExpanded(false);
+            startTimeRef.current = Date.now(); // Reiniciar timer
         } else if (!transcript) {
             setGeneratedNote(null);
             setIsRiskExpanded(false);
@@ -216,12 +234,15 @@ const ConsultationView: React.FC = () => {
     return patients.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()));
   }, [patients, searchTerm]);
 
+  // --- LÓGICA DE SELECCIÓN INTELIGENTE (LAZY REGISTRATION) ---
   const handleSelectPatient = async (patient: any) => {
+      // Caso 1: Es una Cita Fantasma (Viene de Agenda/Dashboard sin ID de paciente)
       if (patient.isGhost) {
           const loadingToast = toast.loading("Registrando paciente desde la cita...");
           try {
               if (!currentUserId) throw new Error("No autenticado");
 
+              // 1. Crear el paciente en la BD automáticamente
               const { data: newPatient, error: createError } = await supabase.from('patients').insert({
                   name: patient.name,
                   doctor_id: currentUserId,
@@ -230,11 +251,13 @@ const ConsultationView: React.FC = () => {
 
               if (createError) throw createError;
 
+              // 2. Vincular la cita huérfana al nuevo paciente
               await supabase.from('appointments').update({ patient_id: newPatient.id }).eq('id', patient.appointmentId);
 
+              // 3. Actualizar la lista local para que ya no sea fantasma
               setPatients(prev => {
-                  const filtered = prev.filter(p => p.id !== patient.id);
-                  return [newPatient, ...filtered];
+                  const filtered = prev.filter(p => p.id !== patient.id); // Quitar el fantasma
+                  return [newPatient, ...filtered]; // Poner el real
               });
 
               setSelectedPatient(newPatient);
@@ -245,15 +268,18 @@ const ConsultationView: React.FC = () => {
               console.error(error);
               toast.dismiss(loadingToast);
               toast.error("Error al registrar paciente automático.");
+              // Fallback: lo cargamos como temporal para no bloquear al médico
               setSelectedPatient({ ...patient, id: 'temp_' + Date.now(), isTemporary: true });
           }
       } 
+      // Caso 2: Paciente Normal
       else {
           setSelectedPatient(patient);
       }
       setSearchTerm('');
   };
 
+  // --- NUEVA FUNCIÓN: CREAR PACIENTE TEMPORAL DESDE BUSCADOR ---
   const handleCreateTemporary = (name: string) => {
       const tempPatient: any = { 
           id: 'temp_' + Date.now(), 
@@ -262,7 +288,8 @@ const ConsultationView: React.FC = () => {
       };
       setSelectedPatient(tempPatient);
       setSearchTerm('');
-      toast.info(`Nuevo paciente temporal: ${name}`);
+      startTimeRef.current = Date.now(); // Reiniciar timer
+      toast.info(`Nuevo paciente temporal: ${name} (Se guardará al finalizar)`);
   };
 
   const handleToggleRecording = () => {
@@ -335,6 +362,9 @@ const ConsultationView: React.FC = () => {
       }
   };
 
+  // =================================================================================
+  // 🚀 FUNCIÓN GENERATE (IA V-ULTIMATE)
+  // =================================================================================
   const handleGenerate = async () => {
     if (!transcript) return toast.error("Sin audio.");
     
@@ -421,6 +451,9 @@ const ConsultationView: React.FC = () => {
     }
   };
 
+  // =================================================================================
+  // 💾 FUNCIÓN SAVE (CON LÓGICA DE CIERRE DE CICLO Y TIEMPO REAL)
+  // =================================================================================
   const handleSaveConsultation = async () => {
     if (!selectedPatient || !generatedNote) return toast.error("Faltan datos.");
     if (!isOnline) return toast.error("Requiere internet para sincronizar con la nube.");
@@ -432,6 +465,7 @@ const ConsultationView: React.FC = () => {
         
         let finalPatientId = selectedPatient.id;
 
+        // 1. SI ES PACIENTE TEMPORAL (WALK-IN), LO REGISTRAMOS AHORA
         if ((selectedPatient as any).isTemporary) {
             const { data: newPatient, error: createError } = await supabase.from('patients').insert({
                 name: selectedPatient.name,
@@ -448,14 +482,19 @@ const ConsultationView: React.FC = () => {
             ? `FECHA: ${new Date().toLocaleDateString()}\nS: ${generatedNote.soap.subjective}\nO: ${generatedNote.soap.objective}\nA: ${generatedNote.soap.assessment}\nP: ${generatedNote.soap.plan}\n\nPLAN PACIENTE:\n${editableInstructions}`
             : (generatedNote.clinicalNote + "\n\nPLAN PACIENTE:\n" + editableInstructions);
 
+        // 2. CERRAR CITA EN AGENDA (Si existe vínculo)
         if (linkedAppointmentId) {
              await supabase.from('appointments')
                 .update({ status: 'completed' })
                 .eq('id', linkedAppointmentId);
              console.log("✅ Cita marcada como completada en Dashboard");
         } else {
+             // Fallback para citas fantasmas internas
              await AppointmentService.markAppointmentAsCompleted(finalPatientId);
         }
+
+        // 3. CALCULAR TIEMPO REAL DE CONSULTA
+        const durationSeconds = Math.round((Date.now() - startTimeRef.current) / 1000);
 
         const payload = {
             doctor_id: user.id, 
@@ -464,7 +503,8 @@ const ConsultationView: React.FC = () => {
             summary: summaryToSave,
             status: 'completed',
             ai_analysis_data: generatedNote, 
-            legal_status: 'validated'
+            legal_status: 'validated',
+            real_duration_seconds: durationSeconds // CAMPO NUEVO
         };
 
         const { error } = await supabase.from('consultations').insert(payload);
@@ -481,7 +521,8 @@ const ConsultationView: React.FC = () => {
         setConsentGiven(false); 
         setIsRiskExpanded(false);
         setPatientInsights(null);
-        setLinkedAppointmentId(null); 
+        setLinkedAppointmentId(null);
+        startTimeRef.current = Date.now(); // Reiniciar cronómetro para el siguiente
 
     } catch (e:any) { 
         console.error("Error guardando:", e);
@@ -579,6 +620,7 @@ const ConsultationView: React.FC = () => {
                             {p.isGhost && <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full flex items-center gap-1"><Calendar size={10}/> Cita sin registro</span>}
                         </div>
                     ))}
+                    {/* BOTÓN PARA CREAR PACIENTE NUEVO (SOLUCIÓN ERROR "FALTAN DATOS") */}
                     {filteredPatients.length === 0 && (
                         <div 
                             onClick={() => handleCreateTemporary(searchTerm)} 
