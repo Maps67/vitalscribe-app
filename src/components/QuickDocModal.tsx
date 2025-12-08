@@ -1,6 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { X, Printer, FileText, Calendar, User } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import React, { useState } from 'react';
+import { X, Printer, FileText, Calendar, User, AlignLeft } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
@@ -14,161 +13,239 @@ interface QuickDocModalProps {
 export const QuickDocModal: React.FC<QuickDocModalProps> = ({ isOpen, onClose, doctorProfile, defaultType = 'justificante' }) => {
   const [docType, setDocType] = useState(defaultType);
   const [patientName, setPatientName] = useState('');
+  const [age, setAge] = useState(''); // Nuevo campo para igualar formato
   const [diagnosis, setDiagnosis] = useState('');
   const [restDays, setRestDays] = useState('1');
   const [content, setContent] = useState('');
   
-  // Auto-llenado de fecha
-  const todayLong = format(new Date(), "d 'de' MMMM 'del' yyyy", { locale: es });
+  // Fecha larga automática (Ej: 7 de diciembre de 2025)
+  const todayLong = format(new Date(), "d 'de' MMMM 'de' yyyy", { locale: es });
 
   const handlePrint = () => {
     const printWindow = window.open('', '', 'height=800,width=800');
     if (!printWindow) return;
 
-    // PLANTILLA LEGAL MÉXICO (NOM-004)
+    // --- ESTILOS CLONADOS DE LA RECETA VERDE (TEAL BRANDING) ---
+    const primaryColor = "#0d9488"; // El Teal de tu marca
+    const lightColor = "#f0fdfa";   // Fondo muy suave
+    const grayText = "#4b5563";
+
+    const docTitle = docType === 'justificante' ? 'JUSTIFICANTE MÉDICO' : docType === 'certificado' ? 'CERTIFICADO DE SALUD' : 'RECETA MÉDICA';
+
     const htmlContent = `
       <html>
         <head>
-          <title>${docType.toUpperCase()}</title>
+          <title>${docTitle}</title>
           <style>
-            body { font-family: 'Times New Roman', serif; padding: 40px; color: #000; }
-            .header { text-align: center; margin-bottom: 40px; border-bottom: 2px solid #000; padding-bottom: 20px; }
-            .doctor-name { font-size: 24px; font-weight: bold; text-transform: uppercase; }
-            .meta-info { font-size: 12px; margin-top: 5px; }
-            .title { text-align: center; font-size: 20px; font-weight: bold; margin: 30px 0; text-decoration: underline; text-transform: uppercase; }
-            .content { font-size: 14px; line-height: 1.8; text-align: justify; margin-bottom: 60px; }
-            .signature-section { margin-top: 100px; text-align: center; page-break-inside: avoid; }
-            .line { border-top: 1px solid #000; width: 60%; margin: 0 auto 10px auto; }
-            .cedula { font-size: 12px; font-weight: bold; }
-            .footer { position: fixed; bottom: 20px; left: 0; right: 0; text-align: center; font-size: 10px; color: #666; }
+            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+            body { font-family: 'Inter', sans-serif; padding: 40px; color: #1f2937; -webkit-print-color-adjust: exact; }
+            
+            /* HEADER */
+            .header { margin-bottom: 20px; }
+            .doctor-name { color: ${primaryColor}; font-size: 22px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; }
+            .specialty { font-size: 11px; font-weight: 700; color: #374151; letter-spacing: 1px; text-transform: uppercase; margin-top: 4px; }
+            .meta { font-size: 10px; color: #6b7280; margin-top: 2px; }
+            .separator { height: 3px; background-color: ${primaryColor}; width: 100%; margin-top: 15px; margin-bottom: 20px; }
+
+            /* PATIENT BAR */
+            .patient-bar { background-color: ${lightColor}; border: 1px solid #ccfbf1; padding: 8px 15px; border-radius: 6px; display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 30px; }
+            .label { color: ${primaryColor}; font-weight: 800; text-transform: uppercase; margin-right: 5px; }
+            .value { color: #111827; font-weight: 500; }
+
+            /* TITLE */
+            .doc-title { text-align: center; font-size: 18px; font-weight: 700; color: ${primaryColor}; text-decoration: underline; text-transform: uppercase; margin-bottom: 30px; letter-spacing: 1px; }
+
+            /* BODY */
+            .content { font-size: 12px; line-height: 1.8; text-align: justify; margin-bottom: 60px; color: #374151; }
+            .highlight { font-weight: bold; color: #000; }
+
+            /* FOOTER & SIGNATURE */
+            .footer-container { position: fixed; bottom: 40px; left: 40px; right: 40px; display: flex; justify-content: space-between; align-items: flex-end; }
+            
+            .legal-text { width: 50%; font-size: 7px; color: #9ca3af; text-align: justify; border-top: 1px solid #e5e7eb; padding-top: 5px; }
+            
+            .signature-box { width: 40%; text-align: center; }
+            .sig-line { border-top: 1px solid #000; margin-bottom: 5px; }
+            .sig-name { font-size: 11px; font-weight: 800; color: #111827; }
+            .sig-meta { font-size: 9px; color: #6b7280; }
+
             @media print { .no-print { display: none; } }
           </style>
         </head>
         <body>
+          
           <div class="header">
             <div class="doctor-name">${doctorProfile?.full_name || 'DR. NOMBRE DEL MÉDICO'}</div>
-            <div class="meta-info">${doctorProfile?.specialty?.toUpperCase() || 'MEDICINA GENERAL'}</div>
-            <div class="meta-info">${doctorProfile?.university || 'UNIVERSIDAD DE EGRESO'}</div>
-            <div class="meta-info">CÉDULA PROF: ${doctorProfile?.license_number || 'PENDIENTE'}</div>
-            <div class="meta-info" style="margin-top: 10px;">${doctorProfile?.address || 'Dirección del Consultorio'} | Tel: ${doctorProfile?.phone || ''}</div>
+            <div class="specialty">${doctorProfile?.specialty || 'MEDICINA GENERAL'}</div>
+            <div class="meta">${doctorProfile?.university || 'UNIVERSIDAD DE EGRESO'}</div>
+            <div class="meta">CÉDULA PROFESIONAL: ${doctorProfile?.license_number || 'PENDIENTE'}</div>
+            <div class="meta">${doctorProfile?.address || 'Dirección del consultorio no configurada'}</div>
+            <div class="separator"></div>
           </div>
 
-          <div class="title">
-            ${docType === 'justificante' ? 'JUSTIFICANTE MÉDICO' : docType === 'certificado' ? 'CERTIFICADO MÉDICO' : 'RECETA MÉDICA'}
+          <div class="patient-bar">
+            <div><span class="label">Paciente:</span> <span class="value">${patientName.toUpperCase() || '__________________'}</span></div>
+            <div><span class="label">Edad:</span> <span class="value">${age || '--'}</span></div>
+            <div><span class="label">Fecha:</span> <span class="value">${todayLong}</span></div>
           </div>
+
+          <div class="doc-title">${docTitle}</div>
 
           <div class="content">
-            <p align="right"><b>Lugar y Fecha:</b> ${location.hostname === 'localhost' ? 'CDMX' : 'México'}, a ${todayLong}.</p>
-            <br/>
             ${generateBody()}
           </div>
 
-          <div class="signature-section">
-            <div class="line"></div>
-            <div><b>${doctorProfile?.full_name}</b></div>
-            <div class="cedula">CÉD. PROF. ${doctorProfile?.license_number}</div>
-            <div>FIRMA AUTÓGRAFA</div>
+          <div class="footer-container">
+            <div class="legal-text">
+                <b>AVISO LEGAL:</b><br/>
+                Este documento es un comprobante médico privado legalmente válido conforme a la legislación sanitaria vigente (NOM-004-SSA3-2012). Su falsificación, alteración o uso indebido constituye un delito sancionado por la ley. La información contenida está protegida por el secreto médico.
+                <br/>Generado vía MediScribe AI.
+            </div>
+            
+            <div class="signature-box">
+                <div class="sig-line"></div>
+                <div class="sig-name">${doctorProfile?.full_name}</div>
+                <div class="sig-meta">CÉD. PROF. ${doctorProfile?.license_number}</div>
+                <div class="sig-meta">FIRMA AUTÓGRAFA</div>
+            </div>
           </div>
 
-          <div class="footer">
-            Este documento contiene información confidencial protegida por el Secreto Médico.
-            Generado vía MediScribe AI.
-          </div>
         </body>
       </html>
     `;
 
     printWindow.document.write(htmlContent);
     printWindow.document.close();
-    printWindow.print();
+    // Esperar a que carguen estilos (aunque sean inline es buena práctica)
+    setTimeout(() => {
+        printWindow.print();
+        // printWindow.close(); // Opcional: cerrar automático
+    }, 500);
   };
 
   const generateBody = () => {
     if (docType === 'justificante') {
       return `
         <p><b>A QUIEN CORRESPONDA:</b></p>
-        <p>El que suscribe, Médico Cirujano legalmente autorizado para ejercer la profesión, HACE CONSTAR que después de haber examinado al paciente:</p>
-        <p align="center" style="font-size: 18px; font-weight: bold;">${patientName.toUpperCase()}</p>
-        <p>Se encontró con diagnóstico de <b>${diagnosis || 'ENFERMEDAD GENERAL'}</b>, por lo que requiere de <b>${restDays} DÍAS</b> de reposo relativo/absoluto para su recuperación y control, contando a partir de la fecha de expedición de este documento.</p>
-        <p>Se extiende la presente a petición del interesado para los fines legales y administrativos que a este convengan.</p>
+        <br/>
+        <p>El que suscribe, Médico Cirujano legalmente autorizado para ejercer la profesión, <b style="color:#0d9488">HACE CONSTAR</b> que habiendo examinado al paciente:</p>
+        <p align="center" style="font-size: 16px; font-weight: bold; margin: 20px 0; letter-spacing: 1px;">${patientName.toUpperCase()}</p>
+        <p>Se encontró con diagnóstico clínico de <span class="highlight">${diagnosis || 'ENFERMEDAD GENERAL (CIE-10)'}</span>.</p>
+        <p>Por lo anterior, se determina que requiere de <span class="highlight">${restDays} DÍAS</span> de reposo para su recuperación y control médico, abarcando el periodo a partir de la fecha de expedición de este documento.</p>
+        <br/>
+        <p>Se extiende la presente constancia a petición del interesado para los fines legales y administrativos que a este convengan, en la ciudad de <b>${location.hostname === 'localhost' ? 'México' : 'México'}</b>.</p>
       `;
     } else if (docType === 'certificado') {
       return `
         <p><b>A QUIEN CORRESPONDA:</b></p>
-        <p>CERTIFICO que habiendo practicado reconocimiento médico a:</p>
-        <p align="center" style="font-size: 18px; font-weight: bold;">${patientName.toUpperCase()}</p>
-        <p>Lo he encontrado <b>CLÍNICAMENTE SANO</b>, sin evidencia de enfermedades infectocontagiosas, crónico-degenerativas ni alteraciones psicomotrices al momento de la exploración, por lo que se encuentra APTO para realizar las actividades que le sean requeridas.</p>
-        <p>Se extiende el presente certificado a solicitud del interesado.</p>
+        <br/>
+        <p>El que suscribe, Médico Cirujano legalmente autorizado, <b style="color:#0d9488">CERTIFICA</b> que habiendo practicado un reconocimiento médico exhaustivo y revisión de antecedentes a:</p>
+        <p align="center" style="font-size: 16px; font-weight: bold; margin: 20px 0; letter-spacing: 1px;">${patientName.toUpperCase()}</p>
+        <p>Al momento de la exploración, lo he encontrado <span class="highlight">CLÍNICAMENTE SANO</span>.</p>
+        <p>No se encontró evidencia de enfermedades infectocontagiosas activas, padecimientos crónico-degenerativos descompensados ni alteraciones psicomotrices que limiten sus facultades.</p>
+        <p>El paciente se encuentra <b>APTO</b> para realizar las actividades físicas, laborales o escolares que le sean requeridas conforme a su grupo de edad.</p>
+        <br/>
+        <p>Se extiende el presente certificado médico a solicitud del interesado.</p>
       `;
     } else {
-        return `<p><b>PACIENTE:</b> ${patientName}</p><p><b>RX:</b></p><p style="white-space: pre-wrap;">${content}</p>`;
+        // Receta simple (Formato libre)
+        return `
+        <div style="font-size: 14px; min-height: 400px;">
+            <p style="font-weight:bold; color: #0d9488; text-transform:uppercase;">Indicaciones Terapéuticas:</p>
+            <div style="white-space: pre-wrap; font-family: monospace; color: #000; margin-top:10px;">${content || 'Escriba aquí la prescripción...'}</div>
+        </div>
+        `;
     }
   };
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in">
-      <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-        <div className="bg-slate-900 p-4 text-white flex justify-between items-center">
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+      <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] ring-1 ring-slate-200">
+        
+        {/* Header Modal */}
+        <div className="bg-slate-50 p-4 border-b border-slate-100 flex justify-between items-center">
           <div className="flex items-center gap-2">
-            <FileText size={20} className="text-teal-400"/>
-            <h3 className="font-bold text-lg">Generador de Documentos Legales</h3>
+            <div className="p-2 bg-teal-100 rounded-lg text-teal-700">
+                <FileText size={20}/>
+            </div>
+            <div>
+                <h3 className="font-bold text-slate-800 text-sm">Generador de Documentos</h3>
+                <p className="text-[10px] text-slate-500 uppercase tracking-wide">Cumplimiento NOM-004</p>
+            </div>
           </div>
-          <button onClick={onClose} className="p-1 hover:bg-white/20 rounded-full transition-colors"><X size={20}/></button>
+          <button onClick={onClose} className="p-2 hover:bg-slate-200 rounded-full transition-colors text-slate-400"><X size={20}/></button>
         </div>
 
-        <div className="p-6 overflow-y-auto flex-1 bg-slate-50">
-          <div className="grid grid-cols-3 gap-2 mb-6 bg-white p-1 rounded-xl border border-slate-200">
+        {/* Body */}
+        <div className="p-6 overflow-y-auto flex-1 bg-white">
+          
+          {/* Selector de Tipo */}
+          <div className="flex p-1 bg-slate-100 rounded-xl mb-6">
              {['justificante', 'certificado', 'receta'].map((t) => (
                <button 
                 key={t}
                 onClick={() => setDocType(t as any)}
-                className={`py-2 rounded-lg text-xs font-bold uppercase transition-all ${docType === t ? 'bg-slate-800 text-white shadow-md' : 'text-slate-500 hover:bg-slate-100'}`}
+                className={`flex-1 py-2 rounded-lg text-xs font-bold uppercase transition-all ${docType === t ? 'bg-white text-teal-700 shadow-sm ring-1 ring-black/5' : 'text-slate-500 hover:text-slate-700'}`}
                >
                  {t}
                </button>
              ))}
           </div>
 
-          <div className="space-y-4">
-             <div>
-               <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Nombre del Paciente</label>
-               <input type="text" value={patientName} onChange={e => setPatientName(e.target.value)} className="w-full p-3 border border-slate-200 rounded-xl font-bold text-slate-800 focus:ring-2 focus:ring-teal-500 outline-none" placeholder="Nombre completo..."/>
+          <div className="grid grid-cols-1 gap-5">
+             <div className="grid grid-cols-4 gap-4">
+                 <div className="col-span-3">
+                   <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1.5 ml-1">Paciente</label>
+                   <div className="relative">
+                       <User size={16} className="absolute left-3 top-3 text-slate-400"/>
+                       <input type="text" value={patientName} onChange={e => setPatientName(e.target.value)} className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl font-bold text-slate-700 focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none transition-all text-sm" placeholder="Nombre completo..."/>
+                   </div>
+                 </div>
+                 <div className="col-span-1">
+                   <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1.5 ml-1">Edad</label>
+                   <input type="text" value={age} onChange={e => setAge(e.target.value)} className="w-full px-3 py-2.5 border border-slate-200 rounded-xl font-medium text-slate-700 focus:ring-2 focus:ring-teal-500 outline-none transition-all text-sm" placeholder="Ej. 32 años"/>
+                 </div>
              </div>
 
              {docType === 'justificante' && (
-               <div className="grid grid-cols-2 gap-4">
+               <div className="bg-teal-50/50 p-4 rounded-xl border border-teal-100 grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Días de Reposo</label>
-                    <input type="number" value={restDays} onChange={e => setRestDays(e.target.value)} className="w-full p-3 border border-slate-200 rounded-xl" />
+                    <label className="block text-[10px] font-bold text-teal-700 uppercase mb-1.5 ml-1">Días de Reposo</label>
+                    <div className="flex items-center">
+                        <button onClick={() => setRestDays(String(Math.max(1, parseInt(restDays)-1)))} className="w-8 h-10 bg-white border border-slate-200 rounded-l-lg flex items-center justify-center hover:bg-slate-50">-</button>
+                        <input type="number" value={restDays} onChange={e => setRestDays(e.target.value)} className="w-full h-10 border-y border-slate-200 text-center font-bold text-teal-800 outline-none" />
+                        <button onClick={() => setRestDays(String(parseInt(restDays)+1))} className="w-8 h-10 bg-white border border-slate-200 rounded-r-lg flex items-center justify-center hover:bg-slate-50">+</button>
+                    </div>
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Diagnóstico (CIE-10 Sugerido)</label>
-                    <input type="text" value={diagnosis} onChange={e => setDiagnosis(e.target.value)} className="w-full p-3 border border-slate-200 rounded-xl" placeholder="Ej. Faringitis Aguda..."/>
+                    <label className="block text-[10px] font-bold text-teal-700 uppercase mb-1.5 ml-1">Diagnóstico (CIE-10)</label>
+                    <input type="text" value={diagnosis} onChange={e => setDiagnosis(e.target.value)} className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-teal-500 outline-none" placeholder="Ej. J00 Rinofaringitis..."/>
                   </div>
                </div>
              )}
 
              {docType === 'receta' && (
                 <div>
-                   <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Indicaciones</label>
-                   <textarea value={content} onChange={e => setContent(e.target.value)} className="w-full p-3 border border-slate-200 rounded-xl h-32" placeholder="Escriba medicamentos..."></textarea>
+                   <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1.5 ml-1"><AlignLeft size={12} className="inline mr-1"/>Cuerpo de la Receta</label>
+                   <textarea value={content} onChange={e => setContent(e.target.value)} className="w-full p-4 border border-slate-200 rounded-xl h-40 text-sm leading-relaxed focus:ring-2 focus:ring-teal-500 outline-none resize-none font-mono" placeholder="1. Paracetamol 500mg..."></textarea>
                 </div>
              )}
-
-             <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-100 text-xs text-yellow-800 flex items-start gap-2">
-                <span className="font-bold">Nota Legal:</span> 
-                Este documento incluirá automáticamente su Cédula Profesional: {doctorProfile?.license_number || '[NO CONFIGURADA]'} y Universidad: {doctorProfile?.university || '[NO CONFIGURADA]'}. Verifique su perfil antes de imprimir.
-             </div>
           </div>
         </div>
 
-        <div className="p-4 border-t border-slate-200 flex justify-end gap-3 bg-white">
-           <button onClick={onClose} className="px-6 py-3 text-slate-500 font-bold hover:bg-slate-50 rounded-xl">Cancelar</button>
-           <button onClick={handlePrint} className="px-6 py-3 bg-slate-900 text-white font-bold rounded-xl flex items-center gap-2 hover:bg-black shadow-lg">
-             <Printer size={18} /> IMPRIMIR OFICIAL
-           </button>
+        {/* Footer Actions */}
+        <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-between items-center">
+           <p className="text-[10px] text-slate-400 max-w-[50%] leading-tight">
+               El documento se generará en formato PDF listo para imprimir conforme a la identidad visual de su consultorio.
+           </p>
+           <div className="flex gap-3">
+               <button onClick={onClose} className="px-4 py-2.5 text-slate-500 font-bold hover:bg-white hover:shadow-sm rounded-lg transition-all text-xs">Cancelar</button>
+               <button onClick={handlePrint} className="px-6 py-2.5 bg-teal-600 text-white font-bold rounded-xl flex items-center gap-2 hover:bg-teal-700 shadow-lg shadow-teal-600/20 active:scale-95 transition-all text-xs">
+                 <Printer size={16} /> IMPRIMIR DOCUMENTO
+               </button>
+           </div>
         </div>
       </div>
     </div>
