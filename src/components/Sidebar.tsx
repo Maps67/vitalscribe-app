@@ -1,9 +1,8 @@
-// Archivo: src/components/Sidebar.tsx
 import React, { useEffect, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom'; 
 import { 
   LayoutDashboard, Stethoscope, Users, Briefcase, LogOut, X, 
-  Settings, Download, Share, Calendar, Moon, Sun, Crown 
+  Settings, Download, Share, Calendar, Moon, Sun 
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useTheme } from '../context/ThemeContext';
@@ -87,34 +86,15 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, onLogout }) => {
             </NavLink>
           ))}
 
-          {/* BOTÓN UPGRADE */}
-          <div className="pt-4 mt-2">
-            <button 
-                onClick={() => navigate('/settings')} 
-                className="w-full relative overflow-hidden group bg-gradient-to-r from-amber-100 to-amber-200 dark:from-amber-900/40 dark:to-amber-800/40 border border-amber-200 dark:border-amber-700/50 rounded-xl p-3 shadow-sm hover:shadow-md transition-all"
-            >
-                <div className="flex items-center justify-between relative z-10">
-                    <div className="flex items-center gap-3">
-                        <div className="bg-white/80 dark:bg-black/20 p-1.5 rounded-lg text-amber-600 dark:text-amber-400">
-                            <Crown size={18} fill="currentColor" />
-                        </div>
-                        <div className="text-left">
-                            <p className="text-xs font-bold text-amber-900 dark:text-amber-100 uppercase tracking-wider">Plan PRO</p>
-                            <p className="text-[10px] text-amber-700 dark:text-amber-300 font-medium">Desbloquear todo</p>
-                        </div>
-                    </div>
-                </div>
-                <div className="absolute top-0 -left-[100%] group-hover:left-[100%] w-full h-full bg-gradient-to-r from-transparent via-white/40 to-transparent transition-all duration-1000 ease-in-out transform skew-x-12"></div>
+          {/* ZONA DE TOGGLES E INSTALACIÓN */}
+          <div className="pt-4 mt-2 border-t border-slate-100 dark:border-slate-800">
+            <button onClick={toggleTheme} className="w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-colors duration-200 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 font-medium">
+              {theme === 'light' ? <Moon size={20} /> : <Sun size={20} />}
+              <span>{theme === 'light' ? 'Modo Oscuro' : 'Modo Claro'}</span>
             </button>
-          </div>
 
-          <button onClick={toggleTheme} className="w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-colors duration-200 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 mt-2 font-medium">
-            {theme === 'light' ? <Moon size={20} /> : <Sun size={20} />}
-            <span>{theme === 'light' ? 'Modo Oscuro' : 'Modo Claro'}</span>
-          </button>
-
-          {!isStandalone && (
-            <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800">
+            {!isStandalone && (
+              <div className="mt-2">
                 <button 
                   onClick={handleInstallClick} 
                   className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-colors duration-200 shadow-lg active:scale-95 ${canInstall || isIOS ? 'bg-slate-900 dark:bg-slate-800 text-white cursor-pointer' : 'bg-slate-100 text-slate-400 cursor-help'}`}
@@ -124,14 +104,15 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, onLogout }) => {
                 </button>
                 
                 {showIOSInstructions && (
-                    <div className="mt-3 p-3 bg-slate-100 dark:bg-slate-800 rounded-lg text-xs text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 animate-fade-in-up">
-                        <p className="font-bold mb-2">Para instalar en iPhone:</p>
-                        <div className="flex items-center gap-2 mb-1">1. Toca <Share size={12} className="text-blue-500"/> Compartir.</div>
-                        <div>2. Selecciona <strong>"Agregar a Inicio"</strong>.</div>
-                    </div>
+                  <div className="mt-3 p-3 bg-slate-100 dark:bg-slate-800 rounded-lg text-xs text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 animate-fade-in-up">
+                    <p className="font-bold mb-2">Para instalar en iPhone:</p>
+                    <div className="flex items-center gap-2 mb-1">1. Toca <Share size={12} className="text-blue-500"/> Compartir.</div>
+                    <div>2. Selecciona <strong>"Agregar a Inicio"</strong>.</div>
+                  </div>
                 )}
-            </div>
-          )}
+              </div>
+            )}
+          </div>
         </nav>
 
         <div className="p-4 border-t border-slate-100 dark:border-slate-800 shrink-0 bg-white dark:bg-slate-900 z-10">
