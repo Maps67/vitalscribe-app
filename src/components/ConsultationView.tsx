@@ -68,10 +68,12 @@ const ConsultationView: React.FC = () => {
   const [isInsightsOpen, setIsInsightsOpen] = useState(false);
   const [patientInsights, setPatientInsights] = useState<PatientInsight | null>(null);
   const [isLoadingInsights, setIsLoadingInsights] = useState(false);
-
-  // --- ESTADOS NUEVOS (INTEGRACIÓN DASHBOARD) ---
+  
+  // ESTADO NUEVO PARA ENLAZAR CITA DEL DASHBOARD
   const [linkedAppointmentId, setLinkedAppointmentId] = useState<string | null>(null);
-  const startTimeRef = useRef<number>(Date.now()); // Cronómetro invisible
+
+  // ⏱️ CRONÓMETRO INTERNO: Marca el inicio real de la consulta
+  const startTimeRef = useRef<number>(Date.now());
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const transcriptEndRef = useRef<HTMLDivElement>(null);
@@ -84,7 +86,7 @@ const ConsultationView: React.FC = () => {
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
     
-    // Iniciar cronómetro al montar
+    // Reset del timer al montar el componente
     startTimeRef.current = Date.now();
 
     return () => { window.removeEventListener('online', handleOnline); window.removeEventListener('offline', handleOffline); };
@@ -103,7 +105,7 @@ const ConsultationView: React.FC = () => {
             // 1. Cargar Pacientes Registrados
             const { data: patientsData } = await supabase.from('patients').select('*').order('created_at', { ascending: false });
             
-            // 2. Cargar Citas "Fantasmas"
+            // 2. Cargar Citas "Fantasmas" (Sin ID de paciente vinculado)
             const today = new Date();
             today.setHours(0,0,0,0);
             
@@ -143,7 +145,7 @@ const ConsultationView: React.FC = () => {
                 }
             }
 
-            // --- LÓGICA DE PUENTE (DASHBOARD -> CONSULTA) CORREGIDA ---
+            // --- LÓGICA DE PUENTE (DASHBOARD -> CONSULTA) ---
             if (location.state?.patientData) {
                 const incoming = location.state.patientData;
                 
@@ -154,7 +156,7 @@ const ConsultationView: React.FC = () => {
                      // Paciente real - buscamos en la lista cargada para asegurar consistencia
                      const realPatient = loadedPatients.find(p => p.id === incoming.id);
                      if (realPatient) setSelectedPatient(realPatient);
-                     else setSelectedPatient(incoming); // Fallback si no estaba en la lista inicial
+                     else setSelectedPatient(incoming); // Fallback
                      
                      toast.success(`Paciente cargado: ${incoming.name}`);
                 }
@@ -362,9 +364,6 @@ const ConsultationView: React.FC = () => {
       }
   };
 
-  // =================================================================================
-  // 🚀 FUNCIÓN GENERATE (IA V-ULTIMATE)
-  // =================================================================================
   const handleGenerate = async () => {
     if (!transcript) return toast.error("Sin audio.");
     
@@ -451,9 +450,6 @@ const ConsultationView: React.FC = () => {
     }
   };
 
-  // =================================================================================
-  // 💾 FUNCIÓN SAVE (CON LÓGICA DE CIERRE DE CICLO Y TIEMPO REAL)
-  // =================================================================================
   const handleSaveConsultation = async () => {
     if (!selectedPatient || !generatedNote) return toast.error("Faltan datos.");
     if (!isOnline) return toast.error("Requiere internet para sincronizar con la nube.");
@@ -504,7 +500,7 @@ const ConsultationView: React.FC = () => {
             status: 'completed',
             ai_analysis_data: generatedNote, 
             legal_status: 'validated',
-            real_duration_seconds: durationSeconds // CAMPO NUEVO
+            real_duration_seconds: durationSeconds // CAMPO NUEVO PARA TELEMETRÍA REAL
         };
 
         const { error } = await supabase.from('consultations').insert(payload);
@@ -558,30 +554,44 @@ const ConsultationView: React.FC = () => {
       } catch { toast.error("Error agendando"); }
   };
 
+  // --- FUNCIÓN DE GENERACIÓN DE PDF ROBUSTA Y LEGAL ---
   const generatePDFBlob = async () => {
       if (!selectedPatient || !doctorProfile) return null;
       
-      // Cálculo de edad si tuvieras la fecha, o placeholder legal
       const ageDisplay = "No registrada"; 
 
-      return await pdf(
-        <PrescriptionPDF 
-            doctorName={doctorProfile.full_name} 
-            specialty={doctorProfile.specialty} 
-            license={doctorProfile.license_number} 
-            university={doctorProfile.university || "Universidad Nacional"} // Fallback
-            phone={doctorProfile.phone || ""}
-            address={doctorProfile.address || ""}
-            logoUrl={doctorProfile.logo_url} 
-            signatureUrl={doctorProfile.signature_url} 
-            patientName={selectedPatient.name}
-            patientAge={ageDisplay} // NUEVO CAMPO
-            date={new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' })}
-            content={editableInstructions} 
-        />
-      ).toBlob();
+      try {
+        return await pdf(
+            <PrescriptionPDF 
+                doctorName={doctorProfile.full_name} 
+                specialty={doctorProfile.specialty} 
+                license={doctorProfile.license_number} 
+                university={doctorProfile.university || "Universidad Nacional"} 
+                phone={doctorProfile.phone || ""}
+                address={doctorProfile.address || ""}
+                logoUrl={doctorProfile.logo_url} 
+                signatureUrl={doctorProfile.signature_url} 
+                patientName={selectedPatient.name}
+                patientAge={ageDisplay} 
+                date={new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' })}
+                content={editableInstructions} 
+            />
+        ).toBlob();
+      } catch (error) {
+          console.error("Error generando PDF:", error);
+          toast.error("Error al generar el PDF. Revise la consola.");
+          return null;
+      }
   };
-  const handlePrint = async () => { const blob = await generatePDFBlob(); if(blob) window.open(URL.createObjectURL(blob), '_blank'); };
+
+  const handlePrint = async () => { 
+      const loadingToast = toast.loading("Generando receta...");
+      const blob = await generatePDFBlob(); 
+      toast.dismiss(loadingToast);
+      if(blob) {
+          window.open(URL.createObjectURL(blob), '_blank');
+      }
+  };
   
   const handleShareWhatsApp = async () => { 
     if (!editableInstructions || !selectedPatient) return toast.error("No hay instrucciones.");
