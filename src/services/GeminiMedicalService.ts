@@ -109,32 +109,36 @@ const getSpecialtyPromptConfig = (specialty: string) => {
 // ==========================================
 export const GeminiMedicalService = {
 
-  // --- A. NOTA CLÍNICA (Con Lógica Hybrid Retrieval) ---
+  // --- A. NOTA CLÍNICA (Con Lógica Hybrid Retrieval + Chain of Thought) ---
   async generateClinicalNote(transcript: string, specialty: string = "Medicina General", patientHistory: string = ""): Promise<GeminiResponse> {
     try {
       const now = new Date();
       const profile = getSpecialtyPromptConfig(specialty);
 
-      // Implementación del Hybrid Retrieval en el Prompt
+      // Implementación del Hybrid Retrieval + Chain of Thought en el Prompt
       const prompt = `
         ROL: Actúas como "MediScribe AI", asistente de documentación clínica.
         PERFIL CLÍNICO: Tienes el conocimiento experto de un ${profile.role}.
         ENFOQUE DE ANÁLISIS: ${profile.focus}
         SESGO CLÍNICO: ${profile.bias}
 
-        🔥🔥 ESTRATEGIA DE MEMORIA: HYBRID RETRIEVAL (BÚSQUEDA HÍBRIDA) 🔥🔥
-        Para generar esta nota, debes procesar dos fuentes de información con jerarquía distinta:
+        🔥🔥 ESTRATEGIA DE MEMORIA: HYBRID RETRIEVAL + CHAIN OF THOUGHT 🔥🔥
+        Debes procesar dos fuentes y ejecutar una SIMULACIÓN MENTAL antes de escribir:
 
         1. FUENTE A: CHUNK ESTÁTICO (SAFETY LAYER) [PRIORIDAD ALTA]
-           - Contiene: Alergias, Enfermedades Crónicas, Medicación Activa (Datos duros de SQL).
-           - Instrucción: Estos datos son la VERDAD ABSOLUTA del paciente. Si el plan actual los contradice, es una ALERTA.
+           - Datos: Alergias, Enfermedades Crónicas (Ej. Tetralogía de Fallot, Insuficiencia Renal).
+           - Instrucción: Esta es la FISIOLOGÍA BASE del paciente.
 
-        2. FUENTE B: CHUNK DINÁMICO (VECTOR LAYER) [CONTEXTO EPISÓDICO]
-           - Contiene: La transcripción de la consulta actual (Dolor, motivo de visita).
-        
-        🛑 PROTOCOLO DE SEGURIDAD (CRUCE DE FUENTES):
-        - Antes de validar cualquier medicamento o tratamiento en la Fuente B, crúzalo contra la Fuente A.
-        - Ejemplo: Si Fuente B dice "Recetar Diclofenaco" pero Fuente A dice "Insuficiencia Renal", TU DEBER es marcar 'risk_analysis' como ALTO.
+        2. FUENTE B: CHUNK DINÁMICO (VECTOR LAYER) [ACCIONES]
+           - Datos: Transcripción actual, órdenes médicas, medicamentos recetados.
+
+        🛑 PROTOCOLO "ADVERSARIAL CHECK" (OBLIGATORIO):
+        ANTES de generar el JSON, piensa paso a paso (Chain of Thought):
+        1. Identifica la patología base en FUENTE A (Ej: Cardiopatía Congénita).
+        2. Identifica la intervención en FUENTE B (Ej: Nitroglicerina).
+        3. SIMULA EL EFECTO: ¿Qué le hace la intervención a la fisiología base?
+           - *Ejemplo Crítico:* Si tiene Tetralogía de Fallot y recibe vasodilatadores (Nitro), cae la resistencia sistémica -> Aumenta el shunt derecha-izquierda -> MUERTE.
+        4. Si el resultado es DAÑO GRAVE, tu deber es marcar 'risk_analysis' como ALTO y ADVERTIR, aunque el médico lo haya ordenado.
 
         DATOS DE ENTRADA:
         - Fecha: ${now.toLocaleDateString()}
