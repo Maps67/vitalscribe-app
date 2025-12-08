@@ -27,6 +27,13 @@ export const QuickDocModal: React.FC<QuickDocModalProps> = ({ isOpen, onClose, d
     try {
         const titleMap = { 'justificante': 'JUSTIFICANTE MÉDICO', 'certificado': 'CERTIFICADO DE SALUD', 'receta': 'RECETA MÉDICA' };
         const finalTitle = titleMap[docType];
+        
+        // LÓGICA DE PREFIJO "DR." FORZOSO PARA DOCUMENTOS
+        let finalDrName = doctorProfile?.full_name || 'Dr.';
+        if (!finalDrName.startsWith('Dr.') && !finalDrName.startsWith('Dra.')) {
+            finalDrName = `Dr. ${finalDrName}`;
+        }
+
         let bodyText = "";
         if (docType === 'justificante') {
             bodyText = `A QUIEN CORRESPONDA:\n\n` +
@@ -43,7 +50,25 @@ export const QuickDocModal: React.FC<QuickDocModalProps> = ({ isOpen, onClose, d
         } else {
             bodyText = content || "Sin prescripciones agregadas.";
         }
-        const blob = await pdf(<PrescriptionPDF doctorName={doctorProfile?.full_name || 'Dr.'} specialty={doctorProfile?.specialty || 'Medicina General'} license={doctorProfile?.license_number || ''} university={doctorProfile?.university || ''} phone={doctorProfile?.phone || ''} address={doctorProfile?.address || ''} logoUrl={doctorProfile?.logo_url} signatureUrl={doctorProfile?.signature_url} patientName={patientName} patientAge={age || ''} date={todayLong} documentTitle={finalTitle} content={bodyText} />).toBlob();
+        
+        const blob = await pdf(
+            <PrescriptionPDF 
+                doctorName={finalDrName} // <--- Pasamos el nombre con prefijo asegurado
+                specialty={doctorProfile?.specialty || 'Medicina General'} 
+                license={doctorProfile?.license_number || ''} 
+                university={doctorProfile?.university || ''} 
+                phone={doctorProfile?.phone || ''} 
+                address={doctorProfile?.address || ''} 
+                logoUrl={doctorProfile?.logo_url} 
+                signatureUrl={doctorProfile?.signature_url} 
+                patientName={patientName} 
+                patientAge={age || ''} 
+                date={todayLong} 
+                documentTitle={finalTitle} 
+                content={bodyText} 
+            />
+        ).toBlob();
+        
         const url = URL.createObjectURL(blob);
         window.open(url, '_blank');
         toast.dismiss(loadingToast);
