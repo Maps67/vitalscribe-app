@@ -4,7 +4,7 @@ import {
   Calendar, MapPin, ChevronRight, Sun, Moon, Cloud, 
   Upload, X, Bot, Mic, Square, Loader2, CheckCircle2,
   Stethoscope, UserCircle, AlertTriangle, FileText,
-  Clock, UserPlus, Activity, Search, // <--- Search importado
+  Clock, UserPlus, Activity, Search,
   CalendarX, Repeat, Ban, PlayCircle, PenLine, Calculator, Sparkles,
   BarChart3, FileSignature, Microscope, StickyNote, FileCheck, Printer,
   Sunrise, Sunset, MoonStar
@@ -25,7 +25,7 @@ import { QuickNotes } from '../components/QuickNotes';
 import { MedicalCalculators } from '../components/MedicalCalculators';
 import { QuickDocModal } from '../components/QuickDocModal';
 
-// ... (Interfaces DashboardAppointment, PendingItem se mantienen igual) ...
+// --- INTERFACES ---
 interface DashboardAppointment {
   id: string; title: string; start_time: string; status: string;
   patient?: { id: string; name: string; history?: string; };
@@ -36,24 +36,23 @@ interface PendingItem {
     id: string; type: 'note' | 'lab' | 'appt'; title: string; subtitle: string; date: string;
 }
 
-// ... (AssistantModal se mantiene igual) ...
+// --- ASISTENTE DE VOZ ---
 const AssistantModal = ({ isOpen, onClose, onActionComplete }: { isOpen: boolean; onClose: () => void; onActionComplete: () => void }) => {
   const { isListening, transcript, startListening, stopListening, resetTranscript } = useSpeechRecognition();
   const [status, setStatus] = useState<'idle' | 'listening' | 'processing' | 'confirming'>('idle');
   const [aiResponse, setAiResponse] = useState<AgentResponse | null>(null);
   const navigate = useNavigate(); 
   
-  // Efecto para iniciar escucha automática si se abre el modal
   useEffect(() => { 
       if (isOpen) {
           resetTranscript(); 
-          setStatus('listening'); // Auto-start listening al abrir
+          setStatus('listening'); 
           startListening();
           setAiResponse(null);
       } else {
           stopListening();
       }
-  }, [isOpen]); // Dependencia simplificada
+  }, [isOpen]);
 
   const handleExecute = async () => {
     if (!aiResponse) return;
@@ -106,7 +105,6 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete }: { isOpen: boolean
                    <Loader2 className="animate-spin" /> Procesando...
                  </div>
                ) : (
-                 // Botón central de micrófono
                  <button 
                     onClick={status === 'listening' ? () => {stopListening(); setStatus('processing'); setTimeout(() => handleExecute(), 1500);} : () => {startListening(); setStatus('listening');}} 
                     className={`w-20 h-20 rounded-full flex items-center justify-center shadow-2xl transition-all transform active:scale-95 ${status === 'listening' ? 'bg-red-500 text-white animate-pulse ring-8 ring-red-100' : 'bg-slate-900 text-white hover:bg-black hover:scale-105'}`}
@@ -135,8 +133,7 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete }: { isOpen: boolean
   );
 };
 
-// ... (StatusWidget, ActivityGraph, QuickDocs, ActionRadar se mantienen igual) ...
-// (Omito el código repetido de los widgets visuales para no hacer el mensaje eterno, ya los tienes en la v5.1)
+// --- WIDGETS VISUALES ---
 const StatusWidget = ({ weather, totalApts, pendingApts, isNight, location }: any) => {
     const [time, setTime] = useState(new Date());
     useEffect(() => { const t = setInterval(() => setTime(new Date()), 1000); return () => clearInterval(t); }, []);
@@ -271,7 +268,6 @@ const MorningBriefing = ({ greeting, message, weather, systemStatus, onOpenAssis
                 </div>
                 
                 <div className="flex gap-4">
-                    {/* BARRA DE COMANDOS DE ESCRITORIO (NUEVO) */}
                     <button 
                         onClick={onOpenAssistant}
                         className="hidden md:flex items-center gap-3 bg-white/20 backdrop-blur-md border border-white/30 text-white px-5 py-3 rounded-2xl hover:bg-white/30 transition-all active:scale-95 group"
@@ -488,8 +484,8 @@ const Dashboard: React.FC = () => {
       {/* MODAL DE DOCUMENTOS LEGALES */}
       <QuickDocModal isOpen={isDocModalOpen} onClose={() => setIsDocModalOpen(false)} doctorProfile={doctorProfile} defaultType={docType} />
 
-      {/* FAB - BOTÓN FLOTANTE MÓVIL (SOLO MÓVIL) */}
-      <button onClick={() => setIsAssistantOpen(true)} className="md:hidden fixed bottom-6 right-6 w-16 h-16 bg-indigo-600 text-white rounded-full shadow-2xl flex items-center justify-center z-40 active:scale-95 border-4 border-white/20">
+      {/* FAB CORREGIDO: bottom-24 (ELEVADO) */}
+      <button onClick={() => setIsAssistantOpen(true)} className="md:hidden fixed bottom-24 right-6 w-16 h-16 bg-indigo-600 text-white rounded-full shadow-2xl flex items-center justify-center z-50 active:scale-95 border-4 border-white/20">
           <Bot size={32}/>
       </button>
 
