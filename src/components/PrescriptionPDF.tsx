@@ -2,7 +2,7 @@ import React from 'react';
 import { Page, Text, View, Document, StyleSheet, Image, Font } from '@react-pdf/renderer';
 import { MedicationItem } from '../types';
 
-// Fuentes estándar seguras
+// Fuentes estándar
 Font.register({
   family: 'Helvetica',
   fonts: [
@@ -19,7 +19,6 @@ const styles = StyleSheet.create({
   doctorInfo: { width: '80%', justifyContent: 'center' },
   doctorName: { fontSize: 14, fontFamily: 'Helvetica-Bold', color: '#0d9488', marginBottom: 2, textTransform: 'uppercase' },
   specialty: { fontSize: 10, fontFamily: 'Helvetica-Bold', color: '#555', marginBottom: 2, textTransform: 'uppercase' },
-  // Estilo específico para datos legales (Universidad, Cédula)
   detailsLegal: { fontSize: 8, color: '#444', marginBottom: 1 },
   patientSection: { marginBottom: 15, padding: 8, backgroundColor: '#f0fdfa', borderRadius: 4, flexDirection: 'row', justifyContent: 'space-between', border: '1px solid #ccfbf1' },
   label: { fontFamily: 'Helvetica-Bold', color: '#0f766e', fontSize: 9 },
@@ -35,7 +34,6 @@ const styles = StyleSheet.create({
   signatureSection: { alignItems: 'center', width: '40%' },
   signatureImage: { width: 100, height: 40, objectFit: 'contain', marginBottom: 5 },
   signatureLine: { width: '100%', borderTopWidth: 1, borderTopColor: '#333', marginTop: 5 },
-  // Texto legal obligatorio a pie de página
   legalTextContainer: { width: '55%' },
   legalText: { fontSize: 6, color: '#888', marginTop: 2, textAlign: 'left', lineHeight: 1.2 },
 });
@@ -50,7 +48,7 @@ interface PrescriptionPDFProps {
   logoUrl?: string;
   signatureUrl?: string;
   patientName: string;
-  patientAge?: string; // Nuevo campo requerido por NOM-004
+  patientAge?: string; // Recibe la edad
   date: string;
   medications?: MedicationItem[];
   content?: string; 
@@ -69,7 +67,6 @@ const PrescriptionPDF: React.FC<PrescriptionPDFProps> = ({
     return lines.map((line, index) => {
       const trimmed = line.trim();
       if (!trimmed) return null;
-      // Mapeo de secciones SOAP a formato visual
       if (trimmed.match(/^(S:|Subjetivo:)/i)) return <View key={index} style={styles.sectionBlock}><Text style={styles.sectionTitle}>PADECIMIENTO ACTUAL (S):</Text><Text style={styles.sectionBody}>{trimmed.replace(/^(S:|Subjetivo:)/i, '').trim()}</Text></View>;
       if (trimmed.match(/^(O:|Objetivo:)/i)) return <View key={index} style={styles.sectionBlock}><Text style={styles.sectionTitle}>EXPLORACIÓN FÍSICA (O):</Text><Text style={styles.sectionBody}>{trimmed.replace(/^(O:|Objetivo:)/i, '').trim()}</Text></View>;
       if (trimmed.match(/^(A:|Análisis:|Dx:)/i)) return <View key={index} style={styles.sectionBlock}><Text style={styles.sectionTitle}>DIAGNÓSTICO (A):</Text><Text style={styles.sectionBody}>{trimmed.replace(/^(A:|Análisis:|Dx:)/i, '').trim()}</Text></View>;
@@ -85,7 +82,7 @@ const PrescriptionPDF: React.FC<PrescriptionPDFProps> = ({
     <Document>
       <Page size="LETTER" style={styles.page}>
         
-        {/* ENCABEZADO LEGAL */}
+        {/* ENCABEZADO */}
         <View style={styles.header}>
           <View style={styles.logoSection}>
              {isValidUrl(logoUrl) && <Image src={logoUrl!} style={styles.logo} />}
@@ -99,24 +96,24 @@ const PrescriptionPDF: React.FC<PrescriptionPDFProps> = ({
           </View>
         </View>
 
-        {/* DATOS DEL PACIENTE (Requerido: Edad) */}
+        {/* PACIENTE */}
         <View style={styles.patientSection}>
             <View>
                 <Text><Text style={styles.label}>PACIENTE: </Text>{patientName}</Text>
             </View>
             <View style={{flexDirection: 'row', gap: 15}}>
+                {/* Aquí renderizamos la edad si existe */}
                 {patientAge && <Text><Text style={styles.label}>EDAD: </Text>{patientAge}</Text>}
                 <Text><Text style={styles.label}>FECHA: </Text>{date}</Text>
             </View>
         </View>
 
-        {/* CUERPO DEL DOCUMENTO */}
+        {/* CUERPO */}
         <View style={styles.rxSection}>
           <Text style={styles.docTitle}>{documentTitle}</Text>
           {content ? (
               <View>{formatContent(content)}</View> 
           ) : (
-              // Modo Lista de Medicamentos (Receta Rápida)
               medications.map((med, i) => (
               <View key={i} style={styles.medication}>
                   <Text style={styles.medName}>{i + 1}. {med.drug || med.name} <Text style={{fontSize:9, fontFamily:'Helvetica'}}>({med.details})</Text></Text>
@@ -127,7 +124,7 @@ const PrescriptionPDF: React.FC<PrescriptionPDFProps> = ({
           )}
         </View>
 
-        {/* PIE DE PÁGINA (NOM-004) */}
+        {/* PIE DE PÁGINA */}
         <View style={styles.footer}>
           <View style={styles.legalTextContainer}>
              <Text style={{fontSize: 7, fontFamily: 'Helvetica-Bold', marginBottom: 2}}>AVISO LEGAL:</Text>
