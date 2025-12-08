@@ -149,11 +149,19 @@ const ConsultationView: React.FC = () => {
             if (location.state?.patientData) {
                 const incoming = location.state.patientData;
                 
-                // Si viene como fantasma (sin ID real), lo procesamos como tal
+                // [MODIFICADO: LAZY LOAD] Si viene como fantasma, NO llamamos a DB, usamos memoria local
                 if (incoming.isGhost) {
-                     handleSelectPatient(incoming);
+                     const tempPatient = {
+                         ...incoming,
+                         id: `temp_${Date.now()}`, // ID válido local para React
+                         isTemporary: true, // Se guardará al final
+                         appointmentId: incoming.appointmentId || incoming.id.replace('ghost_', '')
+                     };
+                     setSelectedPatient(tempPatient);
+                     if(incoming.appointmentId) setLinkedAppointmentId(incoming.appointmentId);
+                     toast.info(`Iniciando consulta para: ${incoming.name}`);
                 } else {
-                     // Paciente real - buscamos en la lista cargada para asegurar consistencia
+                     // Paciente real - buscamos en la lista cargada
                      const realPatient = loadedPatients.find(p => p.id === incoming.id);
                      if (realPatient) setSelectedPatient(realPatient);
                      else setSelectedPatient(incoming); // Fallback
@@ -238,41 +246,17 @@ const ConsultationView: React.FC = () => {
 
   // --- LÓGICA DE SELECCIÓN INTELIGENTE (LAZY REGISTRATION) ---
   const handleSelectPatient = async (patient: any) => {
-      // Caso 1: Es una Cita Fantasma (Viene de Agenda/Dashboard sin ID de paciente)
+      // [MODIFICADO: LAZY LOAD] Si es fantasma, no registramos en BD todavía
       if (patient.isGhost) {
-          const loadingToast = toast.loading("Registrando paciente desde la cita...");
-          try {
-              if (!currentUserId) throw new Error("No autenticado");
-
-              // 1. Crear el paciente en la BD automáticamente
-              const { data: newPatient, error: createError } = await supabase.from('patients').insert({
-                  name: patient.name,
-                  doctor_id: currentUserId,
-                  history: JSON.stringify({ created_via: 'appointment_bridge', linked_appointment_id: patient.appointmentId })
-              }).select().single();
-
-              if (createError) throw createError;
-
-              // 2. Vincular la cita huérfana al nuevo paciente
-              await supabase.from('appointments').update({ patient_id: newPatient.id }).eq('id', patient.appointmentId);
-
-              // 3. Actualizar la lista local para que ya no sea fantasma
-              setPatients(prev => {
-                  const filtered = prev.filter(p => p.id !== patient.id); // Quitar el fantasma
-                  return [newPatient, ...filtered]; // Poner el real
-              });
-
-              setSelectedPatient(newPatient);
-              toast.dismiss(loadingToast);
-              toast.success(`Paciente ${newPatient.name} registrado y vinculado.`);
-
-          } catch (error) {
-              console.error(error);
-              toast.dismiss(loadingToast);
-              toast.error("Error al registrar paciente automático.");
-              // Fallback: lo cargamos como temporal para no bloquear al médico
-              setSelectedPatient({ ...patient, id: 'temp_' + Date.now(), isTemporary: true });
-          }
+          const tempPatient = {
+              ...patient,
+              id: `temp_${Date.now()}`,
+              isTemporary: true,
+              appointmentId: patient.appointmentId // Preservamos vínculo
+          };
+          setSelectedPatient(tempPatient);
+          if (patient.appointmentId) setLinkedAppointmentId(patient.appointmentId);
+          toast.info(`Paciente temporal: ${patient.name} (Se registrará al guardar)`);
       } 
       // Caso 2: Paciente Normal
       else {
@@ -461,7 +445,7 @@ const ConsultationView: React.FC = () => {
         
         let finalPatientId = selectedPatient.id;
 
-        // 1. SI ES PACIENTE TEMPORAL (WALK-IN), LO REGISTRAMOS AHORA
+        // 1. SI ES PACIENTE TEMPORAL (WALK-IN O GHOST), LO REGISTRAMOS AHORA
         if ((selectedPatient as any).isTemporary) {
             const { data: newPatient, error: createError } = await supabase.from('patients').insert({
                 name: selectedPatient.name,
@@ -480,10 +464,14 @@ const ConsultationView: React.FC = () => {
 
         // 2. CERRAR CITA EN AGENDA (Si existe vínculo)
         if (linkedAppointmentId) {
+             // [MODIFICADO: DATA INTEGRITY] Aseguramos que la cita quede vinculada al paciente real
              await supabase.from('appointments')
-                .update({ status: 'completed' })
+                .update({ 
+                    status: 'completed',
+                    patient_id: finalPatientId // Actualización crítica para Ghosts
+                })
                 .eq('id', linkedAppointmentId);
-             console.log("✅ Cita marcada como completada en Dashboard");
+             console.log("✅ Cita marcada como completada y vinculada en Dashboard");
         } else {
              // Fallback para citas fantasmas internas
              await AppointmentService.markAppointmentAsCompleted(finalPatientId);
