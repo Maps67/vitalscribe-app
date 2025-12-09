@@ -225,7 +225,8 @@ const ActionRadar = ({ items, onItemClick }: { items: PendingItem[], onItemClick
     );
 };
 
-const MorningBriefing = ({ greeting, message, weather, systemStatus, onOpenAssistant }: any) => {
+// --- HEADER DINÁMICO (ACTUALIZADO: MICRO-DASHBOARD) ---
+const MorningBriefing = ({ greeting, message, weather, systemStatus, onOpenAssistant, insights }: any) => {
     const hour = new Date().getHours();
     
     let theme = { gradient: "from-orange-400 via-amber-500 to-yellow-500", icon: Sunrise, label: "Buenos Días", text: "text-amber-50", shadow: "shadow-orange-200/50" };
@@ -236,19 +237,59 @@ const MorningBriefing = ({ greeting, message, weather, systemStatus, onOpenAssis
     return (
         <div className={`relative w-full rounded-[2.5rem] bg-gradient-to-r ${theme.gradient} p-8 shadow-2xl ${theme.shadow} dark:shadow-none text-white overflow-hidden mb-8 transition-all duration-1000 ease-in-out`}>
             <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
-            <div className="absolute -right-10 -top-10 w-64 h-64 bg-white/10 rounded-full blur-[80px] animate-pulse"></div>
+            <div className="absolute -right-20 -top-20 w-96 h-96 bg-white/10 rounded-full blur-[100px] animate-pulse"></div>
             
-            <div className="relative z-10 flex flex-col md:flex-row justify-between items-end gap-6">
-                <div className="flex-1">
-                    <div className={`flex items-center gap-2 mb-2 opacity-90 ${theme.text}`}>
-                        <theme.icon size={18} className="animate-pulse-slow" />
-                        <span className="text-xs font-bold uppercase tracking-widest">{theme.label}</span>
+            <div className="relative z-10 flex flex-col lg:flex-row justify-between items-end gap-6">
+                <div className="flex-1 w-full">
+                    {/* Eliminamos el "Buenas Tardes" pequeño redundante */}
+                    <div className="flex items-center gap-2 mb-3 opacity-90">
+                        <div className="p-1.5 bg-white/20 rounded-lg backdrop-blur-sm">
+                            <theme.icon size={16} className="text-white" />
+                        </div>
+                        <span className="text-xs font-bold uppercase tracking-widest opacity-80">Resumen Operativo</span>
                     </div>
-                    <h1 className="text-3xl md:text-4xl font-black tracking-tight mb-2 drop-shadow-sm">{greeting}</h1>
-                    <p className="text-white/90 font-medium max-w-lg leading-relaxed">{message}</p>
+                    
+                    <h1 className="text-3xl md:text-4xl font-black tracking-tight mb-6 drop-shadow-sm leading-tight">
+                        {greeting}
+                    </h1>
+
+                    {/* --- AQUÍ ESTÁ LA MAGIA (Micro-Dashboard) --- */}
+                    {insights && (
+                        <div className="flex flex-wrap gap-3">
+                            {/* Chip 1: Próximo Paciente */}
+                            <div className="flex items-center gap-3 bg-white/15 border border-white/10 px-4 py-2 rounded-xl backdrop-blur-md">
+                                <div className="bg-white/20 p-1.5 rounded-lg"><Clock size={16}/></div>
+                                <div>
+                                    <p className="text-[10px] uppercase font-bold opacity-70">Próxima Cita</p>
+                                    <p className="text-sm font-bold">{insights.nextTime || "Libre"}</p>
+                                </div>
+                            </div>
+
+                            {/* Chip 2: Pendientes */}
+                            <div className="flex items-center gap-3 bg-white/15 border border-white/10 px-4 py-2 rounded-xl backdrop-blur-md">
+                                <div className={`${insights.pending > 0 ? 'bg-amber-400/80 text-amber-900' : 'bg-white/20'} p-1.5 rounded-lg`}>
+                                    <AlertTriangle size={16}/>
+                                </div>
+                                <div>
+                                    <p className="text-[10px] uppercase font-bold opacity-70">Atención</p>
+                                    <p className="text-sm font-bold">{insights.pending} Acciones</p>
+                                </div>
+                            </div>
+
+                            {/* Chip 3: Carga del Día */}
+                            <div className="flex items-center gap-3 bg-white/15 border border-white/10 px-4 py-2 rounded-xl backdrop-blur-md hidden sm:flex">
+                                <div className="bg-white/20 p-1.5 rounded-lg"><Activity size={16}/></div>
+                                <div>
+                                    <p className="text-[10px] uppercase font-bold opacity-70">Progreso Hoy</p>
+                                    <p className="text-sm font-bold">{insights.done}/{insights.total} Pacientes</p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
                 
-                <div className="flex gap-4">
+                {/* Bloque Derecho (Clima) - Se mantiene igual pero alineado */}
+                <div className="flex gap-4 shrink-0">
                     <div className="flex items-center gap-6 bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/20 shadow-inner">
                         <div className="text-right">
                             <p className="text-3xl font-bold leading-none">{weather.temp}°</p>
@@ -260,7 +301,7 @@ const MorningBriefing = ({ greeting, message, weather, systemStatus, onOpenAssis
                                 <div className={`w-2.5 h-2.5 rounded-full ${systemStatus ? 'bg-emerald-400 shadow-[0_0_10px_#34d399] animate-pulse' : 'bg-red-500'}`}></div>
                                 <span className="font-bold text-sm tracking-tight">{systemStatus ? 'Online' : 'Offline'}</span>
                             </div>
-                            <p className="text-[10px] opacity-80 mt-1 font-medium">{format(new Date(), "EEEE d 'de' MMMM", { locale: es })}</p>
+                            <p className="text-[10px] opacity-80 mt-1 font-medium">{format(new Date(), "EEEE d", { locale: es })}</p>
                         </div>
                     </div>
                 </div>
@@ -382,6 +423,14 @@ const Dashboard: React.FC = () => {
             weather={weather} 
             systemStatus={systemStatus} 
             onOpenAssistant={() => setIsAssistantOpen(true)}
+            
+            // 👇 INSIGHTS PROACTIVOS (LA MEJORA)
+            insights={{
+                nextTime: nextPatient ? format(parseISO(nextPatient.start_time), 'h:mm a') : null,
+                pending: pendingItems.length,
+                total: appointments.length,
+                done: appointments.filter(a => a.status === 'completed').length
+            }}
          />
 
          <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
@@ -430,7 +479,6 @@ const Dashboard: React.FC = () => {
                      </div>
                      <div className="flex flex-col gap-6 h-full">
                          <div className="flex-1"><QuickDocs openModal={openDocModal} /></div>
-                         {/* 👇 AQUÍ YA SE INVOCA EL COMPONENTE MODULAR LIMPIO 👇 */}
                          <div className="h-40"><ImpactMetrics /></div>
                      </div>
                  </div>
