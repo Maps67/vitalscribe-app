@@ -25,7 +25,8 @@ import { QuickNotes } from '../components/QuickNotes';
 import { MedicalCalculators } from '../components/MedicalCalculators';
 import { QuickDocModal } from '../components/QuickDocModal';
 
-import { AnalyticsService, WeeklyStats } from '../services/AnalyticsService';
+// 👇 AQUÍ ESTÁ LA CONEXIÓN MODULAR
+import { ImpactMetrics } from '../components/ImpactMetrics';
 
 // --- Interfaces ---
 interface DashboardAppointment {
@@ -35,7 +36,7 @@ interface DashboardAppointment {
 }
 
 interface PendingItem {
-    id: string; type: 'note' | 'lab' | 'appt'; title: string; subtitle: string; date: string;
+   id: string; type: 'note' | 'lab' | 'appt'; title: string; subtitle: string; date: string;
 }
 
 // --- Assistant Modal ---
@@ -162,59 +163,9 @@ const StatusWidget = ({ weather, totalApts, pendingApts, isNight, location }: an
     );
 };
 
-const ActivityGraph = () => {
-    const [stats, setStats] = useState<WeeklyStats | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
-
-    useEffect(() => {
-        let isMounted = true;
-        const loadStats = async () => {
-            const data = await AnalyticsService.getWeeklyActivity();
-            if (isMounted) {
-                setStats(data);
-                setIsLoading(false);
-            }
-        };
-        loadStats();
-        return () => { isMounted = false; };
-    }, []);
-
-    const days = stats?.labels || ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
-    const values = stats?.values || [0, 0, 0, 0, 0, 0, 0];
-    const rawCounts = stats?.rawCounts || [0, 0, 0, 0, 0, 0, 0];
-
-    return (
-        // 🔴 DISEÑO: Tinte azulado muy suave
-        <div className="bg-gradient-to-br from-white to-blue-50/50 dark:from-slate-900 dark:to-slate-900 rounded-[2rem] p-6 border border-slate-100 dark:border-slate-800 shadow-sm h-full group transition-colors">
-            <div className="flex justify-between items-center mb-6">
-                <h3 className="font-bold text-slate-800 dark:text-white flex items-center gap-2"><div className="p-2 bg-blue-50 text-blue-600 rounded-lg"><BarChart3 size={18}/></div> Actividad</h3>
-                <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full">+12%</span>
-            </div>
-            <div className="flex items-end justify-between h-32 gap-2">
-                {isLoading ? (
-                    <div className="w-full h-full flex items-center justify-center text-slate-300">
-                        <Loader2 className="animate-spin" />
-                    </div>
-                ) : (
-                    values.map((h, i) => (
-                        <div key={i} className="flex-1 flex flex-col items-center gap-2 group/bar cursor-default" title={`${rawCounts[i]} Citas`}>
-                            <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-t-lg relative h-full overflow-hidden">
-                                <div 
-                                    className="absolute bottom-0 w-full bg-gradient-to-t from-blue-500 to-indigo-400 rounded-t-lg transition-all duration-1000 group-hover/bar:from-blue-400 group-hover/bar:to-indigo-300" 
-                                    style={{height: `${h}%`}}
-                                ></div>
-                            </div>
-                            <span className="text-[10px] font-bold text-slate-400">{days[i]}</span>
-                        </div>
-                    ))
-                )}
-            </div>
-        </div>
-    );
-};
+// NOTA: Eliminamos ActivityGraph local porque usamos ImpactMetrics importado
 
 const QuickDocs = ({ openModal }: { openModal: (type: 'justificante' | 'certificado' | 'receta') => void }) => (
-    // 🔴 DISEÑO: Tinte rosado muy suave
     <div className="bg-gradient-to-br from-white to-pink-50/50 dark:from-slate-900 dark:to-slate-900 rounded-[2rem] p-6 border border-slate-100 dark:border-slate-800 shadow-sm h-full">
         <h3 className="font-bold text-slate-800 dark:text-white flex items-center gap-2 mb-4">
             <div className="p-2 bg-pink-50 text-pink-600 rounded-lg"><FileCheck size={18}/></div>
@@ -246,7 +197,6 @@ const QuickDocs = ({ openModal }: { openModal: (type: 'justificante' | 'certific
 
 const ActionRadar = ({ items, onItemClick }: { items: PendingItem[], onItemClick: (item: PendingItem) => void }) => {
     if (items.length === 0) return (
-        // 🔴 DISEÑO: Tinte ámbar muy suave
         <div className="bg-gradient-to-br from-white to-amber-50/50 dark:from-slate-900 dark:to-slate-900 rounded-[2rem] p-6 border border-slate-100 dark:border-slate-800 shadow-sm flex flex-col items-center justify-center text-center h-48">
             <CheckCircle2 size={40} className="text-green-500 mb-2 opacity-50"/>
             <p className="font-bold text-slate-600 dark:text-slate-300">Todo en orden</p>
@@ -254,7 +204,6 @@ const ActionRadar = ({ items, onItemClick }: { items: PendingItem[], onItemClick
         </div>
     );
     return (
-        // 🔴 DISEÑO: Tinte ámbar muy suave
         <div className="bg-gradient-to-br from-white to-amber-50/50 dark:from-slate-900 dark:to-slate-900 rounded-[2rem] p-6 border border-slate-100 dark:border-slate-800 shadow-sm">
             <h3 className="font-bold text-slate-800 dark:text-white flex items-center gap-2 mb-4">
                 <div className="p-2 bg-amber-50 text-amber-600 rounded-lg"><AlertTriangle size={18}/></div>
@@ -276,7 +225,6 @@ const ActionRadar = ({ items, onItemClick }: { items: PendingItem[], onItemClick
     );
 };
 
-// --- HEADER DINÁMICO ---
 const MorningBriefing = ({ greeting, message, weather, systemStatus, onOpenAssistant }: any) => {
     const hour = new Date().getHours();
     
@@ -327,7 +275,6 @@ const Dashboard: React.FC = () => {
   const [doctorProfile, setDoctorProfile] = useState<any>(null); 
   const [appointments, setAppointments] = useState<DashboardAppointment[]>([]);
   const [pendingItems, setPendingItems] = useState<PendingItem[]>([]); 
-  const [loading, setLoading] = useState(true);
   const [weather, setWeather] = useState({ temp: '--', code: 0 });
   const [locationName, setLocationName] = useState('Localizando...');
   const [systemStatus, setSystemStatus] = useState(true); 
@@ -341,9 +288,7 @@ const Dashboard: React.FC = () => {
   const now = new Date();
   const hour = now.getHours();
   const isNight = hour >= 19 || hour < 6;
-  const dateStr = now.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' });
 
-  // 🔴 IDENTIDAD MÉDICA: LÓGICA DE PREFIJO FORZOSO 🔴
   const formattedDocName = useMemo(() => {
     if (!doctorProfile?.full_name) return '';
     const raw = doctorProfile.full_name.trim();
@@ -375,7 +320,7 @@ const Dashboard: React.FC = () => {
           const { data: lostApts } = await supabase.from('appointments').select('id, title, start_time').eq('doctor_id', user.id).eq('status', 'scheduled').lt('start_time', new Date().toISOString()).limit(3);
           if (lostApts) { lostApts.forEach(a => radar.push({ id: a.id, type: 'appt', title: 'Cita por Cerrar', subtitle: `${a.title} • ${format(parseISO(a.start_time), 'dd/MM HH:mm')}`, date: a.start_time })); }
           setPendingItems(radar);
-      } catch (e) { setSystemStatus(false); console.error(e); } finally { setLoading(false); }
+      } catch (e) { setSystemStatus(false); console.error(e); }
   }, []);
 
   useEffect(() => {
@@ -431,7 +376,6 @@ const Dashboard: React.FC = () => {
 
       <div className="px-4 md:px-8 pt-4 md:pt-8 max-w-[1600px] mx-auto w-full">
          
-         {/* HEADER */}
          <MorningBriefing 
             greeting={dynamicGreeting.greeting} 
             message={dynamicGreeting.message} 
@@ -442,10 +386,8 @@ const Dashboard: React.FC = () => {
 
          <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
              
-             {/* ZONA IZQUIERDA (OPERATIVA) - 8 COLS */}
              <div className="xl:col-span-8 flex flex-col gap-8">
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 h-auto md:h-64">
-                     {/* 🔴 DISEÑO: Tinte esmeralda muy suave para En Espera */}
                      <div className="bg-gradient-to-br from-white to-emerald-50/50 dark:from-slate-900 dark:to-slate-900 rounded-[2rem] p-1 shadow-xl shadow-slate-200/50 dark:shadow-none border border-slate-100 dark:border-slate-800 relative overflow-hidden group">
                         <div className={`absolute top-0 left-0 w-2 h-full ${nextPatient ? 'bg-emerald-500' : 'bg-slate-300'}`}></div>
                         <div className="p-8 flex flex-col justify-between h-full relative z-10">
@@ -464,7 +406,6 @@ const Dashboard: React.FC = () => {
                  </div>
 
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                     {/* 🔴 DISEÑO: Tinte índigo muy suave para Agenda */}
                      <div className="bg-gradient-to-br from-white to-indigo-50/50 dark:from-slate-900 dark:to-slate-900 rounded-[2rem] p-6 border border-slate-100 dark:border-slate-800 shadow-sm min-h-[300px]">
                         <div className="flex justify-between items-center mb-6">
                             <h3 className="font-bold text-slate-800 dark:text-white flex items-center gap-2"><Calendar size={20} className="text-indigo-600"/> Agenda</h3>
@@ -489,16 +430,15 @@ const Dashboard: React.FC = () => {
                      </div>
                      <div className="flex flex-col gap-6 h-full">
                          <div className="flex-1"><QuickDocs openModal={openDocModal} /></div>
-                         <div className="h-40"><ActivityGraph /></div>
+                         {/* 👇 AQUÍ YA SE INVOCA EL COMPONENTE MODULAR LIMPIO 👇 */}
+                         <div className="h-40"><ImpactMetrics /></div>
                      </div>
                  </div>
              </div>
 
-             {/* ZONA DERECHA */}
              <div className="xl:col-span-4 flex flex-col gap-8">
                  <ActionRadar items={pendingItems} onItemClick={handleRadarClick} />
                  
-                 {/* 🔴 DISEÑO: Tinte gris muy suave para Herramientas */}
                  <div className="bg-gradient-to-br from-white to-slate-100 dark:from-slate-900 dark:to-slate-900 rounded-[2rem] border border-slate-100 dark:border-slate-800 shadow-xl shadow-slate-200/50 dark:shadow-none flex-1 flex flex-col min-h-[400px]">
                       <div className="flex p-2 gap-2 bg-slate-50/50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-700">
                           <button onClick={() => setToolsTab('notes')} className={`flex-1 py-3 rounded-xl text-xs font-bold uppercase transition-all ${toolsTab === 'notes' ? 'bg-white dark:bg-slate-700 text-indigo-600 shadow-sm' : 'text-slate-400'}`}><PenLine size={14} className="inline mr-2"/> Notas</button>
@@ -532,5 +472,5 @@ const Dashboard: React.FC = () => {
     </div>
   );
 };
-
+        
 export default Dashboard;
