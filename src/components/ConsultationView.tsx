@@ -425,6 +425,7 @@ const ConsultationView: React.FC = () => {
       setGeneratedNote(response);
       setEditableInstructions(response.patientInstructions || '');
       
+      // Lógica de alerta inicial
       if (response.risk_analysis?.level === 'Alto') {
           setIsRiskExpanded(true);
           toast.dismiss(loadingToast);
@@ -757,14 +758,14 @@ const ConsultationView: React.FC = () => {
                                     <div 
                                       onClick={() => setIsRiskExpanded(!isRiskExpanded)}
                                       className={`mt-2 w-full rounded-xl border cursor-pointer transition-all duration-300 overflow-hidden ${
-                                          generatedNote.risk_analysis.level === 'Alto' ? 'bg-red-50 border-red-200' :
-                                          generatedNote.risk_analysis.level === 'Medio' ? 'bg-amber-50 border-amber-200' :
+                                          generatedNote.risk_analysis.level.toUpperCase().includes('ALTO') ? 'bg-red-50 border-red-200' :
+                                          generatedNote.risk_analysis.level.toUpperCase().includes('MEDIO') ? 'bg-amber-50 border-amber-200' :
                                           'bg-green-50 border-green-200'
                                       }`}
                                     >
                                         <div className={`p-3 flex justify-between items-center ${
-                                            generatedNote.risk_analysis.level === 'Alto' ? 'text-red-700' :
-                                            generatedNote.risk_analysis.level === 'Medio' ? 'text-amber-700' :
+                                            generatedNote.risk_analysis.level.toUpperCase().includes('ALTO') ? 'text-red-700' :
+                                            generatedNote.risk_analysis.level.toUpperCase().includes('MEDIO') ? 'text-amber-700' :
                                             'text-green-700'
                                         }`}>
                                             <div className="flex items-center gap-2 font-bold text-sm">
@@ -776,8 +777,8 @@ const ConsultationView: React.FC = () => {
                                         </div>
 
                                         <div className={`px-4 pb-4 text-sm leading-relaxed transition-all duration-300 ${
-                                            generatedNote.risk_analysis.level === 'Alto' ? 'text-red-800' :
-                                            generatedNote.risk_analysis.level === 'Medio' ? 'text-amber-800' :
+                                            generatedNote.risk_analysis.level.toUpperCase().includes('ALTO') ? 'text-red-800' :
+                                            generatedNote.risk_analysis.level.toUpperCase().includes('MEDIO') ? 'text-amber-800' :
                                             'text-green-800'
                                         } ${isRiskExpanded ? 'block animate-fade-in' : 'hidden'}`}>
                                             <hr className={`mb-2 opacity-20 border-current`}/>
