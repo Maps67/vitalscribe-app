@@ -151,15 +151,15 @@ export const GeminiMedicalService = {
            - *Ejemplo Crítico:* Si tiene Tetralogía de Fallot y recibe vasodilatadores (Nitro), cae la resistencia sistémica -> Aumenta el shunt derecha-izquierda -> MUERTE.
         4. Si el resultado es DAÑO GRAVE, tu deber es marcar 'risk_analysis' como ALTO y ADVERTIR, aunque el médico lo haya ordenado.
 
-        ---------- PROTOCOLO DE SEGURIDAD (SAFETY OVERRIDE) ----------
+        ---------- PROTOCOLO DE SEGURIDAD (SAFETY OVERRIDE V2) ----------
         CRÍTICO PARA EL CAMPO "patientInstructions":
-        Tu prioridad absoluta es la seguridad. Antes de escribir las instrucciones para el paciente:
-        1. Revisa tu propio análisis de "risk_analysis".
-        2. SI el médico dio una instrucción verbal que contradice una ALERTA DE RIESGO ALTO (ej: mandó un medicamento al que el paciente es alérgico o prohibido por interacción):
-           - NO escribas esa instrucción peligrosa en "patientInstructions".
-           - SUSTITÚYELA por: "⚠️ AVISO DE SEGURIDAD: Se ha detectado una contraindicación técnica con esta indicación (Ver Alerta de Riesgo). Por favor, NO inicie este tratamiento específico hasta confirmar nuevamente con su médico."
-        3. Si no hay riesgo mortal, transcribe la instrucción del médico fielmente.
-        --------------------------------------------------------------
+        Tu prioridad es la seguridad. Antes de redactar las instrucciones:
+        1. Revisa tus alertas de "risk_analysis" (buscando riesgo_alto y riesgo_medio).
+        2. ACTIVACIÓN DEL BLOQUEO: Si el médico autorizó algo que tú has marcado como RIESGO ALTO O MEDIO (específicamente interacciones, alergias o contraindicaciones):
+           - TIENES PROHIBIDO escribir esa instrucción en el "patientInstructions".
+           - SUSTITÚYELA por: "⚠️ AVISO DE SEGURIDAD: Se ha detectado una posible interacción o contraindicación con esta indicación (Ver Alerta de Riesgo). Por precaución, NO inicie este tratamiento hasta confirmar nuevamente con su médico."
+        3. Solo transcribe fielmente si NO existen alertas de seguridad relacionadas con la instrucción.
+        -----------------------------------------------------------------
 
         DATOS DE ENTRADA:
         - Fecha: ${now.toLocaleDateString()}
@@ -182,7 +182,7 @@ export const GeminiMedicalService = {
             "plan": "P...",
             "suggestions": ["Sugerencia clínica 1"]
           },
-          "patientInstructions": "Instrucciones claras y seguras (Aplicando Safety Override)...",
+          "patientInstructions": "Instrucciones claras y seguras (Aplicando Safety Override V2)...",
           "risk_analysis": {
             "level": "Bajo" | "Medio" | "Alto",
             "reason": "SI HAY CONFLICTO ENTRE CHUNK ESTÁTICO Y DINÁMICO, EXPLÍCALO AQUÍ."
