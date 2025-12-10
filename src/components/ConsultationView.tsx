@@ -37,7 +37,7 @@ const ConsultationView: React.FC = () => {
   const { isListening, transcript, startListening, stopListening, resetTranscript, setTranscript, isAPISupported } = useSpeechRecognition();
   const location = useLocation(); 
   
-  const [patients, setPatients] = useState<any[]>([]); // Usamos any para permitir la estructura híbrida (Pacientes + Fantasmas)
+  const [patients, setPatients] = useState<any[]>([]); 
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [doctorProfile, setDoctorProfile] = useState<DoctorProfile | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null); 
@@ -69,10 +69,8 @@ const ConsultationView: React.FC = () => {
   const [patientInsights, setPatientInsights] = useState<PatientInsight | null>(null);
   const [isLoadingInsights, setIsLoadingInsights] = useState(false);
   
-  // ESTADO NUEVO PARA ENLAZAR CITA DEL DASHBOARD
   const [linkedAppointmentId, setLinkedAppointmentId] = useState<string | null>(null);
 
-  // ⏱️ CRONÓMETRO INTERNO: Marca el inicio real de la consulta
   const startTimeRef = useRef<number>(Date.now());
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -86,7 +84,6 @@ const ConsultationView: React.FC = () => {
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
     
-    // Reset del timer al montar el componente
     startTimeRef.current = Date.now();
 
     return () => { window.removeEventListener('online', handleOnline); window.removeEventListener('offline', handleOffline); };
@@ -105,7 +102,7 @@ const ConsultationView: React.FC = () => {
             // 1. Cargar Pacientes Registrados
             const { data: patientsData } = await supabase.from('patients').select('*').order('created_at', { ascending: false });
             
-            // 2. Cargar Citas "Fantasmas" (Sin ID de paciente vinculado)
+            // 2. Cargar Citas "Fantasmas"
             const today = new Date();
             today.setHours(0,0,0,0);
             
@@ -120,14 +117,13 @@ const ConsultationView: React.FC = () => {
 
             const loadedPatients = patientsData || [];
             
-            // 3. Mezclar Datos
             let combinedList = [...loadedPatients];
             
             if (ghostAppointments && ghostAppointments.length > 0) {
                 const ghosts = ghostAppointments.map(apt => ({
-                    id: `ghost_${apt.id}`, // ID temporal
+                    id: `ghost_${apt.id}`, 
                     name: apt.title,
-                    isGhost: true, // Bandera para detectar que requiere registro lazy
+                    isGhost: true, 
                     appointmentId: apt.id,
                     created_at: apt.start_time
                 }));
@@ -149,36 +145,32 @@ const ConsultationView: React.FC = () => {
             if (location.state?.patientData) {
                 const incoming = location.state.patientData;
                 
-                // [MODIFICADO: LAZY LOAD] Si viene como fantasma, NO llamamos a DB, usamos memoria local
                 if (incoming.isGhost) {
-                     const tempPatient = {
-                         ...incoming,
-                         id: `temp_${Date.now()}`, // ID válido local para React
-                         isTemporary: true, // Se guardará al final
-                         appointmentId: incoming.appointmentId || incoming.id.replace('ghost_', '')
-                     };
-                     setSelectedPatient(tempPatient);
-                     if(incoming.appointmentId) setLinkedAppointmentId(incoming.appointmentId);
-                     toast.info(`Iniciando consulta para: ${incoming.name}`);
+                      const tempPatient = {
+                          ...incoming,
+                          id: `temp_${Date.now()}`, 
+                          isTemporary: true, 
+                          appointmentId: incoming.appointmentId || incoming.id.replace('ghost_', '')
+                      };
+                      setSelectedPatient(tempPatient);
+                      if(incoming.appointmentId) setLinkedAppointmentId(incoming.appointmentId);
+                      toast.info(`Iniciando consulta para: ${incoming.name}`);
                 } else {
-                     // Paciente real - buscamos en la lista cargada
-                     const realPatient = loadedPatients.find(p => p.id === incoming.id);
-                     if (realPatient) setSelectedPatient(realPatient);
-                     else setSelectedPatient(incoming); // Fallback
-                     
-                     toast.success(`Paciente cargado: ${incoming.name}`);
+                      // Paciente real - buscamos en la lista cargada
+                      const realPatient = loadedPatients.find(p => p.id === incoming.id);
+                      if (realPatient) setSelectedPatient(realPatient);
+                      else setSelectedPatient(incoming); 
+                      
+                      toast.success(`Paciente cargado: ${incoming.name}`);
                 }
 
-                // Capturar el ID de la cita para cerrar el ciclo
                 if (location.state.linkedAppointmentId) {
                     setLinkedAppointmentId(location.state.linkedAppointmentId);
                     console.log("🔗 Cita vinculada para cierre automático:", location.state.linkedAppointmentId);
                 }
                 
-                // Limpiamos el state para evitar re-lecturas erróneas al recargar
                 window.history.replaceState({}, document.title);
             }
-            // Soporte Legacy (Solo nombre) -> Walk-in
             else if (location.state?.patientName) {
                 const incomingName = location.state.patientName;
                 const existingPatient = loadedPatients.find((p: any) => p.name.toLowerCase() === incomingName.toLowerCase());
@@ -220,7 +212,7 @@ const ConsultationView: React.FC = () => {
             if (currentUserId) localStorage.removeItem(`draft_${currentUserId}`);
             setGeneratedNote(null);
             setIsRiskExpanded(false);
-            startTimeRef.current = Date.now(); // Reiniciar timer
+            startTimeRef.current = Date.now(); 
         } else if (!transcript) {
             setGeneratedNote(null);
             setIsRiskExpanded(false);
@@ -244,28 +236,57 @@ const ConsultationView: React.FC = () => {
     return patients.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()));
   }, [patients, searchTerm]);
 
-  // --- LÓGICA DE SELECCIÓN INTELIGENTE (LAZY REGISTRATION) ---
+  // --- 🔥 CORRECCIÓN: HIDRATACIÓN REACTIVA ---
+  // Esta función ha sido reconstruida para garantizar que SIEMPRE tengamos el historial
   const handleSelectPatient = async (patient: any) => {
-      // [MODIFICADO: LAZY LOAD] Si es fantasma, no registramos en BD todavía
+      // Caso 1: Paciente Fantasma (Sigue igual)
       if (patient.isGhost) {
           const tempPatient = {
               ...patient,
               id: `temp_${Date.now()}`,
               isTemporary: true,
-              appointmentId: patient.appointmentId // Preservamos vínculo
+              appointmentId: patient.appointmentId 
           };
           setSelectedPatient(tempPatient);
           if (patient.appointmentId) setLinkedAppointmentId(patient.appointmentId);
           toast.info(`Paciente temporal: ${patient.name} (Se registrará al guardar)`);
       } 
-      // Caso 2: Paciente Normal
+      // Caso 2: Paciente Registrado (AQUÍ ESTÁ LA MAGIA)
       else {
+          // Primero, seteamos lo que ya tenemos visualmente para que se sienta rápido
           setSelectedPatient(patient);
+          setSearchTerm(''); // Limpiamos buscador
+
+          // AHORA: Hidratación Reactiva en segundo plano
+          // Si el objeto 'patient' viene de una lista resumida, podría no tener el 'history' completo.
+          // Forzamos una búsqueda fresca a la base de datos para estar seguros.
+          try {
+              // Pequeño indicador visual de carga de datos
+              const loadingHistory = toast.loading("Sincronizando historial...");
+              
+              const { data: fullPatientData, error } = await supabase
+                  .from('patients')
+                  .select('*') // Traemos TODO, incluyendo history
+                  .eq('id', patient.id)
+                  .single();
+
+              toast.dismiss(loadingHistory);
+
+              if (fullPatientData && !error) {
+                  console.log("💧 Paciente Hidratado Correctamente:", fullPatientData.name);
+                  // Actualizamos el estado con los datos "frescos" y completos
+                  setSelectedPatient(fullPatientData);
+                  toast.success("Historial clínico cargado.");
+              } else {
+                  console.warn("⚠️ No se pudo hidratar el historial, usando datos en caché.");
+              }
+          } catch (e) {
+              console.error("Error en hidratación reactiva:", e);
+              // No bloqueamos, seguimos con los datos que ya teníamos
+          }
       }
-      setSearchTerm('');
   };
 
-  // --- NUEVA FUNCIÓN: CREAR PACIENTE TEMPORAL DESDE BUSCADOR ---
   const handleCreateTemporary = (name: string) => {
       const tempPatient: any = { 
           id: 'temp_' + Date.now(), 
@@ -274,7 +295,7 @@ const ConsultationView: React.FC = () => {
       };
       setSelectedPatient(tempPatient);
       setSearchTerm('');
-      startTimeRef.current = Date.now(); // Reiniciar timer
+      startTimeRef.current = Date.now(); 
       toast.info(`Nuevo paciente temporal: ${name} (Se guardará al finalizar)`);
   };
 
@@ -375,6 +396,7 @@ const ConsultationView: React.FC = () => {
               .order('created_at', { ascending: false })
               .limit(3); 
 
+          // AQUÍ SE USA EL DATO HIDRATADO QUE ACABAMOS DE TRAER EN handleSelectPatient
           const staticHistory = selectedPatient.history || "Sin antecedentes patológicos registrados.";
           
           const episodicHistory = historyData && historyData.length > 0
@@ -445,7 +467,6 @@ const ConsultationView: React.FC = () => {
         
         let finalPatientId = selectedPatient.id;
 
-        // 1. SI ES PACIENTE TEMPORAL (WALK-IN O GHOST), LO REGISTRAMOS AHORA
         if ((selectedPatient as any).isTemporary) {
             const { data: newPatient, error: createError } = await supabase.from('patients').insert({
                 name: selectedPatient.name,
@@ -462,22 +483,18 @@ const ConsultationView: React.FC = () => {
             ? `FECHA: ${new Date().toLocaleDateString()}\nS: ${generatedNote.soap.subjective}\nO: ${generatedNote.soap.objective}\nA: ${generatedNote.soap.assessment}\nP: ${generatedNote.soap.plan}\n\nPLAN PACIENTE:\n${editableInstructions}`
             : (generatedNote.clinicalNote + "\n\nPLAN PACIENTE:\n" + editableInstructions);
 
-        // 2. CERRAR CITA EN AGENDA (Si existe vínculo)
         if (linkedAppointmentId) {
-             // [MODIFICADO: DATA INTEGRITY] Aseguramos que la cita quede vinculada al paciente real
              await supabase.from('appointments')
                 .update({ 
                     status: 'completed',
-                    patient_id: finalPatientId // Actualización crítica para Ghosts
+                    patient_id: finalPatientId 
                 })
                 .eq('id', linkedAppointmentId);
              console.log("✅ Cita marcada como completada y vinculada en Dashboard");
         } else {
-             // Fallback para citas fantasmas internas
              await AppointmentService.markAppointmentAsCompleted(finalPatientId);
         }
 
-        // 3. CALCULAR TIEMPO REAL DE CONSULTA
         const durationSeconds = Math.round((Date.now() - startTimeRef.current) / 1000);
 
         const payload = {
@@ -488,7 +505,7 @@ const ConsultationView: React.FC = () => {
             status: 'completed',
             ai_analysis_data: generatedNote, 
             legal_status: 'validated',
-            real_duration_seconds: durationSeconds // CAMPO NUEVO PARA TELEMETRÍA REAL
+            real_duration_seconds: durationSeconds 
         };
 
         const { error } = await supabase.from('consultations').insert(payload);
@@ -506,7 +523,7 @@ const ConsultationView: React.FC = () => {
         setIsRiskExpanded(false);
         setPatientInsights(null);
         setLinkedAppointmentId(null);
-        startTimeRef.current = Date.now(); // Reiniciar cronómetro para el siguiente
+        startTimeRef.current = Date.now(); 
 
     } catch (e:any) { 
         console.error("Error guardando:", e);
@@ -542,12 +559,9 @@ const ConsultationView: React.FC = () => {
       } catch { toast.error("Error agendando"); }
   };
 
-  // --- FUNCIÓN DE GENERACIÓN DE PDF ROBUSTA Y LEGAL ---
   const generatePDFBlob = async () => {
       if (!selectedPatient || !doctorProfile) return null;
-      
       const ageDisplay = "No registrada"; 
-
       try {
         return await pdf(
             <PrescriptionPDF 
@@ -597,7 +611,6 @@ const ConsultationView: React.FC = () => {
   return (
     <div className="flex flex-col md:flex-row h-[calc(100vh-64px)] bg-slate-100 dark:bg-slate-950 relative">
       
-      {/* PANEL IZQUIERDO (CONTROLES) */}
       <div className={`w-full md:w-1/4 p-4 flex flex-col gap-4 border-r dark:border-slate-800 bg-white dark:bg-slate-900 overflow-y-auto ${generatedNote ? 'hidden md:flex' : 'flex'}`}>
         <div className="flex justify-between items-center">
             <h2 className="text-xl font-bold dark:text-white flex items-center gap-2">
@@ -637,7 +650,6 @@ const ConsultationView: React.FC = () => {
                             {p.isGhost && <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full flex items-center gap-1"><Calendar size={10}/> Cita sin registro</span>}
                         </div>
                     ))}
-                    {/* BOTÓN PARA CREAR PACIENTE NUEVO (SOLUCIÓN ERROR "FALTAN DATOS") */}
                     {filteredPatients.length === 0 && (
                         <div 
                             onClick={() => handleCreateTemporary(searchTerm)} 
@@ -712,7 +724,6 @@ const ConsultationView: React.FC = () => {
         </div>
       </div>
       
-      {/* PANEL DERECHO (RESULTADOS 75%) */}
       <div className={`w-full md:w-3/4 bg-slate-100 dark:bg-slate-950 flex flex-col border-l dark:border-slate-800 ${!generatedNote?'hidden md:flex':'flex h-full'}`}>
           <div className="flex border-b dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0 items-center px-2">
              <button onClick={()=>setGeneratedNote(null)} className="md:hidden p-4 text-slate-500"><ArrowLeft/></button>
@@ -786,20 +797,20 @@ const ConsultationView: React.FC = () => {
                                         <Quote size={14} className="text-indigo-500"/> Transcripción Inteligente
                                     </h4>
                                     <div className="space-y-4 max-h-[300px] overflow-y-auto custom-scrollbar pr-2">
-                                        {generatedNote.conversation_log.map((line, idx) => (
-                                            <div key={idx} className={`flex ${line.speaker === 'Médico' ? 'justify-end' : 'justify-start'}`}>
-                                                <div className={`max-w-[80%] rounded-2xl p-3 text-sm ${
-                                                    line.speaker === 'Médico' 
-                                                        ? 'bg-blue-50 text-blue-900 dark:bg-blue-900/30 dark:text-blue-100 rounded-tr-none' 
-                                                        : 'bg-white border border-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700 rounded-tl-none'
-                                                }`}>
-                                                    <span className={`text-[10px] font-bold block mb-1 uppercase opacity-70 ${line.speaker === 'Médico' ? 'text-right' : 'text-left'}`}>
-                                                        {line.speaker}
-                                                    </span>
-                                                    {line.text}
+                                            {generatedNote.conversation_log.map((line, idx) => (
+                                                <div key={idx} className={`flex ${line.speaker === 'Médico' ? 'justify-end' : 'justify-start'}`}>
+                                                    <div className={`max-w-[80%] rounded-2xl p-3 text-sm ${
+                                                        line.speaker === 'Médico' 
+                                                            ? 'bg-blue-50 text-blue-900 dark:bg-blue-900/30 dark:text-blue-100 rounded-tr-none' 
+                                                            : 'bg-white border border-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700 rounded-tl-none'
+                                                    }`}>
+                                                        <span className={`text-[10px] font-bold block mb-1 uppercase opacity-70 ${line.speaker === 'Médico' ? 'text-right' : 'text-left'}`}>
+                                                            {line.speaker}
+                                                        </span>
+                                                        {line.text}
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        ))}
+                                            ))}
                                     </div>
                                 </div>
                             )}
@@ -886,7 +897,6 @@ const ConsultationView: React.FC = () => {
       
       {isQuickRxModalOpen && selectedPatient && doctorProfile && <QuickRxModal isOpen={isQuickRxModalOpen} onClose={()=>setIsQuickRxModalOpen(false)} initialTranscript={transcript} patientName={selectedPatient.name} doctorProfile={doctorProfile}/>}
       
-      {/* INSIGHTS PANEL */}
       {selectedPatient && (
         <InsightsPanel 
             isOpen={isInsightsOpen}
