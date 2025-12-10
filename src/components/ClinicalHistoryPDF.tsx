@@ -9,39 +9,53 @@ import {
   Font 
 } from '@react-pdf/renderer';
 
-// 1. REGISTRO DE FUENTES
-// Usamos fuentes estándar de Google Fonts (Helvetica/Roboto) para asegurar caracteres latinos
+// ----------------------------------------------------------------------
+// 1. CONFIGURACIÓN DE FUENTES
+// ----------------------------------------------------------------------
+// Registramos Helvetica (estándar seguro) para soportar acentos y ñ
 Font.register({
   family: 'Helvetica',
   fonts: [
-    { src: 'https://cdn.jsdelivr.net/npm/@canvas-fonts/helvetica@1.0.4/Helvetica.ttf' },
-    { src: 'https://cdn.jsdelivr.net/npm/@canvas-fonts/helvetica@1.0.4/Helvetica-Bold.ttf', fontWeight: 'bold' }
+    { 
+      src: 'https://cdn.jsdelivr.net/npm/@canvas-fonts/helvetica@1.0.4/Helvetica.ttf' 
+    },
+    { 
+      src: 'https://cdn.jsdelivr.net/npm/@canvas-fonts/helvetica@1.0.4/Helvetica-Bold.ttf', 
+      fontWeight: 'bold' 
+    }
   ]
 });
 
-// 2. ESTILOS DETALLADOS (Diseño Profesional)
+// ----------------------------------------------------------------------
+// 2. ESTILOS DETALLADOS Y EXPANDIDOS (NO COMPACTADOS)
+// ----------------------------------------------------------------------
 const styles = StyleSheet.create({
   page: {
-    padding: 40,
+    paddingTop: 40,
+    paddingBottom: 40,
+    paddingLeft: 40,
+    paddingRight: 40,
     fontFamily: 'Helvetica',
     fontSize: 10,
     lineHeight: 1.5,
     color: '#334155', // Slate-700
     backgroundColor: '#ffffff'
   },
-  // Encabezado del Doctor
+  
+  // --- Encabezado del Doctor ---
   header: {
     flexDirection: 'row',
     marginBottom: 25,
     borderBottomWidth: 2,
-    borderBottomColor: '#0f766e', // Brand Teal
+    borderBottomColor: '#0f766e', // Brand Teal (Teal-700)
     paddingBottom: 15,
     alignItems: 'center',
     justifyContent: 'space-between'
   },
   headerLeft: {
     flexGrow: 1,
-    paddingRight: 10
+    paddingRight: 10,
+    flexDirection: 'column'
   },
   logo: {
     width: 70,
@@ -65,13 +79,17 @@ const styles = StyleSheet.create({
   },
   drInfo: {
     fontSize: 9,
-    color: '#64748b' // Slate-500
+    color: '#64748b', // Slate-500
+    marginBottom: 1
   },
-  
-  // Sección del Paciente
+
+  // --- Sección de Datos del Paciente ---
   patientSection: {
     backgroundColor: '#f8fafc', // Slate-50
-    padding: 15,
+    paddingTop: 15,
+    paddingBottom: 15,
+    paddingLeft: 15,
+    paddingRight: 15,
     borderRadius: 6,
     marginBottom: 25,
     borderLeftWidth: 4,
@@ -110,7 +128,7 @@ const styles = StyleSheet.create({
     color: '#1e293b' // Slate-800
   },
 
-  // Sección de Antecedentes
+  // --- Sección de Antecedentes ---
   historySection: {
     marginBottom: 25,
     paddingBottom: 10,
@@ -121,16 +139,17 @@ const styles = StyleSheet.create({
     fontSize: 9, 
     fontWeight: 'bold', 
     color: '#64748b', 
-    marginBottom: 3, 
+    marginBottom: 4, 
     textTransform:'uppercase' 
   },
   historyText: {
     fontSize: 10, 
     color: '#334155',
-    textAlign: 'justify' 
+    textAlign: 'justify',
+    lineHeight: 1.4
   },
 
-  // Línea de Tiempo (Consultas)
+  // --- Línea de Tiempo (Consultas) ---
   timelineItem: {
     marginBottom: 20,
     paddingBottom: 15,
@@ -143,7 +162,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#f1f5f9',
     paddingVertical: 6,
     paddingHorizontal: 10,
-    marginBottom: 8,
+    marginBottom: 10,
     borderRadius: 4,
     alignItems: 'center'
   },
@@ -155,27 +174,39 @@ const styles = StyleSheet.create({
   },
   folioBadge: {
     fontSize: 8,
-    color: '#64748b',
-    fontFamily: 'Helvetica'
+    color: '#64748b'
   },
   
-  // Cuerpo del Texto Formateado
-  sectionHeader: {
+  // --- Estilos para el Cuerpo del Texto Formateado ---
+  soapHeader: {
     fontSize: 9,
     fontWeight: 'bold',
     color: '#0f766e',
-    marginTop: 6,
+    marginTop: 8,
     marginBottom: 2,
     textTransform: 'uppercase'
   },
-  bodyText: {
+  soapBody: {
     fontSize: 10,
     textAlign: 'justify',
     marginBottom: 4,
-    lineHeight: 1.4
+    lineHeight: 1.4,
+    color: '#334155'
+  },
+  planHeader: {
+    fontSize: 9,
+    fontWeight: 'bold',
+    color: '#0f766e', // Mismo color de marca
+    marginTop: 10,
+    marginBottom: 2,
+    textTransform: 'uppercase'
+  },
+  normalText: {
+    fontSize: 10,
+    marginBottom: 2
   },
 
-  // Pie de Página
+  // --- Pie de Página Legal ---
   footer: {
     position: 'absolute',
     bottom: 30,
@@ -190,7 +221,9 @@ const styles = StyleSheet.create({
   }
 });
 
-// 3. INTERFACES DE DATOS
+// ----------------------------------------------------------------------
+// 3. INTERFACES DE DATOS (TIPADO FUERTE)
+// ----------------------------------------------------------------------
 interface ConsultationRecord {
   id: string;
   created_at: string;
@@ -218,48 +251,105 @@ interface ClinicalHistoryPDFProps {
   generatedDate: string;
 }
 
-// 4. HELPER: TRADUCTOR DE LENGUAJE UNIVERSAL
-// Convierte S, O, A, P en títulos legibles para humanos
+// ----------------------------------------------------------------------
+// 4. HELPER: TRADUCTOR INTELIGENTE DE SOAP
+// ----------------------------------------------------------------------
 const FormattedConsultationBody = ({ text }: { text: string }) => {
   const cleanText = text || "";
 
-  // Si no detectamos formato SOAP, devolvemos texto plano
-  if (!cleanText.includes("S:") && !cleanText.includes("S: ")) {
-      return <Text style={styles.bodyText}>{cleanText}</Text>;
-  }
+  // Paso 1: Normalizar saltos de línea
+  // Esto asegura que funcionemos igual en Windows/Mac/Linux
+  const normalizedText = cleanText.replace(/\r\n/g, '\n');
 
-  // Mapeo inteligente de secciones
-  let formatted = cleanText
-    .replace(/S:\s*/g, '||SÍNTOMAS Y MOTIVO:||')
-    .replace(/O:\s*/g, '||EXPLORACIÓN FÍSICA:||')
-    .replace(/A:\s*/g, '||DIAGNÓSTICO Y ANÁLISIS:||')
-    .replace(/P:\s*/g, '||PLAN MÉDICO:||')
-    .replace(/PLAN PACIENTE:\s*/g, '||INDICACIONES AL PACIENTE:||');
-
-  const parts = formatted.split('||').filter(p => p.trim().length > 0);
+  // Paso 2: Separar por líneas para analizar una por una
+  // Evitamos regex complejos que rompan el texto si el doctor escribe "S:" dentro de una frase.
+  const lines = normalizedText.split('\n');
 
   return (
     <View>
-      {parts.map((part, index) => {
-        // Detectamos si es un título
-        const isHeader = 
-            part.includes("SÍNTOMAS Y MOTIVO") || 
-            part.includes("EXPLORACIÓN FÍSICA") || 
-            part.includes("DIAGNÓSTICO Y ANÁLISIS") || 
-            part.includes("PLAN MÉDICO") ||
-            part.includes("INDICACIONES AL PACIENTE");
+      {lines.map((line, index) => {
+        const trimmedLine = line.trim();
+        
+        // Ignoramos líneas vacías para ahorrar espacio visual
+        if (!trimmedLine) return null;
 
-        if (isHeader) {
-            return <Text key={index} style={styles.sectionHeader}>{part.replace(':', '')}</Text>;
-        } else {
-            return <Text key={index} style={styles.bodyText}>{part.trim()}</Text>;
+        // DETECCIÓN SEGURA DE ENCABEZADOS (Solo al inicio de la línea)
+        
+        // Caso S: Subjetivo
+        if (trimmedLine.startsWith("S:") || trimmedLine.startsWith("S ")) {
+            return (
+                <View key={index} wrap={false}>
+                    <Text style={styles.soapHeader}>SÍNTOMAS Y MOTIVO:</Text>
+                    <Text style={styles.soapBody}>{trimmedLine.replace(/^(S:|S )/i, '').trim()}</Text>
+                </View>
+            );
         }
+
+        // Caso O: Objetivo
+        if (trimmedLine.startsWith("O:") || trimmedLine.startsWith("O ")) {
+            return (
+                <View key={index} wrap={false}>
+                    <Text style={styles.soapHeader}>EXPLORACIÓN FÍSICA:</Text>
+                    <Text style={styles.soapBody}>{trimmedLine.replace(/^(O:|O )/i, '').trim()}</Text>
+                </View>
+            );
+        }
+
+        // Caso A: Análisis
+        if (trimmedLine.startsWith("A:") || trimmedLine.startsWith("A ")) {
+            return (
+                <View key={index} wrap={false}>
+                    <Text style={styles.soapHeader}>DIAGNÓSTICO Y ANÁLISIS:</Text>
+                    <Text style={styles.soapBody}>{trimmedLine.replace(/^(A:|A )/i, '').trim()}</Text>
+                </View>
+            );
+        }
+
+        // Caso P: Plan
+        if (trimmedLine.startsWith("P:") || trimmedLine.startsWith("P ")) {
+            return (
+                <View key={index} wrap={false}>
+                    <Text style={styles.soapHeader}>PLAN MÉDICO:</Text>
+                    <Text style={styles.soapBody}>{trimmedLine.replace(/^(P:|P )/i, '').trim()}</Text>
+                </View>
+            );
+        }
+
+        // Caso PLAN PACIENTE (Instrucciones)
+        if (trimmedLine.startsWith("PLAN PACIENTE:")) {
+            return (
+                <View key={index} wrap={false}>
+                    <Text style={styles.planHeader}>INDICACIONES AL PACIENTE:</Text>
+                    <Text style={styles.soapBody}>{trimmedLine.replace(/^PLAN PACIENTE:/i, '').trim()}</Text>
+                </View>
+            );
+        }
+
+        // Caso FECHA (A veces viene en el texto)
+        if (trimmedLine.startsWith("FECHA:")) {
+             // Si ya mostramos la fecha en el encabezado azul, podríamos omitirla, 
+             // pero si el doctor la puso, la dejamos en negrita discreta.
+             return (
+                 <Text key={index} style={[styles.soapBody, { fontSize: 8, color: '#94a3b8' }]}>
+                     {trimmedLine}
+                 </Text>
+             );
+        }
+
+        // TEXTO NORMAL (Líneas de continuación)
+        return (
+            <Text key={index} style={styles.soapBody}>
+                {trimmedLine}
+            </Text>
+        );
       })}
     </View>
   );
 };
 
-// 5. COMPONENTE PRINCIPAL
+// ----------------------------------------------------------------------
+// 5. COMPONENTE PRINCIPAL DEL DOCUMENTO
+// ----------------------------------------------------------------------
 const ClinicalHistoryPDF: React.FC<ClinicalHistoryPDFProps> = ({ 
   doctorProfile, 
   patientData, 
@@ -270,32 +360,43 @@ const ClinicalHistoryPDF: React.FC<ClinicalHistoryPDFProps> = ({
     <Document>
       <Page size="A4" style={styles.page}>
         
-        {/* --- ENCABEZADO --- */}
+        {/* --- 1. ENCABEZADO --- */}
         <View style={styles.header}>
           <View style={styles.headerLeft}>
             <Text style={styles.drName}>Dr. {doctorProfile.full_name}</Text>
-            <Text style={styles.drSpecialty}>{doctorProfile.specialty || "Medicina General"}</Text>
+            <Text style={styles.drSpecialty}>
+              {doctorProfile.specialty || "Medicina General"}
+            </Text>
             
             {doctorProfile.license_number && (
-              <Text style={styles.drInfo}>Céd. Prof: {doctorProfile.license_number} | {doctorProfile.university}</Text>
+              <Text style={styles.drInfo}>
+                Céd. Prof: {doctorProfile.license_number} | {doctorProfile.university}
+              </Text>
             )}
             
             {doctorProfile.address && (
-              <Text style={styles.drInfo}>{doctorProfile.address}</Text>
+              <Text style={styles.drInfo}>
+                {doctorProfile.address}
+              </Text>
             )}
             
             {doctorProfile.phone && (
-              <Text style={styles.drInfo}>Tel: {doctorProfile.phone}</Text>
+              <Text style={styles.drInfo}>
+                Tel: {doctorProfile.phone}
+              </Text>
             )}
           </View>
           
-          {/* Logo condicional (Manejo seguro) */}
+          {/* Logo del Doctor (Si existe) */}
           {doctorProfile.logo_url ? (
-             <Image style={styles.logo} src={doctorProfile.logo_url} />
+             <Image 
+                style={styles.logo} 
+                src={doctorProfile.logo_url} 
+             />
           ) : null}
         </View>
 
-        {/* --- FICHA DEL PACIENTE --- */}
+        {/* --- 2. FICHA DEL PACIENTE --- */}
         <View style={styles.patientSection}>
           <Text style={styles.sectionTitle}>Resumen de Historia Clínica</Text>
           
@@ -324,15 +425,17 @@ const ClinicalHistoryPDF: React.FC<ClinicalHistoryPDFProps> = ({
           </View>
         </View>
 
-        {/* --- ANTECEDENTES (Si existen) --- */}
+        {/* --- 3. ANTECEDENTES (Si existen) --- */}
         {patientData.history && (
             <View style={styles.historySection}>
                 <Text style={styles.historyLabel}>ANTECEDENTES CLÍNICOS REGISTRADOS:</Text>
-                <Text style={styles.historyText}>{patientData.history}</Text>
+                <Text style={styles.historyText}>
+                    {patientData.history}
+                </Text>
             </View>
         )}
 
-        {/* --- LÍNEA DE TIEMPO --- */}
+        {/* --- 4. LÍNEA DE TIEMPO DE CONSULTAS --- */}
         <Text style={[styles.sectionTitle, { 
             marginTop: 10, 
             borderBottomWidth: 1, 
@@ -351,7 +454,8 @@ const ClinicalHistoryPDF: React.FC<ClinicalHistoryPDFProps> = ({
         ) : (
             consultations.map((cons, index) => (
                 <View key={cons.id || index} style={styles.timelineItem} wrap={false}>
-                    {/* Encabezado de la Cita */}
+                    
+                    {/* Barra Azul de Fecha y Folio */}
                     <View style={styles.consultationHeader}>
                         <Text style={styles.dateBadge}>
                             {new Date(cons.created_at).toLocaleDateString('es-MX', { 
@@ -366,14 +470,14 @@ const ClinicalHistoryPDF: React.FC<ClinicalHistoryPDFProps> = ({
                         </Text>
                     </View>
                     
-                    {/* Cuerpo de la Cita (Traducido) */}
+                    {/* Cuerpo de la Cita (Traducido y Formateado) */}
                     <FormattedConsultationBody text={cons.summary} />
                     
                 </View>
             ))
         )}
 
-        {/* --- PIE DE PÁGINA --- */}
+        {/* --- 5. PIE DE PÁGINA --- */}
         <Text 
           style={styles.footer} 
           render={({ pageNumber, totalPages }) => (
