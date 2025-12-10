@@ -25,7 +25,6 @@ import { QuickNotes } from '../components/QuickNotes';
 import { MedicalCalculators } from '../components/MedicalCalculators';
 import { QuickDocModal } from '../components/QuickDocModal';
 
-// 👇 AQUÍ ESTÁ LA CONEXIÓN MODULAR
 import { ImpactMetrics } from '../components/ImpactMetrics';
 
 // --- Interfaces ---
@@ -140,8 +139,11 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete }: { isOpen: boolean
 const StatusWidget = ({ weather, totalApts, pendingApts, isNight, location }: any) => {
     const [time, setTime] = useState(new Date());
     useEffect(() => { const t = setInterval(() => setTime(new Date()), 1000); return () => clearInterval(t); }, []);
+    
+    // LÓGICA CORREGIDA: Ahora 'pendingApts' son los pendientes y 'totalApts' es el total del día
     const completed = totalApts - pendingApts;
     const progress = totalApts > 0 ? (completed / totalApts) * 100 : 0;
+    
     return (
         <div className="bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl rounded-[2rem] p-6 border border-white/50 dark:border-slate-700 shadow-xl h-full flex flex-col justify-between relative overflow-hidden">
              <div className="absolute inset-0 bg-gradient-to-br from-white via-transparent to-blue-50/50 opacity-50"></div>
@@ -162,8 +164,6 @@ const StatusWidget = ({ weather, totalApts, pendingApts, isNight, location }: an
         </div>
     );
 };
-
-// NOTA: Eliminamos ActivityGraph local porque usamos ImpactMetrics importado
 
 const QuickDocs = ({ openModal }: { openModal: (type: 'justificante' | 'certificado' | 'receta') => void }) => (
     <div className="bg-gradient-to-br from-white to-pink-50/50 dark:from-slate-900 dark:to-slate-900 rounded-[2rem] p-6 border border-slate-100 dark:border-slate-800 shadow-sm h-full">
@@ -225,7 +225,6 @@ const ActionRadar = ({ items, onItemClick }: { items: PendingItem[], onItemClick
     );
 };
 
-// --- HEADER DINÁMICO (ACTUALIZADO: MICRO-DASHBOARD) ---
 const MorningBriefing = ({ greeting, message, weather, systemStatus, onOpenAssistant, insights }: any) => {
     const hour = new Date().getHours();
     
@@ -241,7 +240,6 @@ const MorningBriefing = ({ greeting, message, weather, systemStatus, onOpenAssis
             
             <div className="relative z-10 flex flex-col lg:flex-row justify-between items-end gap-6">
                 <div className="flex-1 w-full">
-                    {/* Eliminamos el "Buenas Tardes" pequeño redundante */}
                     <div className="flex items-center gap-2 mb-3 opacity-90">
                         <div className="p-1.5 bg-white/20 rounded-lg backdrop-blur-sm">
                             <theme.icon size={16} className="text-white" />
@@ -253,10 +251,8 @@ const MorningBriefing = ({ greeting, message, weather, systemStatus, onOpenAssis
                         {greeting}
                     </h1>
 
-                    {/* --- AQUÍ ESTÁ LA MAGIA (Micro-Dashboard) --- */}
                     {insights && (
                         <div className="flex flex-wrap gap-3">
-                            {/* Chip 1: Próximo Paciente */}
                             <div className="flex items-center gap-3 bg-white/15 border border-white/10 px-4 py-2 rounded-xl backdrop-blur-md">
                                 <div className="bg-white/20 p-1.5 rounded-lg"><Clock size={16}/></div>
                                 <div>
@@ -265,7 +261,6 @@ const MorningBriefing = ({ greeting, message, weather, systemStatus, onOpenAssis
                                 </div>
                             </div>
 
-                            {/* Chip 2: Pendientes */}
                             <div className="flex items-center gap-3 bg-white/15 border border-white/10 px-4 py-2 rounded-xl backdrop-blur-md">
                                 <div className={`${insights.pending > 0 ? 'bg-amber-400/80 text-amber-900' : 'bg-white/20'} p-1.5 rounded-lg`}>
                                     <AlertTriangle size={16}/>
@@ -276,7 +271,6 @@ const MorningBriefing = ({ greeting, message, weather, systemStatus, onOpenAssis
                                 </div>
                             </div>
 
-                            {/* Chip 3: Carga del Día */}
                             <div className="flex items-center gap-3 bg-white/15 border border-white/10 px-4 py-2 rounded-xl backdrop-blur-md hidden sm:flex">
                                 <div className="bg-white/20 p-1.5 rounded-lg"><Activity size={16}/></div>
                                 <div>
@@ -288,7 +282,6 @@ const MorningBriefing = ({ greeting, message, weather, systemStatus, onOpenAssis
                     )}
                 </div>
                 
-                {/* Bloque Derecho (Clima) - Se mantiene igual pero alineado */}
                 <div className="flex gap-4 shrink-0">
                     <div className="flex items-center gap-6 bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/20 shadow-inner">
                         <div className="text-right">
@@ -315,6 +308,10 @@ const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const [doctorProfile, setDoctorProfile] = useState<any>(null); 
   const [appointments, setAppointments] = useState<DashboardAppointment[]>([]);
+  
+  // NUEVO: Estado para conteo de citas completadas hoy
+  const [completedTodayCount, setCompletedTodayCount] = useState(0);
+
   const [pendingItems, setPendingItems] = useState<PendingItem[]>([]); 
   const [weather, setWeather] = useState({ temp: '--', code: 0 });
   const [locationName, setLocationName] = useState('Localizando...');
@@ -326,10 +323,6 @@ const Dashboard: React.FC = () => {
   const [docType, setDocType] = useState<'justificante' | 'certificado' | 'receta'>('justificante');
   const [toolsTab, setToolsTab] = useState<'notes' | 'calc'>('notes');
   
-  const now = new Date();
-  const hour = now.getHours();
-  const isNight = hour >= 19 || hour < 6;
-
   const formattedDocName = useMemo(() => {
     if (!doctorProfile?.full_name) return '';
     const raw = doctorProfile.full_name.trim();
@@ -348,13 +341,28 @@ const Dashboard: React.FC = () => {
           
           const todayStart = startOfDay(new Date()); 
           const nextWeekEnd = endOfDay(addDays(new Date(), 7));
+          
+          // 1. Citas PENDIENTES (Futuras o de hoy)
           const { data: aptsData } = await supabase.from('appointments').select(`id, title, start_time, status, patient:patients (id, name, history)`).eq('doctor_id', user.id).gte('start_time', todayStart.toISOString()).lte('start_time', nextWeekEnd.toISOString()).neq('status', 'cancelled').neq('status', 'completed').order('start_time', { ascending: true }).limit(10);
+          
           if (aptsData) {
               const formattedApts: DashboardAppointment[] = aptsData.map((item: any) => ({
                   id: item.id, title: item.title, start_time: item.start_time, status: item.status, patient: item.patient, criticalAlert: null 
               }));
               setAppointments(formattedApts);
           }
+
+          // 2. NUEVO: Conteo de citas COMPLETADAS HOY para métricas reales
+          const { count: completedCount } = await supabase
+              .from('appointments')
+              .select('*', { count: 'exact', head: true })
+              .eq('doctor_id', user.id)
+              .eq('status', 'completed')
+              .gte('start_time', todayStart.toISOString())
+              .lte('start_time', endOfDay(new Date()).toISOString());
+          
+          setCompletedTodayCount(completedCount || 0);
+
           const radar: PendingItem[] = [];
           const { data: openConsults } = await supabase.from('consultations').select('id, created_at, patient_name').eq('doctor_id', user.id).eq('status', 'in_progress').limit(3);
           if (openConsults) { openConsults.forEach(c => radar.push({ id: c.id, type: 'note', title: 'Nota Incompleta', subtitle: `${c.patient_name || 'Sin nombre'} • ${format(parseISO(c.created_at), 'dd/MM')}`, date: c.created_at })); }
@@ -407,6 +415,10 @@ const Dashboard: React.FC = () => {
       }
   };
 
+  // CÁLCULO REAL DE LA JORNADA
+  const appointmentsToday = appointments.filter(a => isToday(parseISO(a.start_time))).length;
+  const totalDailyLoad = completedTodayCount + appointmentsToday;
+
   return (
     <div className="min-h-screen bg-[#F8FAFC] dark:bg-slate-950 font-sans w-full pb-32 md:pb-8 relative overflow-hidden">
       
@@ -424,12 +436,11 @@ const Dashboard: React.FC = () => {
             systemStatus={systemStatus} 
             onOpenAssistant={() => setIsAssistantOpen(true)}
             
-            // 👇 INSIGHTS PROACTIVOS (LA MEJORA)
             insights={{
                 nextTime: nextPatient ? format(parseISO(nextPatient.start_time), 'h:mm a') : null,
                 pending: pendingItems.length,
-                total: appointments.length,
-                done: appointments.filter(a => a.status === 'completed').length
+                total: totalDailyLoad, // TOTAL REAL (Completados + Pendientes)
+                done: completedTodayCount // PROGRESO REAL
             }}
          />
 
@@ -451,7 +462,13 @@ const Dashboard: React.FC = () => {
                              {nextPatient && <button onClick={() => handleStartConsultation(nextPatient)} className="mt-6 w-full py-3 bg-slate-900 hover:bg-black text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all"><PlayCircle size={18}/> INICIAR CONSULTA</button>}
                         </div>
                      </div>
-                     <StatusWidget weather={weather} totalApts={10} pendingApts={appointments.length} isNight={isNight} location={locationName} />
+                     <StatusWidget 
+                        weather={weather} 
+                        totalApts={totalDailyLoad} // DATO REAL
+                        pendingApts={appointmentsToday} // DATO REAL
+                        isNight={hour >= 19 || hour < 6} 
+                        location={locationName} 
+                     />
                  </div>
 
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
