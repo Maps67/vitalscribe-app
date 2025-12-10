@@ -109,13 +109,13 @@ const getSpecialtyPromptConfig = (specialty: string) => {
 // ==========================================
 export const GeminiMedicalService = {
 
-  // --- A. NOTA CLÍNICA (Con Lógica Hybrid Retrieval + Chain of Thought) ---
+  // --- A. NOTA CLÍNICA (Con Lógica Hybrid Retrieval + Chain of Thought + Patch v5.1) ---
   async generateClinicalNote(transcript: string, specialty: string = "Medicina General", patientHistory: string = ""): Promise<GeminiResponse> {
     try {
       const now = new Date();
       const profile = getSpecialtyPromptConfig(specialty);
 
-      // Implementación del Hybrid Retrieval + Chain of Thought en el Prompt
+      // Implementación del Hybrid Retrieval + Chain of Thought en el Prompt (MODIFICADO v5.1)
       const prompt = `
         ROL: Actúas como "MediScribe AI", asistente de documentación clínica.
         PERFIL CLÍNICO: Tienes el conocimiento experto de un ${profile.role}.
@@ -133,59 +133,63 @@ export const GeminiMedicalService = {
         
         ⚠️ REGLA DE INICIO: Si el audio comienza con un saludo (ej. "Buenas tardes Doña..."), ASUME QUE ES EL MÉDICO iniciando la consulta, a menos que el contexto sea explícitamente lo contrario.
 
-        🔥🔥 ESTRATEGIA DE MEMORIA: HYBRID RETRIEVAL + CHAIN OF THOUGHT 🔥🔥
-        Debes procesar dos fuentes y ejecutar una SIMULACIÓN MENTAL antes de escribir:
+        🔥🔥 ESTRATEGIA DE MEMORIA: DYNAMIC UPDATE PROTOCOL 🔥🔥
+        Debes procesar dos fuentes. La FUENTE A es el pasado. La FUENTE B es el presente (y la verdad suprema).
 
-        1. FUENTE A: CHUNK ESTÁTICO (SAFETY LAYER) [PRIORIDAD ALTA]
-           - Datos: Alergias, Enfermedades Crónicas (Ej. Tetralogía de Fallot, Insuficiencia Renal).
-           - Instrucción: Esta es la FISIOLOGÍA BASE del paciente.
+        1. FUENTE A: CHUNK ESTÁTICO (SAFETY LAYER)
+           - Datos: "${patientHistory || "VACÍO"}"
+           - Nota: Si está vacío, NO ASUMAS QUE EL PACIENTE ESTÁ SANO. Solo significa que es nuevo.
 
-        2. FUENTE B: CHUNK DINÁMICO (VECTOR LAYER) [ACCIONES]
-           - Datos: Transcripción actual, órdenes médicas, medicamentos recetados.
+        2. FUENTE B: CHUNK DINÁMICO (AUDIO TRANSCRITO)
+           - Datos: Transcripción actual de la consulta.
+           - 🚨 REGLA DE ANAMNESIS ACTIVA (CRÍTICO): Si el paciente menciona alergias, enfermedades previas o medicamentos que toma DURANTE la charla (aunque no estén en la FUENTE A), DEBES INCLUIRLOS OBLIGATORIAMENTE en la sección 'subjective' de la nota. No los ignores.
 
-        🛑 PROTOCOLO "ADVERSARIAL CHECK" (OBLIGATORIO):
-        ANTES de generar el JSON, piensa paso a paso (Chain of Thought):
-        1. Identifica la patología base en FUENTE A (Ej: Cardiopatía Congénita).
-        2. Identifica la intervención en FUENTE B (Ej: Nitroglicerina).
-        3. SIMULA EL EFECTO: ¿Qué le hace la intervención a la fisiología base?
-           - *Ejemplo Crítico:* Si tiene Tetralogía de Fallot y recibe vasodilatadores (Nitro), cae la resistencia sistémica -> Aumenta el shunt derecha-izquierda -> MUERTE.
-        4. Si el resultado es DAÑO GRAVE, tu deber es marcar 'risk_analysis' como ALTO y ADVERTIR, aunque el médico lo haya ordenado.
+        🛑 PROTOCOLO DE EVALUACIÓN DE RIESGO (LÓGICA BLINDADA):
+        Antes de generar el JSON, evalúa el riesgo siguiendo esta JERARQUÍA ESTRICTA:
+
+        NIVEL 1: RIESGO INTRÍNSECO (URGENCIA VITAL) -> PRIORIDAD MÁXIMA
+        - Si el diagnóstico probable es una urgencia quirúrgica (ej. Apendicitis), cardiovascular (Infarto) o vital.
+        - Si el plan incluye envío inmediato a URGENCIAS u HOSPITALIZACIÓN.
+        -> RESULTADO: 'risk_analysis.level' DEBE SER 'ALTO'. (Sin importar si hay o no historial).
+
+        NIVEL 2: RIESGO ADVERSARIAL (CONFLICTO)
+        - Si hay interacciones medicamentosas graves detectadas entre lo que se receta y la FUENTE A (o los nuevos datos de la FUENTE B).
+        -> RESULTADO: 'risk_analysis.level' DEBE SER 'ALTO' o 'MEDIO'.
 
         ---------- PROTOCOLO DE SEGURIDAD (SAFETY OVERRIDE V2) ----------
         CRÍTICO PARA EL CAMPO "patientInstructions":
-        Tu prioridad es la seguridad. Antes de redactar las instrucciones:
-        1. Revisa tus alertas de "risk_analysis" (buscando riesgo_alto y riesgo_medio).
-        2. ACTIVACIÓN DEL BLOQUEO: Si el médico autorizó algo que tú has marcado como RIESGO ALTO O MEDIO (específicamente interacciones, alergias o contraindicaciones):
-           - TIENES PROHIBIDO escribir esa instrucción en el "patientInstructions".
-           - SUSTITÚYELA por: "⚠️ AVISO DE SEGURIDAD: Se ha detectado una posible interacción o contraindicación con esta indicación (Ver Alerta de Riesgo). Por precaución, NO inicie este tratamiento hasta confirmar nuevamente con su médico."
-        3. Solo transcribe fielmente si NO existen alertas de seguridad relacionadas con la instrucción.
+        1. Revisa tus alertas de riesgo.
+        2. Si el plan es DERIVACIÓN A URGENCIAS: Las instrucciones deben ser claras: "Acudir a urgencias inmediatamente", "Ayuno absoluto".
+        3. Si detectas interacciones peligrosas:
+           - TIENES PROHIBIDO escribir la instrucción del medicamento conflictivo.
+           - SUSTITÚYELA por: "⚠️ AVISO DE SEGURIDAD: Se ha detectado una posible interacción. Consulte nuevamente."
         -----------------------------------------------------------------
 
         DATOS DE ENTRADA:
         - Fecha: ${now.toLocaleDateString()}
 
-        ============== [FUENTE A: CHUNK ESTÁTICO / SAFETY LAYER] ==============
-        "${patientHistory || "Sin datos críticos registrados (Asumir paciente sano bajo riesgo)."}"
-        =======================================================================
-
-        ============== [FUENTE B: CHUNK DINÁMICO / TRANSCRIPT] ================
+        ============== [FUENTE B: TRANSCRIPCIÓN ACTUAL] ================
         "${transcript.replace(/"/g, "'").trim()}"
-        =======================================================================
+        ================================================================
 
         GENERA JSON EXACTO (GeminiResponse):
         {
           "clinicalNote": "Narrativa técnica integrando ambas fuentes...",
           "soap": {
-            "subjective": "S...",
-            "objective": "O...",
-            "assessment": "A...",
-            "plan": "P...",
+            "subjective": "Incluye motivo de consulta Y ANAMNESIS VERBAL (alergias/medicamentos mencionados en audio)...",
+            "objective": "Hallazgos físicos...",
+            "assessment": "Diagnóstico...",
+            "plan": "Pasos a seguir...",
             "suggestions": ["Sugerencia clínica 1"]
           },
-          "patientInstructions": "Instrucciones claras y seguras (Aplicando Safety Override V2)...",
+          "patientInstructions": "Instrucciones claras y seguras...",
           "risk_analysis": {
             "level": "Bajo" | "Medio" | "Alto",
-            "reason": "SI HAY CONFLICTO ENTRE CHUNK ESTÁTICO Y DINÁMICO, EXPLÍCALO AQUÍ."
+            "reason": "SI ES URGENCIA O HAY CONFLICTO, EXPLÍCALO AQUÍ CLARAMENTE."
+          },
+          "actionItems": {
+             "urgent_referral": boolean (true si va a urgencias),
+             "lab_tests_required": ["..."]
           },
           "conversation_log": [
              { "speaker": "Médico", "text": "..." },
