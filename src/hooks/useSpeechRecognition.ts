@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 
+// Interfaz para extender Window y evitar errores de TS
 interface IWindow extends Window {
   webkitSpeechRecognition: any;
   SpeechRecognition: any;
@@ -21,9 +22,10 @@ export const useSpeechRecognition = () => {
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState('');
   
-  // Detección de Móvil (Mantenemos tu lógica probada)
+  // Detección de Móvil (Para aplicar parches específicos)
   const isMobile = useRef(/Android|iPhone|iPad|iPod/i.test(navigator.userAgent));
 
+  // Detección de Soporte API
   const [isAPISupported] = useState(() => {
     if (typeof window === 'undefined') return false;
     const { webkitSpeechRecognition, SpeechRecognition } = window as unknown as IWindow;
@@ -34,22 +36,33 @@ export const useSpeechRecognition = () => {
   const isUserInitiatedStop = useRef(false);
   const wakeLockRef = useRef<any>(null);
   
-  // Refs de alto rendimiento
+  // Refs de alto rendimiento para evitar re-renderizados innecesarios en el bucle de audio
   const finalTranscriptRef = useRef('');
 
   // --- GESTIÓN DE ENERGÍA (WAKE LOCK) ---
+  // Evita que el celular se bloquee mientras el médico dicta
   const requestWakeLock = useCallback(async () => {
     if ('wakeLock' in navigator) {
-      try { wakeLockRef.current = await (navigator as any).wakeLock.request('screen'); } catch (err) {}
+      try { 
+          wakeLockRef.current = await (navigator as any).wakeLock.request('screen'); 
+      } catch (err) {
+          console.warn('Wake Lock error:', err);
+      }
     }
   }, []);
 
   const releaseWakeLock = useCallback(async () => {
     if (wakeLockRef.current) {
-      try { await wakeLockRef.current.release(); wakeLockRef.current = null; } catch (err) {}
+      try { 
+          await wakeLockRef.current.release(); 
+          wakeLockRef.current = null; 
+      } catch (err) {
+          console.warn('Wake Lock release error:', err);
+      }
     }
   }, []);
 
+  // Re-aplicar Wake Lock si la app vuelve a primer plano
   useEffect(() => {
     const handleVisibilityChange = async () => {
       if (wakeLockRef.current !== null && document.visibilityState === 'visible') {
@@ -64,6 +77,7 @@ export const useSpeechRecognition = () => {
   const startListening = useCallback(() => {
     if (!isAPISupported) return;
 
+    // Si ya hay una instancia, la matamos antes de crear otra
     if (recognitionRef.current) {
        try { recognitionRef.current.stop(); } catch(e) {}
     }
@@ -73,15 +87,19 @@ export const useSpeechRecognition = () => {
     const recognition = new SpeechAPI();
 
     // CONFIGURACIÓN TURBO
-    recognition.continuous = !isMobile.current; // En PC es continuo
+    // En Desktop usamos continuous=true. En móvil a veces falla, pero intentamos true.
+    recognition.continuous = true; 
     recognition.interimResults = true;          // CRÍTICO: Ver texto mientras hablas
-    recognition.lang = 'es-MX';
+    recognition.lang = 'es-MX';                 // FORZAR ESPAÑOL DE MÉXICO (Mejora acentos)
     recognition.maxAlternatives = 1;
 
     recognition.onstart = () => {
       setIsListening(true);
       isUserInitiatedStop.current = false;
       requestWakeLock();
+      
+      // Feedback Háptico (Vibración) si es móvil
+      if (navigator.vibrate) navigator.vibrate(50);
     };
 
     recognition.onresult = (event: any) => {
@@ -103,7 +121,7 @@ export const useSpeechRecognition = () => {
         const cleanFinal = finalChunk.trim();
         const currentFinal = finalTranscriptRef.current.trim();
         
-        // Deduplicación optimizada
+        // Deduplicación optimizada (Anti-Eco)
         const overlap = getOverlapLength(currentFinal, cleanFinal);
         const newPart = cleanFinal.slice(overlap).trim();
         
@@ -125,27 +143,36 @@ export const useSpeechRecognition = () => {
       // Ignorar error 'no-speech' para evitar parpadeos en UI
       if (event.error === 'no-speech') return; 
       
+      console.warn('Speech Recognition Error:', event.error);
+
       if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
         setIsListening(false);
-        isUserInitiatedStop.current = true;
+        isUserInitiatedStop.current = true; // Bloqueo real
         releaseWakeLock();
       }
     };
 
     recognition.onend = () => {
-      // Lógica de reinicio "Pegajoso" (Sticky Restart)
+      // Lógica de reinicio "Pegajoso" (Sticky Restart) - CRÍTICO PARA MÓVIL
       if (!isUserInitiatedStop.current) {
-          // En móvil, reiniciamos rápido. En PC es automático por continuous=true
-          if (isMobile.current) {
-             try { recognition.start(); } catch (e) {
-                 setTimeout(() => {
-                     if (!isUserInitiatedStop.current) try { recognition.start(); } catch(err) {}
-                 }, 100);
-             }
+          // El usuario NO le dio a stop, pero se apagó solo. LO PRENDEMOS DE NUEVO.
+          console.log('🔄 Reinicio automático del micrófono...');
+          
+          try { 
+              recognition.start(); 
+          } catch (e) {
+              // Si falla el reinicio inmediato, intentamos con un pequeño delay
+              setTimeout(() => {
+                  if (!isUserInitiatedStop.current) {
+                      try { recognition.start(); } catch(err) {}
+                  }
+              }, 100);
           }
       } else {
+        // Apagado real por usuario
         setIsListening(false);
         releaseWakeLock();
+        if (navigator.vibrate) navigator.vibrate([50, 50, 50]); // Vibración de apagado
       }
     };
 
@@ -154,9 +181,13 @@ export const useSpeechRecognition = () => {
   }, [isAPISupported, requestWakeLock, releaseWakeLock]);
 
   const stopListening = useCallback(() => {
-    isUserInitiatedStop.current = true;
-    if (recognitionRef.current) try { recognitionRef.current.stop(); } catch(e) {}
-    // Al detener, "congelamos" el texto final
+    isUserInitiatedStop.current = true; // Bandera: "Yo quise pararlo"
+    
+    if (recognitionRef.current) {
+        try { recognitionRef.current.stop(); } catch(e) {}
+    }
+    
+    // Al detener, "congelamos" el texto final en el estado para que no se borre
     setTranscript(finalTranscriptRef.current);
     setIsListening(false);
     releaseWakeLock();
@@ -167,12 +198,13 @@ export const useSpeechRecognition = () => {
     setTranscript('');
   }, []);
 
+  // Permite editar el texto manualmente y que la IA siga desde ahí
   const setTranscriptManual = useCallback((text: string) => {
       finalTranscriptRef.current = text;
       setTranscript(text);
   }, []);
 
-  // Limpieza al desmontar
+  // Limpieza al desmontar el componente
   useEffect(() => {
     return () => {
         isUserInitiatedStop.current = true;
