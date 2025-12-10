@@ -114,13 +114,13 @@ const getSpecialtyPromptConfig = (specialty: string) => {
 // ==========================================
 export const GeminiMedicalService = {
 
-  // --- A. NOTA CLÍNICA (V5.3 - GRIM REAPER PROTOCOL) ---
+  // --- A. NOTA CLÍNICA (V5.4 - PROTOCOLO OBSTETRA BLINDADO) ---
   async generateClinicalNote(transcript: string, specialty: string = "Medicina General", patientHistory: string = ""): Promise<GeminiResponse> {
     try {
       const now = new Date();
       const profile = getSpecialtyPromptConfig(specialty);
 
-      // Prompt Reforzado v5.3
+      // Prompt Reforzado v5.4
       const prompt = `
         ROL: Eres "MediScribe AI", Auditor de Seguridad Clínica en Tiempo Real.
         ESPECIALIDAD: ${profile.role}.
@@ -131,25 +131,27 @@ export const GeminiMedicalService = {
         2. Extrae ANAMNESIS DE LA TRANSCRIPCIÓN: ¿Qué medicamentos o condiciones menciona el paciente?
            - *Nota:* Si el paciente dice "tomé X ayer/anoche", asume que está ACTIVO en su sistema.
 
-        💀💀 FASE 2: PROTOCOLO "GRIM REAPER" (VERIFICACIÓN MORTAL) 💀💀
-        ANTES de generar cualquier plan, verifica si existe alguna de estas "COMBINACIONES PROHIBIDAS".
-        
-        REGLA DE LAS 48 HORAS: Si el paciente menciona haber tomado Inhibidores PDE5 (Sildenafil, Viagra, Tadalafil) en las últimas 48 horas (ej. "ayer", "anoche", "hoy")...
-        ...Y el médico receta NITRATOS (Isosorbide, Nitroglicerina)...
-        >>> ¡ES UNA SENTENCIA DE MUERTE POR HIPOTENSIÓN REFRACTARIA! <<<
+        💀💀 FASE 2: PROTOCOLO DE CONTEXTO CRÍTICO Y BLOQUEO FARMACOLÓGICO 💀💀
+        Tu deber es detectar dos tipos de riesgo: Urgencia Vital (Grim Reaper) y Daño Irreversible Fetal (OBSTETRA).
 
-        SI DETECTAS ESTO (O cualquier otra interacción letal obvia):
-        1. 🛑 ACTIVAR FRENO DE EMERGENCIA:
-           - 'risk_analysis.level' = "Alto" (OBLIGATORIO).
-           - 'risk_analysis.reason' = "PELIGRO MORTAL: Interacción Nitratos + Sildenafil (Uso < 48h). Riesgo de choque hipotensivo irreversible."
+        A. 🚨 REGLA DE EMBARAZO ACTIVO (TERATOGENICIDAD):
+        - Si la transcripción menciona "embarazo", "bebé", "feto" o "semanas de gestación", ESTE CONTEXTO ES MÁXIMA PRIORIDAD.
+        - ANÁLISIS DE RIESGO TERATOGÉNICO (MÁXIMO):
+          - SI se menciona **Warfarina** o **Enalapril** (IECA), u otro fármaco de Categoría X/D...
+          - ...Y la paciente está embarazada...
+          - > ESTO ES RIESGO MORTAL FETAL IRREVERSIBLE.
+        - 'risk_analysis.level' DEBE SER "Alto" (OBLIGATORIO) por encima del diagnóstico materno.
+
+        B. 🚨 REGLA DE INTERACCIÓN FARMACOLÓGICA (Grim Reaper):
+        - REGLA DE LAS 48 HORAS: Sildenafil/Tadalafil + Nitratos (Isosorbide/Nitroglicerina) = PELIGRO MORTAL.
         
-        2. 🛑 BLOQUEO DE INSTRUCCIONES (CRÍTICO):
-           - En el campo 'patientInstructions', TIENES PROHIBIDO escribir la orden del médico de tomar el medicamento letal.
-           - DEBES escribir EXACTAMENTE: "⚠️ ALERTA DE SEGURIDAD MÁXIMA: El sistema ha bloqueado la administración de Isosorbide/Nitratos debido al uso reciente de Sildenafil. Riesgo de muerte. NO ADMINISTRAR."
+        SI HAY BLOQUEO ACTIVO (PUNTO A o B):
+        1. 🛑 El 'risk_analysis.level' es "Alto" y la 'reason' explica la contraindicación absoluta.
+        2. 🛑 BLOQUEO DE INSTRUCCIONES: En 'patientInstructions', TIENES PROHIBIDO escribir la orden del médico de tomar el medicamento peligroso.
+           - DEBES escribir: "⚠️ ALERTA DE SEGURIDAD MÁXIMA: El sistema ha bloqueado la administración de [Fármacos de Riesgo] por riesgo de muerte/teratogenicidad. NO ADMINISTRAR."
 
         🔥🔥 FASE 3: GENERACIÓN ESTRUCTURADA 🔥🔥
-        Solo si pasas la Fase 2 sin alertas mortales, procede con el plan estándar.
-        Si hay alerta mortal, el 'plan' en SOAP debe reflejar la suspensión del medicamento y la reevaluación.
+        Asegura que el 'plan' en SOAP refleje la acción de seguridad si el bloqueo se activa.
 
         DATOS DE ENTRADA:
         - Historial Previo: "${patientHistory || "Sin datos"}"
@@ -159,16 +161,16 @@ export const GeminiMedicalService = {
         {
           "clinicalNote": "Resumen narrativo...",
           "soap": {
-            "subjective": "Incluye OBLIGATORIAMENTE el uso de medicamentos mencionados (ej. Sildenafil)...",
+            "subjective": "Incluye OBLIGATORIAMENTE el contexto de embarazo y los medicamentos mencionados...",
             "objective": "Hallazgos...",
             "assessment": "Diagnóstico...",
-            "plan": "Pasos a seguir (Modificados por seguridad si hay riesgo)...",
+            "plan": "Pasos a seguir (Suspender fármacos prohibidos si aplica)...",
             "suggestions": ["Sugerencia 1"]
           },
-          "patientInstructions": "Instrucciones SEGURAS (Filtradas por Protocolo Grim Reaper)...",
+          "patientInstructions": "Instrucciones SEGURAS (Filtradas por Protocolo de Bloqueo)...",
           "risk_analysis": {
             "level": "Bajo" | "Medio" | "Alto",
-            "reason": "Si hay interacción, descríbela AQUÍ."
+            "reason": "Si hay bloqueo, describe el peligro absoluto aquí."
           },
           "actionItems": {
              "urgent_referral": boolean,
