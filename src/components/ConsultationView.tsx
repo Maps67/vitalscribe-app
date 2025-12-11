@@ -9,28 +9,51 @@ import {
 } from 'lucide-react';
 
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition'; 
-import { GeminiMedicalService, ChatMessage, GeminiResponse } from '../services/GeminiMedicalService';
+import { GeminiMedicalService } from '../services/GeminiMedicalService';
+// ✅ CORRECCIÓN CRÍTICA: Importamos tipos desde el archivo global
+import { ChatMessage, GeminiResponse, Patient, DoctorProfile, PatientInsight } from '../types';
 import { supabase } from '../lib/supabase';
-import { Patient, DoctorProfile, PatientInsight } from '../types';
 import FormattedText from './FormattedText';
 import { toast } from 'sonner';
 import { pdf } from '@react-pdf/renderer';
 import PrescriptionPDF from './PrescriptionPDF';
 import { AppointmentService } from '../services/AppointmentService';
 import QuickRxModal from './QuickRxModal';
-import { DoctorFileGallery } from './DoctorFileGallery'; // Import sin llaves corregido previamente
+import { DoctorFileGallery } from './DoctorFileGallery';
 import { UploadMedico } from './UploadMedico';
 import { InsightsPanel } from './InsightsPanel';
 
 type TabType = 'record' | 'patient' | 'chat';
 
 const SPECIALTIES = [
-  "Medicina General", "Cardiología", "Cirugía General", "Cirugía de Columna", "Cirugía de Mano", 
-  "Cirugía Oncológica", "Cirugía Pediátrica", "Cirugía Plástica y Reconstructiva", "Dermatología", 
-  "Endocrinología", "Gastroenterología", "Geriatría", "Ginecología y Obstetricia", "Medicina del Deporte", 
-  "Medicina Interna", "Nefrología", "Neumología", "Neurocirugía", "Neurología", "Oftalmología", 
-  "Otorrinolaringología", "Pediatría", "Psiquiatría", "Reumatología", "Traumatología y Ortopedia", 
-  "Traumatología: Artroscopia", "Urología", "Urgencias Médicas"
+  "Medicina General", 
+  "Cardiología", 
+  "Cirugía General", 
+  "Cirugía de Columna", 
+  "Cirugía de Mano", 
+  "Cirugía Oncológica", 
+  "Cirugía Pediátrica", 
+  "Cirugía Plástica y Reconstructiva", 
+  "Dermatología", 
+  "Endocrinología", 
+  "Gastroenterología", 
+  "Geriatría", 
+  "Ginecología y Obstetricia", 
+  "Medicina del Deporte", 
+  "Medicina Interna", 
+  "Nefrología", 
+  "Neumología", 
+  "Neurocirugía", 
+  "Neurología", 
+  "Oftalmología", 
+  "Otorrinolaringología", 
+  "Pediatría", 
+  "Psiquiatría", 
+  "Reumatología", 
+  "Traumatología y Ortopedia", 
+  "Traumatología: Artroscopia", 
+  "Urología", 
+  "Urgencias Médicas"
 ];
 
 const ConsultationView: React.FC = () => {
@@ -236,8 +259,9 @@ const ConsultationView: React.FC = () => {
     return patients.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()));
   }, [patients, searchTerm]);
 
-  // --- 🔥 CORRECCIÓN: HIDRATACIÓN REACTIVA ---
+  // --- HIDRATACIÓN REACTIVA ---
   const handleSelectPatient = async (patient: any) => {
+      // Caso 1: Paciente Fantasma
       if (patient.isGhost) {
           const tempPatient = {
               ...patient,
@@ -249,9 +273,10 @@ const ConsultationView: React.FC = () => {
           if (patient.appointmentId) setLinkedAppointmentId(patient.appointmentId);
           toast.info(`Paciente temporal: ${patient.name} (Se registrará al guardar)`);
       } 
+      // Caso 2: Paciente Registrado
       else {
           setSelectedPatient(patient);
-          setSearchTerm('');
+          setSearchTerm(''); // Limpiamos buscador
 
           try {
               const loadingHistory = toast.loading("Sincronizando historial...");
@@ -311,7 +336,7 @@ const ConsultationView: React.FC = () => {
       }
   };
 
-  // ✅ CORRECCIÓN TIPOS: Usamos soapData y analysis en lugar de soap/assessment
+  // ✅ USO CORRECTO DE SOAPDATA
   const handleSoapChange = (section: 'subjective' | 'objective' | 'analysis' | 'plan', value: string) => {
       if (!generatedNote || !generatedNote.soapData) return;
       setGeneratedNote(prev => {
@@ -373,13 +398,13 @@ const ConsultationView: React.FC = () => {
     abortControllerRef.current = new AbortController();
     
     setIsProcessing(true);
-    const loadingToast = toast.loading("Analizando caso clínico (RAG Híbrido)...");
+    const loadingToast = toast.loading("Analizando caso clínico (Prometheus V7)...");
 
     try {
       let fullMedicalContext = "";
       
       if (selectedPatient && !(selectedPatient as any).isTemporary) {
-          
+          // Si el paciente es real, traemos su contexto histórico para el RAG Híbrido
           const { data: historyData } = await supabase
               .from('consultations')
               .select('created_at, summary')
@@ -393,6 +418,7 @@ const ConsultationView: React.FC = () => {
               ? historyData.map(h => `[FECHA: ${new Date(h.created_at).toLocaleDateString()}] RESUMEN: ${h.summary.substring(0, 300)}...`).join("\n\n")
               : "Sin consultas previas en plataforma.";
 
+          // Construcción del Contexto para la IA
           fullMedicalContext = `
             === [FUENTE A: HISTORIAL CLÍNICO CRÍTICO (VERDAD ABSOLUTA)] ===
             ${staticHistory}
@@ -402,13 +428,14 @@ const ConsultationView: React.FC = () => {
           `;
       }
 
+      // Llamada al Servicio V7
       const response = await GeminiMedicalService.generateClinicalNote(
           transcript, 
           selectedSpecialty, 
           fullMedicalContext 
       );
       
-      // ✅ CORRECCIÓN: Usar soapData
+      // ✅ VALIDACIÓN: Asegurar que llegó soapData
       if (!response || (!response.soapData && !response.clinicalNote)) {
           throw new Error("La IA generó una respuesta vacía o inválida.");
       }
@@ -471,7 +498,7 @@ const ConsultationView: React.FC = () => {
             toast.success("Paciente registrado automáticamente.");
         }
 
-        // ✅ CORRECCIÓN: Usar soapData y analysis
+        // ✅ GUARDADO: Usar soapData
         const summaryToSave = generatedNote.soapData 
             ? `FECHA: ${new Date().toLocaleDateString()}\nS: ${generatedNote.soapData.subjective}\nO: ${generatedNote.soapData.objective}\nA: ${generatedNote.soapData.analysis}\nP: ${generatedNote.soapData.plan}\n\nPLAN PACIENTE:\n${editableInstructions}`
             : (generatedNote.clinicalNote + "\n\nPLAN PACIENTE:\n" + editableInstructions);
@@ -534,7 +561,6 @@ const ConsultationView: React.FC = () => {
       setChatMessages(p => [...p, { role: 'user', text: msg }]);
       setIsChatting(true);
       try {
-          // ✅ CORRECCIÓN: Usar soapData
           const soapContext = generatedNote.soapData ? JSON.stringify(generatedNote.soapData) : generatedNote.clinicalNote;
           const ctx = `NOTA ESTRUCTURADA: ${soapContext}\nPLAN PACIENTE: ${editableInstructions}`;
           const reply = await GeminiMedicalService.chatWithContext(ctx, msg);

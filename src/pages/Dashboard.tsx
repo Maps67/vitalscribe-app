@@ -19,7 +19,7 @@ import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
 import { AssistantService } from '../services/AssistantService';
 import { AgentResponse } from '../services/GeminiAgent';
 import { UploadMedico } from '../components/UploadMedico';
-// ✅ CORRECCIÓN: Importación correcta (aseguramos que coincida con el componente)
+// ✅ CORRECCIÓN: Importación correcta
 import { DoctorFileGallery } from '../components/DoctorFileGallery';
 
 import { QuickNotes } from '../components/QuickNotes';
@@ -137,7 +137,6 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete }: { isOpen: boolean
 };
 
 // --- Widgets ---
-// CORREGIDO: StatusWidget ahora calcula su propia hora/noche para evitar errores de props
 const StatusWidget = ({ weather, totalApts, pendingApts, location }: any) => {
     const [time, setTime] = useState(new Date());
     useEffect(() => { const t = setInterval(() => setTime(new Date()), 1000); return () => clearInterval(t); }, []);
@@ -148,7 +147,6 @@ const StatusWidget = ({ weather, totalApts, pendingApts, location }: any) => {
     
     // Definimos isNight internamente basado en la hora local del widget
     const hour = time.getHours();
-    const isNight = hour >= 19 || hour < 6;
     
     return (
         <div className="bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl rounded-[2rem] p-6 border border-white/50 dark:border-slate-700 shadow-xl h-full flex flex-col justify-between relative overflow-hidden">
