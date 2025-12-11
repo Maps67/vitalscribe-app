@@ -18,7 +18,7 @@ import { pdf } from '@react-pdf/renderer';
 import PrescriptionPDF from './PrescriptionPDF';
 import { AppointmentService } from '../services/AppointmentService';
 import QuickRxModal from './QuickRxModal';
-import { DoctorFileGallery } from './DoctorFileGallery';
+import { DoctorFileGallery } from './DoctorFileGallery'; // Import sin llaves corregido previamente
 import { UploadMedico } from './UploadMedico';
 import { InsightsPanel } from './InsightsPanel';
 
@@ -237,9 +237,7 @@ const ConsultationView: React.FC = () => {
   }, [patients, searchTerm]);
 
   // --- 🔥 CORRECCIÓN: HIDRATACIÓN REACTIVA ---
-  // Esta función ha sido reconstruida para garantizar que SIEMPRE tengamos el historial
   const handleSelectPatient = async (patient: any) => {
-      // Caso 1: Paciente Fantasma (Sigue igual)
       if (patient.isGhost) {
           const tempPatient = {
               ...patient,
@@ -251,22 +249,16 @@ const ConsultationView: React.FC = () => {
           if (patient.appointmentId) setLinkedAppointmentId(patient.appointmentId);
           toast.info(`Paciente temporal: ${patient.name} (Se registrará al guardar)`);
       } 
-      // Caso 2: Paciente Registrado (AQUÍ ESTÁ LA MAGIA)
       else {
-          // Primero, seteamos lo que ya tenemos visualmente para que se sienta rápido
           setSelectedPatient(patient);
-          setSearchTerm(''); // Limpiamos buscador
+          setSearchTerm('');
 
-          // AHORA: Hidratación Reactiva en segundo plano
-          // Si el objeto 'patient' viene de una lista resumida, podría no tener el 'history' completo.
-          // Forzamos una búsqueda fresca a la base de datos para estar seguros.
           try {
-              // Pequeño indicador visual de carga de datos
               const loadingHistory = toast.loading("Sincronizando historial...");
               
               const { data: fullPatientData, error } = await supabase
                   .from('patients')
-                  .select('*') // Traemos TODO, incluyendo history
+                  .select('*') 
                   .eq('id', patient.id)
                   .single();
 
@@ -274,7 +266,6 @@ const ConsultationView: React.FC = () => {
 
               if (fullPatientData && !error) {
                   console.log("💧 Paciente Hidratado Correctamente:", fullPatientData.name);
-                  // Actualizamos el estado con los datos "frescos" y completos
                   setSelectedPatient(fullPatientData);
                   toast.success("Historial clínico cargado.");
               } else {
@@ -282,7 +273,6 @@ const ConsultationView: React.FC = () => {
               }
           } catch (e) {
               console.error("Error en hidratación reactiva:", e);
-              // No bloqueamos, seguimos con los datos que ya teníamos
           }
       }
   };
@@ -321,14 +311,15 @@ const ConsultationView: React.FC = () => {
       }
   };
 
-  const handleSoapChange = (section: 'subjective' | 'objective' | 'assessment' | 'plan', value: string) => {
-      if (!generatedNote || !generatedNote.soap) return;
+  // ✅ CORRECCIÓN TIPOS: Usamos soapData y analysis en lugar de soap/assessment
+  const handleSoapChange = (section: 'subjective' | 'objective' | 'analysis' | 'plan', value: string) => {
+      if (!generatedNote || !generatedNote.soapData) return;
       setGeneratedNote(prev => {
-          if (!prev || !prev.soap) return prev;
+          if (!prev || !prev.soapData) return prev;
           return {
               ...prev,
-              soap: {
-                  ...prev.soap,
+              soapData: {
+                  ...prev.soapData,
                   [section]: value
               }
           };
@@ -396,7 +387,6 @@ const ConsultationView: React.FC = () => {
               .order('created_at', { ascending: false })
               .limit(3); 
 
-          // AQUÍ SE USA EL DATO HIDRATADO QUE ACABAMOS DE TRAER EN handleSelectPatient
           const staticHistory = selectedPatient.history || "Sin antecedentes patológicos registrados.";
           
           const episodicHistory = historyData && historyData.length > 0
@@ -418,7 +408,8 @@ const ConsultationView: React.FC = () => {
           fullMedicalContext 
       );
       
-      if (!response || (!response.soap && !response.clinicalNote)) {
+      // ✅ CORRECCIÓN: Usar soapData
+      if (!response || (!response.soapData && !response.clinicalNote)) {
           throw new Error("La IA generó una respuesta vacía o inválida.");
       }
 
@@ -480,8 +471,9 @@ const ConsultationView: React.FC = () => {
             toast.success("Paciente registrado automáticamente.");
         }
 
-        const summaryToSave = generatedNote.soap 
-            ? `FECHA: ${new Date().toLocaleDateString()}\nS: ${generatedNote.soap.subjective}\nO: ${generatedNote.soap.objective}\nA: ${generatedNote.soap.assessment}\nP: ${generatedNote.soap.plan}\n\nPLAN PACIENTE:\n${editableInstructions}`
+        // ✅ CORRECCIÓN: Usar soapData y analysis
+        const summaryToSave = generatedNote.soapData 
+            ? `FECHA: ${new Date().toLocaleDateString()}\nS: ${generatedNote.soapData.subjective}\nO: ${generatedNote.soapData.objective}\nA: ${generatedNote.soapData.analysis}\nP: ${generatedNote.soapData.plan}\n\nPLAN PACIENTE:\n${editableInstructions}`
             : (generatedNote.clinicalNote + "\n\nPLAN PACIENTE:\n" + editableInstructions);
 
         if (linkedAppointmentId) {
@@ -542,7 +534,8 @@ const ConsultationView: React.FC = () => {
       setChatMessages(p => [...p, { role: 'user', text: msg }]);
       setIsChatting(true);
       try {
-          const soapContext = generatedNote.soap ? JSON.stringify(generatedNote.soap) : generatedNote.clinicalNote;
+          // ✅ CORRECCIÓN: Usar soapData
+          const soapContext = generatedNote.soapData ? JSON.stringify(generatedNote.soapData) : generatedNote.clinicalNote;
           const ctx = `NOTA ESTRUCTURADA: ${soapContext}\nPLAN PACIENTE: ${editableInstructions}`;
           const reply = await GeminiMedicalService.chatWithContext(ctx, msg);
           setChatMessages(p => [...p, { role: 'model', text: reply }]);
@@ -739,7 +732,7 @@ const ConsultationView: React.FC = () => {
                  </div>
              ) : (
                  <div className="min-h-full flex flex-col max-w-4xl mx-auto w-full gap-4 relative pb-8">
-                      {activeTab==='record' && generatedNote.soap && (
+                      {activeTab==='record' && generatedNote.soapData && (
                         <div className="bg-white dark:bg-slate-900 rounded-sm shadow-lg border border-slate-200 dark:border-slate-800 p-8 md:p-12 min-h-full h-fit pb-32 animate-fade-in-up relative">
                             <div className="sticky top-0 z-20 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm border-b border-slate-100 dark:border-slate-800 pb-4 mb-8 -mx-2 px-2 flex flex-col gap-2">
                                 <div className="flex justify-between items-start">
@@ -819,28 +812,28 @@ const ConsultationView: React.FC = () => {
                             <div className="space-y-8">
                                 <div className="group relative">
                                     <h4 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2"><Activity size={14} className="text-blue-500"/> Subjetivo <PenLine size={12} className="opacity-0 group-hover:opacity-50"/></h4>
-                                    <textarea className="w-full bg-transparent text-slate-800 dark:text-slate-200 leading-7 text-base pl-1 resize-none overflow-hidden outline-none focus:ring-1 focus:ring-blue-200 rounded p-1 transition-all" value={generatedNote.soap.subjective} onChange={(e) => handleSoapChange('subjective', e.target.value)} ref={(el) => { if(el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; }}}/>
+                                    <textarea className="w-full bg-transparent text-slate-800 dark:text-slate-200 leading-7 text-base pl-1 resize-none overflow-hidden outline-none focus:ring-1 focus:ring-blue-200 rounded p-1 transition-all" value={generatedNote.soapData.subjective} onChange={(e) => handleSoapChange('subjective', e.target.value)} ref={(el) => { if(el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; }}}/>
                                 </div>
                                 <hr className="border-slate-100 dark:border-slate-800" />
                                 <div className="group relative">
                                     <h4 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2"><ClipboardList size={14} className="text-green-500"/> Objetivo <PenLine size={12} className="opacity-0 group-hover:opacity-50"/></h4>
-                                    <textarea className="w-full bg-transparent text-slate-800 dark:text-slate-200 leading-7 text-base pl-1 resize-none overflow-hidden outline-none focus:ring-1 focus:ring-green-200 rounded p-1 transition-all" value={generatedNote.soap.objective} onChange={(e) => handleSoapChange('objective', e.target.value)} ref={(el) => { if(el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; }}}/>
+                                    <textarea className="w-full bg-transparent text-slate-800 dark:text-slate-200 leading-7 text-base pl-1 resize-none overflow-hidden outline-none focus:ring-1 focus:ring-green-200 rounded p-1 transition-all" value={generatedNote.soapData.objective} onChange={(e) => handleSoapChange('objective', e.target.value)} ref={(el) => { if(el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; }}}/>
                                 </div>
                                 <hr className="border-slate-100 dark:border-slate-800" />
                                 <div className="group relative">
                                     <h4 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2"><Brain size={14} className="text-amber-500"/> Análisis y Diagnóstico <PenLine size={12} className="opacity-0 group-hover:opacity-50"/></h4>
-                                    <textarea className="w-full bg-transparent text-slate-800 dark:text-slate-200 leading-7 text-base pl-1 resize-none overflow-hidden outline-none focus:ring-1 focus:ring-amber-200 rounded p-1 transition-all" value={generatedNote.soap.assessment} onChange={(e) => handleSoapChange('assessment', e.target.value)} ref={(el) => { if(el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; }}}/>
+                                    <textarea className="w-full bg-transparent text-slate-800 dark:text-slate-200 leading-7 text-base pl-1 resize-none overflow-hidden outline-none focus:ring-1 focus:ring-amber-200 rounded p-1 transition-all" value={generatedNote.soapData.analysis} onChange={(e) => handleSoapChange('analysis', e.target.value)} ref={(el) => { if(el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; }}}/>
                                 </div>
                                 <hr className="border-slate-100 dark:border-slate-800" />
                                 <div className="group relative">
                                     <h4 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2"><FileSignature size={14} className="text-purple-500"/> Plan Médico <PenLine size={12} className="opacity-0 group-hover:opacity-50"/></h4>
-                                    <textarea className="w-full bg-transparent text-slate-800 dark:text-slate-200 leading-7 text-base pl-1 resize-none overflow-hidden outline-none focus:ring-1 focus:ring-purple-200 rounded p-1 transition-all" value={generatedNote.soap.plan} onChange={(e) => handleSoapChange('plan', e.target.value)} ref={(el) => { if(el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; }}}/>
+                                    <textarea className="w-full bg-transparent text-slate-800 dark:text-slate-200 leading-7 text-base pl-1 resize-none overflow-hidden outline-none focus:ring-1 focus:ring-purple-200 rounded p-1 transition-all" value={generatedNote.soapData.plan} onChange={(e) => handleSoapChange('plan', e.target.value)} ref={(el) => { if(el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; }}}/>
                                 </div>
                             </div>
                         </div>
                       )}
 
-                      {activeTab==='record' && !generatedNote.soap && generatedNote.clinicalNote && (
+                      {activeTab==='record' && !generatedNote.soapData && generatedNote.clinicalNote && (
                           <div className="bg-white dark:bg-slate-900 p-8 rounded-xl shadow-sm h-full flex flex-col border dark:border-slate-800 overflow-hidden">
                                 <div className="bg-yellow-50 text-yellow-800 p-2 text-sm rounded mb-2 dark:bg-yellow-900/30 dark:text-yellow-200">Formato antiguo.</div>
                               <div className="flex-1 overflow-y-auto pr-4 custom-scrollbar"><FormattedText content={generatedNote.clinicalNote}/></div>

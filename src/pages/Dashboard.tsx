@@ -19,6 +19,7 @@ import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
 import { AssistantService } from '../services/AssistantService';
 import { AgentResponse } from '../services/GeminiAgent';
 import { UploadMedico } from '../components/UploadMedico';
+// ✅ CORRECCIÓN: Importación correcta (aseguramos que coincida con el componente)
 import { DoctorFileGallery } from '../components/DoctorFileGallery';
 
 import { QuickNotes } from '../components/QuickNotes';
@@ -531,7 +532,8 @@ const Dashboard: React.FC = () => {
              <button onClick={() => setIsUploadModalOpen(false)} className="absolute top-4 right-4 p-2 bg-slate-100 rounded-full"><X size={16}/></button>
              <h3 className="font-bold text-lg mb-4">Gestión Documental</h3>
              <UploadMedico onUploadComplete={() => {}}/>
-             <div className="mt-4 pt-4 border-t"><DoctorFileFileGallery /></div>
+             {/* ✅ CORRECCIÓN DE TYPO AQUÍ */}
+             <div className="mt-4 pt-4 border-t"><DoctorFileGallery /></div>
           </div>
         </div>
       )}

@@ -160,12 +160,11 @@ export const GeminiMedicalService = {
         GENERA JSON EXACTO (GeminiResponse):
         {
           "clinicalNote": "Resumen narrativo...",
-          "soap": {
+          "soapData": {
             "subjective": "Incluye OBLIGATORIAMENTE el contexto de embarazo y los medicamentos mencionados...",
             "objective": "Hallazgos...",
-            "assessment": "Diagnóstico...",
-            "plan": "Pasos a seguir (Suspender fármacos prohibidos si aplica)...",
-            "suggestions": ["Sugerencia 1"]
+            "analysis": "Diagnóstico...",
+            "plan": "Pasos a seguir (Suspender fármacos prohibidos si aplica)..."
           },
           "patientInstructions": "Instrucciones SEGURAS (Filtradas por Protocolo de Bloqueo)...",
           "risk_analysis": {

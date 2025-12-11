@@ -18,7 +18,8 @@ import { PatientWizard } from './PatientWizard';
 import { InsightsPanel } from './InsightsPanel'; 
 import { GeminiMedicalService } from '../services/GeminiMedicalService'; 
 
-interface PatientData extends Partial<Patient> {
+// ✅ CORRECCIÓN DE TIPO: Usamos Omit para evitar conflictos con la definición base de 'age'
+interface PatientData extends Omit<Partial<Patient>, 'age'> {
   id: string;
   name: string; 
   age: number | string; 
@@ -379,7 +380,7 @@ const PatientsView: React.FC = () => {
 
         {/* MÓVIL */}
         <div className="md:hidden divide-y divide-slate-100 dark:divide-slate-700">
-             {filteredPatients.map(patient => {
+              {filteredPatients.map(patient => {
                 const isExpanded = expandedPatientId === patient.id;
                 return (
                 <div key={patient.id} className={`transition-all duration-300 ${isExpanded ? 'bg-slate-50 dark:bg-slate-800/50 pb-3' : 'bg-white dark:bg-slate-800'}`}>
@@ -465,7 +466,9 @@ const PatientsView: React.FC = () => {
                                 obgyn: h.obgyn,
                                 insurance: h.admin?.insurance,
                                 rfc: h.admin?.rfc,
-                                patientType: h.admin?.type
+                                invoice: h.admin?.invoice,
+                                patientType: h.admin?.type,
+                                referral: h.admin?.referral
                             };
                         } catch { return {}; }
                     })()

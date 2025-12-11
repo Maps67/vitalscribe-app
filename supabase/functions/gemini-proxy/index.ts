@@ -42,7 +42,17 @@ serve(async (req) => {
           Responde ÚNICAMENTE con este JSON válido (sin markdown, sin explicaciones):
           {
             "clinicalNote": "Texto completo de la nota clínica en formato SOAP. Usa terminología técnica de ${payload.specialty}.",
+            "soapData": {
+               "subjective": "Texto detallado del padecimiento actual y subjetivo",
+               "objective": "Signos vitales y exploración física",
+               "analysis": "Diagnóstico presuntivo y análisis",
+               "plan": "Plan de tratamiento detallado"
+            },
             "patientInstructions": "Lista de instrucciones claras para el paciente.",
+            "risk_analysis": {
+               "level": "Bajo",
+               "reason": "Justificación breve"
+            },
             "actionItems": {
               "next_appointment": "Fecha sugerida o null",
               "urgent_referral": false,
