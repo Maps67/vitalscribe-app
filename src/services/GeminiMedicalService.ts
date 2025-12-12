@@ -2,7 +2,7 @@ import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from "@google/ge
 // Importamos interfaces locales para evitar errores de compilación
 import { GeminiResponse, PatientInsight, MedicationItem, FollowUpMessage } from '../types';
 
-console.log("🚀 V-ULTIMATE: PROMETHEUS ENGINE (Stable Infrastructure + Full Logic)");
+console.log("🚀 V-ULTIMATE: MODO PRO (Stable Logic + Infrastructure Fix)");
 
 // ==========================================
 // 1. CONFIGURACIÓN ROBUSTA
@@ -12,15 +12,15 @@ const API_KEY = import.meta.env.VITE_GEMINI_API_KEY || import.meta.env.VITE_GOOG
 if (!API_KEY) console.error("⛔ FATAL: API Key no encontrada. Revisa tu archivo .env");
 
 // LISTA DE COMBATE BLINDADA (Failover System - Stable Channel)
-// CORRECCIÓN TÉCNICA: Se usan los alias estables para evitar el error 404 en v1beta.
+// CORRECCIÓN: Eliminamos modelos experimentales (-002, -exp) que causan error 404.
 const MODELS_TO_TRY = [
-  "gemini-1.5-flash",       // 1. Estándar Global (Rápido y Estable)
-  "gemini-1.5-pro",         // 2. Inteligencia Alta
-  "gemini-pro"              // 3. Legacy (v1.0): El tanque de guerra que nunca falla.
+  "gemini-1.5-flash",       // 1. Versión Estándar (Rápida y Estable)
+  "gemini-1.5-pro",         // 2. Versión Inteligente (Respaldo)
+  "gemini-1.0-pro"          // 3. Legacy (Tanque de guerra, máxima compatibilidad)
 ];
 
-// CONFIGURACIÓN DE SEGURIDAD (GUARDRAILS)
-// OBLIGATORIO: Necesario para que la IA no censure términos médicos (sangre, corte, muerte) como "Violencia".
+// SEGURIDAD OBLIGATORIA (SAFETY SETTINGS)
+// Necesario para evitar bloqueos falsos en notas médicas (sangre, heridas, etc.)
 const SAFETY_SETTINGS = [
   { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
   { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
@@ -55,11 +55,11 @@ async function generateWithFailover(prompt: string, jsonMode: boolean = false): 
 
   for (const modelName of MODELS_TO_TRY) {
     try {
-      console.log(`📡 Conectando Cerebro: ${modelName}...`);
+      console.log(`📡 Conectando Cerebro V-Ultimate: ${modelName}...`);
       
       const model = genAI.getGenerativeModel({ 
         model: modelName,
-        safetySettings: SAFETY_SETTINGS, // <--- INYECCIÓN DE SEGURIDAD CRÍTICA
+        safetySettings: SAFETY_SETTINGS, // Inyección de seguridad crítica
         generationConfig: jsonMode ? { responseMimeType: "application/json" } : undefined
       });
       
@@ -68,12 +68,12 @@ async function generateWithFailover(prompt: string, jsonMode: boolean = false): 
 
       if (text && text.length > 5) return text; // ¡Éxito!
     } catch (error: any) {
-      console.warn(`⚠️ Modelo ${modelName} inestable. Rotando al siguiente...`);
+      console.warn(`⚠️ Modelo ${modelName} inestable. Cambiando al siguiente...`);
       lastError = error;
       continue; 
     }
   }
-  throw lastError || new Error("Fallo sistémico de IA. Verifica tu API Key o conexión.");
+  throw lastError || new Error("Todos los modelos de IA fallaron. Verifica tu conexión.");
 }
 
 /**
