@@ -2,7 +2,7 @@ import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from "@google/ge
 // ✅ IMPORTACIÓN CRÍTICA: Asegúrate de que estos tipos existan en tu archivo src/types/index.ts
 import { GeminiResponse, PatientInsight, MedicationItem, FollowUpMessage } from '../types';
 
-console.log("🚀 V-FINAL: PROMETHEUS ENGINE (Full Suite - Gemini 2.5 Flash + Legal Guardrails)");
+console.log("🚀 V-DEPLOY: PROMETHEUS ENGINE (Gemini 2.5 Flash + Legal Guardrails + Clinical Suggestions)");
 
 // ==========================================
 // 1. CONFIGURACIÓN DE ALTO NIVEL
@@ -92,7 +92,7 @@ async function generateContentDirect(prompt: string, jsonMode: boolean = false, 
  */
 const getSpecialtyConfig = (specialty: string) => {
   const defaults = {
-    role: `Escriba Clínico Experto y Auditor de Calidad Médica para ${specialty}`,
+    role: `Escriba Clínico Experto y Auditor de Calidad Médica (MediScribe AI) para ${specialty}`,
     focus: "Generar documentación clínica técnica, legalmente blindada y basada estrictamente en evidencia.",
     bias: "Lenguaje probabilístico y objetividad radical."
   };
@@ -111,7 +111,7 @@ export const GeminiMedicalService = {
     try {
       const profile = getSpecialtyConfig(specialty);
 
-      // PROMPT SISTÉMICO AVANZADO CON PROTOCOLO DE SEGURIDAD
+      // PROMPT SISTÉMICO AVANZADO CON PROTOCOLO DE SEGURIDAD Y SUGERENCIAS CLÍNICAS
       const prompt = `
         ROL: ${profile.role}.
         OBJETIVO: ${profile.focus}
@@ -131,19 +131,19 @@ export const GeminiMedicalService = {
 
         2. PRINCIPIO DE "GROUNDING" (OBJETIVIDAD RADICAL):
            - Basa la nota EXCLUSIVAMENTE en la transcripción proporcionada.
-           - Si el médico NO mencionó un medicamento, dosis o estudio, NO LO ESCRIBAS en el plan, aunque las guías clínicas lo recomienden. Inventar tratamientos es una falta legal grave.
+           - Si el médico NO mencionó un medicamento, dosis o estudio, NO LO ESCRIBAS en el "plan", aunque las guías clínicas lo recomienden. Inventar tratamientos es una falta legal grave.
 
-        3. CANALIZACIÓN DE INTELIGENCIA:
+        3. CANALIZACIÓN DE INTELIGENCIA (EL "CEREBRO" DE LA IA):
            - Tu inteligencia clínica es bienvenida, pero debe ir en su lugar correcto.
            - CAMPO "plan": Solo lo que el médico verbalizó (Hechos).
-           - CAMPO "risk_analysis": Aquí pon tu análisis experto de riesgos.
+           - CAMPO "clinical_suggestions": Aquí pon tu análisis experto. Si detectas que falta un tratamiento obvio (ej: Aspirina en infarto) o hay un error, escríbelo AQUÍ como sugerencia para el médico.
 
-        ---------- PROTOCOLO DE SEGURIDAD (SAFETY OVERRIDE) ----------
+        ---------- PROTOCOLO DE SEGURIDAD (SAFETY OVERRIDE V2) ----------
         CRÍTICO PARA EL CAMPO "patientInstructions":
         1. Revisa tus alertas de riesgo (Alto/Medio).
         2. Si el médico dio una instrucción verbal que contradice una ALERTA DE RIESGO (ej: recetó algo prohibido o peligroso):
-           - TIENES PROHIBIDO escribir esa instrucción tal cual.
-           - SUSTITÚYELA por: "⚠️ AVISO DE SEGURIDAD: Se ha detectado una posible contraindicación técnica. Por precaución, verificar nuevamente con el médico."
+           - TIENES PROHIBIDO escribir esa instrucción en las instrucciones del paciente.
+           - SUSTITÚYELA por: "⚠️ AVISO DE SEGURIDAD: Se ha detectado una posible contraindicación técnica con esta indicación. Por precaución, NO inicie este tratamiento hasta confirmar nuevamente con su médico."
         -----------------------------------------------------------------
 
         DATOS DE ENTRADA:
@@ -159,6 +159,10 @@ export const GeminiMedicalService = {
             "analysis": "Análisis clínico usando lenguaje probabilístico (Ej: 'Cuadro sugestivo de...').",
             "plan": "Lista de acciones/recetas VERBALIZADAS por el médico. Si no hubo órdenes, dejar vacío o poner 'Pendiente'. NO INVENTAR."
           },
+          "clinical_suggestions": [
+            "Sugerencia 1 (Ej: 'Valorar inicio de Nitroglicerina por clínica de angina')",
+            "Sugerencia 2 (Ej: 'Descartar Lyme por lesión en diana')"
+          ],
           "patientInstructions": "Instrucciones claras para el paciente (Aplicando Safety Override si es necesario).",
           "risk_analysis": {
             "level": "Bajo" | "Medio" | "Alto",

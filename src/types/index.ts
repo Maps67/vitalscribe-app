@@ -44,6 +44,8 @@ export interface GeminiResponse {
     level: string;
     reason: string;
   };
+  // ✨ CAMPO NUEVO: Sugerencias clínicas opcionales
+  clinical_suggestions?: string[];
   conversation_log?: {
     speaker: string;
     text: string;
