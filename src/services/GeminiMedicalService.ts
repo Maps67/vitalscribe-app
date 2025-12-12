@@ -1,23 +1,21 @@
 import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from "@google/generative-ai";
 import { GeminiResponse, PatientInsight, MedicationItem, FollowUpMessage } from '../types';
 
-console.log("🚀 V-ULTIMATE: PROMETHEUS ENGINE (Gemini 1.5 Flash Standard)");
+console.log("🚀 V-ULTIMATE: PROMETHEUS ENGINE (Gemini 1.5 ONLY)");
 
 // ==========================================
 // 1. CONFIGURACIÓN BLINDADA
 // ==========================================
 const API_KEY = import.meta.env.VITE_GEMINI_API_KEY || import.meta.env.VITE_GOOGLE_GENAI_API_KEY || "";
 
-// ⚠️ CORRECCIÓN FINAL: MODELOS 1.5 EXCLUSIVOS
-// Eliminamos "gemini-pro" (1.0) porque Google devuelve 404 en cuentas nuevas.
-// Usamos la familia 1.5 que es la nativa de su nueva API Key.
+// ⚠️ CORRECCIÓN ABSOLUTA: SOLO FAMILIA 1.5
+// Eliminamos "gemini-pro" y "gemini-1.0-pro" porque causan el Error 404.
 const MODELS_TO_TRY = [
-  "gemini-1.5-flash",       // VELOCIDAD: El estándar actual.
-  "gemini-1.5-pro-latest",  // INTELIGENCIA: La última versión disponible.
-  "gemini-1.5-flash-latest" // RESPALDO: Alias de seguridad.
+  "gemini-1.5-flash",       // El estándar más rápido y compatible hoy.
+  "gemini-1.5-pro",         // La versión más inteligente.
 ];
 
-// SAFETY SETTINGS (OBLIGATORIO PARA MEDICINA)
+// SAFETY SETTINGS (OBLIGATORIO)
 const SAFETY_SETTINGS = [
   { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
   { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
@@ -26,7 +24,7 @@ const SAFETY_SETTINGS = [
 ];
 
 // ==========================================
-// 2. MOTOR DE CONEXIÓN E INTELIGENCIA
+// 2. MOTOR DE CONEXIÓN
 // ==========================================
 
 const cleanJSON = (text: string) => {
@@ -42,10 +40,9 @@ const cleanJSON = (text: string) => {
 };
 
 /**
- * MOTOR DE CONEXIÓN CON DIAGNÓSTICO 1.5
+ * MOTOR DE CONEXIÓN
  */
 async function generateWithFailover(prompt: string, jsonMode: boolean = false): Promise<string> {
-  // 1. Diagnóstico Previo
   if (!API_KEY) {
       alert("❌ ERROR: Falta API Key. Revisa tu .env");
       throw new Error("API Key Missing");
@@ -54,7 +51,7 @@ async function generateWithFailover(prompt: string, jsonMode: boolean = false): 
   const genAI = new GoogleGenerativeAI(API_KEY);
   let lastError: any = null;
 
-  // 2. Bucle de Intentos (Solo familia 1.5)
+  // Bucle de Intentos (Solo familia 1.5)
   for (const modelName of MODELS_TO_TRY) {
     try {
       console.log(`📡 Conectando con ${modelName}...`);
@@ -76,15 +73,15 @@ async function generateWithFailover(prompt: string, jsonMode: boolean = false): 
     }
   }
 
-  // 3. Diagnóstico de Error Final
+  // Diagnóstico de Error Final
   console.error("🔥 ERROR FINAL:", lastError);
-  let mensaje = "Error de conexión con Google.";
   const errStr = lastError?.toString() || "";
+  let mensaje = "Error de conexión con Google.";
 
-  if (errStr.includes("404")) mensaje = "ERROR 404: MODELO NO DISPONIBLE.\nAsegúrate de haber ejecutado 'npm install @google/generative-ai@latest'.";
+  if (errStr.includes("404")) mensaje = "ERROR 404: MODELO NO ENCONTRADO.\nEstamos intentando acceder a un modelo que tu API Key no permite.";
   if (errStr.includes("403")) mensaje = "ERROR 403: HABILITA LA API.\nVe a Google Cloud Console > APIs > Habilitar 'Generative Language API'.";
   
-  alert(`🛑 FALLO DE CONEXIÓN:\n${mensaje}`);
+  alert(`🛑 FALLO DE CONEXIÓN:\n${mensaje}\n\nDetalle: ${errStr}`);
   throw lastError;
 }
 
@@ -104,7 +101,7 @@ const getSpecialtyPromptConfig = (specialty: string) => {
 };
 
 // ==========================================
-// 3. SERVICIO PRINCIPAL (SIN RECORTES)
+// 3. SERVICIO PRINCIPAL
 // ==========================================
 export const GeminiMedicalService = {
 
