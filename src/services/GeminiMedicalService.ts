@@ -61,6 +61,7 @@ const cleanJSON = (text: string): string => {
 
 /**
  * MOTOR DE GENERACIÓN BLINDADO (FAILOVER + TEMPERATURA DINÁMICA)
+ * Protocolo Radar: Intenta conectar con múltiples modelos si el principal falla.
  */
 async function generateWithFailover(prompt: string, jsonMode: boolean = false, tempOverride?: number): Promise<string> {
   const genAI = new GoogleGenerativeAI(API_KEY);
@@ -165,9 +166,9 @@ export const GeminiMedicalService = {
         1. **DIARIZACIÓN MENTAL:** Separa mentalmente qué dijo el médico y qué dijo el paciente.
         2. **EXTRACCIÓN DE HECHOS:** Identifica síntomas, temporalidad, medicamentos actuales y alergias.
         3. **ANÁLISIS DE RIESGO (CRÍTICO):**
-           - Busca "Banderas Rojas" (Dolor pecho, disnea, sangrado, ideación suicida, fiebre alta en niños).
-           - Verifica interacciones medicamentosas graves detectadas en el audio.
-           - Si detectas CUALQUIER síntoma de alarma vital, el riesgo es ALTO.
+            - Busca "Banderas Rojas" (Dolor pecho, disnea, sangrado, ideación suicida, fiebre alta en niños).
+            - Verifica interacciones medicamentosas graves detectadas en el audio.
+            - Si detectas CUALQUIER síntoma de alarma vital, el riesgo es ALTO.
         4. **SÍNTESIS SOAP:** Traduce el lenguaje coloquial del paciente a terminología médica técnica (ej. "dolor de cabeza" -> "cefalea").
 
         --- FORMATO DE SALIDA (JSON ESTRICTO) ---
