@@ -6,7 +6,7 @@ console.log("🚀 V-ULTIMATE: PROMETHEUS ENGINE (Diagnostic Mode Active)");
 // ==========================================
 // 1. CONFIGURACIÓN BLINDADA
 // ==========================================
-const API_KEY = "AIzaSyBpfkcc9Q6eV7tx92miigETNiOIMYI9Y7Y";
+const API_KEY = import.meta.env.VITE_GEMINI_API_KEY || import.meta.env.VITE_GOOGLE_GENAI_API_KEY || "";
 
 // LISTA DE MODELOS (Prioridad: Flash 1.5 -> Pro 1.5)
 // Se incluyen variantes canónicas para evitar errores de resolución de DNS/Región
