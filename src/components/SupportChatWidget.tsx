@@ -1,9 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { MessageCircle, X, Send, Bot, Loader2, Mic, MicOff, Volume2, VolumeX } from 'lucide-react';
+import { MessageCircle, X, Send, Bot, Loader2, Mic, MicOff, Volume2 } from 'lucide-react';
 import { GeminiSupportService } from '../services/GeminiSupportService';
 
 // --- DEFINICIÓN DE TIPOS PARA RECONOCIMIENTO DE VOZ (WEB SPEECH API) ---
-// Esto evita errores de TypeScript porque 'webkitSpeechRecognition' no siempre está tipado por defecto.
 declare global {
   interface Window {
     webkitSpeechRecognition: any;
@@ -36,6 +35,17 @@ export const SupportChatWidget: React.FC = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isOpen, isListening]);
 
+  // --- AUDIO MUTEX: LIMPIEZA DE RECURSOS AL DESMONTAR ---
+  useEffect(() => {
+    return () => {
+      // Si el componente muere, matamos cualquier audio activo para liberar al navegador
+      window.speechSynthesis.cancel();
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+    };
+  }, []);
+
   // --- LÓGICA DE TEXT-TO-SPEECH (HABLAR) ---
   const speakText = (text: string) => {
     if ('speechSynthesis' in window) {
@@ -43,7 +53,7 @@ export const SupportChatWidget: React.FC = () => {
       if (window.speechSynthesis.speaking) {
         window.speechSynthesis.cancel();
         setIsSpeaking(false);
-        return; // Si era para detener, terminamos aquí
+        return; 
       }
 
       const utterance = new SpeechSynthesisUtterance(text);
@@ -63,7 +73,7 @@ export const SupportChatWidget: React.FC = () => {
   // --- LÓGICA DE SPEECH-TO-TEXT (ESCUCHAR) ---
   const toggleListening = () => {
     if (isListening) {
-      // Detener manualmente
+      // Detener manualmente y liberar recurso
       recognitionRef.current?.stop();
       setIsListening(false);
       return;
@@ -78,7 +88,7 @@ export const SupportChatWidget: React.FC = () => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     recognitionRef.current = new SpeechRecognition();
     recognitionRef.current.lang = 'es-MX';
-    recognitionRef.current.continuous = false; // Se detiene al dejar de hablar
+    recognitionRef.current.continuous = false; // Se detiene al dejar de hablar (evita bucles)
     recognitionRef.current.interimResults = false;
 
     recognitionRef.current.onstart = () => {
@@ -89,8 +99,6 @@ export const SupportChatWidget: React.FC = () => {
       const transcript = event.results[0][0].transcript;
       setInput(transcript); // Pone el texto en el input
       setIsListening(false);
-      // Opcional: Auto-enviar si se detecta voz
-      // handleSend(transcript); 
     };
 
     recognitionRef.current.onerror = (event: any) => {
@@ -125,9 +133,6 @@ export const SupportChatWidget: React.FC = () => {
       // 3. Agregamos respuesta del bot
       setMessages(prev => [...prev, { role: 'bot', text: response }]);
       
-      // 4. (Opcional) Leer automáticamente la respuesta si el usuario usó voz recientemente?
-      // Por ahora dejamos que el usuario haga click en el icono de hablar para no ser invasivos.
-
     } catch (error) {
       setMessages(prev => [...prev, { role: 'bot', text: "Lo siento, tuve un error de conexión." }]);
     } finally {
@@ -142,8 +147,22 @@ export const SupportChatWidget: React.FC = () => {
     }
   };
 
+  // --- FUNCIÓN DE CIERRE SEGURO (AUDIO SAFETY) ---
+  const handleCloseChat = () => {
+    setIsOpen(false);
+    // 1. Matar síntesis de voz (Robot hablando)
+    window.speechSynthesis.cancel(); 
+    // 2. Matar reconocimiento de voz (Micrófono escuchando)
+    if (recognitionRef.current) {
+        recognitionRef.current.stop();
+    }
+    setIsListening(false);
+    setIsSpeaking(false);
+  };
+
   return (
-    <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end print:hidden">
+    // CAMBIO CRÍTICO: Clases de posicionamiento ajustadas para evitar solapamiento (Elevación Adaptativa)
+    <div className="fixed bottom-28 right-4 md:bottom-20 md:right-6 z-50 flex flex-col items-end print:hidden">
       
       {/* VENTANA DEL CHAT */}
       {isOpen && (
@@ -156,10 +175,7 @@ export const SupportChatWidget: React.FC = () => {
               <span className="font-semibold">Soporte MediScribe</span>
             </div>
             <button 
-              onClick={() => {
-                setIsOpen(false);
-                window.speechSynthesis.cancel(); // Callar al cerrar
-              }}
+              onClick={handleCloseChat}
               className="text-white/80 hover:text-white hover:bg-white/10 p-1 rounded transition-colors"
             >
               <X className="w-5 h-5" />
@@ -261,7 +277,7 @@ export const SupportChatWidget: React.FC = () => {
 
       {/* BOTÓN FLOTANTE (FAB) */}
       <button
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => isOpen ? handleCloseChat() : setIsOpen(true)}
         className={`p-4 rounded-full shadow-2xl transition-all duration-300 hover:scale-110 active:scale-95 border-2 border-white/20 ${
           isOpen ? 'bg-gray-800 text-white rotate-90' : 'bg-indigo-600 text-white'
         }`}
