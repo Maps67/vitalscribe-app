@@ -24,6 +24,8 @@ import TermsOfService from './pages/TermsOfService';
 import { TrialMonitor } from './components/TrialMonitor';
 // PÁGINA NUEVA
 import UpdatePassword from './pages/UpdatePassword';
+// WIDGET DE SOPORTE FLOTANTE
+import { SupportChatWidget } from './components/SupportChatWidget';
 
 interface MainLayoutProps {
   session: Session | null;
@@ -64,6 +66,8 @@ const MainLayout: React.FC<MainLayoutProps> = ({ session, onLogout }) => {
             </div>
           </main>
       </div>
+      {/* Botón Flotante de Soporte IA */}
+      <SupportChatWidget />
     </div>
   );
 };
