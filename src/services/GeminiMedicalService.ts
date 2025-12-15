@@ -1,8 +1,8 @@
 import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from "@google/generative-ai";
-// Asegúrate de que la ruta a tus tipos sea correcta
+import { supabase } from '../lib/supabase'; 
 import { GeminiResponse, PatientInsight, MedicationItem, FollowUpMessage } from '../types';
 
-console.log("🚀 V-STABLE FIXED: JSON SCHEMA ALIGNED (soapData + clinical_suggestions)");
+console.log("🚀 V-HYBRID DEPLOY: Secure Note (Supabase) + Local Utils");
 
 // ==========================================
 // 1. CONFIGURACIÓN ROBUSTA & MOTOR DE IA
@@ -10,7 +10,7 @@ console.log("🚀 V-STABLE FIXED: JSON SCHEMA ALIGNED (soapData + clinical_sugge
 const API_KEY = import.meta.env.VITE_GOOGLE_GENAI_API_KEY || "";
 
 if (!API_KEY) {
-  console.error("⛔ FATAL: API Key no encontrada. Revisa tu archivo .env");
+  console.warn("⚠️ Advertencia: API Key local no encontrada. Las funciones secundarias (Chat/Meds) podrían fallar, pero la Nota Clínica funcionará vía Supabase.");
 }
 
 // 🛡️ LISTA DE COMBATE (High IQ Only)
@@ -52,11 +52,11 @@ const cleanJSON = (text: string) => {
 };
 
 /**
- * MOTOR DE CONEXIÓN BLINDADO (FAILOVER + DETERMINISMO)
- * Fuerza temperature: 0 para evitar alucinaciones en diagnósticos de riesgo.
+ * MOTOR DE CONEXIÓN LOCAL (FAILOVER)
+ * Usado para herramientas menores que aún no migran a Supabase.
  */
 async function generateWithFailover(prompt: string, jsonMode: boolean = false): Promise<string> {
-  if (!API_KEY) throw new Error("API Key faltante.");
+  if (!API_KEY) throw new Error("API Key local faltante para herramientas secundarias.");
 
   const genAI = new GoogleGenerativeAI(API_KEY);
   let lastError: any = null;
@@ -68,7 +68,7 @@ async function generateWithFailover(prompt: string, jsonMode: boolean = false): 
         safetySettings: SAFETY_SETTINGS,
         generationConfig: {
             responseMimeType: jsonMode ? "application/json" : "text/plain",
-            temperature: 0.0,      // 🛑 CRÍTICO: Cero creatividad para decisiones médicas
+            temperature: 0.0,
             topP: 0.8,
             topK: 40
         }
@@ -82,16 +82,17 @@ async function generateWithFailover(prompt: string, jsonMode: boolean = false): 
         return text; 
       }
     } catch (error: any) {
-      console.warn(`⚠️ Modelo ${modelName} falló. Intentando siguiente...`);
+      console.warn(`⚠️ Modelo local ${modelName} falló. Intentando siguiente...`);
       lastError = error;
     }
   }
   
-  throw lastError || new Error("Todos los modelos de IA fallaron. Verifica tu conexión.");
+  throw lastError || new Error("Todos los modelos de IA locales fallaron.");
 }
 
 /**
  * MOTOR DE PERFILES (PERSONALIDAD CLÍNICA)
+ * Mantenido para referencia de tipos.
  */
 const getSpecialtyPromptConfig = (specialty: string) => {
   const configs: Record<string, any> = {
@@ -149,88 +150,39 @@ const getSpecialtyPromptConfig = (specialty: string) => {
 // ==========================================
 export const GeminiMedicalService = {
 
-  // --- A. NOTA CLÍNICA (V5.6 FIXED - SCHEMA CORREGIDO: soapData + clinical_suggestions) ---
+  // --- A. NOTA CLÍNICA (AHORA VÍA SUPABASE EDGE FUNCTIONS - BLINDADO) ---
   async generateClinicalNote(transcript: string, specialty: string = "Medicina General", patientHistory: string = ""): Promise<GeminiResponse> {
     try {
-      const profile = getSpecialtyPromptConfig(specialty);
+      console.log("🔒 Solicitando Nota Clínica Segura a Supabase...");
 
-      const prompt = `
-        ROL: Eres "MediScribe AI", Auditor de Seguridad Clínica en Tiempo Real.
-        ESPECIALIDAD: ${profile.role}.
-        ENFOQUE: ${profile.focus}
-        
-        🔥🔥 FASE 1: EXTRACCIÓN DE DATOS 🔥🔥
-        1. Identifica al Médico y al Paciente (Diarización).
-        2. Extrae ANAMNESIS DE LA TRANSCRIPCIÓN: ¿Qué medicamentos o condiciones menciona el paciente?
-           - *Nota:* Si el paciente dice "tomé X ayer/anoche", asume que está ACTIVO en su sistema.
-           - *Nota:* Si el paciente tiene historial (ej. Diabetes Tipo 1), úsalo como contexto base.
-
-        💀💀 FASE 2: PROTOCOLO DE CONTEXTO CRÍTICO Y BLOQUEO DE SEGURIDAD 💀💀
-        Tu deber es detectar riesgos vitales y bloquear órdenes negligentes o peligrosas.
-
-        A. 🚨 REGLA DE EMBARAZO ACTIVO (TERATOGENICIDAD):
-        - SI se menciona **Warfarina** o **Enalapril** (IECA) en paciente embarazada -> RIESGO ALTO. BLOQUEAR.
-
-        B. 🚨 REGLA DE INTERACCIÓN FARMACOLÓGICA (Grim Reaper):
-        - Sildenafil/Tadalafil + Nitratos (Isosorbide/Nitroglicerina) -> RIESGO ALTO. BLOQUEAR.
-        
-        C. 🚨 REGLA DE URGENCIA METABÓLICA/VITAL (Negligencia):
-        - SI detectas Cetoacidosis (CAD), Infarto, ACV u otra urgencia vital...
-        - ...Y el médico ordena "esperar", "no hacer nada" o minimiza el cuadro...
-        - > ESTO ES NEGLIGENCIA MÉDICA.
-        - 'risk_analysis.level' DEBE SER "Alto".
-        - BLOQUEO ÉTICO: En 'patientInstructions' y 'plan', IGNORA la orden negligente. Escribe el protocolo médico correcto y urgente (ej. "Iniciar hidratación e insulina IV inmediatamente").
-
-        SI HAY BLOQUEO ACTIVO (A, B o C):
-        1. 'risk_analysis.level' = "Alto".
-        2. BLOQUEO DE INSTRUCCIONES: En 'patientInstructions', escribe: "⚠️ ALERTA DE SEGURIDAD MÁXIMA: [Razón del bloqueo]. [Acción Correcta Inmediata]."
-
-        🔥🔥 FASE 3: GENERACIÓN ESTRUCTURADA SOAP 🔥🔥
-        Genera la nota clínica completa y detallada.
-
-        DATOS DE ENTRADA:
-        - Historial Previo: "${patientHistory || "Sin datos"}"
-        - Transcripción Actual: "${transcript.replace(/"/g, "'").trim()}"
-
-        ⚠️ GENERA EL SIGUIENTE JSON EXACTO (RESPETA LOS NOMBRES DE LAS CLAVES):
-        {
-          "clinicalNote": "Resumen narrativo completo del caso.",
-          "soapData": {
-            "subjective": "Incluye OBLIGATORIAMENTE el contexto de embarazo, medicamentos mencionados y síntomas reportados por el paciente.",
-            "objective": "Hallazgos físicos y signos vitales reportados por el médico (ej. Glucosa 450, Aliento frutal).",
-            "analysis": "Diagnóstico y razonamiento clínico (ej. Cetoacidosis Diabética).",
-            "plan": "Pasos a seguir DETALLADOS. Si hubo bloqueo ético, pon aquí el tratamiento CORRECTO (no el negligente)."
-          },
-          "clinical_suggestions": [
-            "Sugerencia clínica 1",
-            "Sugerencia clínica 2"
-          ],
-          "patientInstructions": "Instrucciones SEGURAS y claras para el paciente (Filtradas por Protocolo de Bloqueo)...",
-          "risk_analysis": {
-            "level": "Bajo" | "Medio" | "Alto",
-            "reason": "Razón clara del nivel de riesgo seleccionado."
-          },
-          "actionItems": {
-             "urgent_referral": boolean,
-             "lab_tests_required": ["Lista de estudios necesarios"]
-          },
-          "conversation_log": [
-             { "speaker": "Médico", "text": "..." },
-             { "speaker": "Paciente", "text": "..." }
-          ]
+      // Llamada a la Edge Function segura
+      const { data, error } = await supabase.functions.invoke('generate-clinical-note', {
+        body: { 
+            transcript, 
+            specialty, 
+            patientHistory 
         }
-      `;
+      });
 
-      const rawText = await generateWithFailover(prompt, true);
-      return JSON.parse(cleanJSON(rawText)) as GeminiResponse;
+      if (error) {
+        console.error("❌ Error en Edge Function:", error);
+        throw error;
+      }
 
-    } catch (error) {
-      console.error("❌ Error Nota Clínica:", error);
+      if (!data) {
+        throw new Error("Supabase no devolvió datos (Respuesta vacía).");
+      }
+
+      console.log("✅ Nota recibida exitosamente de Supabase.");
+      return data as GeminiResponse;
+
+    } catch (error: any) {
+      console.error("❌ Error Crítico Nota Clínica:", error);
       throw error;
     }
   },
 
-  // --- B. BALANCE 360 ---
+  // --- B. BALANCE 360 (Mantiene motor local por ahora) ---
   async generatePatient360Analysis(patientName: string, historySummary: string, consultations: string[]): Promise<PatientInsight> {
     try {
       const contextText = consultations.length > 0 
@@ -259,7 +211,7 @@ export const GeminiMedicalService = {
     }
   },
 
-  // --- C. EXTRACCIÓN MEDICAMENTOS ---
+  // --- C. EXTRACCIÓN MEDICAMENTOS (Mantiene motor local por ahora) ---
   async extractMedications(text: string): Promise<MedicationItem[]> {
     if (!text) return [];
     try {
@@ -274,7 +226,7 @@ export const GeminiMedicalService = {
     } catch (e) { return []; }
   },
 
-  // --- D. AUDITORÍA CALIDAD ---
+  // --- D. AUDITORÍA CALIDAD (Mantiene motor local por ahora) ---
   async generateClinicalNoteAudit(noteContent: string): Promise<any> {
     try {
       const prompt = `
@@ -286,7 +238,7 @@ export const GeminiMedicalService = {
     } catch (e) { return { riskLevel: "Medio", score: 0, analysis: "", recommendations: [] }; }
   },
 
-  // --- E. WHATSAPP ---
+  // --- E. WHATSAPP (Mantiene motor local por ahora) ---
   async generateFollowUpPlan(patientName: string, clinicalNote: string, instructions: string): Promise<FollowUpMessage[]> {
     try {
       const prompt = `
@@ -300,7 +252,7 @@ export const GeminiMedicalService = {
     } catch (e) { return []; }
   },
 
-  // --- F. CHAT ---
+  // --- F. CHAT (Mantiene motor local por ahora) ---
   async chatWithContext(context: string, userMessage: string): Promise<string> {
     try {
        const prompt = `CONTEXTO: ${context}. PREGUNTA: ${userMessage}. RESPUESTA CORTA:`;
