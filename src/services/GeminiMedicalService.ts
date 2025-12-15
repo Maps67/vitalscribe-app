@@ -2,7 +2,7 @@ import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from "@google/ge
 // Asegúrate de que la ruta a tus tipos sea correcta
 import { GeminiResponse, PatientInsight, MedicationItem, FollowUpMessage } from '../types';
 
-console.log("🚀 V-DEPLOY: ORIGINAL ULTIMATE RESTORED (Full Prompts + Multi-Model Fix)");
+console.log("🚀 V-STABLE: PROTOCOLO DE ESTABILIZACIÓN (Temp 0 + Schema Fix + High IQ Models)");
 
 // ==========================================
 // 1. CONFIGURACIÓN ROBUSTA & MOTOR DE IA
@@ -13,16 +13,15 @@ if (!API_KEY) {
   console.error("⛔ FATAL: API Key no encontrada. Revisa tu archivo .env");
 }
 
-// 🛡️ LISTA DE COMBATE (Failover System)
-// Esta es la ÚNICA modificación técnica: Permite que si Gemini 1.5 falla (404), entre el 2.0 o el Pro.
+// 🛡️ LISTA DE COMBATE (High IQ Only)
+// Se eliminó la versión "8b" porque carece de razonamiento complejo para seguridad médica.
 const MODELS_TO_TRY = [
-  "gemini-2.0-flash-exp",    // 1. Experimental: Mayor velocidad y razonamiento (Tu preferencia)
-  "gemini-1.5-flash-002",    // 2. Estable Específica: Evita el error 404 del alias genérico
-  "gemini-1.5-pro-002",      // 3. Respaldo Potente: Mejor para casos complejos
-  "gemini-1.5-flash-8b"      // 4. Emergencia: Ultra rápido
+  "gemini-2.0-flash-exp",    // 1. Velocidad + Razonamiento superior
+  "gemini-1.5-flash-002",    // 2. Estable y probado
+  "gemini-1.5-pro-002"       // 3. Respaldo pesado (Más lento pero infalible)
 ];
 
-// CONFIGURACIÓN DE SEGURIDAD (Necesaria para temas médicos explícitos)
+// CONFIGURACIÓN DE SEGURIDAD
 const SAFETY_SETTINGS = [
   { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
   { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
@@ -54,8 +53,8 @@ const cleanJSON = (text: string) => {
 };
 
 /**
- * MOTOR DE CONEXIÓN BLINDADO (FAILOVER)
- * Soluciona el error 404 iterando sobre modelos disponibles sin tocar tus prompts.
+ * MOTOR DE CONEXIÓN BLINDADO (FAILOVER + DETERMINISMO)
+ * Ahora fuerza temperature: 0 para evitar alucinaciones en diagnósticos de riesgo.
  */
 async function generateWithFailover(prompt: string, jsonMode: boolean = false): Promise<string> {
   if (!API_KEY) throw new Error("API Key faltante.");
@@ -68,7 +67,12 @@ async function generateWithFailover(prompt: string, jsonMode: boolean = false): 
       const model = genAI.getGenerativeModel({ 
         model: modelName,
         safetySettings: SAFETY_SETTINGS,
-        generationConfig: jsonMode ? { responseMimeType: "application/json" } : undefined
+        generationConfig: {
+            responseMimeType: jsonMode ? "application/json" : "text/plain",
+            temperature: 0.0,      // 🛑 CRÍTICO: Cero creatividad para decisiones médicas
+            topP: 0.8,
+            topK: 40
+        }
       });
       
       const result = await model.generateContent(prompt);
@@ -76,7 +80,7 @@ async function generateWithFailover(prompt: string, jsonMode: boolean = false): 
       const text = response.text();
 
       if (text && text.length > 0) {
-        console.log(`✅ Conexión exitosa con: ${modelName}`);
+        // console.log(`✅ Conexión exitosa con: ${modelName}`); // Descomentar para debug
         return text; 
       }
     } catch (error: any) {
@@ -90,7 +94,6 @@ async function generateWithFailover(prompt: string, jsonMode: boolean = false): 
 
 /**
  * MOTOR DE PERFILES (PERSONALIDAD CLÍNICA)
- * Restaurado ÍNTEGRO de tu versión V-ULTIMATE.
  */
 const getSpecialtyPromptConfig = (specialty: string) => {
   const configs: Record<string, any> = {
@@ -143,8 +146,7 @@ const getSpecialtyPromptConfig = (specialty: string) => {
 // ==========================================
 export const GeminiMedicalService = {
 
-  // --- A. NOTA CLÍNICA (V5.4 - PROTOCOLO OBSTETRA BLINDADO & DIARIZACIÓN) ---
-  // PROMPT RESTAURADO LETRA POR LETRA DE TU ORIGINAL V-ULTIMATE
+  // --- A. NOTA CLÍNICA (V5.5 - STABLE SCHEMA & DETERMINISTIC) ---
   async generateClinicalNote(transcript: string, specialty: string = "Medicina General", patientHistory: string = ""): Promise<GeminiResponse> {
     try {
       const profile = getSpecialtyPromptConfig(specialty);
@@ -153,12 +155,9 @@ export const GeminiMedicalService = {
         ROL: Eres "MediScribe AI", Auditor de Seguridad Clínica en Tiempo Real.
         ESPECIALIDAD: ${profile.role}.
         ENFOQUE: ${profile.focus}
-        SESGO CLÍNICO: ${profile.bias}
         
-        🔥🔥 FASE 1: EXTRACCIÓN DE DATOS Y DIARIZACIÓN 🔥🔥
+        🔥🔥 FASE 1: EXTRACCIÓN DE DATOS 🔥🔥
         1. Identifica al Médico y al Paciente (Diarización).
-           - Identifica al "Médico" (quien interroga, da instrucciones).
-           - Identifica al "Paciente" (quien responde, describe síntomas).
         2. Extrae ANAMNESIS DE LA TRANSCRIPCIÓN: ¿Qué medicamentos o condiciones menciona el paciente?
            - *Nota:* Si el paciente dice "tomé X ayer/anoche", asume que está ACTIVO en su sistema.
 
@@ -188,24 +187,23 @@ export const GeminiMedicalService = {
         - Historial Previo: "${patientHistory || "Sin datos"}"
         - Transcripción Actual: "${transcript.replace(/"/g, "'").trim()}"
 
-        GENERA JSON EXACTO (GeminiResponse):
+        GENERA JSON EXACTO (Compatibilidad estricta con GeminiResponse Interface):
         {
           "clinicalNote": "Resumen narrativo completo.",
-          "soapData": {
-            "subjective": "Incluye OBLIGATORIAMENTE el contexto de embarazo y los medicamentos mencionados (Paciente).",
-            "objective": "Hallazgos y signos vitales (Médico).",
-            "analysis": "Diagnóstico y razonamiento clínico.",
-            "plan": "Pasos a seguir (Suspender fármacos prohibidos si aplica)..."
+          "soap": {
+            "subjective": "Incluye OBLIGATORIAMENTE el contexto de embarazo y los medicamentos mencionados.",
+            "objective": "Hallazgos y signos vitales.",
+            "assessment": "Diagnóstico y razonamiento clínico.",
+            "plan": "Pasos a seguir (Suspender fármacos prohibidos si aplica)...",
+            "suggestions": ["Sugerencia 1"]
           },
-          "clinical_suggestions": ["Sugerencia 1"],
           "patientInstructions": "Instrucciones SEGURAS (Filtradas por Protocolo de Bloqueo)...",
           "risk_analysis": {
             "level": "Bajo" | "Medio" | "Alto",
             "reason": "Si hay bloqueo, describe el peligro absoluto aquí."
           },
           "actionItems": {
-             "next_appointment": "Fecha o null",
-             "urgent_referral": false,
+             "urgent_referral": boolean,
              "lab_tests_required": ["Lista de estudios"]
           },
           "conversation_log": [
@@ -224,7 +222,7 @@ export const GeminiMedicalService = {
     }
   },
 
-  // --- B. BALANCE 360 (ORIGINAL V-ULTIMATE) ---
+  // --- B. BALANCE 360 ---
   async generatePatient360Analysis(patientName: string, historySummary: string, consultations: string[]): Promise<PatientInsight> {
     try {
       const contextText = consultations.length > 0 
@@ -253,7 +251,7 @@ export const GeminiMedicalService = {
     }
   },
 
-  // --- C. EXTRACCIÓN MEDICAMENTOS (ORIGINAL V-ULTIMATE) ---
+  // --- C. EXTRACCIÓN MEDICAMENTOS ---
   async extractMedications(text: string): Promise<MedicationItem[]> {
     if (!text) return [];
     try {
@@ -268,7 +266,7 @@ export const GeminiMedicalService = {
     } catch (e) { return []; }
   },
 
-  // --- D. AUDITORÍA CALIDAD (ORIGINAL V-ULTIMATE) ---
+  // --- D. AUDITORÍA CALIDAD ---
   async generateClinicalNoteAudit(noteContent: string): Promise<any> {
     try {
       const prompt = `
@@ -280,7 +278,7 @@ export const GeminiMedicalService = {
     } catch (e) { return { riskLevel: "Medio", score: 0, analysis: "", recommendations: [] }; }
   },
 
-  // --- E. WHATSAPP (ORIGINAL V-ULTIMATE) ---
+  // --- E. WHATSAPP ---
   async generateFollowUpPlan(patientName: string, clinicalNote: string, instructions: string): Promise<FollowUpMessage[]> {
     try {
       const prompt = `
@@ -294,7 +292,7 @@ export const GeminiMedicalService = {
     } catch (e) { return []; }
   },
 
-  // --- F. CHAT (ORIGINAL V-ULTIMATE) ---
+  // --- F. CHAT ---
   async chatWithContext(context: string, userMessage: string): Promise<string> {
     try {
        const prompt = `CONTEXTO: ${context}. PREGUNTA: ${userMessage}. RESPUESTA CORTA:`;
@@ -302,7 +300,7 @@ export const GeminiMedicalService = {
     } catch (e) { return "Error conexión."; }
   },
 
-  // --- HELPERS LEGACY ---
+  // --- HELPERS ---
   async generatePatientInsights(p: string, h: string, c: string[]): Promise<any> { return this.generatePatient360Analysis(p, h, c); },
   async generateQuickRxJSON(t: string, p: string): Promise<MedicationItem[]> { return this.extractMedications(t); },
   async generatePrescriptionOnly(t: string): Promise<string> { return "Use extractMedications."; }
