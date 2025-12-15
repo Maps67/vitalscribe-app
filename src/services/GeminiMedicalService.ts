@@ -1,24 +1,22 @@
 import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from "@google/generative-ai";
-// Asegúrate de que la ruta a tus tipos sea correcta.
+// Ajusta la ruta '../types' si tus tipos están en otra carpeta (ej: '@/types' o '../types/index')
 import { GeminiResponse, PatientInsight, MedicationItem, FollowUpMessage } from '../types';
 
-// CAMBIO ESTA LÍNEA PARA FORZAR LA DETECCIÓN DE GIT
-console.log("🚀 V-DEPLOY: PROMETHEUS ENGINE v2.1 (Gemini 1.5 Flash + Library Fix)");
+console.log("🚀 SISTEMA: Gemini 1.5 Flash (Stable Build 0.24.1) - Inicializado");
 
 // ==========================================
-// 1. CONFIGURACIÓN DE ALTO NIVEL
+// 1. CONFIGURACIÓN Y SEGURIDAD
 // ==========================================
 const API_KEY = import.meta.env.VITE_GOOGLE_GENAI_API_KEY || "";
 
 if (!API_KEY) {
-  console.error("⛔ FATAL: API Key no encontrada en variables de entorno (VITE_GOOGLE_GENAI_API_KEY).");
+  console.error("⛔ ERROR CRÍTICO: No se encontró VITE_GOOGLE_GENAI_API_KEY en las variables de entorno.");
 }
 
-// 🔥 CONFIGURACIÓN DE MODELO
-// Usamos 'gemini-1.5-flash' estable. Al forzar el push, la librería actualizada detectará este modelo correctamente.
+// Usamos el modelo estable flash-1.5 compatible con la librería 0.24.1
 const MODEL_NAME = "gemini-1.5-flash";
 
-// CONFIGURACIÓN DE SEGURIDAD (GUARDRAILS)
+// Configuración de seguridad para permitir contexto médico sin bloqueos falsos
 const SAFETY_SETTINGS = [
   {
     category: HarmCategory.HARM_CATEGORY_HARASSMENT,
@@ -39,18 +37,25 @@ const SAFETY_SETTINGS = [
 ];
 
 // ==========================================
-// 2. UTILIDADES DE LIMPIEZA & PROCESAMIENTO
+// 2. UTILIDADES
 // ==========================================
 
+/**
+ * Limpia la respuesta de la IA para obtener un JSON válido.
+ * Elimina bloques de código markdown (```json ... ```) y texto basura.
+ */
 const cleanJSON = (text: string): string => {
   try {
+    // 1. Eliminar etiquetas de markdown
     let clean = text.replace(/```json/g, '').replace(/```/g, '');
     
+    // 2. Encontrar el inicio y fin del objeto JSON o Array
     const firstCurly = clean.indexOf('{');
     const lastCurly = clean.lastIndexOf('}');
     const firstBracket = clean.indexOf('[');
     const lastBracket = clean.lastIndexOf(']');
 
+    // 3. Recortar el string para quedarse solo con el JSON válido
     if (firstCurly !== -1 && lastCurly !== -1 && (firstCurly < firstBracket || firstBracket === -1)) {
       clean = clean.substring(firstCurly, lastCurly + 1);
     } else if (firstBracket !== -1 && lastBracket !== -1) {
@@ -65,16 +70,16 @@ const cleanJSON = (text: string): string => {
 };
 
 /**
- * MOTOR DE GENERACIÓN DIRECTO
+ * Función central de generación de contenido.
+ * Maneja la instanciación del modelo y la configuración de respuesta.
  */
 async function generateContentDirect(prompt: string, jsonMode: boolean = false, tempOverride?: number): Promise<string> {
   if (!API_KEY) {
-    throw new Error("Falta la API Key en las variables de entorno.");
+    throw new Error("Falta la API Key. Configure VITE_GOOGLE_GENAI_API_KEY.");
   }
 
   try {
     const genAI = new GoogleGenerativeAI(API_KEY);
-    console.log(`📡 Conectando al núcleo IA: ${MODEL_NAME}...`);
     
     const model = genAI.getGenerativeModel({ 
       model: MODEL_NAME,
@@ -83,6 +88,7 @@ async function generateContentDirect(prompt: string, jsonMode: boolean = false, 
           temperature: tempOverride ?? 0.3, 
           topP: 0.95,
           topK: 40,
+          // Forzar JSON mode ayuda a la estabilidad del modelo flash
           responseMimeType: jsonMode ? "application/json" : "text/plain"
       }
     });
@@ -91,36 +97,36 @@ async function generateContentDirect(prompt: string, jsonMode: boolean = false, 
     const response = await result.response;
     const text = response.text();
 
-    if (text && text.length > 5) {
+    if (text && text.length > 0) {
       return text; 
     }
     
-    throw new Error("Google devolvió una respuesta vacía o inválida.");
+    throw new Error("La IA devolvió una respuesta vacía.");
 
   } catch (error: any) {
-    console.error(`❌ Error en Motor IA (${MODEL_NAME}):`, error);
-    throw new Error(`Fallo de IA (${MODEL_NAME}): ${error.message || 'Error de conexión'}`);
+    console.error(`❌ Error Gemini (${MODEL_NAME}):`, error);
+    // Lanzamos el error para que el UI pueda mostrarlo
+    throw new Error(`Error de IA: ${error.message || 'Fallo de conexión'}`);
   }
 }
 
 /**
- * GENERADOR DE PERFILES CLÍNICOS
+ * Configuración de personalidad según especialidad
  */
 const getSpecialtyConfig = (specialty: string) => {
   return {
-    role: `Escriba Clínico Experto y Auditor de Calidad Médica (MediScribe AI) especializado en ${specialty}`,
-    focus: "Generar documentación clínica técnica, legalmente blindada, precisa y basada estrictamente en la evidencia presentada.",
-    bias: "Lenguaje probabilístico, objetividad radical y terminología médica formal."
+    role: `Escriba Clínico Experto y Auditor Médico (MediScribe AI) especializado en ${specialty}`,
+    focus: "Generar documentación clínica técnica, legalmente blindada, precisa y basada estrictamente en la evidencia presentada."
   };
 };
 
 // ==========================================
-// 3. SERVICIO PRINCIPAL (LOGIC CORE)
+// 3. EXPORTACIÓN DEL SERVICIO
 // ==========================================
 export const GeminiMedicalService = {
 
   // ---------------------------------------------------------------------------
-  // A. GENERACIÓN DE NOTA CLÍNICA (CORE)
+  // A. GENERAR NOTA CLÍNICA
   // ---------------------------------------------------------------------------
   async generateClinicalNote(transcript: string, specialty: string = "Medicina General", patientHistory: string = ""): Promise<GeminiResponse> {
     try {
@@ -130,48 +136,39 @@ export const GeminiMedicalService = {
         ROL: ${profile.role}.
         OBJETIVO: ${profile.focus}
 
-        🧠 PROTOCOLO DE PENSAMIENTO (CHAIN OF THOUGHT):
-        1. Analiza la transcripción identificando hablantes.
-        2. Cruza la información con el Historial.
-        3. Redacta la nota clínica estructurada.
-
-        ⚠️ REGLAS LEGALES OBLIGATORIAS:
-        1. NO DIAGNÓSTICO: Usa lenguaje probabilístico.
-        2. EVIDENCIA: Solo incluye en el "Plan" lo que el médico verbalizó.
-        3. SUGERENCIAS: Pon recomendaciones no verbalizadas en "clinical_suggestions".
-        4. SEGURIDAD: Advierte contraindicaciones en "risk_analysis".
+        INSTRUCCIONES:
+        Genera un objeto JSON válido con la estructura solicitada.
+        Básate EXCLUSIVAMENTE en la transcripción y el historial proporcionado.
+        No inventes datos médicos no mencionados.
 
         DATOS DE ENTRADA:
-        - HISTORIAL (RAG): "${patientHistory || "No disponible"}"
-        - TRANSCRIPCIÓN DE CONSULTA: "${transcript.replace(/"/g, "'").trim()}"
+        - HISTORIAL: "${patientHistory || "No disponible"}"
+        - TRANSCRIPCIÓN: "${transcript.replace(/"/g, "'").trim()}"
 
-        GENERA UN JSON VÁLIDO CON ESTA ESTRUCTURA EXACTA:
+        ESTRUCTURA JSON REQUERIDA (GeminiResponse):
         {
           "clinicalNote": "Texto narrativo completo de la consulta (Historia Clínica).",
           "soapData": {
             "subjective": "Padecimiento actual e interrogatorio.",
-            "objective": "Signos vitales y exploración física.",
+            "objective": "Signos vitales y exploración física (si se mencionan).",
             "analysis": "Razonamiento clínico e impresión diagnóstica.",
-            "plan": "Tratamiento y estudios verbalizados."
+            "plan": "Tratamiento, estudios y pasos a seguir."
           },
           "clinical_suggestions": [
-            "Sugerencia 1",
-            "Sugerencia 2"
+            "Sugerencia clínica 1",
+            "Sugerencia clínica 2"
           ],
-          "patientInstructions": "Instrucciones para el paciente.",
+          "patientInstructions": "Instrucciones claras y amigables para el paciente.",
           "risk_analysis": {
             "level": "Bajo" | "Medio" | "Alto",
-            "reason": "Justificación breve."
+            "reason": "Justificación breve del nivel de riesgo."
           },
           "actionItems": {
-             "next_appointment": "Fecha o 'A demanda'",
-             "urgent_referral": boolean,
+             "next_appointment": "Fecha aproximada o texto (ej: 'En 1 semana')",
+             "urgent_referral": false,
              "lab_tests_required": ["Lista de estudios"]
           },
-          "conversation_log": [
-             { "speaker": "Médico", "text": "..." },
-             { "speaker": "Paciente", "text": "..." }
-          ]
+          "conversation_log": []
         }
       `;
 
@@ -179,13 +176,13 @@ export const GeminiMedicalService = {
       return JSON.parse(cleanJSON(rawText)) as GeminiResponse;
 
     } catch (error: any) {
-      console.error("❌ Error generando Nota Clínica:", error);
+      console.error("❌ Error en generateClinicalNote:", error);
       throw error;
     }
   },
 
   // ---------------------------------------------------------------------------
-  // B. ANÁLISIS DE PACIENTE 360
+  // B. ANÁLISIS DE PACIENTE (360)
   // ---------------------------------------------------------------------------
   async generatePatient360Analysis(patientName: string, historySummary: string, consultations: string[]): Promise<PatientInsight> {
     try {
@@ -200,8 +197,8 @@ export const GeminiMedicalService = {
           Analiza la evolución y genera un JSON:
           {
             "evolution": "Resumen narrativo de progreso.",
-            "medication_audit": "Análisis de farmacoterapia.",
-            "risk_flags": ["Bandera roja 1"],
+            "medication_audit": "Análisis de farmacoterapia y adherencia.",
+            "risk_flags": ["Bandera roja 1", "Bandera roja 2"],
             "pending_actions": ["Acción pendiente 1"]
           }
       `;
@@ -220,18 +217,25 @@ export const GeminiMedicalService = {
   },
 
   // ---------------------------------------------------------------------------
-  // C. EXTRACCIÓN DE MEDICAMENTOS
+  // C. EXTRAER MEDICAMENTOS
   // ---------------------------------------------------------------------------
   async extractMedications(text: string): Promise<MedicationItem[]> {
-    if (!text || text.length < 10) return [];
+    if (!text || text.length < 5) return [];
     
     try {
       const prompt = `
-        TAREA: Extraer medicamentos.
+        TAREA: Extraer medicamentos del siguiente texto.
         TEXTO: "${text.replace(/"/g, "'")}"
         
-        Responde SOLO con un Array JSON válido:
-        [{ "drug": "...", "details": "...", "frequency": "...", "duration": "..." }]
+        Responde SOLO con un Array JSON:
+        [
+          { 
+            "drug": "Nombre del medicamento", 
+            "details": "Dosis y presentación", 
+            "frequency": "Frecuencia", 
+            "duration": "Duración" 
+          }
+        ]
       `;
       
       const rawText = await generateContentDirect(prompt, true, 0.1);
@@ -243,7 +247,7 @@ export const GeminiMedicalService = {
   },
 
   // ---------------------------------------------------------------------------
-  // D. AUDITORÍA DE CALIDAD
+  // D. AUDITORÍA DE NOTA
   // ---------------------------------------------------------------------------
   async generateClinicalNoteAudit(noteContent: string): Promise<any> {
     try {
@@ -252,7 +256,12 @@ export const GeminiMedicalService = {
         NOTA: "${noteContent}"
         
         JSON esperado: 
-        { "riskLevel": "Bajo" | "Medio" | "Alto", "score": 0-100, "analysis": "...", "recommendations": [] }
+        { 
+          "riskLevel": "Bajo" | "Medio" | "Alto", 
+          "score": 0-100, 
+          "analysis": "Breve análisis", 
+          "recommendations": ["Recomendación 1"] 
+        }
       `;
       
       const rawText = await generateContentDirect(prompt, true, 0.4);
@@ -263,16 +272,21 @@ export const GeminiMedicalService = {
   },
 
   // ---------------------------------------------------------------------------
-  // E. PLAN DE SEGUIMIENTO
+  // E. PLAN DE SEGUIMIENTO (WHATSAPP)
   // ---------------------------------------------------------------------------
   async generateFollowUpPlan(patientName: string, clinicalNote: string, instructions: string): Promise<FollowUpMessage[]> {
     try {
       const prompt = `
-        Genera 3 mensajes de WhatsApp para ${patientName}.
-        Nota: "${clinicalNote}". Instrucciones: "${instructions}"
+        Genera 3 mensajes de WhatsApp para seguimiento de ${patientName}.
+        Nota: "${clinicalNote}". 
+        Instrucciones: "${instructions}"
         
         JSON Array esperado: 
-        [{ "day": 1, "message": "..." }, { "day": 3, "message": "..." }, { "day": 7, "message": "..." }]
+        [
+          { "day": 1, "message": "..." }, 
+          { "day": 3, "message": "..." }, 
+          { "day": 7, "message": "..." }
+        ]
       `;
       
       const rawText = await generateContentDirect(prompt, true, 0.5);
@@ -292,7 +306,7 @@ export const GeminiMedicalService = {
           ERES: Asistente médico MediScribe.
           CONTEXTO: ${context}
           PREGUNTA: "${userMessage}"
-          Responde breve y técnicamente.
+          Responde brevemente.
        `;
        return await generateContentDirect(prompt, false, 0.4);
     } catch (e) { 
@@ -300,8 +314,8 @@ export const GeminiMedicalService = {
     }
   },
 
-  // Helpers Legacy
+  // MÉTODOS LEGACY (Compatibilidad con versiones anteriores del frontend)
   async generatePatientInsights(p: string, h: string, c: string[]): Promise<any> { return this.generatePatient360Analysis(p, h, c); },
   async generateQuickRxJSON(t: string, p: string): Promise<MedicationItem[]> { return this.extractMedications(t); },
-  async generatePrescriptionOnly(t: string): Promise<string> { return "Función deprecada."; }
+  async generatePrescriptionOnly(t: string): Promise<string> { return "Función obsoleta."; }
 };
