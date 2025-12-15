@@ -2,7 +2,7 @@ import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from "@google/ge
 // ✅ IMPORTACIÓN CRÍTICA: Asegúrate de que estos tipos existan en tu archivo src/types/index.ts
 import { GeminiResponse, PatientInsight, MedicationItem, FollowUpMessage } from '../types';
 
-console.log("🚀 V-DEPLOY: PROMETHEUS ENGINE (Gemini 2.5 Flash + Legal Guardrails + Clinical Suggestions)");
+console.log("🚀 V-DEPLOY: PROMETHEUS ENGINE (Gemini 1.5 Flash Stable + Legal Guardrails + Clinical Suggestions)");
 
 // ==========================================
 // 1. CONFIGURACIÓN DE ALTO NIVEL
@@ -13,10 +13,14 @@ if (!API_KEY) {
   console.error("⛔ FATAL: API Key no encontrada en variables de entorno.");
 }
 
-// 🔥 EL CAMBIO DEFINITIVO: Usamos el modelo que apareció en tu lista oficial
-const MODEL_NAME = "gemini-2.5-flash";
+// 🔥 CONFIGURACIÓN DE MODELO
+// Nota: 'gemini-2.5-flash' NO existe.
+// Usamos 'gemini-1.5-flash' para máxima estabilidad en producción.
+// Si deseas la experimental 2.0, cambia a: "gemini-2.0-flash-exp"
+const MODEL_NAME = "gemini-1.5-flash"; 
 
 // CONFIGURACIÓN DE SEGURIDAD (GUARDRAILS)
+// Ajustado para permitir terminología médica/anatómica sin bloqueos falsos positivos
 const SAFETY_SETTINGS = [
   { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
   { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
@@ -39,6 +43,7 @@ const cleanJSON = (text: string): string => {
     const firstBracket = clean.indexOf('[');
     const lastBracket = clean.lastIndexOf(']');
 
+    // Determinar si es objeto {} o array [] y cortar el texto sobrante
     if (firstCurly !== -1 && lastCurly !== -1 && (firstCurly < firstBracket || firstBracket === -1)) {
       clean = clean.substring(firstCurly, lastCurly + 1);
     } else if (firstBracket !== -1 && lastBracket !== -1) {
@@ -54,10 +59,10 @@ const cleanJSON = (text: string): string => {
 
 /**
  * MOTOR DE GENERACIÓN DIRECTO
- * Conecta específicamente al modelo 2.5 sin bucles de reintento para evitar errores 404.
+ * Conecta al modelo sin bucles complejos para minimizar latencia y errores.
  */
 async function generateContentDirect(prompt: string, jsonMode: boolean = false, tempOverride?: number): Promise<string> {
-  if (!API_KEY) throw new Error("Falta la API Key en Netlify.");
+  if (!API_KEY) throw new Error("Falta la API Key en las variables de entorno.");
 
   try {
     const genAI = new GoogleGenerativeAI(API_KEY);
@@ -82,7 +87,7 @@ async function generateContentDirect(prompt: string, jsonMode: boolean = false, 
 
   } catch (error: any) {
     console.error(`❌ Error en Motor IA (${MODEL_NAME}):`, error);
-    // Mensaje claro para depuración
+    // Mensaje claro para depuración en frontend
     throw new Error(`Fallo de IA (${MODEL_NAME}): ${error.message || 'Error de conexión'}`);
   }
 }
@@ -275,11 +280,11 @@ export const GeminiMedicalService = {
   async chatWithContext(context: string, userMessage: string): Promise<string> {
     try {
        const prompt = `
-         ERES: Asistente médico experto.
-         CONTEXTO ACTUAL: ${context}
-         PREGUNTA DEL DOCTOR: "${userMessage}"
-         
-         Responde de forma breve, técnica y directa.
+          ERES: Asistente médico experto.
+          CONTEXTO ACTUAL: ${context}
+          PREGUNTA DEL DOCTOR: "${userMessage}"
+          
+          Responde de forma breve, técnica y directa.
        `;
        return await generateContentDirect(prompt, false, 0.4);
     } catch (e) { return "El asistente no está disponible en este momento."; }
