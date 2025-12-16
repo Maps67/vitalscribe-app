@@ -5,7 +5,7 @@ import {
   MessageSquare, User, Send, Edit2, Check, ArrowLeft, 
   Stethoscope, Trash2, WifiOff, Save, Share2, Download, Printer,
   Paperclip, Calendar, Clock, UserCircle, Activity, ClipboardList, Brain, FileSignature, Keyboard,
-  Quote, AlertTriangle, ChevronDown, ChevronUp, Sparkles, PenLine, UserPlus
+  Quote, AlertTriangle, ChevronDown, ChevronUp, Sparkles, PenLine, UserPlus, ShieldCheck
 } from 'lucide-react';
 
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition'; 
@@ -766,11 +766,29 @@ const ConsultationView: React.FC = () => {
                                         <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Nota de Evolución</h1>
                                         <p className="text-sm text-slate-500 dark:text-slate-400 uppercase tracking-wide">{selectedSpecialty}</p>
                                     </div>
-                                    <div className="flex flex-col items-end gap-2">
-                                        <button onClick={handleSaveConsultation} disabled={isSaving} className="bg-brand-teal text-white px-4 py-2 rounded-lg font-bold flex gap-2 hover:bg-teal-600 shadow-md transition-all disabled:opacity-70 text-sm items-center">
-                                                {isSaving?<RefreshCw className="animate-spin" size={16}/>:<Save size={16}/>} Validar y Guardar
-                                        </button>
+                                    
+                                    {/* --- SECCIÓN BOTÓN + DISCLAIMER --- */}
+                                    <div className="flex flex-col items-end gap-3">
+                                      {/* Botón Principal (Estilizado y funcional) */}
+                                      <button 
+                                        onClick={handleSaveConsultation} 
+                                        disabled={isSaving} 
+                                        className="bg-brand-teal text-white px-6 py-2 rounded-lg font-bold flex items-center gap-2 hover:bg-teal-600 shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                      >
+                                        {isSaving ? <RefreshCw className="animate-spin" size={16}/> : <Save size={16}/>} 
+                                        Validar y Guardar
+                                      </button>
+
+                                      {/* Disclaimer Legal Estético */}
+                                      <div className="flex items-start justify-end gap-1.5 max-w-xs text-right opacity-60 hover:opacity-100 transition-opacity duration-300 group cursor-help">
+                                        <ShieldCheck className="w-3 h-3 text-slate-400 mt-[2px] flex-shrink-0 group-hover:text-brand-teal" />
+                                        <p className="text-[10px] leading-3 text-slate-400 group-hover:text-slate-600 transition-colors">
+                                          <span className="font-semibold text-brand-teal">MediScribe AI</span> es soporte clínico. 
+                                          La responsabilidad final del tratamiento es exclusiva del médico tratante.
+                                        </p>
+                                      </div>
                                     </div>
+
                                 </div>
 
                                 {generatedNote.risk_analysis && (
