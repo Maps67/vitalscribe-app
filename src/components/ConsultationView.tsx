@@ -64,7 +64,7 @@ const ConsultationView: React.FC = () => {
   const [doctorProfile, setDoctorProfile] = useState<DoctorProfile | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null); 
   
-  // --- CONTEXTO MÉDICO ACTIVO (Con Fallback) ---
+  // --- CONTEXTO MÉDICO ACTIVO ---
   const [activeMedicalContext, setActiveMedicalContext] = useState<{ history: string, allergies: string } | null>(null);
 
   const [isProcessing, setIsProcessing] = useState(false);
@@ -181,7 +181,6 @@ const ConsultationView: React.FC = () => {
                       if(incoming.appointmentId) setLinkedAppointmentId(incoming.appointmentId);
                       toast.info(`Iniciando consulta para: ${incoming.name}`);
                 } else {
-                      // Paciente real - buscamos en la lista cargada
                       const realPatient = loadedPatients.find(p => p.id === incoming.id);
                       if (realPatient) setSelectedPatient(realPatient);
                       else setSelectedPatient(incoming); 
@@ -227,13 +226,36 @@ const ConsultationView: React.FC = () => {
     return () => { mounted = false; };
   }, [setTranscript, location.state]); 
 
-  // --- EFECTO: Carga de Contexto Médico (Con Fallback Histórico) ---
+  // --- FUNCIÓN DE LIMPIEZA DE JSON ---
+  // Esta función elimina el código basura {"background":...} y extrae solo texto real
+  const cleanHistoryString = (input: string | null | undefined): string => {
+      if (!input) return "";
+      const trimmed = input.trim();
+      
+      // Si parece un objeto JSON (empieza con { o [)
+      if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+          try {
+              const parsed = JSON.parse(trimmed);
+              // Si tiene formato antiguo con 'legacyNote', usamos eso
+              if (parsed.legacyNote && typeof parsed.legacyNote === 'string' && parsed.legacyNote.trim() !== "") {
+                  return parsed.legacyNote;
+              }
+              // Si es un objeto vacío o solo estructura, devolvemos vacío para no ensuciar
+              return ""; 
+          } catch (e) {
+              // Si falla el parseo, devolvemos el texto original por seguridad
+              return input;
+          }
+      }
+      return input; // Si es texto normal, lo devolvemos tal cual
+  };
+
+  // --- EFECTO: Carga de Contexto Médico (Con Limpieza Automática) ---
   useEffect(() => {
     const fetchMedicalContext = async () => {
-        setActiveMedicalContext(null); // Reset al cambiar paciente
+        setActiveMedicalContext(null);
         if (selectedPatient && !(selectedPatient as any).isTemporary) {
             try {
-                // Buscamos todas las columnas posibles
                 const { data, error } = await supabase
                     .from('patients')
                     .select('pathological_history, allergies, history') 
@@ -241,22 +263,23 @@ const ConsultationView: React.FC = () => {
                     .single();
 
                 if (!error && data) {
-                    // LÓGICA DE FALLBACK INTELIGENTE:
-                    // 1. Usamos pathological_history si existe.
-                    // 2. Si no, usamos 'history' (el campo antiguo donde puede estar todo mezclado).
-                    const historyData = data.pathological_history || data.history || "No registrados";
-                    const allergyData = data.allergies || "No registradas";
+                    // Aplicamos la limpieza a los datos crudos
+                    const rawHistory = data.pathological_history || data.history;
+                    const cleanHistory = cleanHistoryString(rawHistory);
+                    
+                    const rawAllergies = data.allergies;
+                    // Las alergias a veces también vienen en JSON, las limpiamos igual
+                    const cleanAllergies = cleanHistoryString(rawAllergies);
 
-                    // Solo mostramos si hay algo relevante (evitamos mostrar "No registrados" si todo está vacío)
+                    // Solo mostramos la tarjeta si quedó texto real después de limpiar
                     const hasRealData = 
-                        (data.pathological_history && data.pathological_history.length > 3) ||
-                        (data.history && data.history.length > 3) ||
-                        (data.allergies && data.allergies.length > 3);
+                        (cleanHistory && cleanHistory.length > 2) ||
+                        (cleanAllergies && cleanAllergies.length > 2);
 
                     if (hasRealData) {
                          setActiveMedicalContext({
-                            history: historyData,
-                            allergies: allergyData
+                            history: cleanHistory || "No registrados",
+                            allergies: cleanAllergies || "No registradas"
                          });
                     }
                 }
@@ -304,7 +327,6 @@ const ConsultationView: React.FC = () => {
 
   // --- HIDRATACIÓN REACTIVA ---
   const handleSelectPatient = async (patient: any) => {
-      // Caso 1: Paciente Fantasma
       if (patient.isGhost) {
           const tempPatient = {
               ...patient,
@@ -316,14 +338,12 @@ const ConsultationView: React.FC = () => {
           if (patient.appointmentId) setLinkedAppointmentId(patient.appointmentId);
           toast.info(`Paciente temporal: ${patient.name} (Se registrará al guardar)`);
       } 
-      // Caso 2: Paciente Registrado
       else {
           setSelectedPatient(patient);
-          setSearchTerm(''); // Limpiamos buscador
+          setSearchTerm(''); 
 
           try {
               const loadingHistory = toast.loading("Sincronizando historial...");
-              
               const { data: fullPatientData, error } = await supabase
                   .from('patients')
                   .select('*') 
@@ -333,14 +353,13 @@ const ConsultationView: React.FC = () => {
               toast.dismiss(loadingHistory);
 
               if (fullPatientData && !error) {
-                  console.log("💧 Paciente Hidratado Correctamente:", fullPatientData.name);
                   setSelectedPatient(fullPatientData);
                   toast.success("Historial clínico cargado.");
               } else {
-                  console.warn("⚠️ No se pudo hidratar el historial, usando datos en caché.");
+                  console.warn("⚠️ No se pudo hidratar el historial.");
               }
           } catch (e) {
-              console.error("Error en hidratación reactiva:", e);
+              console.error("Error en hidratación:", e);
           }
       }
   };
@@ -354,7 +373,7 @@ const ConsultationView: React.FC = () => {
       setSelectedPatient(tempPatient);
       setSearchTerm('');
       startTimeRef.current = Date.now(); 
-      toast.info(`Nuevo paciente temporal: ${name} (Se guardará al finalizar)`);
+      toast.info(`Nuevo paciente temporal: ${name}`);
   };
 
   const handleToggleRecording = () => {
@@ -445,7 +464,6 @@ const ConsultationView: React.FC = () => {
     try {
       let fullMedicalContext = "";
       
-      // INYECCIÓN DE APP Y ALERGIAS (O HISTORIAL ANTIGUO)
       let activeContextString = "";
       if (activeMedicalContext) {
           activeContextString = `
@@ -494,11 +512,11 @@ const ConsultationView: React.FC = () => {
       if (response.risk_analysis?.level === 'Alto') {
           setIsRiskExpanded(true);
           toast.dismiss(loadingToast);
-          toast.error("⚠️ ALERTA: Se han detectado riesgos clínicos importantes.");
+          toast.error("⚠️ ALERTA: Riesgos clínicos importantes.");
       } else if (response.risk_analysis?.level === 'Medio') {
           setIsRiskExpanded(false);
           toast.dismiss(loadingToast);
-          toast.warning("Atención: Revise las alertas de riesgo moderado.");
+          toast.warning("Revise alertas de riesgo moderado.");
       } else {
           setIsRiskExpanded(false);
           toast.dismiss(loadingToast);
@@ -524,7 +542,7 @@ const ConsultationView: React.FC = () => {
 
   const handleSaveConsultation = async () => {
     if (!selectedPatient || !generatedNote) return toast.error("Faltan datos.");
-    if (!isOnline) return toast.error("Requiere internet para sincronizar con la nube.");
+    if (!isOnline) return toast.error("Requiere internet.");
     
     setIsSaving(true);
     try {
@@ -556,7 +574,6 @@ const ConsultationView: React.FC = () => {
                     patient_id: finalPatientId 
                 })
                 .eq('id', linkedAppointmentId);
-             console.log("✅ Cita marcada como completada y vinculada en Dashboard");
         } else {
              await AppointmentService.markAppointmentAsCompleted(finalPatientId);
         }
@@ -578,7 +595,7 @@ const ConsultationView: React.FC = () => {
         
         if (error) throw error;
         
-        toast.success("Nota validada y guardada en expediente");
+        toast.success("Nota validada y guardada");
         
         resetTranscript(); 
         if (currentUserId) localStorage.removeItem(`draft_${currentUserId}`); 
@@ -729,7 +746,7 @@ const ConsultationView: React.FC = () => {
             )}
         </div>
         
-        {/* === TARJETA DE CONTEXTO MÉDICO ACTIVO (Con Fallback) === */}
+        {/* === TARJETA DE CONTEXTO MÉDICO ACTIVO (Con Limpieza JSON) === */}
         {activeMedicalContext && !generatedNote && (
             <div className="bg-amber-50 dark:bg-amber-900/20 p-3 rounded-lg border border-amber-200 dark:border-amber-800 text-xs shadow-sm animate-fade-in-up">
                 <div className="flex items-center gap-2 mb-2 text-amber-700 dark:text-amber-400 font-bold border-b border-amber-200 dark:border-amber-800 pb-1">
