@@ -10,7 +10,6 @@ import {
 
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition'; 
 import { GeminiMedicalService } from '../services/GeminiMedicalService';
-// ✅ CORRECCIÓN CRÍTICA: Importamos tipos desde el archivo global
 import { ChatMessage, GeminiResponse, Patient, DoctorProfile, PatientInsight } from '../types';
 import { supabase } from '../lib/supabase';
 import FormattedText from './FormattedText';
@@ -65,7 +64,7 @@ const ConsultationView: React.FC = () => {
   const [doctorProfile, setDoctorProfile] = useState<DoctorProfile | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null); 
   
-  // --- NUEVO ESTADO: Contexto Médico Activo ---
+  // --- CONTEXTO MÉDICO ACTIVO (Con Fallback) ---
   const [activeMedicalContext, setActiveMedicalContext] = useState<{ history: string, allergies: string } | null>(null);
 
   const [isProcessing, setIsProcessing] = useState(false);
@@ -228,30 +227,41 @@ const ConsultationView: React.FC = () => {
     return () => { mounted = false; };
   }, [setTranscript, location.state]); 
 
-  // --- EFECTO: Carga de Contexto Médico (APP + Alergias) ---
+  // --- EFECTO: Carga de Contexto Médico (Con Fallback Histórico) ---
   useEffect(() => {
     const fetchMedicalContext = async () => {
         setActiveMedicalContext(null); // Reset al cambiar paciente
         if (selectedPatient && !(selectedPatient as any).isTemporary) {
             try {
-                // Buscamos si existen las columnas (soportando estructura antigua)
+                // Buscamos todas las columnas posibles
                 const { data, error } = await supabase
                     .from('patients')
-                    .select('pathological_history, allergies') // Intentamos leer
+                    .select('pathological_history, allergies, history') 
                     .eq('id', selectedPatient.id)
                     .single();
 
                 if (!error && data) {
-                    // Solo seteamos si hay datos relevantes
-                    if (data.pathological_history || data.allergies) {
+                    // LÓGICA DE FALLBACK INTELIGENTE:
+                    // 1. Usamos pathological_history si existe.
+                    // 2. Si no, usamos 'history' (el campo antiguo donde puede estar todo mezclado).
+                    const historyData = data.pathological_history || data.history || "No registrados";
+                    const allergyData = data.allergies || "No registradas";
+
+                    // Solo mostramos si hay algo relevante (evitamos mostrar "No registrados" si todo está vacío)
+                    const hasRealData = 
+                        (data.pathological_history && data.pathological_history.length > 3) ||
+                        (data.history && data.history.length > 3) ||
+                        (data.allergies && data.allergies.length > 3);
+
+                    if (hasRealData) {
                          setActiveMedicalContext({
-                            history: data.pathological_history || "No registrados",
-                            allergies: data.allergies || "No registradas"
+                            history: historyData,
+                            allergies: allergyData
                          });
                     }
                 }
             } catch (e) {
-                console.log("Aviso: Columnas APP no disponibles aún o error de lectura", e);
+                console.log("Error leyendo contexto médico:", e);
             }
         }
     };
@@ -369,7 +379,6 @@ const ConsultationView: React.FC = () => {
       }
   };
 
-  // ✅ USO CORRECTO DE SOAPDATA
   const handleSoapChange = (section: 'subjective' | 'objective' | 'analysis' | 'plan', value: string) => {
       if (!generatedNote || !generatedNote.soapData) return;
       setGeneratedNote(prev => {
@@ -436,18 +445,17 @@ const ConsultationView: React.FC = () => {
     try {
       let fullMedicalContext = "";
       
-      // INYECCIÓN DE APP Y ALERGIAS
+      // INYECCIÓN DE APP Y ALERGIAS (O HISTORIAL ANTIGUO)
       let activeContextString = "";
       if (activeMedicalContext) {
           activeContextString = `
             >>> DATOS CRÍTICOS DEL PACIENTE (APP):
-            - Antecedentes Patológicos: ${activeMedicalContext.history}
+            - Antecedentes Patológicos / Historial: ${activeMedicalContext.history}
             - Alergias Conocidas: ${activeMedicalContext.allergies}
           `;
       }
 
       if (selectedPatient && !(selectedPatient as any).isTemporary) {
-          // Si el paciente es real, traemos su contexto histórico para el RAG Híbrido
           const { data: historyData } = await supabase
               .from('consultations')
               .select('created_at, summary')
@@ -455,34 +463,27 @@ const ConsultationView: React.FC = () => {
               .order('created_at', { ascending: false })
               .limit(3); 
 
-          const staticHistory = selectedPatient.history || "Sin antecedentes patológicos generales.";
-          
           const episodicHistory = historyData && historyData.length > 0
               ? historyData.map(h => `[FECHA: ${new Date(h.created_at).toLocaleDateString()}] RESUMEN: ${h.summary.substring(0, 300)}...`).join("\n\n")
               : "Sin consultas previas en plataforma.";
 
-          // Construcción del Contexto para la IA
           fullMedicalContext = `
             === [FUENTE A: HISTORIAL CLÍNICO CRÍTICO (VERDAD ABSOLUTA)] ===
             ${activeContextString}
-            ${staticHistory}
             
             === [FUENTE B: EVOLUCIÓN RECIENTE (CONTEXTO)] ===
             ${episodicHistory}
           `;
       } else {
-          // Paciente temporal o nuevo, solo pasamos lo que tengamos
           fullMedicalContext = activeContextString;
       }
 
-      // Llamada al Servicio V7
       const response = await GeminiMedicalService.generateClinicalNote(
           transcript, 
           selectedSpecialty, 
           fullMedicalContext 
       );
       
-      // ✅ VALIDACIÓN: Asegurar que llegó soapData
       if (!response || (!response.soapData && !response.clinicalNote)) {
           throw new Error("La IA generó una respuesta vacía o inválida.");
       }
@@ -490,7 +491,6 @@ const ConsultationView: React.FC = () => {
       setGeneratedNote(response);
       setEditableInstructions(response.patientInstructions || '');
       
-      // Lógica de alerta inicial
       if (response.risk_analysis?.level === 'Alto') {
           setIsRiskExpanded(true);
           toast.dismiss(loadingToast);
@@ -545,7 +545,6 @@ const ConsultationView: React.FC = () => {
             toast.success("Paciente registrado automáticamente.");
         }
 
-        // ✅ GUARDADO: Usar soapData
         const summaryToSave = generatedNote.soapData 
             ? `FECHA: ${new Date().toLocaleDateString()}\nS: ${generatedNote.soapData.subjective}\nO: ${generatedNote.soapData.objective}\nA: ${generatedNote.soapData.analysis}\nP: ${generatedNote.soapData.plan}\n\nPLAN PACIENTE:\n${editableInstructions}`
             : (generatedNote.clinicalNote + "\n\nPLAN PACIENTE:\n" + editableInstructions);
@@ -730,7 +729,7 @@ const ConsultationView: React.FC = () => {
             )}
         </div>
         
-        {/* === TARJETA DE CONTEXTO MÉDICO ACTIVO === */}
+        {/* === TARJETA DE CONTEXTO MÉDICO ACTIVO (Con Fallback) === */}
         {activeMedicalContext && !generatedNote && (
             <div className="bg-amber-50 dark:bg-amber-900/20 p-3 rounded-lg border border-amber-200 dark:border-amber-800 text-xs shadow-sm animate-fade-in-up">
                 <div className="flex items-center gap-2 mb-2 text-amber-700 dark:text-amber-400 font-bold border-b border-amber-200 dark:border-amber-800 pb-1">
@@ -739,13 +738,15 @@ const ConsultationView: React.FC = () => {
                 </div>
                 <div className="space-y-2 text-slate-700 dark:text-slate-300">
                     <div>
-                        <span className="font-semibold block text-[10px] uppercase text-amber-600">Patológicos:</span>
+                        <span className="font-semibold block text-[10px] uppercase text-amber-600">Patológicos / Historial:</span>
                         {activeMedicalContext.history}
                     </div>
-                    <div>
-                         <span className="font-semibold block text-[10px] uppercase text-amber-600">Alergias:</span>
-                         {activeMedicalContext.allergies}
-                    </div>
+                    {activeMedicalContext.allergies && activeMedicalContext.allergies !== "No registradas" && (
+                        <div>
+                             <span className="font-semibold block text-[10px] uppercase text-amber-600">Alergias:</span>
+                             {activeMedicalContext.allergies}
+                        </div>
+                    )}
                 </div>
             </div>
         )}
