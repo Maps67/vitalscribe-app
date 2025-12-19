@@ -24,8 +24,8 @@ import TermsOfService from './pages/TermsOfService';
 import { TrialMonitor } from './components/TrialMonitor';
 // PÁGINA DE RECUPERACIÓN
 import UpdatePassword from './pages/UpdatePassword';
-// WIDGET DE SOPORTE
-import { SupportChatWidget } from './components/SupportChatWidget';
+
+// NOTA: Se ha eliminado la importación del SupportChatWidget para estabilidad del sistema.
 
 interface MainLayoutProps {
   session: Session | null;
@@ -93,8 +93,8 @@ const MainLayout: React.FC<MainLayoutProps> = ({ session, onLogout }) => {
             </div>
           </main>
       </div>
-      {/* Botón Flotante de Soporte IA */}
-      <SupportChatWidget />
+      
+      {/* ELIMINADO: El Widget de Soporte ya no se renderiza aquí */}
     </div>
   );
 };
