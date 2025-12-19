@@ -6,7 +6,7 @@ import {
   Stethoscope, Trash2, WifiOff, Save, Share2, Download, Printer,
   Paperclip, Calendar, Clock, UserCircle, Activity, ClipboardList, Brain, FileSignature, Keyboard,
   Quote, AlertTriangle, ChevronDown, ChevronUp, Sparkles, PenLine, UserPlus, ShieldCheck, AlertCircle,
-  Pause, Play
+  Pause, Play, Signal
 } from 'lucide-react';
 
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition'; 
@@ -57,13 +57,14 @@ const SPECIALTIES = [
 ];
 
 const ConsultationView: React.FC = () => {
-  // IMPORTAMOS LAS NUEVAS FUNCIONES DEL HOOK (pauseListening, isPaused)
+  // --- HOOK OPTIMIZADO V5.1 ---
   const { 
       isListening, 
-      isPaused,      // NUEVO
+      isPaused,
+      isDetectingSpeech, // <--- NUEVA SEÑAL VISUAL
       transcript, 
       startListening, 
-      pauseListening, // NUEVO
+      pauseListening,
       stopListening, 
       resetTranscript, 
       setTranscript, 
@@ -860,7 +861,19 @@ const ConsultationView: React.FC = () => {
                 </div>
             )}
             
-            {/* INDICADOR DE PAUSA (NUEVO) */}
+            {/* INDICADOR VISUAL EN TIEMPO REAL (NUEVO) */}
+            {isListening && !isPaused && (
+                 <div className={`absolute top-2 right-2 z-20 px-2 py-1 rounded-full text-[10px] font-bold border flex items-center gap-1.5 transition-all duration-300 ${
+                     isDetectingSpeech 
+                     ? 'bg-indigo-100 text-indigo-600 border-indigo-200 shadow-sm' 
+                     : 'bg-slate-100 text-slate-400 border-slate-200 opacity-70'
+                 }`}>
+                    <div className={`w-1.5 h-1.5 rounded-full ${isDetectingSpeech ? 'bg-indigo-500 animate-ping' : 'bg-slate-400'}`} />
+                    {isDetectingSpeech ? 'Detectando voz...' : 'Escuchando...'}
+                 </div>
+            )}
+
+            {/* INDICADOR DE PAUSA */}
             {isPaused && (
                  <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20 bg-amber-100 text-amber-600 px-3 py-1 rounded-full text-xs font-bold border border-amber-200 shadow-sm animate-pulse flex items-center gap-1">
                     <Pause size={10} className="fill-amber-600" />

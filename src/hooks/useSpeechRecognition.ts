@@ -24,8 +24,12 @@ function getOverlapLength(a: string, b: string) {
 
 export const useSpeechRecognition = () => {
   const [isListening, setIsListening] = useState(false);
-  const [isPaused, setIsPaused] = useState(false); // NUEVO: Estado de pausa
+  const [isPaused, setIsPaused] = useState(false);
   const [transcript, setTranscript] = useState('');
+  
+  // NUEVO: Estado para saber si el usuario está hablando activamente o si hay silencio (procesando)
+  // Esto permite mostrar el indicador "Analizando..." en la UI inmediatamente.
+  const [isDetectingSpeech, setIsDetectingSpeech] = useState(false);
   
   // Detección de Móvil Robusta (Android/iOS) para aplicar parches específicos
   const isMobile = useRef(/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent));
@@ -41,12 +45,13 @@ export const useSpeechRecognition = () => {
   const isUserInitiatedStop = useRef(false); // Bandera para distinguir stop manual vs caída de red/batería
   const wakeLockRef = useRef<any>(null); // Para mantener la pantalla encendida
   
-  // "Fuente de la verdad" del texto. Usamos Ref para que los eventos del listener
-  // siempre tengan acceso al valor más reciente sin depender del ciclo de render de React.
+  // Timer para detectar silencio y cambiar el estado visual a "Analizando"
+  const silenceTimer = useRef<any>(null);
+
+  // "Fuente de la verdad" del texto.
   const finalTranscriptRef = useRef('');
 
   // --- GESTIÓN DE ENERGÍA (WAKE LOCK) ---
-  // Evita que la pantalla del celular se apague mientras el médico dicta.
   const requestWakeLock = useCallback(async () => {
     if ('wakeLock' in navigator) {
       try { 
@@ -68,7 +73,6 @@ export const useSpeechRecognition = () => {
     }
   }, []);
 
-  // Si el usuario cambia de pestaña y vuelve, intentamos recuperar el bloqueo de pantalla
   useEffect(() => {
     const handleVisibilityChange = async () => {
       if (wakeLockRef.current !== null && document.visibilityState === 'visible') {
@@ -83,7 +87,6 @@ export const useSpeechRecognition = () => {
   const startListening = useCallback(() => {
     if (!isAPISupported) return;
 
-    // Limpieza de seguridad por si había una instancia pegada
     if (recognitionRef.current) {
        try { recognitionRef.current.stop(); } catch(e) {}
     }
@@ -92,36 +95,42 @@ export const useSpeechRecognition = () => {
     const SpeechAPI = SpeechRecognition || webkitSpeechRecognition;
     const recognition = new SpeechAPI();
 
-    // --- CONFIGURACIÓN HÍBRIDA (LA SOLUCIÓN AL PROBLEMA) ---
-    // PC: continuous = true. El navegador mantiene el micro abierto y gestiona el flujo.
-    // MÓVIL: continuous = false. Forzamos cortes constantes para limpiar el buffer
-    // y evitar que el navegador móvil acumule basura y repita palabras.
+    // Configuración Híbrida: Continuous true en PC, false en Móvil para limpieza de buffer
     recognition.continuous = !isMobile.current; 
-    
-    recognition.interimResults = true;              // Queremos ver lo que se está escribiendo en tiempo real
-    recognition.lang = 'es-MX';                     // Forzamos español latino
+    recognition.interimResults = true;
+    recognition.lang = 'es-MX';
     recognition.maxAlternatives = 1;
 
     recognition.onstart = () => {
       setIsListening(true);
-      setIsPaused(false); // Si empieza, ya no está en pausa
+      setIsPaused(false);
       isUserInitiatedStop.current = false;
       requestWakeLock();
       
-      // Feedback táctil (vibración) para confirmar inicio en móviles
       if (isMobile.current && navigator.vibrate) {
           navigator.vibrate(50);
       }
     };
 
     recognition.onresult = (event: any) => {
+      // 1. Detección de Actividad de Voz (VAD Simulado)
+      setIsDetectingSpeech(true);
+      
+      // Reiniciamos el timer de silencio cada vez que llega una palabra nueva
+      if (silenceTimer.current) clearTimeout(silenceTimer.current);
+      
+      // OPTIMIZACIÓN DE VELOCIDAD: 800ms de silencio se considera "Fin de frase"
+      // Esto le dice a la UI que ya puede mostrar "Analizando..."
+      silenceTimer.current = setTimeout(() => {
+        setIsDetectingSpeech(false);
+      }, 800);
+
       let interimChunk = '';
       let finalChunk = '';
 
       for (let i = event.resultIndex; i < event.results.length; ++i) {
         const res = event.results[i];
         
-        // PARCHE ANDROID: A veces envía resultados vacíos o con confianza 0 que duplican texto
         if (isMobile.current && (res[0].confidence === 0 || !res[0].transcript)) continue;
 
         if (res.isFinal) {
@@ -131,23 +140,16 @@ export const useSpeechRecognition = () => {
         }
       }
 
-      // --- PROCESAMIENTO Y FILTRADO (AQUÍ ACTÚA EL ANTI-ECO) ---
+      // --- PROCESAMIENTO ANTI-ECO ---
       if (finalChunk) {
         const cleanFinal = finalChunk.trim();
         const currentFinal = finalTranscriptRef.current.trim();
         
-        // 1. Calculamos si hay solapamiento (Eco)
         const overlap = getOverlapLength(currentFinal, cleanFinal);
-        
-        // 2. Solo tomamos la parte NUEVA de la frase
         const newPart = cleanFinal.slice(overlap).trim();
         
         if (newPart) {
-            // 3. Formateo estético: Añadimos espacio si hace falta y mayúscula inicial
             const prefix = (currentFinal && !currentFinal.endsWith(' ')) ? ' ' : '';
-            
-            // Lógica simple de capitalización: Si el anterior termina en punto, mayúscula.
-            // Si es el inicio absoluto, mayúscula. De lo contrario, mantener como viene.
             let formattedPart = newPart;
             if (currentFinal.length === 0 || currentFinal.endsWith('.') || currentFinal.endsWith('?')) {
                  formattedPart = newPart.charAt(0).toUpperCase() + newPart.slice(1);
@@ -157,19 +159,15 @@ export const useSpeechRecognition = () => {
         }
       }
 
-      // Actualizamos el estado visual para React
-      // Combinamos lo confirmado (finalTranscriptRef) + lo que se está escuchando (interimChunk)
       const displayText = (finalTranscriptRef.current + (interimChunk ? ' ' + interimChunk : '')).trim();
       setTranscript(displayText);
     };
 
     recognition.onerror = (event: any) => {
-      // Ignoramos el error 'no-speech' porque es común si hay silencios y no queremos parpadeos
       if (event.error === 'no-speech') return; 
       
       console.warn('Speech Recognition Error:', event.error);
 
-      // Si el usuario bloqueó el permiso o el sistema no deja, paramos de verdad
       if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
         setIsListening(false);
         setIsPaused(false);
@@ -179,30 +177,26 @@ export const useSpeechRecognition = () => {
     };
 
     recognition.onend = () => {
-      // --- LÓGICA "MOBILE KEEP-ALIVE" (PERSISTENCIA) ---
-      // Si el evento 'end' salta pero el usuario NO presionó el botón de parar (ni stop ni pausa),
-      // significa que el navegador cortó para ahorrar batería o por silencio.
-      // Lo reiniciamos inmediatamente.
+      // Limpieza de estados visuales al terminar
+      setIsDetectingSpeech(false);
+      if (silenceTimer.current) clearTimeout(silenceTimer.current);
+
+      // Lógica "Mobile Keep-Alive" (Reconexión automática)
       if (!isUserInitiatedStop.current) {
-          // Usamos un pequeño timeout para no bloquear el hilo principal
           setTimeout(() => {
-              // Verificamos de nuevo por seguridad
               if (!isUserInitiatedStop.current) {
                   try { 
                       recognition.start(); 
                   } catch(e) {
-                      console.log('Intento de reconexión fallido (normal si se cerró rápido)', e);
+                      console.log('Intento de reconexión fallido', e);
                   }
               }
-          }, 50); // 50ms es imperceptible pero suficiente para reiniciar el motor
+          }, 50);
       } else {
-        // Si fue un paro manual legítimo:
         setIsListening(false);
-        // Si no estamos pausados, liberamos el wake lock (si estamos pausados, quizas queramos mantenerlo, 
-        // pero para ahorrar bateria mejor lo soltamos y lo pedimos al reanudar)
         releaseWakeLock();
         if (isMobile.current && navigator.vibrate) {
-            navigator.vibrate([50, 50, 50]); // Vibración triple al apagar
+            navigator.vibrate([50, 50, 50]);
         }
       }
     };
@@ -211,25 +205,24 @@ export const useSpeechRecognition = () => {
     try { recognition.start(); } catch (e) { setIsListening(false); }
   }, [isAPISupported, requestWakeLock, releaseWakeLock]);
 
-  // NUEVO: Función para PAUSAR (Detiene motor, mantiene texto)
   const pauseListening = useCallback(() => {
-    isUserInitiatedStop.current = true; // Decimos que fue intencional para que no se reinicie solo
-    setIsPaused(true); // Activamos estado visual de pausa
+    isUserInitiatedStop.current = true;
+    setIsPaused(true);
+    setIsDetectingSpeech(false); // Al pausar, dejamos de detectar voz
     
     if (recognitionRef.current) {
         try { recognitionRef.current.stop(); } catch(e) {}
     }
     
-    // Sincronizamos estado pero NO borramos finalTranscriptRef
     setTranscript(finalTranscriptRef.current);
     setIsListening(false);
     releaseWakeLock();
   }, [releaseWakeLock]);
 
-  // Función para DETENER FINALMENTE (Detiene motor, listo para enviar)
   const stopListening = useCallback(() => {
     isUserInitiatedStop.current = true; 
-    setIsPaused(false); // Ya no es pausa, es fin
+    setIsPaused(false);
+    setIsDetectingSpeech(false);
     
     if (recognitionRef.current) {
         try { recognitionRef.current.stop(); } catch(e) {}
@@ -244,30 +237,31 @@ export const useSpeechRecognition = () => {
     finalTranscriptRef.current = '';
     setTranscript('');
     setIsPaused(false);
+    setIsDetectingSpeech(false);
   }, []);
 
-  // Esta función permite que el usuario edite el texto manualmente en el <textarea>
-  // y que la IA respete esos cambios y siga escribiendo después de ellos.
   const setTranscriptManual = useCallback((text: string) => {
       finalTranscriptRef.current = text;
       setTranscript(text);
   }, []);
 
-  // Limpieza final al desmontar el componente
+  // Limpieza final al desmontar
   useEffect(() => {
     return () => {
         isUserInitiatedStop.current = true;
         if (recognitionRef.current) try { recognitionRef.current.stop(); } catch(e) {}
+        if (silenceTimer.current) clearTimeout(silenceTimer.current);
         releaseWakeLock();
     };
   }, [releaseWakeLock]);
 
   return { 
     isListening,
-    isPaused, // Exportamos el nuevo estado
+    isPaused,
+    isDetectingSpeech, // <--- NUEVA EXPORTACIÓN PARA LA UI
     transcript, 
     startListening, 
-    pauseListening, // Exportamos la nueva función
+    pauseListening, 
     stopListening, 
     resetTranscript, 
     setTranscript: setTranscriptManual, 
