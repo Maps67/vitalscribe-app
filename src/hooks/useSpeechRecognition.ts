@@ -6,17 +6,11 @@ interface IWindow extends Window {
   SpeechRecognition: any;
 }
 
-// --- ALGORITMO ANTI-ECO (EL PORTERO INTELIGENTE) ---
-// Esta función compara el final del texto existente (A) con el inicio del nuevo texto (B)
-// para detectar y eliminar palabras repetidas que envían los navegadores móviles.
+// --- ALGORITMO ANTI-ECO ---
 function getOverlapLength(a: string, b: string) {
   if (b.length === 0 || a.length === 0) return 0;
-  
-  // Optimización: Solo analizamos los últimos 50 caracteres para no afectar el rendimiento
   const maxCheck = Math.min(a.length, b.length, 50); 
-  
   for (let len = maxCheck; len > 0; len--) {
-    // Si el final de A coincide exactamente con el inicio de B
     if (a.slice(-len) === b.slice(0, len)) return len;
   }
   return 0;
@@ -27,14 +21,11 @@ export const useSpeechRecognition = () => {
   const [isPaused, setIsPaused] = useState(false);
   const [transcript, setTranscript] = useState('');
   
-  // Estado para saber si el usuario está hablando activamente o si hay silencio (procesando)
-  // Esto permite mostrar el indicador "Analizando..." en la UI inmediatamente.
+  // Estado visual reactivo
   const [isDetectingSpeech, setIsDetectingSpeech] = useState(false);
   
-  // Detección de Móvil Robusta (Android/iOS) para aplicar parches específicos
   const isMobile = useRef(/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent));
 
-  // Detección de Soporte API en el navegador
   const [isAPISupported] = useState(() => {
     if (typeof window === 'undefined') return false;
     const { webkitSpeechRecognition, SpeechRecognition } = window as unknown as IWindow;
@@ -42,35 +33,39 @@ export const useSpeechRecognition = () => {
   });
   
   const recognitionRef = useRef<any>(null);
-  const isUserInitiatedStop = useRef(false); // Bandera para distinguir stop manual vs caída de red/batería
-  const wakeLockRef = useRef<any>(null); // Para mantener la pantalla encendida
+  const isUserInitiatedStop = useRef(false);
+  const wakeLockRef = useRef<any>(null); 
   
-  // Timer para detectar silencio y cambiar el estado visual a "Analizando"
-  const silenceTimer = useRef<any>(null);
-
-  // "Fuente de la verdad" del texto.
+  // Timer para "suavizar" el indicador visual y que no parpadee
+  const speechActivityTimer = useRef<any>(null);
+  
   const finalTranscriptRef = useRef('');
 
-  // --- GESTIÓN DE ENERGÍA (WAKE LOCK) ---
+  // --- WAKE LOCK ---
   const requestWakeLock = useCallback(async () => {
     if ('wakeLock' in navigator) {
-      try { 
-          wakeLockRef.current = await (navigator as any).wakeLock.request('screen'); 
-      } catch (err) {
-          console.warn('Wake Lock error (no crítico):', err);
-      }
+      try { wakeLockRef.current = await (navigator as any).wakeLock.request('screen'); } 
+      catch (err) { console.warn('Wake Lock error:', err); }
     }
   }, []);
 
   const releaseWakeLock = useCallback(async () => {
     if (wakeLockRef.current) {
-      try { 
-          await wakeLockRef.current.release(); 
-          wakeLockRef.current = null; 
-      } catch (err) {
-          console.warn('Wake Lock release error:', err);
-      }
+      try { await wakeLockRef.current.release(); wakeLockRef.current = null; } 
+      catch (err) { console.warn('Wake Lock release error:', err); }
     }
+  }, []);
+
+  // Función auxiliar para activar la señal visual "Detectando..." sin depender del texto
+  const triggerSpeechActivity = useCallback(() => {
+      setIsDetectingSpeech(true);
+      if (speechActivityTimer.current) clearTimeout(speechActivityTimer.current);
+      
+      // Mantenemos el estado "Detectando" activo por 1.5s después del último ruido
+      // Esto evita el parpadeo cuando hablas bajito o haces pausas cortas.
+      speechActivityTimer.current = setTimeout(() => {
+          setIsDetectingSpeech(false);
+      }, 1500);
   }, []);
 
   useEffect(() => {
@@ -83,7 +78,7 @@ export const useSpeechRecognition = () => {
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [requestWakeLock]);
 
-  // --- LÓGICA CORE DE RECONOCIMIENTO ---
+  // --- LÓGICA CORE ---
   const startListening = useCallback(() => {
     if (!isAPISupported) return;
 
@@ -95,41 +90,41 @@ export const useSpeechRecognition = () => {
     const SpeechAPI = SpeechRecognition || webkitSpeechRecognition;
     const recognition = new SpeechAPI();
 
-    // Configuración Híbrida: Continuous true en PC, false en Móvil para limpieza de buffer
     recognition.continuous = !isMobile.current; 
     recognition.interimResults = true;
     recognition.lang = 'es-MX';
     recognition.maxAlternatives = 1;
+
+    // --- EVENTOS NATIVOS DE AUDIO (LA SOLUCIÓN DE SENSIBILIDAD) ---
+    // Estos eventos ocurren ANTES de que haya texto.
+    
+    // 1. onsoundstart: El micrófono detectó CUALQUIER ruido (incluso respiración fuerte)
+    recognition.onsoundstart = () => {
+        triggerSpeechActivity();
+    };
+
+    // 2. onspeechstart: El navegador detectó algo que parece voz humana
+    recognition.onspeechstart = () => {
+        triggerSpeechActivity();
+    };
 
     recognition.onstart = () => {
       setIsListening(true);
       setIsPaused(false);
       isUserInitiatedStop.current = false;
       requestWakeLock();
-      
-      if (isMobile.current && navigator.vibrate) {
-          navigator.vibrate(50);
-      }
+      if (isMobile.current && navigator.vibrate) navigator.vibrate(50);
     };
 
     recognition.onresult = (event: any) => {
-      // 1. Detección de Actividad de Voz (VAD Simulado)
-      setIsDetectingSpeech(true);
-      
-      // Reiniciamos el timer de silencio cada vez que llega una palabra nueva
-      if (silenceTimer.current) clearTimeout(silenceTimer.current);
-      
-      // OPTIMIZACIÓN: 1500ms de silencio se considera cambio de idea/turno
-      silenceTimer.current = setTimeout(() => {
-        setIsDetectingSpeech(false);
-      }, 1500);
+      // Reforzamos la actividad visual (por si acaso los eventos de audio fallaron)
+      triggerSpeechActivity();
 
       let interimChunk = '';
       let finalChunk = '';
 
       for (let i = event.resultIndex; i < event.results.length; ++i) {
         const res = event.results[i];
-        
         if (isMobile.current && (res[0].confidence === 0 || !res[0].transcript)) continue;
 
         if (res.isFinal) {
@@ -139,50 +134,42 @@ export const useSpeechRecognition = () => {
         }
       }
 
-      // --- "EL FORMATEADOR GRAMATICAL" (Lógica v5.3) ---
+      // --- LOGICA DE FORMATO v5.3 (Puntuación y Saltos) ---
       if (finalChunk) {
         const cleanFinal = finalChunk.trim();
         const currentFinal = finalTranscriptRef.current.trim();
         
-        // 1. Algoritmo Anti-Eco
         const overlap = getOverlapLength(currentFinal, cleanFinal);
         let newPart = cleanFinal.slice(overlap).trim();
         
         if (newPart) {
-            // 2. Auto-Capitalización: Forzamos mayúscula al inicio de cada bloque nuevo
             newPart = newPart.charAt(0).toUpperCase() + newPart.slice(1);
 
-            // 3. Auto-Puntuación y Salto de Línea Inteligente
-            // Esto separa visualmente las ideas para que la IA detecte el cambio de hablante
             let separator = ' ';
-            
             if (currentFinal.length > 0) {
                 const lastChar = currentFinal.slice(-1);
-                
-                // Si la frase anterior NO termina en puntuación fuerte, agregamos punto y salto
                 if (!['.', '?', '!', ':', '\n'].includes(lastChar)) {
                     separator = '.\n'; 
                 } else {
-                    // Si ya tenía puntuación, solo agregamos el salto de línea para separar
                     separator = '\n'; 
                 }
             }
-
-            // 4. Construcción del texto estructurado
             finalTranscriptRef.current = currentFinal + separator + newPart;
         }
       }
 
-      // Actualizamos la UI combinando lo confirmado (estructurado) + lo temporal (flotando)
       const displayText = (finalTranscriptRef.current + (interimChunk ? ' ' + interimChunk : '')).trim();
       setTranscript(displayText);
     };
 
     recognition.onerror = (event: any) => {
-      if (event.error === 'no-speech') return; 
+      if (event.error === 'no-speech') {
+          // No hacemos nada, es normal que haya silencio.
+          // El timer se encargará de apagar el "Detectando voz" suavemente.
+          return; 
+      }
       
-      console.warn('Speech Recognition Error:', event.error);
-
+      console.warn('Speech Error:', event.error);
       if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
         setIsListening(false);
         setIsPaused(false);
@@ -192,43 +179,32 @@ export const useSpeechRecognition = () => {
     };
 
     recognition.onend = () => {
-      // Limpieza de estados visuales al terminar
+      // Al terminar, forzamos apagado visual
+      if (speechActivityTimer.current) clearTimeout(speechActivityTimer.current);
       setIsDetectingSpeech(false);
-      if (silenceTimer.current) clearTimeout(silenceTimer.current);
 
-      // Lógica "Mobile Keep-Alive" (Reconexión automática)
       if (!isUserInitiatedStop.current) {
           setTimeout(() => {
               if (!isUserInitiatedStop.current) {
-                  try { 
-                      recognition.start(); 
-                  } catch(e) {
-                      console.log('Intento de reconexión fallido', e);
-                  }
+                  try { recognition.start(); } catch(e) {}
               }
           }, 50);
       } else {
         setIsListening(false);
         releaseWakeLock();
-        if (isMobile.current && navigator.vibrate) {
-            navigator.vibrate([50, 50, 50]);
-        }
+        if (isMobile.current && navigator.vibrate) navigator.vibrate([50, 50, 50]);
       }
     };
 
     recognitionRef.current = recognition;
     try { recognition.start(); } catch (e) { setIsListening(false); }
-  }, [isAPISupported, requestWakeLock, releaseWakeLock]);
+  }, [isAPISupported, requestWakeLock, releaseWakeLock, triggerSpeechActivity]);
 
   const pauseListening = useCallback(() => {
     isUserInitiatedStop.current = true;
     setIsPaused(true);
-    setIsDetectingSpeech(false); // Al pausar, dejamos de detectar voz
-    
-    if (recognitionRef.current) {
-        try { recognitionRef.current.stop(); } catch(e) {}
-    }
-    
+    setIsDetectingSpeech(false);
+    if (recognitionRef.current) try { recognitionRef.current.stop(); } catch(e) {}
     setTranscript(finalTranscriptRef.current);
     setIsListening(false);
     releaseWakeLock();
@@ -238,11 +214,7 @@ export const useSpeechRecognition = () => {
     isUserInitiatedStop.current = true; 
     setIsPaused(false);
     setIsDetectingSpeech(false);
-    
-    if (recognitionRef.current) {
-        try { recognitionRef.current.stop(); } catch(e) {}
-    }
-    
+    if (recognitionRef.current) try { recognitionRef.current.stop(); } catch(e) {}
     setTranscript(finalTranscriptRef.current);
     setIsListening(false);
     releaseWakeLock();
@@ -260,26 +232,18 @@ export const useSpeechRecognition = () => {
       setTranscript(text);
   }, []);
 
-  // Limpieza final al desmontar
   useEffect(() => {
     return () => {
         isUserInitiatedStop.current = true;
         if (recognitionRef.current) try { recognitionRef.current.stop(); } catch(e) {}
-        if (silenceTimer.current) clearTimeout(silenceTimer.current);
+        if (speechActivityTimer.current) clearTimeout(speechActivityTimer.current);
         releaseWakeLock();
     };
   }, [releaseWakeLock]);
 
   return { 
-    isListening,
-    isPaused,
-    isDetectingSpeech,
-    transcript, 
-    startListening, 
-    pauseListening, 
-    stopListening, 
-    resetTranscript, 
-    setTranscript: setTranscriptManual, 
-    isAPISupported 
+    isListening, isPaused, isDetectingSpeech, transcript, 
+    startListening, pauseListening, stopListening, resetTranscript, 
+    setTranscript: setTranscriptManual, isAPISupported 
   };
 };
