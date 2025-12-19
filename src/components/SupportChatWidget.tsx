@@ -25,12 +25,11 @@ export const SupportChatWidget: React.FC = () => {
   
   // Estados para Voz
   const [isListening, setIsListening] = useState(false);
-  const [isSpeaking, setIsSpeaking] = useState(false);
   const recognitionRef = useRef<any>(null);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll al fondo del chat
+  // Auto-scroll al fondo del chat cada vez que llega un mensaje
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isOpen, isListening]);
@@ -38,7 +37,7 @@ export const SupportChatWidget: React.FC = () => {
   // --- AUDIO MUTEX: LIMPIEZA DE RECURSOS AL DESMONTAR ---
   useEffect(() => {
     return () => {
-      // Si el componente muere, matamos cualquier audio activo para liberar al navegador
+      // Si el componente se desmonta, matamos cualquier audio activo
       window.speechSynthesis.cancel();
       if (recognitionRef.current) {
         recognitionRef.current.stop();
@@ -49,46 +48,46 @@ export const SupportChatWidget: React.FC = () => {
   // --- LÓGICA DE TEXT-TO-SPEECH (HABLAR) ---
   const speakText = (text: string) => {
     if ('speechSynthesis' in window) {
-      // Si ya está hablando, lo callamos
+      // Si ya está hablando, lo interrumpimos para decir lo nuevo o callar
       if (window.speechSynthesis.speaking) {
         window.speechSynthesis.cancel();
-        setIsSpeaking(false);
-        return; 
+        // Si solo queríamos callarlo (toggle), podríamos retornar aquí, 
+        // pero asumimos que el usuario quiere escuchar este mensaje específico.
       }
 
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.lang = 'es-MX'; // Español Latino
       utterance.rate = 1.0; // Velocidad normal
       
-      utterance.onstart = () => setIsSpeaking(true);
-      utterance.onend = () => setIsSpeaking(false);
-      utterance.onerror = () => setIsSpeaking(false);
+      // Manejo de errores silencioso para no romper la UI
+      utterance.onerror = () => console.warn("Error en síntesis de voz");
 
       window.speechSynthesis.speak(utterance);
     } else {
-      alert("Tu navegador no soporta lectura de voz.");
+      console.warn("Navegador no soporta síntesis de voz");
     }
   };
 
   // --- LÓGICA DE SPEECH-TO-TEXT (ESCUCHAR) ---
   const toggleListening = () => {
+    // Si ya está escuchando, paramos
     if (isListening) {
-      // Detener manualmente y liberar recurso
-      recognitionRef.current?.stop();
+      if (recognitionRef.current) recognitionRef.current.stop();
       setIsListening(false);
       return;
     }
 
+    // Verificación de soporte del navegador
     if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
-      alert("Tu navegador no soporta reconocimiento de voz. Usa Chrome o Edge.");
+      alert("Tu navegador no soporta reconocimiento de voz. Por favor usa Chrome o Edge.");
       return;
     }
 
-    // Configurar reconocimiento
+    // Configuración del motor de reconocimiento
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     recognitionRef.current = new SpeechRecognition();
     recognitionRef.current.lang = 'es-MX';
-    recognitionRef.current.continuous = false; // Se detiene al dejar de hablar (evita bucles)
+    recognitionRef.current.continuous = false; // Se detiene automáticamente al detectar silencio
     recognitionRef.current.interimResults = false;
 
     recognitionRef.current.onstart = () => {
@@ -97,12 +96,14 @@ export const SupportChatWidget: React.FC = () => {
 
     recognitionRef.current.onresult = (event: any) => {
       const transcript = event.results[0][0].transcript;
-      setInput(transcript); // Pone el texto en el input
+      if (transcript) {
+        setInput(transcript); // Insertamos el texto escuchado
+      }
       setIsListening(false);
     };
 
     recognitionRef.current.onerror = (event: any) => {
-      console.error("Error de voz:", event.error);
+      console.warn("Error de reconocimiento de voz:", event.error);
       setIsListening(false);
     };
 
@@ -110,31 +111,40 @@ export const SupportChatWidget: React.FC = () => {
       setIsListening(false);
     };
 
-    recognitionRef.current.start();
+    try {
+      recognitionRef.current.start();
+    } catch (e) {
+      console.error("No se pudo iniciar el reconocimiento:", e);
+      setIsListening(false);
+    }
   };
 
   // --- ENVIAR MENSAJE ---
   const handleSend = async (overrideText?: string) => {
     const textToSend = overrideText || input;
+    
+    // Validación: No enviar si está vacío o si ya está cargando
     if (!textToSend.trim() || isLoading) return;
 
-    // Limpiar input y parar audio si estaba hablando
+    // 1. Limpieza inicial: Borrar input y detener cualquier audio previo
     setInput('');
     window.speechSynthesis.cancel(); 
     
-    // 1. Agregamos mensaje del usuario
+    // 2. Optimistic Update: Mostrar mensaje del usuario inmediatamente
     setMessages(prev => [...prev, { role: 'user', text: textToSend }]);
     setIsLoading(true);
 
     try {
-      // 2. Llamamos al servicio (Cerebro IA)
+      // 3. Llamada al Servicio (Cerebro)
       const response = await GeminiSupportService.askSupport(textToSend);
       
-      // 3. Agregamos respuesta del bot
+      // 4. Mostrar respuesta
       setMessages(prev => [...prev, { role: 'bot', text: response }]);
       
     } catch (error) {
-      setMessages(prev => [...prev, { role: 'bot', text: "Lo siento, tuve un error de conexión." }]);
+      console.error("Error en Widget Chat:", error);
+      // Fallback elegante en caso de error crítico no manejado por el servicio
+      setMessages(prev => [...prev, { role: 'bot', text: "Lo siento, no pude procesar tu solicitud en este momento." }]);
     } finally {
       setIsLoading(false);
     }
@@ -147,26 +157,24 @@ export const SupportChatWidget: React.FC = () => {
     }
   };
 
-  // --- FUNCIÓN DE CIERRE SEGURO (AUDIO SAFETY) ---
+  // --- FUNCIÓN DE CIERRE SEGURO ---
   const handleCloseChat = () => {
     setIsOpen(false);
-    // 1. Matar síntesis de voz (Robot hablando)
+    // Limpieza agresiva al cerrar visualmente
     window.speechSynthesis.cancel(); 
-    // 2. Matar reconocimiento de voz (Micrófono escuchando)
     if (recognitionRef.current) {
         recognitionRef.current.stop();
     }
     setIsListening(false);
-    setIsSpeaking(false);
   };
 
   return (
-    // CAMBIO CRÍTICO: Clases de posicionamiento ajustadas para evitar solapamiento (Elevación Adaptativa)
+    // CONTENEDOR FLOTANTE: Posicionamiento responsivo (bottom-28 en móvil para no tapar tabs, bottom-20 en desktop)
     <div className="fixed bottom-28 right-4 md:bottom-20 md:right-6 z-50 flex flex-col items-end print:hidden">
       
       {/* VENTANA DEL CHAT */}
       {isOpen && (
-        <div className="mb-4 w-80 md:w-96 bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col transition-all duration-300 animate-in slide-in-from-bottom-5 fade-in">
+        <div className="mb-4 w-80 md:w-96 bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-700 overflow-hidden flex flex-col transition-all duration-300 animate-in slide-in-from-bottom-5 fade-in">
           
           {/* Header */}
           <div className="bg-indigo-600 p-4 flex justify-between items-center shadow-md z-10">
@@ -183,7 +191,7 @@ export const SupportChatWidget: React.FC = () => {
           </div>
 
           {/* Área de Mensajes */}
-          <div className="flex-1 h-80 overflow-y-auto p-4 bg-gray-50 space-y-4">
+          <div className="flex-1 h-80 overflow-y-auto p-4 bg-gray-50 dark:bg-slate-900 space-y-4">
             {messages.map((msg, idx) => (
               <div 
                 key={idx} 
@@ -195,12 +203,12 @@ export const SupportChatWidget: React.FC = () => {
                     className={`p-3 rounded-2xl text-sm shadow-sm relative group ${
                       msg.role === 'user' 
                         ? 'bg-indigo-600 text-white rounded-br-none' 
-                        : 'bg-white border border-gray-200 text-gray-700 rounded-bl-none'
+                        : 'bg-white dark:bg-slate-700 dark:text-slate-200 border border-gray-200 dark:border-slate-600 text-gray-700 rounded-bl-none'
                     }`}
                   >
                     {msg.text}
 
-                    {/* Botón de Leer en Voz Alta (Solo para Bot) */}
+                    {/* Botón de Leer en Voz Alta (Solo para mensajes del Bot) */}
                     {msg.role === 'bot' && (
                       <button 
                         onClick={() => speakText(msg.text)}
@@ -215,20 +223,21 @@ export const SupportChatWidget: React.FC = () => {
               </div>
             ))}
 
-            {/* Indicador "Escribiendo..." */}
+            {/* Indicador "Pensando..." */}
             {isLoading && (
               <div className="flex justify-start">
-                <div className="bg-white p-3 rounded-2xl rounded-bl-none border border-gray-200 shadow-sm flex items-center gap-2">
+                <div className="bg-white dark:bg-slate-700 p-3 rounded-2xl rounded-bl-none border border-gray-200 dark:border-slate-600 shadow-sm flex items-center gap-2">
                   <Loader2 className="w-4 h-4 animate-spin text-indigo-600" />
                   <span className="text-xs text-gray-400">Consultando manual...</span>
                 </div>
               </div>
             )}
             
+            {/* Elemento invisible para scroll automático */}
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Estado Escuchando */}
+          {/* Barra de Estado: Escuchando */}
           {isListening && (
             <div className="bg-red-50 text-red-600 text-xs py-1 px-4 text-center border-t border-red-100 animate-pulse font-medium flex items-center justify-center gap-2">
               <span className="w-2 h-2 bg-red-600 rounded-full animate-ping"/>
@@ -236,8 +245,8 @@ export const SupportChatWidget: React.FC = () => {
             </div>
           )}
 
-          {/* Input Area */}
-          <div className="p-3 bg-white border-t border-gray-100 flex gap-2 items-end">
+          {/* Área de Input */}
+          <div className="p-3 bg-white dark:bg-slate-800 border-t border-gray-100 dark:border-slate-700 flex gap-2 items-end">
             
             {/* Botón Micrófono */}
             <button
@@ -245,7 +254,7 @@ export const SupportChatWidget: React.FC = () => {
               className={`p-2 rounded-full transition-all duration-300 flex-shrink-0 ${
                 isListening 
                   ? 'bg-red-100 text-red-600 hover:bg-red-200' 
-                  : 'bg-gray-100 text-gray-500 hover:bg-indigo-50 hover:text-indigo-600'
+                  : 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-slate-300 hover:text-indigo-600'
               }`}
               title="Dictar pregunta"
             >
@@ -254,13 +263,13 @@ export const SupportChatWidget: React.FC = () => {
 
             <div className="flex-1 relative">
                 <input
-                type="text"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={handleKeyPress}
-                placeholder={isListening ? "Escuchando..." : "Escribe o dicta tu duda..."}
-                disabled={isListening}
-                className="w-full pl-4 pr-2 py-2.5 bg-gray-100 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 border-none disabled:opacity-70 transition-all"
+                  type="text"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={handleKeyPress}
+                  placeholder={isListening ? "Escuchando..." : "Escribe tu duda..."}
+                  disabled={isListening || isLoading}
+                  className="w-full pl-4 pr-2 py-2.5 bg-gray-100 dark:bg-slate-700 dark:text-white rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 border-none disabled:opacity-70 transition-all"
                 />
             </div>
 
@@ -269,13 +278,13 @@ export const SupportChatWidget: React.FC = () => {
               disabled={isLoading || (!input.trim() && !isListening)}
               className="p-2.5 bg-indigo-600 text-white rounded-full hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
             >
-              <Send className="w-4 h-4" />
+              {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
             </button>
           </div>
         </div>
       )}
 
-      {/* BOTÓN FLOTANTE (FAB) */}
+      {/* BOTÓN FLOTANTE (FAB) - Controla apertura/cierre */}
       <button
         onClick={() => isOpen ? handleCloseChat() : setIsOpen(true)}
         className={`p-4 rounded-full shadow-2xl transition-all duration-300 hover:scale-110 active:scale-95 border-2 border-white/20 ${
@@ -287,5 +296,4 @@ export const SupportChatWidget: React.FC = () => {
 
     </div>
   );
-};   
- 
+};
