@@ -18,7 +18,6 @@ interface FileObject {
   metadata: Record<string, any>;
 }
 
-// Props: Ahora recibimos el ID del paciente opcionalmente
 interface DoctorFileGalleryProps {
   patientId?: string; 
 }
@@ -26,24 +25,19 @@ interface DoctorFileGalleryProps {
 export const DoctorFileGallery: React.FC<DoctorFileGalleryProps> = ({ patientId }) => {
   const [files, setFiles] = useState<FileObject[]>([]);
   const [loading, setLoading] = useState(false);
-  
-  // Estados para el Visor
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [selectedFileName, setSelectedFileName] = useState('');
 
   const fetchFiles = async () => {
-    // Si no hay ID de paciente, limpiamos la lista para no mostrar datos mezclados
     if (!patientId) {
         setFiles([]);
         return;
     }
-
     setLoading(true);
     try {
-      // LISTAR DESDE LA CARPETA ESPECÍFICA DEL PACIENTE
       const { data, error } = await supabase.storage
         .from(BUCKET_NAME)
-        .list(patientId, { // Usamos el ID como nombre de carpeta raíz
+        .list(patientId, {
           limit: 20,
           offset: 0,
           sortBy: { column: 'created_at', order: 'desc' },
@@ -58,39 +52,32 @@ export const DoctorFileGallery: React.FC<DoctorFileGalleryProps> = ({ patientId 
     }
   };
 
-  // Recargar automáticamente cuando cambiamos de paciente
   useEffect(() => {
     fetchFiles();
   }, [patientId]);
 
   const handleViewFile = async (fileName: string) => {
     if (!patientId) return;
-    
-    // Crear URL firmada para la ruta: {patientId}/{fileName}
     const { data } = await supabase.storage
       .from(BUCKET_NAME)
       .createSignedUrl(`${patientId}/${fileName}`, 3600);
     
     if (data?.signedUrl) {
-      // Detectar tipo de archivo
       const isImage = fileName.match(/\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i);
-      
       if (isImage) {
         setSelectedImage(data.signedUrl);
         setSelectedFileName(fileName);
       } else {
-        // PDFs y otros documentos se abren en pestaña nueva
         window.open(data.signedUrl, '_blank');
       }
     }
   };
 
-  // Estado vacío si no hay paciente seleccionado
   if (!patientId) {
       return (
           <div className="p-8 text-center text-slate-400 border-2 border-dashed rounded-xl bg-slate-50 dark:bg-slate-800/50 dark:border-slate-700 h-full flex flex-col items-center justify-center">
               <FolderOpen className="mb-2 opacity-50" size={32}/>
-              <p className="text-xs font-medium">Seleccione o cree un paciente<br/>para ver su expediente.</p>
+              <p className="text-xs font-medium">Seleccione un paciente<br/>para ver su expediente.</p>
           </div>
       )
   }
@@ -146,7 +133,6 @@ export const DoctorFileGallery: React.FC<DoctorFileGalleryProps> = ({ patientId 
         </div>
       </div>
 
-      {/* Visor Modal Integrado */}
       <ImageViewerModal 
         isOpen={!!selectedImage}
         onClose={() => setSelectedImage(null)}
@@ -156,4 +142,4 @@ export const DoctorFileGallery: React.FC<DoctorFileGalleryProps> = ({ patientId 
     </>
   );
 };
-// Actualizacion forzada visor v1
+// FIN DEL ARCHIVO LIMPIO
