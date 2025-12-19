@@ -24,6 +24,7 @@ export interface Patient {
   phone?: string;
   email?: string;
   history?: string; // JSON Stringified con antecedentes
+  isTemporary?: boolean; // Bandera para pacientes "Lazy" (v5.0)
 }
 
 // --- CONSULTAS E HISTORIAL ---
@@ -47,44 +48,63 @@ export interface MedicationItem {
   notes: string;
 }
 
-// --- ESTRUCTURA SOAP (V4) ---
+// --- ESTRUCTURA SOAP (V4/V5) ---
 export interface SOAPHeaders {
-    date: string;
-    time: string;
-    patientName?: string;
-    patientAge?: string;
-    patientGender?: string;
+  date: string;
+  time: string;
+  patientName?: string;
+  patientAge?: string;
+  patientGender?: string;
 }
 
 export interface SOAPData {
-    headers: SOAPHeaders;
-    subjective: string;
-    objective: string;
-    analysis: string;
-    plan: string;
+  headers?: SOAPHeaders; // Opcional para compatibilidad UI
+  subjective: string;
+  objective: string;
+  analysis: string;
+  plan: string;
 }
 
-// --- RESPUESTA IA GENERAL ---
+// --- RESPUESTA IA GENERAL (COMPATIBLE GEMINI 3 FLASH) ---
 export interface GeminiResponse {
-  clinicalNote: string; 
-  soapData?: SOAPData; 
+  clinicalNote: string;
+  soapData?: SOAPData;
   patientInstructions: string;
+  
+  // Nivel de Riesgo (Requerido por v5.0)
+  risk_analysis?: {
+    level: 'Bajo' | 'Medio' | 'Alto';
+    reason: string;
+  };
+
   actionItems?: {
     next_appointment?: string | null;
     urgent_referral?: boolean;
     lab_tests_required?: string[];
   };
+
+  // Log de Conversación (Requerido por v5.0)
+  conversation_log?: {
+    speaker: 'Médico' | 'Paciente' | 'Desconocido';
+    text: string;
+  }[];
 }
 
 // --- NUEVO: BALANCE CLÍNICO (INSIGHTS) ---
 export interface PatientInsight {
-    evolution: string;       // Resumen cronológico
-    medication_audit: string; // Qué ha tomado y qué funcionó
-    risk_flags: string[];    // Alertas rojas
-    pending_actions: string[]; // Cosas que se quedaron en el aire
+  evolution: string;       // Resumen cronológico
+  medication_audit: string; // Qué ha tomado y qué funcionó
+  risk_flags: string[];    // Alertas rojas
+  pending_actions: string[]; // Cosas que se quedaron en el aire
 }
 
 export interface FollowUpMessage {
+  role: 'user' | 'model';
+  text: string;
+}
+
+// Alias para compatibilidad con componentes de Chat
+export interface ChatMessage {
   role: 'user' | 'model';
   text: string;
 }

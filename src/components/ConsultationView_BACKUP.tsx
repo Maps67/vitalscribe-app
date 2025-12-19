@@ -5,8 +5,7 @@ import {
   MessageSquare, User, Send, Edit2, Check, ArrowLeft, 
   Stethoscope, Trash2, WifiOff, Save, Share2, Download, Printer,
   Paperclip, Calendar, Clock, UserCircle, Activity, ClipboardList, Brain, FileSignature, Keyboard,
-  Quote, AlertTriangle, ChevronDown, ChevronUp, Sparkles, PenLine, UserPlus, ShieldCheck, AlertCircle,
-  Pause, Play
+  Quote, AlertTriangle, ChevronDown, ChevronUp, Sparkles, PenLine, UserPlus, ShieldCheck, AlertCircle
 } from 'lucide-react';
 
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition'; 
@@ -57,19 +56,7 @@ const SPECIALTIES = [
 ];
 
 const ConsultationView: React.FC = () => {
-  // IMPORTAMOS LAS NUEVAS FUNCIONES DEL HOOK (pauseListening, isPaused)
-  const { 
-      isListening, 
-      isPaused,      // NUEVO
-      transcript, 
-      startListening, 
-      pauseListening, // NUEVO
-      stopListening, 
-      resetTranscript, 
-      setTranscript, 
-      isAPISupported 
-  } = useSpeechRecognition();
-  
+  const { isListening, transcript, startListening, stopListening, resetTranscript, setTranscript, isAPISupported } = useSpeechRecognition();
   const location = useLocation(); 
   
   const [patients, setPatients] = useState<any[]>([]); 
@@ -307,11 +294,11 @@ const ConsultationView: React.FC = () => {
                 const hasDynamicData = !!lastConsultationData;
 
                 if (hasStaticData || hasDynamicData) {
-                      setActiveMedicalContext({
+                     setActiveMedicalContext({
                         history: cleanHistory || "No registrados",
                         allergies: cleanAllergies || "No registradas",
                         lastConsultation: lastConsultationData
-                      });
+                     });
                 }
 
             } catch (e) {
@@ -407,33 +394,17 @@ const ConsultationView: React.FC = () => {
       toast.info(`Nuevo paciente temporal: ${name}`);
   };
 
-  // --- MANEJO DE GRABACIÓN (MEJORADO CON PAUSA) ---
   const handleToggleRecording = () => {
     if (!isOnline) {
         toast.info("Sin internet: Use el teclado o el dictado de su dispositivo.");
         return;
     }
-    
-    // Si NO soportamos API, error
-    if (!isAPISupported) { toast.error("Navegador no compatible."); return; }
-    
-    // Si falta consentimiento, error
-    if (!consentGiven) { toast.warning("Falta consentimiento."); return; }
-
-    // LÓGICA DE ESTADOS
-    if (isListening) {
-        pauseListening(); // Si estaba grabando, pausamos
-    } else if (isPaused) {
-        startListening(); // Si estaba en pausa, reanudamos
-    } else {
-        startListening(); // Si estaba detenido, iniciamos de cero
+    if (isListening) stopListening();
+    else {
+      if (!isAPISupported) { toast.error("Navegador no compatible."); return; }
+      if (!consentGiven) { toast.warning("Falta consentimiento."); return; }
+      startListening();
     }
-  };
-
-  // Función explícita para el botón "Terminar"
-  const handleFinishRecording = () => {
-      stopListening();
-      toast.success("Dictado finalizado. Listo para generar.");
   };
 
   const handleClearTranscript = () => {
@@ -500,11 +471,6 @@ const ConsultationView: React.FC = () => {
         toast.warning("Modo Offline activo: La IA requiere internet.", { icon: <WifiOff/> });
         toast.info("La nota se ha guardado localmente. Genérela cuando recupere la conexión.");
         return; 
-    }
-
-    // Aseguramos detener grabación antes de enviar
-    if (isListening || isPaused) {
-        stopListening();
     }
 
     if (abortControllerRef.current) abortControllerRef.current.abort();
@@ -840,7 +806,7 @@ const ConsultationView: React.FC = () => {
 
         <div onClick={()=>setConsentGiven(!consentGiven)} className="flex items-center gap-2 p-3 rounded-lg border cursor-pointer select-none dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"><div className={`w-5 h-5 rounded border flex items-center justify-center ${consentGiven?'bg-green-500 border-green-500 text-white':'bg-white dark:bg-slate-700'}`}>{consentGiven&&<Check size={14}/>}</div><label className="text-xs dark:text-white cursor-pointer">Consentimiento otorgado.</label></div>
         
-        <div className={`flex-1 border-2 border-dashed rounded-2xl flex flex-col items-center justify-center p-4 relative transition-colors min-h-[300px] ${!isOnline ? 'border-amber-300 bg-amber-50 dark:bg-amber-900/10' : (isListening ? 'border-red-400 bg-red-50 dark:bg-red-900/10' : isPaused ? 'border-amber-400 bg-amber-50 dark:bg-amber-900/10' : 'border-slate-200 dark:border-slate-700')}`}>
+        <div className={`flex-1 border-2 border-dashed rounded-2xl flex flex-col items-center justify-center p-4 relative transition-colors min-h-[300px] ${!isOnline ? 'border-amber-300 bg-amber-50 dark:bg-amber-900/10' : (isListening?'border-red-400 bg-red-50 dark:bg-red-900/10':'border-slate-200 dark:border-slate-700')}`}>
             
             {!transcript && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none opacity-50">
@@ -859,14 +825,6 @@ const ConsultationView: React.FC = () => {
                     Use el micrófono de su <b>teclado</b> para dictar.
                 </div>
             )}
-            
-            {/* INDICADOR DE PAUSA (NUEVO) */}
-            {isPaused && (
-                 <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20 bg-amber-100 text-amber-600 px-3 py-1 rounded-full text-xs font-bold border border-amber-200 shadow-sm animate-pulse flex items-center gap-1">
-                    <Pause size={10} className="fill-amber-600" />
-                    PAUSADO (Texto guardado)
-                 </div>
-            )}
 
             <textarea 
                 ref={textareaRef}
@@ -879,46 +837,28 @@ const ConsultationView: React.FC = () => {
             <div ref={transcriptEndRef}/>
             
             <div className="flex w-full gap-2 mt-auto flex-col xl:flex-row z-20 pt-4">
-                
-                {/* BOTÓN 1: GRABAR / PAUSAR / REANUDAR */}
                 <button 
                     onClick={handleToggleRecording} 
                     disabled={!isOnline || !consentGiven || (!isAPISupported && !isListening)} 
                     className={`flex-1 py-3 rounded-xl font-bold flex justify-center gap-2 text-white shadow-lg text-sm transition-all ${
                         !isOnline ? 'bg-slate-300 dark:bg-slate-700 cursor-not-allowed text-slate-500' :
-                        isListening ? 'bg-amber-500 hover:bg-amber-600' : // Si graba, botón amarillo de pausa
-                        isPaused ? 'bg-red-600 hover:bg-red-700' : // Si pausa, botón rojo de reanudar
-                        'bg-slate-900 hover:bg-slate-800' // Si está detenido, botón negro de grabar
+                        isListening ? 'bg-red-600 hover:bg-red-700' : 
+                        'bg-slate-900 hover:bg-slate-800'
                     }`}
                 >
-                    {isListening ? (
-                        <><Pause size={16} fill="currentColor"/> Pausar</>
-                    ) : isPaused ? (
-                        <><Play size={16} fill="currentColor"/> Reanudar</>
-                    ) : (
-                        <><Mic size={16}/> Grabar</>
-                    )}
+                    {isListening ? <><Square size={16}/> Parar</> : <><Mic size={16}/> Grabar</>}
                 </button>
 
-                {/* BOTÓN 2: GENERAR / TERMINAR Y GENERAR */}
                 <button 
-                    onClick={isListening || isPaused ? handleFinishRecording : handleGenerate} 
-                    disabled={!transcript || isProcessing} 
+                    onClick={handleGenerate} 
+                    disabled={!transcript || isListening || isProcessing} 
                     className={`flex-1 text-white py-3 rounded-xl font-bold shadow-lg flex justify-center gap-2 disabled:opacity-50 text-sm transition-all ${
                         !isOnline ? 'bg-amber-500 hover:bg-amber-600' : 
-                        (isListening || isPaused) ? 'bg-green-600 hover:bg-green-700' : // Verde si es para terminar
-                        'bg-brand-teal hover:bg-teal-600' // Teal si es para generar directo
+                        'bg-brand-teal hover:bg-teal-600'
                     }`}
                 >
-                    {isProcessing ? <RefreshCw className="animate-spin" size={16}/> : 
-                     (isListening || isPaused) ? <Check size={16}/> : 
-                     (isOnline ? <RefreshCw size={16}/> : <Save size={16}/>)
-                    } 
-                    
-                    {isProcessing ? '...' : 
-                     (isListening || isPaused) ? 'Terminar' : 
-                     (isOnline ? 'Generar' : 'Guardar')
-                    }
+                    {isProcessing ? <RefreshCw className="animate-spin" size={16}/> : (isOnline ? <RefreshCw size={16}/> : <Save size={16}/>)} 
+                    {isProcessing ? '...' : (isOnline ? 'Generar' : 'Guardar')}
                 </button>
             </div>
             

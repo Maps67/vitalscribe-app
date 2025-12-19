@@ -24,6 +24,7 @@ function getOverlapLength(a: string, b: string) {
 
 export const useSpeechRecognition = () => {
   const [isListening, setIsListening] = useState(false);
+  const [isPaused, setIsPaused] = useState(false); // NUEVO: Estado de pausa
   const [transcript, setTranscript] = useState('');
   
   // Detección de Móvil Robusta (Android/iOS) para aplicar parches específicos
@@ -103,6 +104,7 @@ export const useSpeechRecognition = () => {
 
     recognition.onstart = () => {
       setIsListening(true);
+      setIsPaused(false); // Si empieza, ya no está en pausa
       isUserInitiatedStop.current = false;
       requestWakeLock();
       
@@ -170,6 +172,7 @@ export const useSpeechRecognition = () => {
       // Si el usuario bloqueó el permiso o el sistema no deja, paramos de verdad
       if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
         setIsListening(false);
+        setIsPaused(false);
         isUserInitiatedStop.current = true;
         releaseWakeLock();
       }
@@ -177,7 +180,7 @@ export const useSpeechRecognition = () => {
 
     recognition.onend = () => {
       // --- LÓGICA "MOBILE KEEP-ALIVE" (PERSISTENCIA) ---
-      // Si el evento 'end' salta pero el usuario NO presionó el botón de parar,
+      // Si el evento 'end' salta pero el usuario NO presionó el botón de parar (ni stop ni pausa),
       // significa que el navegador cortó para ahorrar batería o por silencio.
       // Lo reiniciamos inmediatamente.
       if (!isUserInitiatedStop.current) {
@@ -195,6 +198,8 @@ export const useSpeechRecognition = () => {
       } else {
         // Si fue un paro manual legítimo:
         setIsListening(false);
+        // Si no estamos pausados, liberamos el wake lock (si estamos pausados, quizas queramos mantenerlo, 
+        // pero para ahorrar bateria mejor lo soltamos y lo pedimos al reanudar)
         releaseWakeLock();
         if (isMobile.current && navigator.vibrate) {
             navigator.vibrate([50, 50, 50]); // Vibración triple al apagar
@@ -206,14 +211,30 @@ export const useSpeechRecognition = () => {
     try { recognition.start(); } catch (e) { setIsListening(false); }
   }, [isAPISupported, requestWakeLock, releaseWakeLock]);
 
-  const stopListening = useCallback(() => {
-    isUserInitiatedStop.current = true; // Marcamos que fue voluntario
+  // NUEVO: Función para PAUSAR (Detiene motor, mantiene texto)
+  const pauseListening = useCallback(() => {
+    isUserInitiatedStop.current = true; // Decimos que fue intencional para que no se reinicie solo
+    setIsPaused(true); // Activamos estado visual de pausa
     
     if (recognitionRef.current) {
         try { recognitionRef.current.stop(); } catch(e) {}
     }
     
-    // Aseguramos que el estado final quede sincronizado
+    // Sincronizamos estado pero NO borramos finalTranscriptRef
+    setTranscript(finalTranscriptRef.current);
+    setIsListening(false);
+    releaseWakeLock();
+  }, [releaseWakeLock]);
+
+  // Función para DETENER FINALMENTE (Detiene motor, listo para enviar)
+  const stopListening = useCallback(() => {
+    isUserInitiatedStop.current = true; 
+    setIsPaused(false); // Ya no es pausa, es fin
+    
+    if (recognitionRef.current) {
+        try { recognitionRef.current.stop(); } catch(e) {}
+    }
+    
     setTranscript(finalTranscriptRef.current);
     setIsListening(false);
     releaseWakeLock();
@@ -222,6 +243,7 @@ export const useSpeechRecognition = () => {
   const resetTranscript = useCallback(() => {
     finalTranscriptRef.current = '';
     setTranscript('');
+    setIsPaused(false);
   }, []);
 
   // Esta función permite que el usuario edite el texto manualmente en el <textarea>
@@ -231,7 +253,7 @@ export const useSpeechRecognition = () => {
       setTranscript(text);
   }, []);
 
-  // Limpieza final al desmontar el componente (cambio de página)
+  // Limpieza final al desmontar el componente
   useEffect(() => {
     return () => {
         isUserInitiatedStop.current = true;
@@ -241,9 +263,11 @@ export const useSpeechRecognition = () => {
   }, [releaseWakeLock]);
 
   return { 
-    isListening, 
+    isListening,
+    isPaused, // Exportamos el nuevo estado
     transcript, 
     startListening, 
+    pauseListening, // Exportamos la nueva función
     stopListening, 
     resetTranscript, 
     setTranscript: setTranscriptManual, 
