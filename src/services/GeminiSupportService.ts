@@ -1,10 +1,10 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-console.log("🚀 SUPPORT ENGINE: Online (Gemini 2.5 Flash - Ultimate Context v5.2)");
+console.log("🚀 SUPPORT ENGINE: Online (Gemini 1.5 Flash - Ultimate Context v5.2)");
 
 // ✅ La llave se lee automáticamente de tus variables de entorno
 const API_KEY = import.meta.env.VITE_GOOGLE_GENAI_API_KEY || "";
-// Usamos el modelo más rápido y estable disponible actualmente
+// CORRECCIÓN CRÍTICA: Usamos el modelo estable y rápido. "2.5" no existe aún.
 const MODEL_NAME = "gemini-1.5-flash"; 
 
 /**
