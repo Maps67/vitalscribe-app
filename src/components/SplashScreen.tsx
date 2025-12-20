@@ -10,13 +10,13 @@ const SplashScreen: React.FC = () => {
             <div className="absolute inset-0 bg-brand-teal blur-xl opacity-20 rounded-full animate-pulse"></div>
             <img 
                 src="/pwa-192x192.png" 
-                alt="MediScribe Logo" 
+                alt="VitalScribe AI Logo" 
                 className="relative w-32 h-32 object-cover rounded-3xl shadow-2xl animate-bounce-slow"
             />
         </div>
 
         <h1 className="text-3xl font-bold text-slate-800 dark:text-white tracking-tight mb-2">
-          MediScribe <span className="text-brand-teal">AI</span>
+          VitalScribe <span className="text-brand-teal">AI</span>
         </h1>
         
         <div className="flex items-center gap-2 text-slate-400 text-sm font-medium mt-4">
