@@ -203,3 +203,4 @@ const App: React.FC = () => {
 };
 
 export default App;
+// Forzando actualización del visor v2.0
