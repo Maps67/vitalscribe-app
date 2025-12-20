@@ -1,3 +1,7 @@
+// PROYECTO: VitalScribe AI
+// DEFINICIONES DE TIPOS (TYPESCRIPT)
+// ESTADO: Production Ready
+
 export interface Patient {
   id: string;
   name: string;

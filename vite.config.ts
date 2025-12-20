@@ -15,8 +15,8 @@ export default defineConfig({
       
       // ELIMINAMOS "WORKBOX": Dejamos que Vite use la configuración estándar de Google
       manifest: {
-        name: 'MediScribe AI',
-        short_name: 'MediScribe', // Regresamos al nombre corto original
+        name: 'VitalScribe AI',
+        short_name: 'VitalScribe', // Nombre corto actualizado para Home Screen
         description: 'Asistente Médico Inteligente',
         theme_color: '#0d9488',
         background_color: '#0f172a',

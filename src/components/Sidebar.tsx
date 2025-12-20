@@ -71,7 +71,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, onLogout }) => {
         <div className="p-6 flex items-center justify-between border-b border-slate-100 dark:border-slate-800 shrink-0">
           <div className="flex items-center space-x-3">
             <img src="/pwa-192x192.png" alt="Logo" className="h-10 w-10 rounded-xl shadow-sm object-cover bg-slate-50" />
-            <span className="text-xl font-bold text-slate-800 dark:text-white tracking-tight">MediScribe</span>
+            <span className="text-xl font-bold text-slate-800 dark:text-white tracking-tight">VitalScribe AI</span>
           </div>
           <button onClick={onClose} className="md:hidden text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
             <X size={24} />
