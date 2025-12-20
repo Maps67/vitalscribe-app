@@ -1,3 +1,7 @@
+// PROYECTO: VitalScribe AI
+// COMPONENTE: UpdatePassword (Wrapper)
+// ESTADO: Production Ready
+
 import React from 'react';
 import AuthView from '../components/AuthView';
 import { supabase } from '../lib/supabase';
@@ -8,8 +12,8 @@ interface UpdatePasswordProps {
 
 const UpdatePassword: React.FC<UpdatePasswordProps> = ({ onSuccess }) => {
   return (
-    // Renderizamos AuthView forzando el modo de reseteo
-    // Esto mantiene tu diseño original (Split Screen) pero mostrando el form correcto
+    // Renderizamos AuthView forzando el modo de reseteo (forceResetMode=true)
+    // Hereda automáticamente la identidad visual de 'VitalScribe AI' definida en AuthView.
     <AuthView 
       authService={{ supabase }} 
       onLoginSuccess={() => {}} 
