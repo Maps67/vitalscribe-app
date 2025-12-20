@@ -15,7 +15,7 @@ if (!API_KEY) {
 
 // 🛡️ LISTA DE COMBATE (High IQ Only)
 const MODELS_TO_TRY = [
-  "gemini-2.0-flash-exp",    // 1. Velocidad + Razonamiento superior + Grounding
+  "gemini-2.0-flash-exp",    // 1. Velocidad + Razonamiento superior
   "gemini-1.5-flash-002",    // 2. Estable y probado
   "gemini-1.5-pro-002"       // 3. Respaldo pesado
 ];
@@ -55,7 +55,7 @@ const cleanJSON = (text: string) => {
  * MOTOR DE CONEXIÓN LOCAL (FAILOVER)
  * Usado para herramientas menores que aún no migran a Supabase.
  */
-async function generateWithFailover(prompt: string, jsonMode: boolean = false, useTools: boolean = false): Promise<string> {
+async function generateWithFailover(prompt: string, jsonMode: boolean = false): Promise<string> {
   if (!API_KEY) throw new Error("API Key local faltante para herramientas secundarias.");
 
   const genAI = new GoogleGenerativeAI(API_KEY);
@@ -63,17 +63,12 @@ async function generateWithFailover(prompt: string, jsonMode: boolean = false, u
 
   for (const modelName of MODELS_TO_TRY) {
     try {
-      // Configuración de herramientas (Grounding) si se solicita
-      const tools = useTools ? [{ googleSearch: {} }] : [];
-      
       const model = genAI.getGenerativeModel({ 
         model: modelName,
         safetySettings: SAFETY_SETTINGS,
-        // @ts-ignore - Ignoramos error de tipado si la librería no está al día con tools
-        tools: tools, 
         generationConfig: {
             responseMimeType: jsonMode ? "application/json" : "text/plain",
-            temperature: useTools ? 0.4 : 0.0, // Un poco más creativo si busca en web
+            temperature: 0.0,
             topP: 0.8,
             topK: 40
         }
@@ -257,25 +252,12 @@ export const GeminiMedicalService = {
     } catch (e) { return []; }
   },
 
-  // --- F. CHAT AVANZADO CON INTERNET (MEJORA v5.5) ---
+  // --- F. CHAT (Mantiene motor local por ahora) ---
   async chatWithContext(context: string, userMessage: string): Promise<string> {
     try {
-       // Prompt mejorado para permitir respuestas largas y uso de internet
-       const prompt = `
-         ERES UN ASISTENTE MÉDICO EXPERTO CON ACCESO A INTERNET.
-         CONTEXTO CLÍNICO: ${context}
-         PREGUNTA DEL MÉDICO: "${userMessage}"
-         
-         INSTRUCCIONES:
-         1. Si la pregunta requiere datos externos (dosis, guías, papers), USA TU HERRAMIENTA DE BÚSQUEDA.
-         2. NO seas breve artificialmente. Explica con detalle si es necesario.
-         3. Cita tus fuentes si buscas en la web.
-         4. Responde profesionalmente.
-       `;
-       
-       // Activamos useTools = true para este método
-       return await generateWithFailover(prompt, false, true);
-    } catch (e) { return "Error de conexión con el asistente."; }
+       const prompt = `CONTEXTO: ${context}. PREGUNTA: ${userMessage}. RESPUESTA CORTA:`;
+       return await generateWithFailover(prompt, false);
+    } catch (e) { return "Error conexión."; }
   },
 
   // --- HELPERS ---
