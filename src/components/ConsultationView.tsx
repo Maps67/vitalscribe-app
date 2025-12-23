@@ -28,7 +28,7 @@ type TabType = 'record' | 'patient' | 'chat';
 
 // Extensión local de tipo para soportar la nueva estructura de medicamentos que viene de la IA v5.6
 interface EnhancedGeminiResponse extends GeminiResponse {
-    prescriptions?: MedicationItem[];
+   prescriptions?: MedicationItem[];
 }
 
 const SPECIALTIES = [
@@ -669,8 +669,9 @@ const ConsultationView: React.FC = () => {
       const ageDisplay = calculateAge(dob);
 
       // 2. PREPARACIÓN DE DATOS PARA PDF (MODO ESTRUCTURADO)
-      // Pasamos los objetos crudos directamente al componente PDF para que renderice correctamente.
-      
+      // Definimos el contenido de respaldo (Legacy) por si no hay tabla
+      const legacyContent = generatedNote?.clinicalNote || "";
+
       try {
         return await pdf(
             <PrescriptionPDF 
@@ -691,7 +692,11 @@ const ConsultationView: React.FC = () => {
                 instructions={editableInstructions}
                 riskAnalysis={generatedNote?.risk_analysis}
                 // ----------------------------------
-                // FIX CRÍTICO: Eliminamos la propiedad content para que no sobrescriba la estructura
+                
+                // FIX V5.6: Lógica condicional estricta.
+                // Si hay recetas estructuradas, pasamos undefined a 'content' para activar la Tabla.
+                // Si NO hay recetas, pasamos el texto legacy para evitar hoja en blanco.
+                content={editablePrescriptions.length > 0 ? undefined : legacyContent}
             />
         ).toBlob();
       } catch (error) {
