@@ -1,47 +1,12 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useLocation } from 'react-router-dom'; 
 import { 
-  Mic, 
-  Square, 
-  RefreshCw, 
-  FileText, 
-  Search, 
-  X, 
-  MessageSquare, 
-  User, 
-  Send, 
-  Edit2, 
-  Check, 
-  ArrowLeft, 
-  Stethoscope, 
-  Trash2, 
-  WifiOff, 
-  Save, 
-  Share2, 
-  Download, 
-  Printer,
-  Paperclip, 
-  Calendar, 
-  Clock, 
-  UserCircle, 
-  Activity, 
-  ClipboardList, 
-  Brain, 
-  FileSignature, 
-  Keyboard,
-  Quote, 
-  AlertTriangle, 
-  ChevronDown, 
-  ChevronUp, 
-  Sparkles, 
-  PenLine, 
-  UserPlus, 
-  ShieldCheck, 
-  AlertCircle,
-  Pause, 
-  Play, 
-  Pill, 
-  Plus
+  Mic, Square, RefreshCw, FileText, Search, X, 
+  MessageSquare, User, Send, Edit2, Check, ArrowLeft, 
+  Stethoscope, Trash2, WifiOff, Save, Share2, Download, Printer,
+  Paperclip, Calendar, Clock, UserCircle, Activity, ClipboardList, Brain, FileSignature, Keyboard,
+  Quote, AlertTriangle, ChevronDown, ChevronUp, Sparkles, PenLine, UserPlus, ShieldCheck, AlertCircle,
+  Pause, Play, Pill, Plus
 } from 'lucide-react';
 
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition'; 
@@ -703,9 +668,8 @@ const ConsultationView: React.FC = () => {
       const dob = patientAny.birthdate || patientAny.dob || patientAny.fecha_nacimiento;
       const ageDisplay = calculateAge(dob);
 
-      // 2. CONEXIÓN DE PROPS ESTRUCTURADOS (EL FIX)
-      // Pasamos los objetos crudos (Array, String, Object) directamente al componente PDF
-      // para que él renderice la tabla y los estilos correctamente.
+      // 2. PREPARACIÓN DE DATOS PARA PDF (MODO ESTRUCTURADO)
+      // Pasamos los objetos crudos directamente al componente PDF para que renderice correctamente.
       
       try {
         return await pdf(
@@ -722,12 +686,12 @@ const ConsultationView: React.FC = () => {
                 patientAge={ageDisplay} 
                 date={new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' })}
                 
-                // --- AQUI ESTÁ LA CONEXIÓN CLAVE PARA QUE SE VEA EL PDF ---
+                // --- NUEVOS PROPS ESTRUCTURADOS ---
                 prescriptions={editablePrescriptions} 
                 instructions={editableInstructions}
                 riskAnalysis={generatedNote?.risk_analysis}
-                // ----------------------------------------------------------
-                content="" // Fallback vacío
+                // ----------------------------------
+                // FIX CRÍTICO: Eliminamos la propiedad content para que no sobrescriba la estructura
             />
         ).toBlob();
       } catch (error) {
