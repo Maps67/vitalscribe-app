@@ -2,7 +2,7 @@ import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from "@google/ge
 import { supabase } from '../lib/supabase'; 
 import { GeminiResponse, PatientInsight, MedicationItem, FollowUpMessage } from '../types';
 
-console.log("🚀 V-HYBRID DEPLOY: Secure Note (Supabase) + Local Utils");
+console.log("🚀 V-HYBRID DEPLOY: Secure Note (Direct Client) + Local Utils");
 
 // ==========================================
 // 1. CONFIGURACIÓN ROBUSTA & MOTOR DE IA
@@ -10,7 +10,7 @@ console.log("🚀 V-HYBRID DEPLOY: Secure Note (Supabase) + Local Utils");
 const API_KEY = import.meta.env.VITE_GOOGLE_GENAI_API_KEY || "";
 
 if (!API_KEY) {
-  console.warn("⚠️ Advertencia: API Key local no encontrada. Las funciones secundarias (Chat/Meds) podrían fallar, pero la Nota Clínica funcionará vía Supabase.");
+  console.warn("⚠️ Advertencia: API Key local no encontrada. El sistema intentará usar funciones de respaldo.");
 }
 
 // 🛡️ LISTA DE COMBATE (High IQ Only)
@@ -53,10 +53,10 @@ const cleanJSON = (text: string) => {
 
 /**
  * MOTOR DE CONEXIÓN LOCAL (FAILOVER)
- * Usado para herramientas menores que aún no migran a Supabase.
+ * Usado para herramientas menores y ahora también para Nota Clínica Detallada.
  */
 async function generateWithFailover(prompt: string, jsonMode: boolean = false, useTools: boolean = false): Promise<string> {
-  if (!API_KEY) throw new Error("API Key local faltante para herramientas secundarias.");
+  if (!API_KEY) throw new Error("API Key local faltante para herramientas de IA.");
 
   const genAI = new GoogleGenerativeAI(API_KEY);
   let lastError: any = null;
@@ -73,7 +73,7 @@ async function generateWithFailover(prompt: string, jsonMode: boolean = false, u
         tools: tools, 
         generationConfig: {
             responseMimeType: jsonMode ? "application/json" : "text/plain",
-            temperature: useTools ? 0.4 : 0.0, // Un poco más creativo si busca en web
+            temperature: useTools ? 0.4 : 0.2, // Temperatura baja para precisión en notas
             topP: 0.8,
             topK: 40
         }
@@ -97,7 +97,7 @@ async function generateWithFailover(prompt: string, jsonMode: boolean = false, u
 
 /**
  * MOTOR DE PERFILES (PERSONALIDAD CLÍNICA)
- * Mantenido para referencia de tipos.
+ * Mantenido para referencia de tipos y ajuste de tono.
  */
 const getSpecialtyPromptConfig = (specialty: string) => {
   const configs: Record<string, any> = {
@@ -155,35 +155,91 @@ const getSpecialtyPromptConfig = (specialty: string) => {
 // ==========================================
 export const GeminiMedicalService = {
 
-  // --- A. NOTA CLÍNICA (AHORA VÍA SUPABASE EDGE FUNCTIONS - BLINDADO) ---
+  // --- A. NOTA CLÍNICA (CLIENT-SIDE INTELLIGENT FIX) ---
+  // Se ha movido la lógica al cliente para controlar la densidad de la transcripción
   async generateClinicalNote(transcript: string, specialty: string = "Medicina General", patientHistory: string = ""): Promise<GeminiResponse> {
     try {
-      console.log("🔒 Solicitando Nota Clínica Segura a Supabase...");
+      console.log("⚡ Generando Nota Clínica Detallada (Modo Alta Densidad)...");
 
-      // Llamada a la Edge Function segura
-      const { data, error } = await supabase.functions.invoke('generate-clinical-note', {
-        body: { 
-            transcript, 
-            specialty, 
-            patientHistory 
+      const specialtyConfig = getSpecialtyPromptConfig(specialty);
+      
+      const prompt = `
+        ACTÚA COMO: ${specialtyConfig.role}.
+        ENFOQUE: ${specialtyConfig.focus}
+        SESGO CLÍNICO: ${specialtyConfig.bias}
+
+        TAREA: Analizar la siguiente transcripción de consulta médica y estructurar una Nota Clínica Profesional (SOAP) + Transcripción Limpia + Instrucciones.
+
+        TRANSCRIPCIÓN CRUDA (INPUT):
+        "${transcript}"
+
+        HISTORIA CLÍNICA PREVIA (CONTEXTO):
+        "${patientHistory || 'No disponible'}"
+
+        INSTRUCCIONES DE GENERACIÓN CRÍTICAS:
+        
+        1. conversation_log (TRANSCRIPCIÓN INTELIGENTE):
+           - OBJETIVO: Generar un guion legible que preserve el 100% del contenido clínico y el flujo de la conversación.
+           - DENSIDAD: MANTÉN LA LONGITUD DE LA CONVERSACIÓN. No resumas 10 minutos en 3 líneas.
+           - LIMPIEZA: Elimina SOLO muletillas ("este...", "mmm", "o sea"), tartamudeos y repeticiones sin valor.
+           - INTEGRIDAD: Respeta cada síntoma mencionado, cada pregunta del médico y cada preocupación del paciente.
+           - FORMATO: Array de objetos { speaker: 'Médico' | 'Paciente' | 'Desconocido', text: "..." }.
+
+        2. clinicalNote (NOTA SOAP):
+           - Redacta una nota médica formal, técnica y completa.
+           - Subjetivo: Motivo de consulta, síntomas (semilogía completa).
+           - Objetivo: Hallazgos físicos y signos vitales mencionados.
+           - Análisis: Razonamiento diagnóstico.
+           - Plan: Tratamiento, estudios y seguimiento.
+
+        3. patientInstructions:
+           - Instrucciones claras, empáticas y directas para el paciente (Nivel lectura: 6to grado).
+
+        4. risk_analysis:
+           - Detecta banderas rojas o riesgos latentes. Nivel: Bajo, Medio, Alto.
+
+        SALIDA ESPERADA (JSON Schema Strict):
+        {
+          "clinicalNote": "Texto completo de la nota...",
+          "soapData": { 
+             "subjective": "...", 
+             "objective": "...", 
+             "analysis": "...", 
+             "plan": "..." 
+          },
+          "patientInstructions": "...",
+          "risk_analysis": { 
+             "level": "Bajo" | "Medio" | "Alto", 
+             "reason": "..." 
+          },
+          "actionItems": { 
+             "next_appointment": "YYYY-MM-DD o null", 
+             "urgent_referral": boolean, 
+             "lab_tests_required": ["..."] 
+          },
+          "conversation_log": [ 
+             { "speaker": "Médico", "text": "..." }, 
+             { "speaker": "Paciente", "text": "..." } 
+          ]
         }
-      });
+      `;
 
-      if (error) {
-        console.error("❌ Error en Edge Function:", error);
-        throw error;
-      }
+      // Usamos el motor local con jsonMode = true
+      const rawText = await generateWithFailover(prompt, true);
+      const parsedData = JSON.parse(cleanJSON(rawText));
 
-      if (!data) {
-        throw new Error("Supabase no devolvió datos (Respuesta vacía).");
-      }
-
-      console.log("✅ Nota recibida exitosamente de Supabase.");
-      return data as GeminiResponse;
+      console.log("✅ Nota generada con éxito.");
+      return parsedData as GeminiResponse;
 
     } catch (error: any) {
-      console.error("❌ Error Crítico Nota Clínica:", error);
-      throw error;
+      console.error("❌ Error generando Nota Clínica:", error);
+      // Fallback básico en caso de error catastrófico
+      return {
+          clinicalNote: "Error al generar la nota. Por favor intente de nuevo.",
+          patientInstructions: "Consulte a su médico.",
+          conversation_log: [],
+          risk_analysis: { level: "Bajo", reason: "Error de generación" }
+      };
     }
   },
 
@@ -282,15 +338,15 @@ export const GeminiMedicalService = {
     try {
        // Prompt mejorado para permitir respuestas largas y uso de internet
        const prompt = `
-         ERES UN ASISTENTE MÉDICO EXPERTO CON ACCESO A INTERNET.
-         CONTEXTO CLÍNICO: ${context}
-         PREGUNTA DEL MÉDICO: "${userMessage}"
-         
-         INSTRUCCIONES:
-         1. Si la pregunta requiere datos externos (dosis, guías, papers), USA TU HERRAMIENTA DE BÚSQUEDA.
-         2. NO seas breve artificialmente. Explica con detalle si es necesario.
-         3. Cita tus fuentes si buscas en la web.
-         4. Responde profesionalmente.
+          ERES UN ASISTENTE MÉDICO EXPERTO CON ACCESO A INTERNET.
+          CONTEXTO CLÍNICO: ${context}
+          PREGUNTA DEL MÉDICO: "${userMessage}"
+          
+          INSTRUCCIONES:
+          1. Si la pregunta requiere datos externos (dosis, guías, papers), USA TU HERRAMIENTA DE BÚSQUEDA.
+          2. NO seas breve artificialmente. Explica con detalle si es necesario.
+          3. Cita tus fuentes si buscas en la web.
+          4. Responde profesionalmente.
        `;
        
        // Activamos useTools = true para este método
