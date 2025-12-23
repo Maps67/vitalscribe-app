@@ -14,10 +14,12 @@ if (!API_KEY) {
 }
 
 // 🛡️ LISTA DE COMBATE (High IQ Only)
+// ACTUALIZACIÓN DEC 2025: Gemini 3 Flash lidera la prioridad.
 const MODELS_TO_TRY = [
-  "gemini-2.0-flash-exp",    // 1. Velocidad + Razonamiento superior + Grounding
-  "gemini-1.5-flash-002",    // 2. Estable y probado
-  "gemini-1.5-pro-002"       // 3. Respaldo pesado
+  "gemini-3-flash-preview",  // 1. NUEVO: Velocidad extrema + Razonamiento v3 (Release Dec 17, 2025)
+  "gemini-2.0-flash-exp",    // 2. Respaldo sólido
+  "gemini-1.5-flash-002",    // 3. Estable Legacy
+  "gemini-1.5-pro-002"       // 4. Respaldo pesado
 ];
 
 // CONFIGURACIÓN DE SEGURIDAD
@@ -159,7 +161,7 @@ export const GeminiMedicalService = {
   // Se ha movido la lógica al cliente para controlar la densidad de la transcripción
   async generateClinicalNote(transcript: string, specialty: string = "Medicina General", patientHistory: string = ""): Promise<GeminiResponse> {
     try {
-      console.log("⚡ Generando Nota Clínica Detallada (Modo Alta Densidad)...");
+      console.log("⚡ Generando Nota Clínica Detallada (Modo Alta Densidad - Gemini 3)...");
 
       const specialtyConfig = getSpecialtyPromptConfig(specialty);
       
