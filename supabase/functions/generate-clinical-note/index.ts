@@ -1,5 +1,5 @@
-// Importamos la librería oficial de Google Cloud Vertex AI
-import { VertexAI, HarmCategory, HarmBlockThreshold } from "npm:@google-cloud/vertexai";
+//
+import { VertexAI, HarmCategory, HarmBlockThreshold } from "npm:@google-cloud/vertexai@latest";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 console.log("🚀 SUPABASE EDGE: MEDICINE AI (GEMINI 2.0 FLASH EXP - ACTIVADO)");

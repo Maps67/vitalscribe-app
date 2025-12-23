@@ -1,6 +1,6 @@
 // PROYECTO: VitalScribe AI
 // DEFINICIONES DE TIPOS (TYPESCRIPT)
-// ESTADO: Production Ready
+// ESTADO: Production Ready v5.9 (Fixed)
 
 export interface Patient {
   id: string;
@@ -40,15 +40,29 @@ export interface SoapData {
   plan: string;
 }
 
+// ✅ CORRECCIÓN CRÍTICA: Asegúrate de que 'drug' y 'dose' estén aquí
+export interface MedicationItem {
+  drug: string;        // <--- ¡NO BORRAR! Nombre del medicamento
+  dose?: string;       // <--- ¡NO BORRAR! Dosis (ej. 500mg)
+  details?: string;
+  frequency?: string;
+  duration?: string;
+  notes?: string;
+}
+
+// ✅ CORRECCIÓN DE RESPUESTA IA
 export interface GeminiResponse {
   clinicalNote: string;
   soapData?: SoapData;
   patientInstructions?: string;
+  
+  // Array de medicamentos estructurados
+  prescriptions?: MedicationItem[]; // <--- Vital para que el PDF no falle
+
   risk_analysis?: {
     level: string;
     reason: string;
   };
-  // ✨ CAMPO NUEVO: Sugerencias clínicas opcionales
   clinical_suggestions?: string[];
   conversation_log?: {
     speaker: string;
@@ -66,14 +80,6 @@ export interface PatientInsight {
   medication_audit: string;
   risk_flags: string[];
   pending_actions: string[];
-}
-
-export interface MedicationItem {
-  drug: string;
-  details?: string;
-  frequency?: string;
-  duration?: string;
-  notes?: string;
 }
 
 export interface FollowUpMessage {
