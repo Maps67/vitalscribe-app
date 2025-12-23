@@ -629,14 +629,14 @@ const ConsultationView: React.FC = () => {
             : (generatedNote.clinicalNote + "\n\nPLAN PACIENTE:\n" + editableInstructions);
 
         if (linkedAppointmentId) {
-             await supabase.from('appointments')
+              await supabase.from('appointments')
                 .update({ 
                     status: 'completed',
                     patient_id: finalPatientId 
                 })
                 .eq('id', linkedAppointmentId);
         } else {
-             await AppointmentService.markAppointmentAsCompleted(finalPatientId);
+              await AppointmentService.markAppointmentAsCompleted(finalPatientId);
         }
 
         const durationSeconds = Math.round((Date.now() - startTimeRef.current) / 1000);
@@ -703,9 +703,43 @@ const ConsultationView: React.FC = () => {
       } catch { toast.error("Error agendando"); }
   };
 
+  // --- FUNCIÓN AUXILIAR DE EDAD ---
+  const calculateAge = (birthdate?: string): string => {
+      if (!birthdate) return "No registrada";
+      try {
+          const dob = new Date(birthdate);
+          const diff_ms = Date.now() - dob.getTime();
+          const age_dt = new Date(diff_ms);
+          return Math.abs(age_dt.getUTCFullYear() - 1970).toString() + " años";
+      } catch (e) {
+          return "No registrada";
+      }
+  };
+
   const generatePDFBlob = async () => {
       if (!selectedPatient || !doctorProfile) return null;
-      const ageDisplay = "No registrada"; 
+
+      // 1. Corrección NOM-004: Cálculo de Edad
+      // Intentamos extraer la fecha de nacimiento del objeto del paciente (aunque el tipo sea parcial)
+      const patientAny = selectedPatient as any;
+      const dob = patientAny.birthdate || patientAny.dob || patientAny.fecha_nacimiento;
+      const ageDisplay = calculateAge(dob);
+
+      // 2. Protocolo Radar de Seguridad: Inyección Forzosa de Advertencias
+      let finalContent = editableInstructions;
+
+      if (generatedNote?.risk_analysis?.level === 'Alto') {
+          const warningBox = `
+*** ADVERTENCIA DE SEGURIDAD CLÍNICA - RIESGO ALTO ***
+MOTIVO DETECTADO: ${generatedNote.risk_analysis.reason ? generatedNote.risk_analysis.reason.toUpperCase() : 'CONDICIÓN CRÍTICA DETECTADA'}
+
+POR FAVOR VERIFIQUE LAS CONTRAINDICACIONES Y ALERTAS ANTES DE SEGUIR ESTE PLAN.
+----------------------------------------------------------------------------------
+`;
+          // Prependemos la advertencia al contenido para que aparezca SIEMPRE en el PDF
+          finalContent = warningBox + "\n" + finalContent;
+      }
+
       try {
         return await pdf(
             <PrescriptionPDF 
@@ -720,7 +754,7 @@ const ConsultationView: React.FC = () => {
                 patientName={selectedPatient.name}
                 patientAge={ageDisplay} 
                 date={new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' })}
-                content={editableInstructions} 
+                content={finalContent} 
             />
         ).toBlob();
       } catch (error) {
