@@ -821,37 +821,47 @@ const ConsultationView: React.FC = () => {
       setIsChatting(true);
       
       try {
-          // --- FIX RADICAL V6.1: ELIMINACIÓN TOTAL DE JSON ---
-          let readableContext = "";
-          
+          // --- FIX: CONSTRUCCIÓN DE CONTEXTO LIMPIO (SIN JSON) ---
+          let contextData = "";
           if (generatedNote.soapData) {
-              // Convertimos el objeto en una lista de texto legible para humanos
-              readableContext = `
-              RESUMEN CLÍNICO ACTUAL:
-              - Subjetivo (Síntomas): ${generatedNote.soapData.subjective}
-              - Objetivo (Signos): ${generatedNote.soapData.objective}
-              - Análisis (Diagnóstico): ${generatedNote.soapData.analysis}
-              - Plan Médico: ${generatedNote.soapData.plan}
-              `;
+             contextData = `
+             RESUMEN ACTUAL DEL PACIENTE:
+             - Síntomas: ${generatedNote.soapData.subjective}
+             - Hallazgos: ${generatedNote.soapData.objective}
+             - Diagnóstico: ${generatedNote.soapData.analysis}
+             - Plan: ${generatedNote.soapData.plan}
+             `;
           } else {
-              readableContext = `NOTA CLÍNICA: ${generatedNote.clinicalNote}`;
+             contextData = generatedNote.clinicalNote || "Sin datos";
           }
 
-          // INYECCIÓN DE PERSONALIDAD (PRIMING)
-          // Forzamos a la IA a comportarse como médico y no como base de datos.
+          // --- FIX: INSTRUCCIONES DE DISEÑO PARA LA IA ---
           const ctx = `
-          [INSTRUCCIÓN DE SISTEMA: ACTÚA COMO UN COLEGA MÉDICO EXPERTO.]
-          [FORMATO: Usa Markdown, negritas para diagnósticos y listas para pasos. NO USES JSON NI CÓDIGO.]
-          [TONO: Profesional, cálido y directo.]
+          ACTÚA COMO: Un consultor médico experto senior.
+          CONTEXTO CLÍNICO: ${contextData}
+          INSTRUCCIONES VIGENTES: ${editableInstructions}
 
-          CONTEXTO DEL PACIENTE:
-          ${readableContext}
+          TU OBJETIVO: Responder a la duda del doctor de forma visual y profesional.
 
-          PLAN E INSTRUCCIONES VIGENTES: ${editableInstructions}
+          REGLAS DE FORMATO OBLIGATORIAS:
+          1. Usa **negritas** para resaltar hallazgos clave, nombres de medicamentos o alertas.
+          2. Usa listas (guiones -) si das varios pasos o recomendaciones.
+          3. Usa párrafos cortos.
+          4. NUNCA respondas con JSON o código. Solo texto con formato Markdown.
+          
+          Ejemplo de cómo debes responder:
+          "Recomiendo ajustar la dosis de **Metformina**.
+          Consideraciones:
+          - Vigilar función renal.
+          - Riesgo de acidosis láctica."
           `;
           
           const reply = await GeminiMedicalService.chatWithContext(ctx, msg);
-          setChatMessages(p => [...p, { role: 'model', text: reply }]);
+          
+          // --- FIX: LIMPIEZA DE SEGURIDAD ---
+          const cleanReply = reply.replace(/```json/g, '').replace(/```/g, '').trim();
+
+          setChatMessages(p => [...p, { role: 'model', text: cleanReply }]);
 
       } catch (error) { 
           console.error("Chat Error:", error);
@@ -1252,7 +1262,7 @@ const ConsultationView: React.FC = () => {
                                   {/* AQUÍ ESTÁ EL CAMBIO: Usamos FormattedText en lugar de texto plano */}
                                   {chatMessages.map((m,i)=>(
                                       <div key={i} className={`p-3 mb-3 rounded-2xl max-w-[85%] text-sm shadow-sm ${m.role==='user'?'bg-brand-teal text-white self-end ml-auto rounded-tr-none':'bg-slate-100 dark:bg-slate-800 dark:text-slate-200 self-start mr-auto rounded-tl-none'}`}>
-                                          <FormattedText content={m.text} />
+                                              <FormattedText content={m.text} />
                                       </div>
                                   ))}
                                   <div ref={chatEndRef}/>
