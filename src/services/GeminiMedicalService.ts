@@ -1,7 +1,7 @@
 import { supabase } from '../lib/supabase';
 import { GeminiResponse, PatientInsight, MedicationItem, FollowUpMessage } from '../types';
 
-console.log("🚀 V-HYBRID DEPLOY: Secure Note + Structured Rx (v5.8 - Anti-Crash) [BLINDADO VIA SUPABASE]");
+console.log("🚀 V-HYBRID DEPLOY: Secure Note + Structured Rx (v5.9 - Legal Safe) [BLINDADO VIA SUPABASE]");
 
 // ==========================================
 // 1. UTILIDADES DE LIMPIEZA & CONEXIÓN
@@ -130,10 +130,10 @@ const getSpecialtyPromptConfig = (specialty: string) => {
 // ==========================================
 export const GeminiMedicalService = {
 
-  // --- A. NOTA CLÍNICA (ANTI-CRASH + SAFETY AUDIT) ---
+  // --- A. NOTA CLÍNICA (ANTI-CRASH + SAFETY AUDIT + LEGAL SAFE LANGUAGE) ---
   async generateClinicalNote(transcript: string, specialty: string = "Medicina General", patientHistory: string = ""): Promise<GeminiResponse> {
     try {
-      console.log("⚡ Generando Nota Clínica con Receta Estructurada (v5.8 Anti-Crash)...");
+      console.log("⚡ Generando Nota Clínica con Receta Estructurada (v5.9 Legal Safe)...");
 
       const specialtyConfig = getSpecialtyPromptConfig(specialty);
       
@@ -168,8 +168,12 @@ export const GeminiMedicalService = {
            - LIMPIEZA: Elimina muletillas pero mantén el contexto narrativo completo.
            - FORMATO: Array de objetos { speaker: 'Médico' | 'Paciente' | 'Desconocido', text: "..." }.
 
-        2. clinicalNote (NOTA SOAP):
+        2. clinicalNote (NOTA SOAP) y soapData:
            - Redacta una nota médica formal y completa.
+           - ⚠️ REGLA DE ORO DE REDACCIÓN (PROTECCIÓN LEGAL): USA LENGUAJE PROBABILÍSTICO.
+             - INCORRECTO: "El paciente tiene Cetoacidosis." (Afirmación absoluta).
+             - CORRECTO: "Cuadro clínico compatible con Cetoacidosis.", "Hallazgos sugestivos de...", "Impresión diagnóstica orientada a...".
+           - NUNCA emitas un diagnóstico definitivo como si fueras la autoridad final. Usa frases como "Sugerencia automatizada basada en transcripción" o "A correlacionar con clínica".
            - Si hubo un error médico en el audio, corrígelo en la nota o señala la contraindicación en el Análisis.
 
         3. prescriptions (RECETA ESTRUCTURADA - NUEVO):
@@ -190,7 +194,7 @@ export const GeminiMedicalService = {
           "soapData": { 
              "subjective": "...", 
              "objective": "...", 
-             "analysis": "...", 
+             "analysis": "Integración diagnóstica usando lenguaje de probabilidad (ej. 'Compatible con...', 'A descartar...').", 
              "plan": "..." 
           },
           "prescriptions": [
