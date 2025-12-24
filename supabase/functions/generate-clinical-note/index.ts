@@ -1,22 +1,22 @@
 // @ts-ignore
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-// CORRECCIÓN CRÍTICA: Usamos la versión @latest para soportar Gemini 2.0 y JSON Mode
+// CORRECCIÓN FINAL: Usamos 'npm:' para estabilidad total en Supabase Edge y evitar Error 500
 // @ts-ignore
-import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from "https://esm.sh/@google/generative-ai@latest";
+import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from "npm:@google/generative-ai@^0.12.0";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-console.log("🚀 SUPABASE EDGE: MEDICINE AI (UPDATED LIBRARY - GEMINI 2.0 READY)");
+console.log("🚀 SUPABASE EDGE: MEDICINE AI (GEMINI 3 FIRST - NPM STABLE)");
 
-// 🛡️ LISTA DE COMBATE (High IQ Only) - COPIA LITERAL DE TU CAPTURA image_2c325b.png
+// 🛡️ LISTA DE COMBATE (High IQ Only) - ORDEN EXACTO SOLICITADO POR TI
 const MODELS_TO_TRY = [
-  "gemini-2.0-flash-exp",     // 1. LÍDER TÉCNICO (Cambiado a primera opción por ser el más capaz hoy)
-  "gemini-1.5-pro-002",       // 2. RESPALDO PESADO
+  "gemini-3-flash-preview",   // 1. TU PRIORIDAD ABSOLUTA
+  "gemini-2.0-flash-exp",     // 2. LÍDER TÉCNICO
   "gemini-1.5-flash-002",     // 3. RESPALDO SÓLIDO
-  "gemini-pro"                // 4. ÚLTIMO RECURSO
+  "gemini-1.5-pro-002"        // 4. RESPALDO PESADO
 ];
 
 // Configuración de Seguridad
@@ -47,7 +47,7 @@ serve(async (req) => {
     if (reqBody.prompt) {
         prompt = reqBody.prompt;
     } else {
-        // Fallback para clientes antiguos
+        // Fallback para evitar colapso si el frontend envía formato viejo
         const transcript = reqBody.transcript || "";
         const patientHistory = reqBody.patientHistory || "";
         const specialty = reqBody.specialty || "Medicina General";
@@ -56,26 +56,27 @@ serve(async (req) => {
 
     if (!prompt) throw new Error("Prompt vacío.");
 
-    // 3. Inicializar Motor (Latest SDK)
+    // 3. Inicializar Motor
     const genAI = new GoogleGenerativeAI(API_KEY);
     
     let successfulResponse = null;
     let lastError = null;
 
-    console.log("🧠 Iniciando secuencia de inferencia con librería actualizada...");
+    console.log("🧠 Iniciando secuencia de inferencia con lista estricta...");
 
     // 4. BUCLE DE FAILOVER
     for (const modelName of MODELS_TO_TRY) {
       try {
         console.log(`Trying model: ${modelName}`);
         
+        // CRÍTICO: Usamos { apiVersion: 'v1beta' } para que funcionen los modelos preview/exp
         const model = genAI.getGenerativeModel({ 
           model: modelName,
           safetySettings: SAFETY_SETTINGS,
           generationConfig: {
-             responseMimeType: "application/json" // Esto requería la actualización de librería
+             responseMimeType: "application/json" 
           }
-        });
+        }, { apiVersion: 'v1beta' });
 
         const result = await model.generateContent(prompt);
         const response = await result.response;
@@ -84,16 +85,20 @@ serve(async (req) => {
         if (text && text.length > 0) {
           successfulResponse = text;
           console.log(`✅ ¡Éxito con ${modelName}!`);
-          break;
+          break; // Salimos del bucle
         }
 
-      } catch (error) {
+      } catch (error: any) {
         console.warn(`⚠️ Fallo en modelo ${modelName}:`, error.message);
+        // Si el error contiene "404" o "not found", es que el modelo no existe o no tienes acceso aún.
+        // El bucle continuará automáticamente al siguiente (Gemini 2.0).
         lastError = error;
       }
     }
 
     if (!successfulResponse) {
+      // Si llegamos aquí, fallaron los 4 modelos.
+      // Lanzamos el error del último intento para debug
       throw lastError || new Error("Todos los modelos fallaron.");
     }
 
@@ -112,7 +117,8 @@ serve(async (req) => {
 
   } catch (error: any) {
     console.error("❌ ERROR CRÍTICO EN SERVER:", error);
-    return new Response(JSON.stringify({ error: error.message }), {
+    // Devolvemos el error detallado para que se vea en consola del navegador
+    return new Response(JSON.stringify({ error: error.message, details: error.toString() }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 500,
     });
