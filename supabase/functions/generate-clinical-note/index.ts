@@ -1,3 +1,4 @@
+// FUERZA DE ACTUALIZACION: VITALSCRIBE v6.0 - [23/12/2025]
 // @ts-ignore
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
