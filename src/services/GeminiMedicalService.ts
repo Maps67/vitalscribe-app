@@ -1,41 +1,10 @@
-import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from "@google/generative-ai";
-import { supabase } from '../lib/supabase'; 
+import { supabase } from '../lib/supabase';
 import { GeminiResponse, PatientInsight, MedicationItem, FollowUpMessage } from '../types';
 
-console.log("🚀 V-HYBRID DEPLOY: Secure Note + Structured Rx (v5.9 - Secure Bridge)");
+console.log("🚀 V-HYBRID DEPLOY: Secure Note + Structured Rx (v5.8 - Anti-Crash) [BLINDADO VIA SUPABASE]");
 
 // ==========================================
-// 1. CONFIGURACIÓN ROBUSTA & MOTOR DE IA
-// ==========================================
-const API_KEY = import.meta.env.VITE_GOOGLE_GENAI_API_KEY || "";
-
-// Alerta de seguridad en consola si estamos en modo local expuesto
-if (API_KEY) {
-  console.log("⚠️ MODO HÍBRIDO: API Key local detectada. Se usará solo como respaldo de emergencia.");
-} else {
-  console.log("🔒 MODO BLINDADO: API Key local no detectada. Todo el tráfico irá por Supabase Edge Functions.");
-}
-
-// 🛡️ LISTA DE COMBATE (High IQ Only)
-// CORRECCIÓN v5.8: Uso de versiones explícitas (-002) para evitar error 404 en librería nueva.
-const MODELS_TO_TRY = [
-  "gemini-2.0-flash-exp",     // 1. LÍDER TÉCNICO
-  "gemini-1.5-flash-002",     // 2. RESPALDO SÓLIDO
-  "gemini-1.5-pro-002",       // 3. RESPALDO PESADO
-  "gemini-3-flash-preview"    // 4. EXPERIMENTAL
-];
-
-// CONFIGURACIÓN DE SEGURIDAD
-// Permisividad máxima para evitar bloqueos en psiquiatría
-const SAFETY_SETTINGS = [
-  { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
-  { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
-  { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
-  { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
-];
-
-// ==========================================
-// 2. UTILIDADES DE LIMPIEZA & CONEXIÓN
+// 1. UTILIDADES DE LIMPIEZA & CONEXIÓN
 // ==========================================
 
 const cleanJSON = (text: string) => {
@@ -58,83 +27,42 @@ const cleanJSON = (text: string) => {
 };
 
 /**
- * MOTOR DE CONEXIÓN HÍBRIDO (SUPABASE FIRST -> LOCAL FAILOVER)
- * Esta es la pieza clave de seguridad. Intenta ir por el túnel seguro primero.
+ * MOTOR DE CONEXIÓN SEGURO (SUPABASE EDGE)
+ * Reemplaza la conexión local insegura. Ahora delega la ejecución a la nube.
  */
 async function generateWithFailover(prompt: string, jsonMode: boolean = false, useTools: boolean = false): Promise<string> {
-  
-  // --- FASE 1: INTENTO SEGURO VÍA SUPABASE (SERVER-SIDE) ---
+  console.log("🛡️ Iniciando transmisión segura a Supabase Edge Function...");
+
   try {
-    // console.log("📡 Conectando a Supabase Edge Function (Blindaje Activo)...");
-    
+    // 1. INVOCACIÓN A EDGE FUNCTION (Túnel Seguro)
+    // Enviamos el prompt ya construido y las banderas de configuración
     const { data, error } = await supabase.functions.invoke('generate-clinical-note', {
-      body: { 
-        prompt, 
-        jsonMode, 
-        useTools,
-        model: "gemini-2.0-flash-exp" // Solicitamos el modelo más rápido por defecto
+      body: {
+        prompt: prompt,
+        jsonMode: jsonMode,
+        useTools: useTools
       }
     });
 
+    // 2. MANEJO DE ERRORES DE RED / SERVIDOR
     if (error) {
-      // Si el error es 404 (Function not found), lanzamos para activar failover
-      console.warn(`⚠️ Error en Edge Function: ${error.message}`);
-      throw error;
+      console.error('🚨 Fallo en Edge Function:', error);
+      throw new Error(`Error en Blindaje AI: ${error.message}`);
     }
 
-    if (data && data.text) {
-      // console.log("🔒 Respuesta segura recibida desde Supabase.");
-      return data.text;
+    // 3. VALIDACIÓN DE RESPUESTA
+    // Esperamos que la Edge Function devuelva un objeto { text: "contenido..." }
+    if (!data || !data.text) {
+      console.warn('⚠️ Respuesta vacía o formato incorrecto del servidor seguro.');
+      throw new Error('La Edge Function no devolvió texto válido.');
     }
-    
-  } catch (edgeError) {
-    console.warn("⚠️ Falló el puente seguro (Supabase). Iniciando protocolo de emergencia local...", edgeError);
+
+    return data.text;
+
+  } catch (err: any) {
+    console.error("❌ Error Crítico en GeminiMedicalService (Server Side):", err);
+    throw err;
   }
-
-  // --- FASE 2: PROTOCOLO DE EMERGENCIA (CLIENT-SIDE) ---
-  // Solo se ejecuta si falla Supabase. Requiere VITE_GOOGLE_GENAI_API_KEY.
-  
-  if (!API_KEY) {
-    throw new Error("🚨 ERROR CRÍTICO: Falló la conexión segura con Supabase y NO hay API Key local de respaldo.");
-  }
-
-  console.warn("⚠️ ALERTA DE SEGURIDAD: Usando conexión directa a Google (Fallback). La API Key podría ser visible.");
-
-  const genAI = new GoogleGenerativeAI(API_KEY);
-  let lastError: any = null;
-
-  for (const modelName of MODELS_TO_TRY) {
-    try {
-      // Configuración de herramientas (Grounding) si se solicita
-      const tools = useTools ? [{ googleSearch: {} }] : [];
-      
-      const model = genAI.getGenerativeModel({ 
-        model: modelName,
-        safetySettings: SAFETY_SETTINGS,
-        // @ts-ignore - Ignoramos error de tipado si la librería no está al día con tools
-        tools: tools, 
-        generationConfig: {
-            responseMimeType: jsonMode ? "application/json" : "text/plain",
-            temperature: useTools ? 0.4 : 0.2, // Temperatura baja para precisión en notas
-            topP: 0.8,
-            topK: 40
-        }
-      });
-      
-      const result = await model.generateContent(prompt);
-      const response = await result.response;
-      const text = response.text();
-
-      if (text && text.length > 0) {
-        return text; 
-      }
-    } catch (error: any) {
-      console.warn(`⚠️ Modelo local ${modelName} falló o no existe. Intentando siguiente...`);
-      lastError = error;
-    }
-  }
-  
-  throw lastError || new Error("Todos los modelos de IA (Nube y Local) fallaron.");
 }
 
 /**
@@ -205,7 +133,7 @@ export const GeminiMedicalService = {
   // --- A. NOTA CLÍNICA (ANTI-CRASH + SAFETY AUDIT) ---
   async generateClinicalNote(transcript: string, specialty: string = "Medicina General", patientHistory: string = ""): Promise<GeminiResponse> {
     try {
-      console.log("⚡ Generando Nota Clínica con Receta Estructurada (v5.9 Secure)...");
+      console.log("⚡ Generando Nota Clínica con Receta Estructurada (v5.8 Anti-Crash)...");
 
       const specialtyConfig = getSpecialtyPromptConfig(specialty);
       
@@ -285,11 +213,11 @@ export const GeminiMedicalService = {
         }
       `;
 
-      // Usamos el motor HÍBRIDO con jsonMode = true
+      // Usamos el motor SEGURO (Server-Side) con jsonMode = true
       const rawText = await generateWithFailover(prompt, true);
       const parsedData = JSON.parse(cleanJSON(rawText));
 
-      console.log("✅ Nota estructurada generada con éxito.");
+      console.log("✅ Nota estructurada generada con éxito (vía Secure Cloud).");
       return parsedData as GeminiResponse;
 
     } catch (error: any) {
