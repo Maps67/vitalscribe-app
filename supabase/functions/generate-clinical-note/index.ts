@@ -6,9 +6,9 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// 🔥 MARCA DE AGUA: Si no ves esto en los logs, el código no se actualizó.
-console.log("🚀 SUPABASE EDGE: FINAL ATTEMPT - VERSION RAW HTTP 2025");
+console.log("🚀 SUPABASE EDGE: HTTP PURE MODE (FIXED) - READY");
 
+// TU LISTA EXACTA
 const MODELS_TO_TRY = [
   "gemini-3-flash-preview", 
   "gemini-2.0-flash-exp", 
@@ -17,72 +17,79 @@ const MODELS_TO_TRY = [
 ];
 
 serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
+  // Manejo de CORS
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders });
+  }
 
   try {
+    // 1. Obtener API Key
     const API_KEY = Deno.env.get('GOOGLE_GENAI_API_KEY');
-    if (!API_KEY) throw new Error("CRITICAL: API Key no encontrada en Secrets.");
+    if (!API_KEY) {
+      throw new Error("CRITICAL: API Key no encontrada en Secrets.");
+    }
 
+    // 2. Parsear y VALIDAR entrada (Aquí estaba el error del .replace)
     const reqBody = await req.json();
     let prompt = reqBody.prompt;
 
-    // Fallback simple
+    // Si no hay prompt directo, buscamos transcript
     if (!prompt) {
-        const transcript = reqBody.transcript || "";
-        prompt = `TRANSCRIPCIÓN: "${transcript}". Genera JSON clínico.`;
+        const transcript = reqBody.transcript || ""; // Si es undefined, usa ""
+        if (!transcript.trim()) {
+           throw new Error("La transcripción está vacía.");
+        }
+        
+        // Construcción segura del prompt
+        const specialty = reqBody.specialty || "Medicina General";
+        const history = reqBody.patientHistory || "No disponible";
+        prompt = `ACTÚA COMO: ${specialty}. TRANSCRIPCIÓN: "${transcript}". HISTORIAL: "${history}". Genera JSON clínico.`;
     }
 
-    if (!prompt) throw new Error("Prompt vacío.");
-
+    // 3. Ejecución Segura (Sin librerías externas)
     let successfulResponse = null;
-    let lastErrorDetails = "";
+    let lastError = "";
 
-    console.log("🧠 Iniciando secuencia Raw HTTP...");
+    console.log("🧠 Iniciando secuencia...");
 
     for (const modelName of MODELS_TO_TRY) {
-      console.log(`Trying model via Fetch: ${modelName}`);
-
       try {
+        console.log(`Trying: ${modelName}`);
+        
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${API_KEY}`;
         
-        const payload = {
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { response_mime_type: "application/json" },
-          safetySettings: [
-            { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_ONLY_HIGH" },
-            { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_ONLY_HIGH" },
-            { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_ONLY_HIGH" },
-            { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_ONLY_HIGH" }
-          ]
-        };
-
         const response = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { response_mime_type: "application/json" }
+          })
         });
 
         if (!response.ok) {
-            const errorData = await response.text();
-            console.warn(`⚠️ Fallo HTTP en ${modelName} (${response.status}):`, errorData);
-            lastErrorDetails = `Model ${modelName} status ${response.status}: ${errorData}`;
-            continue;
+           const errText = await response.text();
+           console.warn(`⚠️ Fallo ${modelName}: ${errText}`);
+           lastError = errText;
+           continue; 
         }
 
         const data = await response.json();
-        if (data.candidates && data.candidates[0]?.content?.parts[0]?.text) {
+        if (data.candidates?.[0]?.content?.parts?.[0]?.text) {
              successfulResponse = data.candidates[0].content.parts[0].text;
-             console.log(`✅ ¡Éxito con ${modelName}!`);
-             break;
+             break; // Éxito
         }
-      } catch (err) {
-        lastErrorDetails = err.toString();
+
+      } catch (e) {
+        console.warn(`Error red ${modelName}:`, e);
       }
     }
 
-    if (!successfulResponse) throw new Error(`Todos los modelos fallaron. Detalles: ${lastErrorDetails}`);
+    if (!successfulResponse) {
+      throw new Error(`Todos los modelos fallaron. Último error: ${lastError}`);
+    }
 
-    // Limpieza
+    // 4. Limpieza y Retorno
     let clean = successfulResponse.replace(/```json/g, '').replace(/```/g, '');
     const firstCurly = clean.indexOf('{');
     const lastCurly = clean.lastIndexOf('}');
