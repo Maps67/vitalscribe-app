@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router-dom'; 
 import { 
   Mic, Square, RefreshCw, FileText, Search, X, 
   MessageSquare, User, Send, Edit2, Check, ArrowLeft, 
@@ -9,7 +9,7 @@ import {
   Pause, Play, Pill, Plus
 } from 'lucide-react';
 
-import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
+import { useSpeechRecognition } from '../hooks/useSpeechRecognition'; 
 import { GeminiMedicalService } from '../services/GeminiMedicalService';
 import { ChatMessage, GeminiResponse, Patient, DoctorProfile, PatientInsight, MedicationItem } from '../types';
 import { supabase } from '../lib/supabase';
@@ -32,33 +32,33 @@ interface EnhancedGeminiResponse extends GeminiResponse {
 }
 
 const SPECIALTIES = [
-  "Medicina General",
-  "Cardiología",
-  "Cirugía General",
-  "Cirugía de Columna",
-  "Cirugía de Mano",
-  "Cirugía Oncológica",
-  "Cirugía Pediátrica",
-  "Cirugía Plástica y Reconstructiva",
-  "Dermatología",
-  "Endocrinología",
-  "Gastroenterología",
-  "Geriatría",
-  "Ginecología y Obstetricia",
-  "Medicina del Deporte",
-  "Medicina Interna",
-  "Nefrología",
-  "Neumología",
-  "Neurocirugía",
-  "Neurología",
-  "Oftalmología",
-  "Otorrinolaringología",
-  "Pediatría",
-  "Psiquiatría",
-  "Reumatología",
-  "Traumatología y Ortopedia",
-  "Traumatología: Artroscopia",
-  "Urología",
+  "Medicina General", 
+  "Cardiología", 
+  "Cirugía General", 
+  "Cirugía de Columna", 
+  "Cirugía de Mano", 
+  "Cirugía Oncológica", 
+  "Cirugía Pediátrica", 
+  "Cirugía Plástica y Reconstructiva", 
+  "Dermatología", 
+  "Endocrinología", 
+  "Gastroenterología", 
+  "Geriatría", 
+  "Ginecología y Obstetricia", 
+  "Medicina del Deporte", 
+  "Medicina Interna", 
+  "Nefrología", 
+  "Neumología", 
+  "Neurocirugía", 
+  "Neurología", 
+  "Oftalmología", 
+  "Otorrinolaringología", 
+  "Pediatría", 
+  "Psiquiatría", 
+  "Reumatología", 
+  "Traumatología y Ortopedia", 
+  "Traumatología: Artroscopia", 
+  "Urología", 
   "Urgencias Médicas"
 ];
 
@@ -821,28 +821,33 @@ const ConsultationView: React.FC = () => {
       setIsChatting(true);
       
       try {
-          // --- FIX: CONTEXTO LEGIBLE PARA QUE LA IA NO RESPONDA JSON ---
+          // --- FIX RADICAL V6.1: ELIMINACIÓN TOTAL DE JSON ---
           let readableContext = "";
           
           if (generatedNote.soapData) {
+              // Convertimos el objeto en una lista de texto legible para humanos
               readableContext = `
-              RESUMEN CLÍNICO:
-              - Subjetivo: ${generatedNote.soapData.subjective}
-              - Objetivo: ${generatedNote.soapData.objective}
-              - Análisis: ${generatedNote.soapData.analysis}
-              - Plan: ${generatedNote.soapData.plan}
+              RESUMEN CLÍNICO ACTUAL:
+              - Subjetivo (Síntomas): ${generatedNote.soapData.subjective}
+              - Objetivo (Signos): ${generatedNote.soapData.objective}
+              - Análisis (Diagnóstico): ${generatedNote.soapData.analysis}
+              - Plan Médico: ${generatedNote.soapData.plan}
               `;
           } else {
               readableContext = `NOTA CLÍNICA: ${generatedNote.clinicalNote}`;
           }
 
-          // Inyectamos contexto limpio + instrucciones + PRIMING DE PERSONALIDAD
+          // INYECCIÓN DE PERSONALIDAD (PRIMING)
+          // Forzamos a la IA a comportarse como médico y no como base de datos.
           const ctx = `
-          [SISTEMA: Eres un asistente médico experto. Tu tono es profesional pero colaborativo. USA MARKDOWN (negritas, listas) para estructurar tu respuesta.]
-          
+          [INSTRUCCIÓN DE SISTEMA: ACTÚA COMO UN COLEGA MÉDICO EXPERTO.]
+          [FORMATO: Usa Markdown, negritas para diagnósticos y listas para pasos. NO USES JSON NI CÓDIGO.]
+          [TONO: Profesional, cálido y directo.]
+
+          CONTEXTO DEL PACIENTE:
           ${readableContext}
 
-          INSTRUCCIONES AL PACIENTE VIGENTES: ${editableInstructions}
+          PLAN E INSTRUCCIONES VIGENTES: ${editableInstructions}
           `;
           
           const reply = await GeminiMedicalService.chatWithContext(ctx, msg);
