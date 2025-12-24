@@ -1,7 +1,7 @@
 import { supabase } from '../lib/supabase';
 import { GeminiResponse, PatientInsight, MedicationItem, FollowUpMessage } from '../types';
 
-console.log("🚀 V-STABLE DEPLOY: Deterministic Rx Action Protocol (v6.0) [CONSISTENCY FIX]");
+console.log("🚀 V-STABLE DEPLOY: Deterministic Rx Action Protocol (v6.1) [ICD-10 ENABLED]");
 
 // ==========================================
 // 1. UTILIDADES DE LIMPIEZA & CONEXIÓN
@@ -129,10 +129,10 @@ const getSpecialtyPromptConfig = (specialty: string) => {
 // ==========================================
 export const GeminiMedicalService = {
 
-  // --- A. NOTA CLÍNICA (ANTI-CRASH + SAFETY AUDIT + LEGAL SAFE + DETERMINISTIC RX) ---
+  // --- A. NOTA CLÍNICA (ANTI-CRASH + SAFETY AUDIT + LEGAL SAFE + DETERMINISTIC RX + CIE-10) ---
   async generateClinicalNote(transcript: string, specialty: string = "Medicina General", patientHistory: string = ""): Promise<GeminiResponse> {
     try {
-      console.log("⚡ Generando Nota Clínica Consistente (v6.0)...");
+      console.log("⚡ Generando Nota Clínica Consistente (v6.1)...");
 
       const specialtyConfig = getSpecialtyPromptConfig(specialty);
       
@@ -148,6 +148,13 @@ export const GeminiMedicalService = {
 
         HISTORIA CLÍNICA PREVIA (CONTEXTO):
         "${patientHistory || 'No disponible'}"
+
+        ===================================================
+        📚 CODIFICACIÓN CLÍNICA (CIE-10 / ICD-10)
+        ===================================================
+        - Para cada diagnóstico principal identificado en la sección de ANÁLISIS, DEBES proporcionar el código CIE-10 (ICD-10) correspondiente entre paréntesis.
+        - Ejemplo: "Faringoamigdalitis estreptocócica (J02.0)" o "Diabetes Mellitus tipo 2 sin complicaciones (E11.9)".
+        - Esto es obligatorio para la validez legal y administrativa de la nota.
 
         ===================================================
         🚨 PROTOCOLO DE AUDITORÍA DE SEGURIDAD (CRÍTICO)
@@ -194,7 +201,7 @@ export const GeminiMedicalService = {
           "soapData": { 
              "subjective": "...", 
              "objective": "...", 
-             "analysis": "Integración diagnóstica usando lenguaje de probabilidad.", 
+             "analysis": "Integración diagnóstica usando lenguaje de probabilidad. IMPORTANTE: Incluye el código CIE-10 (ICD-10) entre paréntesis para cada diagnóstico principal.", 
              "plan": "..." 
           },
           "prescriptions": [
@@ -227,7 +234,7 @@ export const GeminiMedicalService = {
       const rawText = await generateWithFailover(prompt, true);
       const parsedData = JSON.parse(cleanJSON(rawText));
 
-      console.log("✅ Nota estructurada generada con éxito (vía Secure Cloud).");
+      console.log("✅ Nota estructurada generada con éxito (vía Secure Cloud + CIE-10).");
       return parsedData as GeminiResponse;
 
     } catch (error: any) {
