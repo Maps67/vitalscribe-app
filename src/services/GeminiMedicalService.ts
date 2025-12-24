@@ -1,7 +1,7 @@
 import { supabase } from '../lib/supabase';
 import { GeminiResponse, PatientInsight, MedicationItem, FollowUpMessage } from '../types';
 
-console.log("🚀 V-HYBRID DEPLOY: Secure Note + Structured Rx (v5.9 - Legal Safe) [BLINDADO VIA SUPABASE]");
+console.log("🚀 V-STABLE DEPLOY: Deterministic Rx Action Protocol (v6.0) [CONSISTENCY FIX]");
 
 // ==========================================
 // 1. UTILIDADES DE LIMPIEZA & CONEXIÓN
@@ -130,10 +130,10 @@ const getSpecialtyPromptConfig = (specialty: string) => {
 // ==========================================
 export const GeminiMedicalService = {
 
-  // --- A. NOTA CLÍNICA (ANTI-CRASH + SAFETY AUDIT + LEGAL SAFE LANGUAGE) ---
+  // --- A. NOTA CLÍNICA (ANTI-CRASH + SAFETY AUDIT + LEGAL SAFE + DETERMINISTIC RX) ---
   async generateClinicalNote(transcript: string, specialty: string = "Medicina General", patientHistory: string = ""): Promise<GeminiResponse> {
     try {
-      console.log("⚡ Generando Nota Clínica con Receta Estructurada (v5.9 Legal Safe)...");
+      console.log("⚡ Generando Nota Clínica Consistente (v6.0)...");
 
       const specialtyConfig = getSpecialtyPromptConfig(specialty);
       
@@ -142,7 +142,7 @@ export const GeminiMedicalService = {
         ENFOQUE: ${specialtyConfig.focus}
         SESGO CLÍNICO: ${specialtyConfig.bias}
 
-        TAREA: Analizar transcripción y generar Nota Clínica + Auditoría de Seguridad + RECETA ESTRUCTURADA.
+        TAREA: Analizar transcripción y generar Nota Clínica + Auditoría de Seguridad + RECETA ESTRUCTURADA DETERMINISTA.
 
         TRANSCRIPCIÓN CRUDA (INPUT):
         "${transcript}"
@@ -151,54 +151,62 @@ export const GeminiMedicalService = {
         "${patientHistory || 'No disponible'}"
 
         ===================================================
-        🚨 PROTOCOLO DE AUDITORÍA DE SEGURIDAD (CRÍTICO) 🚨
+        🚨 PROTOCOLO DE AUDITORÍA DE SEGURIDAD (CRÍTICO)
         ===================================================
         Debes actuar como un "Ángel Guardián Clínico".
-        Si detectas una NEGLIGENCIA o ERROR en el plan del médico (ej. recetar penicilina a alérgico, mantener estrógenos antes de cirugía mayor, ignorar infarto, cirugía prolongada con factores de riesgo trombótico), TU OBLIGACIÓN ES:
-        1. MARCAR "risk_analysis.level" COMO "Alto".
+        1. MARCAR "risk_analysis.level" COMO "Alto" si hay peligro de muerte, error grave o negligencia.
         2. EXPLICAR LA ADVERTENCIA en "risk_analysis.reason" con mayúsculas iniciales.
         3. EN LAS INSTRUCCIONES AL PACIENTE, incluir una nota de cautela diplomática pero firme si la vida corre peligro.
-        4. NO seas cómplice. Si el médico dice "tómate el veneno", tú NO debes poner "Tomar veneno" en la receta sin una advertencia gigante.
 
-        INSTRUCCIONES DE GENERACIÓN CRÍTICAS:
+        ===================================================
+        ⚖️ REGLA DE PROTECCIÓN LEGAL (LENGUAJE)
+        ===================================================
+        - USA LENGUAJE PROBABILÍSTICO EN DIAGNÓSTICOS.
+        - INCORRECTO: "El paciente tiene Cetoacidosis." (Afirmación absoluta).
+        - CORRECTO: "Cuadro clínico compatible con...", "Hallazgos sugestivos de...", "Impresión diagnóstica orientada a...".
+        - NUNCA emitas un diagnóstico definitivo como autoridad final.
+
+        ===================================================
+        💊 REGLAS DE RECETA ESTRUCTURADA (ESTRICTO v6.0)
+        ===================================================
+        Para evitar alucinaciones o inconsistencias, debes clasificar CADA medicamento mencionado en una de estas acciones:
         
-        1. conversation_log (TRANSCRIPCIÓN INTELIGENTE):
-           - OBJETIVO: Generar un guion legible que preserve el 100% del contenido clínico.
-           - DENSIDAD: MANTÉN LA LONGITUD DE LA CONVERSACIÓN. No resumas excesivamente.
-           - LIMPIEZA: Elimina muletillas pero mantén el contexto narrativo completo.
-           - FORMATO: Array de objetos { speaker: 'Médico' | 'Paciente' | 'Desconocido', text: "..." }.
+        - "NUEVO": Medicamento que se recera por primera vez hoy.
+        - "CONTINUAR": Medicamento previo que el paciente debe seguir tomando igual.
+        - "AJUSTAR": Medicamento previo con cambio de dosis.
+        - "SUSPENDER": Medicamento que el paciente DEBE DEJAR DE TOMAR (Esto es vital para la seguridad).
 
-        2. clinicalNote (NOTA SOAP) y soapData:
-           - Redacta una nota médica formal y completa.
-           - ⚠️ REGLA DE ORO DE REDACCIÓN (PROTECCIÓN LEGAL): USA LENGUAJE PROBABILÍSTICO.
-             - INCORRECTO: "El paciente tiene Cetoacidosis." (Afirmación absoluta).
-             - CORRECTO: "Cuadro clínico compatible con Cetoacidosis.", "Hallazgos sugestivos de...", "Impresión diagnóstica orientada a...".
-           - NUNCA emitas un diagnóstico definitivo como si fueras la autoridad final. Usa frases como "Sugerencia automatizada basada en transcripción" o "A correlacionar con clínica".
-           - Si hubo un error médico en el audio, corrígelo en la nota o señala la contraindicación en el Análisis.
+        ⚠️ REGLA DE ORO DE CONSISTENCIA: 
+        Si decides suspender un medicamento (ej. Insulina en hipoglucemia, Antibiótico en interacción), **DEBES INCLUIRLO EN EL JSON** con la acción "SUSPENDER" y en notas poner "SUSPENDIDO". 
+        NO lo omitas. Queremos ver explícitamente qué se canceló en la lista de medicamentos.
 
-        3. prescriptions (RECETA ESTRUCTURADA - NUEVO):
-           - Extrae CADA medicamento recetado en un objeto JSON separado.
-           - NO pongas la lista de medicamentos en "patientInstructions", ponla AQUÍ.
-           - Campos: drug (nombre), dose (dosis), frequency (frecuencia), duration (duración), notes (indicaciones especificas como 'con alimentos').
-
-        4. patientInstructions:
-           - Instrucciones generales, dieta, alarmas y cuidados. 
-           - NO repitas la lista de medicamentos aquí, solo instrucciones narrativas.
-
-        5. risk_analysis:
-           - Banderas rojas obligatorias si hay contraindicaciones absolutas.
+        INSTRUCCIONES JSON:
+        
+        1. conversation_log: Transcripción limpia y completa.
+        2. clinicalNote: Nota SOAP formal corregida.
+        3. prescriptions: Array de objetos.
+           - Campo "action" es OBLIGATORIO: "NUEVO" | "CONTINUAR" | "AJUSTAR" | "SUSPENDER".
+           - Si action es "SUSPENDER", pon en "dose" la palabra "SUSPENDER" y en duration "INMEDIATO".
+        4. patientInstructions: Instrucciones narrativas.
 
         SALIDA ESPERADA (JSON Schema Strict):
         {
-          "clinicalNote": "Texto completo de la nota...",
+          "clinicalNote": "Texto completo...",
           "soapData": { 
              "subjective": "...", 
              "objective": "...", 
-             "analysis": "Integración diagnóstica usando lenguaje de probabilidad (ej. 'Compatible con...', 'A descartar...').", 
+             "analysis": "Integración diagnóstica usando lenguaje de probabilidad.", 
              "plan": "..." 
           },
           "prescriptions": [
-             { "drug": "string", "dose": "string", "frequency": "string", "duration": "string", "notes": "string" }
+             { 
+               "drug": "Nombre Genérico (Comercial)", 
+               "dose": "Dosis o 'SUSPENDER'", 
+               "frequency": "Frecuencia", 
+               "duration": "Duración", 
+               "notes": "Instrucciones",
+               "action": "NUEVO" | "CONTINUAR" | "AJUSTAR" | "SUSPENDER"
+             }
           ],
           "patientInstructions": "...",
           "risk_analysis": { 
@@ -228,10 +236,8 @@ export const GeminiMedicalService = {
       console.error("❌ Error/Bloqueo IA generando Nota Clínica:", error);
 
       // --- ESTRATEGIA DE RECUPERACIÓN (ANTI-CRASH) ---
-      // Si la IA bloquea por "Seguridad" (Drogas/Suicidio) o falla la red, 
-      // devolvemos una nota manual para que la app NO muestre error y permita edición.
       return {
-          clinicalNote: `⚠️ NOTA DE SEGURIDAD DEL SISTEMA:\n\nLa transcripción contiene temas sensibles (Riesgo de Suicidio / Farmacología Compleja / Interacciones Graves) que activaron los filtros de seguridad máxima de la IA.\n\nPor favor, redacte la nota manualmente basándose en la transcripción para asegurar la precisión clínica.\n\nTranscipción recuperada:\n${transcript}`,
+          clinicalNote: `⚠️ NOTA DE SEGURIDAD DEL SISTEMA:\n\nLa transcripción contiene temas sensibles (Riesgo de Suicidio / Farmacología Compleja / Interacciones Graves) que activaron los filtros de seguridad máxima de la IA.\n\nPor favor, redacte la nota manualmente basándose en la transcripción.\n\nTranscipción recuperada:\n${transcript}`,
           soapData: {
               subjective: "Paciente refiere síntomas graves (Contenido sensible detectado).",
               objective: "No evaluable por IA debido a bloqueo de seguridad.",
@@ -309,7 +315,7 @@ export const GeminiMedicalService = {
       const prompt = `
         ACTÚA COMO: Farmacéutico. Extrae medicamentos del texto: "${text.replace(/"/g, "'")}".
         SALIDA JSON ARRAY (MedicationItem[]):
-        [{ "drug": "...", "details": "...", "frequency": "...", "duration": "...", "notes": "..." }]
+        [{ "drug": "...", "details": "...", "frequency": "...", "duration": "...", "notes": "...", "action": "CONTINUAR" }]
       `;
       const rawText = await generateWithFailover(prompt, true);
       const res = JSON.parse(cleanJSON(rawText));
