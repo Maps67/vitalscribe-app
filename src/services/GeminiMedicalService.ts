@@ -2,24 +2,27 @@ import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from "@google/ge
 import { supabase } from '../lib/supabase'; 
 import { GeminiResponse, PatientInsight, MedicationItem, FollowUpMessage } from '../types';
 
-console.log("🚀 V-HYBRID DEPLOY: Secure Note + Structured Rx (v5.8 - Anti-Crash)");
+console.log("🚀 V-HYBRID DEPLOY: Secure Note + Structured Rx (v5.9 - Secure Bridge)");
 
 // ==========================================
 // 1. CONFIGURACIÓN ROBUSTA & MOTOR DE IA
 // ==========================================
 const API_KEY = import.meta.env.VITE_GOOGLE_GENAI_API_KEY || "";
 
-if (!API_KEY) {
-  console.warn("⚠️ Advertencia: API Key local no encontrada. El sistema intentará usar funciones de respaldo.");
+// Alerta de seguridad en consola si estamos en modo local expuesto
+if (API_KEY) {
+  console.log("⚠️ MODO HÍBRIDO: API Key local detectada. Se usará solo como respaldo de emergencia.");
+} else {
+  console.log("🔒 MODO BLINDADO: API Key local no detectada. Todo el tráfico irá por Supabase Edge Functions.");
 }
 
 // 🛡️ LISTA DE COMBATE (High IQ Only)
 // CORRECCIÓN v5.8: Uso de versiones explícitas (-002) para evitar error 404 en librería nueva.
 const MODELS_TO_TRY = [
-  "gemini-3-flash-preview",   // 1. PRIORIDAD (Si tienes acceso)
-  "gemini-2.0-flash-exp",     // 2. LÍDER TÉCNICO
-  "gemini-1.5-flash-002",     // 3. RESPALDO SÓLIDO (Nombre corregido para evitar 404)
-  "gemini-1.5-pro-002"        // 4. RESPALDO PESADO (Nombre corregido para evitar 404)
+  "gemini-2.0-flash-exp",     // 1. LÍDER TÉCNICO
+  "gemini-1.5-flash-002",     // 2. RESPALDO SÓLIDO
+  "gemini-1.5-pro-002",       // 3. RESPALDO PESADO
+  "gemini-3-flash-preview"    // 4. EXPERIMENTAL
 ];
 
 // CONFIGURACIÓN DE SEGURIDAD
@@ -55,11 +58,47 @@ const cleanJSON = (text: string) => {
 };
 
 /**
- * MOTOR DE CONEXIÓN LOCAL (FAILOVER)
- * Usado para herramientas menores y ahora también para Nota Clínica Detallada.
+ * MOTOR DE CONEXIÓN HÍBRIDO (SUPABASE FIRST -> LOCAL FAILOVER)
+ * Esta es la pieza clave de seguridad. Intenta ir por el túnel seguro primero.
  */
 async function generateWithFailover(prompt: string, jsonMode: boolean = false, useTools: boolean = false): Promise<string> {
-  if (!API_KEY) throw new Error("API Key local faltante para herramientas de IA.");
+  
+  // --- FASE 1: INTENTO SEGURO VÍA SUPABASE (SERVER-SIDE) ---
+  try {
+    // console.log("📡 Conectando a Supabase Edge Function (Blindaje Activo)...");
+    
+    const { data, error } = await supabase.functions.invoke('generate-clinical-note', {
+      body: { 
+        prompt, 
+        jsonMode, 
+        useTools,
+        model: "gemini-2.0-flash-exp" // Solicitamos el modelo más rápido por defecto
+      }
+    });
+
+    if (error) {
+      // Si el error es 404 (Function not found), lanzamos para activar failover
+      console.warn(`⚠️ Error en Edge Function: ${error.message}`);
+      throw error;
+    }
+
+    if (data && data.text) {
+      // console.log("🔒 Respuesta segura recibida desde Supabase.");
+      return data.text;
+    }
+    
+  } catch (edgeError) {
+    console.warn("⚠️ Falló el puente seguro (Supabase). Iniciando protocolo de emergencia local...", edgeError);
+  }
+
+  // --- FASE 2: PROTOCOLO DE EMERGENCIA (CLIENT-SIDE) ---
+  // Solo se ejecuta si falla Supabase. Requiere VITE_GOOGLE_GENAI_API_KEY.
+  
+  if (!API_KEY) {
+    throw new Error("🚨 ERROR CRÍTICO: Falló la conexión segura con Supabase y NO hay API Key local de respaldo.");
+  }
+
+  console.warn("⚠️ ALERTA DE SEGURIDAD: Usando conexión directa a Google (Fallback). La API Key podría ser visible.");
 
   const genAI = new GoogleGenerativeAI(API_KEY);
   let lastError: any = null;
@@ -95,7 +134,7 @@ async function generateWithFailover(prompt: string, jsonMode: boolean = false, u
     }
   }
   
-  throw lastError || new Error("Todos los modelos de IA locales fallaron o bloquearon la respuesta.");
+  throw lastError || new Error("Todos los modelos de IA (Nube y Local) fallaron.");
 }
 
 /**
@@ -166,7 +205,7 @@ export const GeminiMedicalService = {
   // --- A. NOTA CLÍNICA (ANTI-CRASH + SAFETY AUDIT) ---
   async generateClinicalNote(transcript: string, specialty: string = "Medicina General", patientHistory: string = ""): Promise<GeminiResponse> {
     try {
-      console.log("⚡ Generando Nota Clínica con Receta Estructurada (v5.8 Anti-Crash)...");
+      console.log("⚡ Generando Nota Clínica con Receta Estructurada (v5.9 Secure)...");
 
       const specialtyConfig = getSpecialtyPromptConfig(specialty);
       
@@ -246,7 +285,7 @@ export const GeminiMedicalService = {
         }
       `;
 
-      // Usamos el motor local con jsonMode = true
+      // Usamos el motor HÍBRIDO con jsonMode = true
       const rawText = await generateWithFailover(prompt, true);
       const parsedData = JSON.parse(cleanJSON(rawText));
 
