@@ -1,149 +1,250 @@
-import React, { useState, useEffect } from 'react';
-import { Calculator, Activity, Baby, ArrowRight, RotateCcw } from 'lucide-react';
+import React, { useState } from 'react';
+import { Calculator, Activity, Baby, ChevronRight, CalendarHeart } from 'lucide-react';
+import { addDays, addMonths, addYears, format, isValid, parseISO } from 'date-fns';
+import { es } from 'date-fns/locale';
 
-type CalcType = 'BMI' | 'GFR' | 'PEDS';
+type CalcType = 'imc' | 'tfg' | 'dosis' | 'embarazo';
 
 export const MedicalCalculators = () => {
-  const [activeTab, setActiveTab] = useState<CalcType>('GFR');
-  const [result, setResult] = useState<string | null>(null);
-  const [interpretation, setInterpretation] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<CalcType>('imc');
 
-  // Estados para inputs
-  const [weight, setWeight] = useState('');
-  const [height, setHeight] = useState('');
-  const [creatinine, setCreatinine] = useState('');
-  const [age, setAge] = useState('');
-  const [gender, setGender] = useState<'M'|'F'>('M');
+  // --- ESTADOS: IMC ---
+  const [imcWeight, setImcWeight] = useState('');
+  const [imcHeight, setImcHeight] = useState('');
+  const [imcResult, setImcResult] = useState<string | null>(null);
 
-  const calculate = () => {
-    let val = 0;
+  // --- ESTADOS: TFG (MDRD-4) ---
+  const [tfgCreatinine, setTfgCreatinine] = useState('');
+  const [tfgAge, setTfgAge] = useState('');
+  const [tfgGender, setTfgGender] = useState<'male' | 'female'>('male');
+  const [tfgResult, setTfgResult] = useState<string | null>(null);
+
+  // --- ESTADOS: DOSIS PEDIÁTRICA ---
+  const [pedWeight, setPedWeight] = useState('');
+  const [pedDrug, setPedDrug] = useState<'paracetamol' | 'ibuprofeno'>('paracetamol');
+  const [pedResult, setPedResult] = useState<string | null>(null);
+
+  // --- ESTADOS: EMBARAZO ---
+  const [fum, setFum] = useState('');
+  const [pregResult, setPregResult] = useState<string | null>(null);
+
+  // --- LÓGICA: IMC ---
+  const calculateIMC = () => {
+    const w = parseFloat(imcWeight);
+    const h = parseFloat(imcHeight);
+    if (!w || !h) return;
     
-    if (activeTab === 'BMI') {
-      const w = parseFloat(weight);
-      const h = parseFloat(height); // asumiendo cm
-      if (w && h) {
-        val = w / ((h/100) * (h/100));
-        setResult(val.toFixed(1));
-        if (val < 18.5) setInterpretation('Bajo Peso');
-        else if (val < 25) setInterpretation('Normal');
-        else if (val < 30) setInterpretation('Sobrepeso');
-        else setInterpretation('Obesidad');
-      }
-    } 
-    else if (activeTab === 'GFR') {
-      // CKD-EPI 2021 Formula
-      const scr = parseFloat(creatinine);
-      const a = parseFloat(age);
-      if (scr && a) {
-        const k = gender === 'F' ? 0.7 : 0.9;
-        const alpha = gender === 'F' ? -0.241 : -0.302;
-        const min_val = Math.min(scr / k, 1);
-        const max_val = Math.max(scr / k, 1);
-        
-        // eGFR = 142 * min^alpha * max^-1.2 * 0.9938^Age * 1.012(if F)
-        val = 142 * Math.pow(min_val, alpha) * Math.pow(max_val, -1.200) * Math.pow(0.9938, a);
-        if (gender === 'F') val *= 1.012;
+    // Si la altura es mayor a 3, asumimos que está en CM y convertimos a Metros
+    const heightInMeters = h > 3 ? h / 100 : h;
+    const res = w / (heightInMeters * heightInMeters);
+    
+    let label = '';
+    if (res < 18.5) label = 'Bajo Peso';
+    else if (res < 24.9) label = 'Normal';
+    else if (res < 29.9) label = 'Sobrepeso';
+    else label = 'Obesidad';
 
-        setResult(val.toFixed(0));
-        if (val >= 90) setInterpretation('Estadio G1 (Normal)');
-        else if (val >= 60) setInterpretation('Estadio G2 (Leve)');
-        else if (val >= 45) setInterpretation('Estadio G3a (Mod-Grave)');
-        else if (val >= 30) setInterpretation('Estadio G3b (Mod-Grave)');
-        else if (val >= 15) setInterpretation('Estadio G4 (Grave)');
-        else setInterpretation('Estadio G5 (Falla Renal)');
-      }
-    }
-    else if (activeTab === 'PEDS') {
-      const w = parseFloat(weight);
-      if (w) {
-        // Dosis ejemplo paracetamol 15mg/kg
-        val = w * 15;
-        setResult(`${val} mg`);
-        setInterpretation('Dosis Paracetamol (15mg/kg)');
-      }
-    }
+    setImcResult(`${res.toFixed(1)} - ${label}`);
   };
 
-  const reset = () => {
-    setResult(null);
-    setInterpretation(null);
-    setWeight(''); setHeight(''); setCreatinine(''); setAge('');
+  // --- LÓGICA: TFG (MDRD-4) ---
+  const calculateTFG = () => {
+    const cr = parseFloat(tfgCreatinine);
+    const age = parseFloat(tfgAge);
+    if (!cr || !age) return;
+
+    // Fórmula MDRD: 175 x (Scr)^-1.154 x (Age)^-0.203 x (0.742 if female)
+    let gfr = 175 * Math.pow(cr, -1.154) * Math.pow(age, -0.203);
+    if (tfgGender === 'female') gfr = gfr * 0.742;
+
+    let stage = '';
+    if (gfr >= 90) stage = 'Estadio 1 (Normal)';
+    else if (gfr >= 60) stage = 'Estadio 2 (Leve)';
+    else if (gfr >= 30) stage = 'Estadio 3 (Moderado)';
+    else if (gfr >= 15) stage = 'Estadio 4 (Grave)';
+    else stage = 'Estadio 5 (Falla Renal)';
+
+    setTfgResult(`${gfr.toFixed(1)} mL/min/1.73m²\n${stage}`);
   };
 
-  useEffect(() => reset(), [activeTab]);
+  // --- LÓGICA: DOSIS PEDIÁTRICA ---
+  const calculateDose = () => {
+    const w = parseFloat(pedWeight);
+    if (!w) return;
+
+    let doseText = '';
+
+    if (pedDrug === 'paracetamol') {
+      // Paracetamol: Dosis meta 15mg/kg.
+      // Jarabe común (Tempra/Tylenol): 160mg/5ml -> 32mg/ml
+      const targetDose = w * 15; 
+      const ml = targetDose / 32; 
+      doseText = `Dosis (15mg/kg): ${targetDose.toFixed(0)}mg\nJarabe (160mg/5ml): ${ml.toFixed(1)} mL cada 6hrs`;
+    } else {
+      // Ibuprofeno: Dosis meta 10mg/kg (Fiebre alta).
+      // Jarabe común (Motrin/Advil): 100mg/5ml -> 20mg/ml
+      const targetDose = w * 10;
+      const ml = targetDose / 20;
+      doseText = `Dosis (10mg/kg): ${targetDose.toFixed(0)}mg\nJarabe (100mg/5ml): ${ml.toFixed(1)} mL cada 8hrs`;
+    }
+
+    setPedResult(doseText);
+  };
+
+  // --- LÓGICA: EMBARAZO (Naegele) ---
+  const calculatePregnancy = () => {
+    if (!fum) return;
+    const dateFUM = parseISO(fum);
+    if (!isValid(dateFUM)) return;
+
+    // Regla simple: FUM + 280 días (40 semanas)
+    const fppDate = addDays(dateFUM, 280);
+    
+    // Semanas de gestación actuales
+    const today = new Date();
+    const diffTime = Math.abs(today.getTime() - dateFUM.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+    const weeks = Math.floor(diffDays / 7);
+    const days = diffDays % 7;
+
+    setPregResult(`FPP: ${format(fppDate, "d 'de' MMMM, yyyy", { locale: es })}\nGestación Hoy: ${weeks} semanas, ${days} días`);
+  };
 
   return (
-    <div className="bg-white rounded-3xl shadow-lg border border-slate-100 overflow-hidden h-[320px] flex flex-col">
-      <div className="bg-slate-50 border-b border-slate-100 p-2 flex gap-1">
-        {[
-          { id: 'GFR', label: 'TFG (CKD-EPI)', icon: Activity },
-          { id: 'BMI', label: 'IMC', icon: Calculator },
-          { id: 'PEDS', label: 'Dosis Ped', icon: Baby },
-        ].map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id as CalcType)}
-            className={`flex-1 py-2 rounded-xl text-xs font-bold flex flex-col items-center gap-1 transition-all ${
-              activeTab === tab.id 
-              ? 'bg-white text-teal-600 shadow-sm ring-1 ring-slate-200' 
-              : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'
-            }`}
-          >
-            <tab.icon size={16} /> {tab.label}
-          </button>
-        ))}
+    <div className="h-full flex flex-col bg-white dark:bg-slate-900 rounded-2xl">
+      {/* Selector de Calculadora - Scroll Horizontal para móviles */}
+      <div className="flex gap-2 mb-4 overflow-x-auto pb-2 px-1 custom-scrollbar">
+        <button 
+            onClick={() => setActiveTab('imc')} 
+            className={`px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors ${activeTab === 'imc' ? 'bg-indigo-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'}`}
+        >
+            IMC
+        </button>
+        <button 
+            onClick={() => setActiveTab('tfg')} 
+            className={`px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors ${activeTab === 'tfg' ? 'bg-indigo-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'}`}
+        >
+            Renal
+        </button>
+        <button 
+            onClick={() => setActiveTab('dosis')} 
+            className={`px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors ${activeTab === 'dosis' ? 'bg-indigo-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'}`}
+        >
+            Pediátrica
+        </button>
+        <button 
+            onClick={() => setActiveTab('embarazo')} 
+            className={`px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors ${activeTab === 'embarazo' ? 'bg-pink-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'}`}
+        >
+            Obstetricia
+        </button>
       </div>
 
-      <div className="p-5 flex-1 flex flex-col relative">
-        {activeTab === 'GFR' && (
-          <div className="grid grid-cols-2 gap-3">
-             <div className="col-span-2 flex bg-slate-100 rounded-lg p-1">
-                <button onClick={() => setGender('M')} className={`flex-1 rounded-md text-xs py-1.5 font-bold transition-all ${gender === 'M' ? 'bg-white shadow text-blue-600' : 'text-slate-400'}`}>HOMBRE</button>
-                <button onClick={() => setGender('F')} className={`flex-1 rounded-md text-xs py-1.5 font-bold transition-all ${gender === 'F' ? 'bg-white shadow text-pink-600' : 'text-slate-400'}`}>MUJER</button>
-             </div>
-             <input type="number" placeholder="Creatinina (mg/dL)" className="input-calc" value={creatinine} onChange={e => setCreatinine(e.target.value)} />
-             <input type="number" placeholder="Edad (años)" className="input-calc" value={age} onChange={e => setAge(e.target.value)} />
+      <div className="flex-1 overflow-y-auto custom-scrollbar pr-1">
+        
+        {/* === IMC === */}
+        {activeTab === 'imc' && (
+          <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2">
+            <div>
+              <label className="text-[10px] font-bold text-slate-400 uppercase">Peso (kg)</label>
+              <input type="number" value={imcWeight} onChange={e => setImcWeight(e.target.value)} className="w-full p-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-slate-800 dark:text-white" placeholder="Ej. 75" />
+            </div>
+            <div>
+              <label className="text-[10px] font-bold text-slate-400 uppercase">Altura (cm)</label>
+              <input type="number" value={imcHeight} onChange={e => setImcHeight(e.target.value)} className="w-full p-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-slate-800 dark:text-white" placeholder="Ej. 175" />
+            </div>
+            <button onClick={calculateIMC} className="w-full bg-slate-900 dark:bg-indigo-600 text-white py-3 rounded-xl font-bold text-sm hover:opacity-90 transition-opacity">Calcular IMC</button>
+            {imcResult && (
+              <div className="p-4 bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-100 dark:border-indigo-800 rounded-xl text-center mt-2">
+                <p className="text-xs text-indigo-500 dark:text-indigo-300 font-bold uppercase mb-1">Resultado</p>
+                <p className="text-xl font-black text-indigo-700 dark:text-indigo-200">{imcResult}</p>
+              </div>
+            )}
           </div>
         )}
 
-        {activeTab === 'BMI' && (
-           <div className="grid grid-cols-2 gap-3">
-             <input type="number" placeholder="Peso (kg)" className="input-calc" value={weight} onChange={e => setWeight(e.target.value)} />
-             <input type="number" placeholder="Altura (cm)" className="input-calc" value={height} onChange={e => setHeight(e.target.value)} />
-           </div>
-        )}
-
-        {activeTab === 'PEDS' && (
-           <div className="grid grid-cols-1 gap-3">
-             <input type="number" placeholder="Peso Paciente (kg)" className="input-calc" value={weight} onChange={e => setWeight(e.target.value)} />
-             <p className="text-xs text-slate-400 text-center mt-2">Calcula dosis estándar (15mg/kg)</p>
-           </div>
-        )}
-
-        {/* RESULTADO OVERLAY */}
-        {result ? (
-          <div className="absolute inset-0 bg-white/95 backdrop-blur-sm z-10 flex flex-col items-center justify-center p-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
-             <span className="text-xs font-bold text-slate-400 uppercase mb-1">Resultado Calculado</span>
-             <div className="text-4xl font-black text-slate-900 mb-1">{result} <span className="text-sm font-medium text-slate-400">{activeTab === 'GFR' ? 'ml/min' : activeTab === 'BMI' ? 'kg/m²' : ''}</span></div>
-             <div className={`px-3 py-1 rounded-full text-xs font-bold mb-4 ${
-               activeTab === 'GFR' && parseFloat(result) < 60 ? 'bg-red-100 text-red-700' : 'bg-teal-50 text-teal-700'
-             }`}>
-               {interpretation}
-             </div>
-             <button onClick={reset} className="flex items-center gap-2 text-slate-400 hover:text-slate-600 font-bold text-xs">
-               <RotateCcw size={14}/> Calcular Otro
-             </button>
+        {/* === TFG (MDRD) === */}
+        {activeTab === 'tfg' && (
+          <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2">
+            <div>
+              <label className="text-[10px] font-bold text-slate-400 uppercase">Creatinina (mg/dL)</label>
+              <input type="number" value={tfgCreatinine} onChange={e => setTfgCreatinine(e.target.value)} className="w-full p-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-slate-800 dark:text-white" placeholder="Ej. 1.2" />
+            </div>
+            <div className="flex gap-2">
+              <div className="flex-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase">Edad</label>
+                <input type="number" value={tfgAge} onChange={e => setTfgAge(e.target.value)} className="w-full p-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl outline-none font-bold text-slate-800 dark:text-white" placeholder="Años" />
+              </div>
+              <div className="flex-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase">Sexo</label>
+                <select value={tfgGender} onChange={(e:any) => setTfgGender(e.target.value)} className="w-full p-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl outline-none font-bold text-slate-800 dark:text-white cursor-pointer">
+                  <option value="male">Hombre</option>
+                  <option value="female">Mujer</option>
+                </select>
+              </div>
+            </div>
+            <button onClick={calculateTFG} className="w-full bg-slate-900 dark:bg-indigo-600 text-white py-3 rounded-xl font-bold text-sm hover:opacity-90 transition-opacity">Calcular TFG</button>
+            {tfgResult && (
+              <div className="p-4 bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-100 dark:border-indigo-800 rounded-xl text-center mt-2">
+                <p className="text-xs text-indigo-500 dark:text-indigo-300 font-bold uppercase mb-1">MDRD Estimado</p>
+                <p className="text-sm font-bold text-indigo-800 dark:text-indigo-100 whitespace-pre-wrap">{tfgResult}</p>
+              </div>
+            )}
           </div>
-        ) : (
-          <button onClick={calculate} className="mt-auto w-full bg-slate-900 text-white py-3 rounded-xl font-bold text-sm hover:bg-slate-800 transition-colors flex justify-center items-center gap-2">
-            Calcular <ArrowRight size={16}/>
-          </button>
         )}
+
+        {/* === DOSIS PEDIÁTRICA === */}
+        {activeTab === 'dosis' && (
+          <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2">
+            <div>
+              <label className="text-[10px] font-bold text-slate-400 uppercase">Peso Niño (kg)</label>
+              <input type="number" value={pedWeight} onChange={e => setPedWeight(e.target.value)} className="w-full p-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-slate-800 dark:text-white" placeholder="Ej. 12" />
+            </div>
+            <div>
+              <label className="text-[10px] font-bold text-slate-400 uppercase">Fármaco</label>
+              <select value={pedDrug} onChange={(e:any) => setPedDrug(e.target.value)} className="w-full p-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl outline-none font-bold text-slate-800 dark:text-white cursor-pointer">
+                <option value="paracetamol">Paracetamol (Tempra)</option>
+                <option value="ibuprofeno">Ibuprofeno (Motrin)</option>
+              </select>
+            </div>
+            <button onClick={calculateDose} className="w-full bg-slate-900 dark:bg-indigo-600 text-white py-3 rounded-xl font-bold text-sm hover:opacity-90 transition-opacity">Calcular Dosis</button>
+            {pedResult && (
+              <div className="p-4 bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-100 dark:border-indigo-800 rounded-xl text-center mt-2">
+                <p className="text-xs text-indigo-500 dark:text-indigo-300 font-bold uppercase mb-1">Dosis Sugerida</p>
+                <p className="text-sm font-bold text-indigo-800 dark:text-indigo-100 whitespace-pre-wrap">{pedResult}</p>
+                <p className="text-[9px] text-indigo-400 dark:text-indigo-300/70 mt-2 italic">*Basado en concentraciones estándar.</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* === OBSTETRICIA (FPP) === */}
+        {activeTab === 'embarazo' && (
+          <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2">
+            <div className="flex flex-col gap-2">
+              <label className="text-[10px] font-bold text-slate-400 uppercase">Fecha Última Menstruación (FUM)</label>
+              <input 
+                type="date" 
+                value={fum} 
+                onChange={e => setFum(e.target.value)} 
+                className="w-full p-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-pink-500 outline-none font-bold text-slate-800 dark:text-white" 
+              />
+            </div>
+            
+            <button onClick={calculatePregnancy} className="w-full bg-pink-600 text-white py-3 rounded-xl font-bold text-sm hover:bg-pink-700 transition-colors flex items-center justify-center gap-2">
+               <Baby size={18}/> Calcular Fecha Parto
+            </button>
+
+            {pregResult && (
+              <div className="p-4 bg-pink-50 dark:bg-pink-900/20 border border-pink-100 dark:border-pink-800 rounded-xl text-center mt-2">
+                <p className="text-xs text-pink-500 dark:text-pink-300 font-bold uppercase mb-1">Cálculo Gestacional</p>
+                <p className="text-sm font-bold text-pink-800 dark:text-pink-100 whitespace-pre-wrap leading-relaxed">{pregResult}</p>
+              </div>
+            )}
+          </div>
+        )}
+
       </div>
-      
-      <style>{`
-        .input-calc { @apply w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-teal-500 transition-all; }
-      `}</style>
     </div>
   );
 };
