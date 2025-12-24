@@ -23,4 +23,4 @@ jobs:
           version: latest
 
       - name: Deploy Gemini Proxy Function
-        run: supabase functions deploy gemini-proxy --project-ref $PROJECT_ID --no-verify-jwt
+        run: supabase functions deploy generate-clinical-note --project-ref $PROJECT_ID --no-verify-jwt
