@@ -6,14 +6,14 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-console.log("🚀 SUPABASE EDGE: RAW HTTP MODE (NO SDK) - FORCE UPDATE");
+// 🔥 MARCA DE AGUA: Si no ves esto en los logs, el código no se actualizó.
+console.log("🚀 SUPABASE EDGE: FINAL ATTEMPT - VERSION RAW HTTP 2025");
 
-// 🛡️ LISTA DE COMBATE (High IQ Only) - ORDEN EXACTO
 const MODELS_TO_TRY = [
-  "gemini-3-flash-preview",   // 1. TU PRIORIDAD
-  "gemini-2.0-flash-exp",     // 2. LÍDER TÉCNICO
-  "gemini-1.5-flash-002",     // 3. RESPALDO SÓLIDO
-  "gemini-1.5-pro-002"        // 4. RESPALDO PESADO
+  "gemini-3-flash-preview", 
+  "gemini-2.0-flash-exp", 
+  "gemini-1.5-flash-002", 
+  "gemini-1.5-pro-002"
 ];
 
 serve(async (req) => {
@@ -26,11 +26,10 @@ serve(async (req) => {
     const reqBody = await req.json();
     let prompt = reqBody.prompt;
 
-    // Fallback
+    // Fallback simple
     if (!prompt) {
         const transcript = reqBody.transcript || "";
-        const specialty = reqBody.specialty || "Medicina General";
-        prompt = `ACTÚA COMO: ${specialty}. TRANSCRIPCIÓN: "${transcript}". Genera JSON clínico.`;
+        prompt = `TRANSCRIPCIÓN: "${transcript}". Genera JSON clínico.`;
     }
 
     if (!prompt) throw new Error("Prompt vacío.");
@@ -44,7 +43,6 @@ serve(async (req) => {
       console.log(`Trying model via Fetch: ${modelName}`);
 
       try {
-        // CONEXIÓN DIRECTA (Sin SDK para evitar Error 500)
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${API_KEY}`;
         
         const payload = {
@@ -72,19 +70,17 @@ serve(async (req) => {
         }
 
         const data = await response.json();
-        
         if (data.candidates && data.candidates[0]?.content?.parts[0]?.text) {
              successfulResponse = data.candidates[0].content.parts[0].text;
              console.log(`✅ ¡Éxito con ${modelName}!`);
              break;
         }
       } catch (err) {
-        console.warn(`⚠️ Error de red en ${modelName}:`, err);
         lastErrorDetails = err.toString();
       }
     }
 
-    if (!successfulResponse) throw new Error(`Todos los modelos fallaron. Último error: ${lastErrorDetails}`);
+    if (!successfulResponse) throw new Error(`Todos los modelos fallaron. Detalles: ${lastErrorDetails}`);
 
     // Limpieza
     let clean = successfulResponse.replace(/```json/g, '').replace(/```/g, '');
@@ -99,7 +95,7 @@ serve(async (req) => {
 
   } catch (error: any) {
     console.error("❌ ERROR CRÍTICO:", error);
-    return new Response(JSON.stringify({ error: error.message, hint: "Si es 500, revisa logs de Supabase." }), {
+    return new Response(JSON.stringify({ error: error.message }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 500,
     });
