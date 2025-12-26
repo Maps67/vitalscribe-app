@@ -1,7 +1,7 @@
 import { supabase } from '../lib/supabase';
 import { GeminiResponse, PatientInsight, MedicationItem, FollowUpMessage } from '../types';
 
-console.log("🚀 V-STABLE DEPLOY: Deterministic Rx Action Protocol (v6.1) [ICD-10 ENABLED]");
+console.log("🚀 V-STABLE DEPLOY: Deterministic Rx Action Protocol (v6.2) [Few-Shot Logic]");
 
 // ==========================================
 // 1. UTILIDADES DE LIMPIEZA & CONEXIÓN
@@ -308,33 +308,36 @@ export const GeminiMedicalService = {
     }
   },
 
-  // --- C. EXTRACCIÓN MEDICAMENTOS (CORREGIDO PARA DICTADO NATURAL) ---
+  // --- C. EXTRACCIÓN MEDICAMENTOS (FEW-SHOT PROMPTING PARA ALTA PRECISIÓN) ---
   async extractMedications(text: string): Promise<MedicationItem[]> {
     if (!text) return [];
     try {
-      // PROMPT MEJORADO: Entiende lenguaje natural y narrativo
+      // PROMPT "FEW-SHOT" (CON EJEMPLOS) para forzar a la IA a entender lenguaje natural
       const prompt = `
-        ACTÚA COMO: Farmacéutico Clínico Experto en Procesamiento de Lenguaje Natural.
-        OBJETIVO: Extraer datos estructurados de medicamentos a partir de un texto libre, dictado o narrativo.
+        TU TAREA: Extraer medicamentos de este texto médico y devolverlos en un ARRAY JSON.
+        
+        EJEMPLOS DE APRENDIZAJE:
+        1. Entrada: "Vamos a darle Amoxicilina de 500 cada 8 horas por 7 días."
+           Salida: [{"drug": "Amoxicilina", "details": "500mg", "frequency": "Cada 8 horas", "duration": "7 días", "notes": "", "action": "NUEVO"}]
+        
+        2. Entrada: "Suspender el Naproxeno inmediatamente."
+           Salida: [{"drug": "Naproxeno", "details": "", "frequency": "", "duration": "INMEDIATO", "notes": "Suspensión indicada", "action": "SUSPENDER"}]
 
-        TEXTO DE ENTRADA: "${text.replace(/"/g, "'")}"
+        3. Entrada: "Paracetamol 1g IV ahora."
+           Salida: [{"drug": "Paracetamol", "details": "1g", "frequency": "Dosis única", "duration": "", "notes": "Vía IV", "action": "NUEVO"}]
 
-        INSTRUCCIONES CLAVE:
-        1. Detecta medicamentos mencionados incluso dentro de frases narrativas (ej: "Vamos a iniciar Paracetamol...", "Quiero que tome Ibuprofeno...", "Agrega Amoxicilina").
-        2. Ignora verbos de relleno o charla ("vamos a", "iniciar", "dar", "tomar").
-        3. Normaliza nombres de medicamentos (Mayúscula inicial).
-        4. Si falta algún dato (frecuencia/duración), déjalo como string vacío "", NO inventes.
-        5. Action por defecto: "NUEVO" salvo que el texto diga "continuar" o "suspender".
+        4. Entrada: "Agrega Metformina de 850."
+           Salida: [{"drug": "Metformina", "details": "850mg", "frequency": "", "duration": "", "notes": "", "action": "NUEVO"}]
 
-        SALIDA REQUERIDA (JSON Array puro de MedicationItem):
-        [{
-          "drug": "Nombre del Fármaco",
-          "details": "Concentración/Dosis (ej: 500mg)",
-          "frequency": "Frecuencia (ej: cada 8 horas)",
-          "duration": "Duración (ej: por 3 días)",
-          "notes": "Instrucciones adicionales si las hay",
-          "action": "NUEVO"
-        }]
+        ---
+        AHORA ANALIZA ESTE TEXTO REAL:
+        "${text.replace(/"/g, "'")}"
+        
+        REGLAS:
+        - Extrae TODO lo que parezca un medicamento.
+        - Si falta frecuencia o duración, pon "".
+        - Action por defecto: "NUEVO".
+        - RESPONDE SOLO CON EL JSON ARRAY.
       `;
       
       const rawText = await generateWithFailover(prompt, true);
