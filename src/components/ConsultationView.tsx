@@ -6,7 +6,7 @@ import {
   Stethoscope, Trash2, WifiOff, Save, Share2, Download, Printer,
   Paperclip, Calendar, Clock, UserCircle, Activity, ClipboardList, Brain, FileSignature, Keyboard,
   Quote, AlertTriangle, ChevronDown, ChevronUp, Sparkles, PenLine, UserPlus, ShieldCheck, AlertCircle,
-  Pause, Play, Pill, Plus
+  Pause, Play, Pill, Plus, Zap
 } from 'lucide-react';
 
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition'; 
@@ -931,15 +931,6 @@ const ConsultationView: React.FC = () => {
         <div className="bg-indigo-50 dark:bg-indigo-900/20 p-3 rounded-lg border border-indigo-100 dark:border-indigo-800">
             <div className="flex justify-between items-center mb-1">
                 <label className="text-xs font-bold text-indigo-600 dark:text-indigo-300 uppercase flex gap-1"><Stethoscope size={14}/> Especialidad</label>
-                {selectedPatient && !(selectedPatient as any).isTemporary && (
-                    <button 
-                        onClick={handleLoadInsights} 
-                        className="flex items-center gap-1 text-[10px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full hover:bg-indigo-200 transition-colors"
-                        title="Ver Balance 360"
-                    >
-                        <Sparkles size={10} /> Balance 360°
-                    </button>
-                )}
             </div>
             <select value={selectedSpecialty} onChange={(e)=>setSelectedSpecialty(e.target.value)} className="w-full bg-transparent border-b border-indigo-200 outline-none py-1 text-sm dark:text-white cursor-pointer">{SPECIALTIES.map(s=><option key={s} value={s}>{s}</option>)}</select>
         </div>
@@ -1097,6 +1088,18 @@ const ConsultationView: React.FC = () => {
                     }
                 </button>
             </div>
+            
+            {/* === BALANCE 360 (NUEVA UBICACIÓN PREMIUM) === */}
+            {selectedPatient && !(selectedPatient as any).isTemporary && (
+                <button 
+                    onClick={handleLoadInsights} 
+                    disabled={isLoadingInsights}
+                    className="w-full mt-4 py-3 bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-bold rounded-xl shadow-lg shadow-indigo-200 dark:shadow-none hover:shadow-xl hover:scale-[1.02] transition-all flex items-center justify-center gap-2 group z-20"
+                >
+                    {isLoadingInsights ? <RefreshCw className="animate-spin" size={18}/> : <Sparkles className="text-yellow-300 group-hover:rotate-12 transition-transform" size={18} />}
+                    <span>Análisis Clínico 360°</span>
+                </button>
+            )}
             
         </div>
       </div>
