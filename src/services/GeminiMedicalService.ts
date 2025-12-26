@@ -308,19 +308,42 @@ export const GeminiMedicalService = {
     }
   },
 
-  // --- C. EXTRACCIÓN MEDICAMENTOS ---
+  // --- C. EXTRACCIÓN MEDICAMENTOS (CORREGIDO PARA DICTADO NATURAL) ---
   async extractMedications(text: string): Promise<MedicationItem[]> {
     if (!text) return [];
     try {
+      // PROMPT MEJORADO: Entiende lenguaje natural y narrativo
       const prompt = `
-        ACTÚA COMO: Farmacéutico. Extrae medicamentos del texto: "${text.replace(/"/g, "'")}".
-        SALIDA JSON ARRAY (MedicationItem[]):
-        [{ "drug": "...", "details": "...", "frequency": "...", "duration": "...", "notes": "...", "action": "CONTINUAR" }]
+        ACTÚA COMO: Farmacéutico Clínico Experto en Procesamiento de Lenguaje Natural.
+        OBJETIVO: Extraer datos estructurados de medicamentos a partir de un texto libre, dictado o narrativo.
+
+        TEXTO DE ENTRADA: "${text.replace(/"/g, "'")}"
+
+        INSTRUCCIONES CLAVE:
+        1. Detecta medicamentos mencionados incluso dentro de frases narrativas (ej: "Vamos a iniciar Paracetamol...", "Quiero que tome Ibuprofeno...", "Agrega Amoxicilina").
+        2. Ignora verbos de relleno o charla ("vamos a", "iniciar", "dar", "tomar").
+        3. Normaliza nombres de medicamentos (Mayúscula inicial).
+        4. Si falta algún dato (frecuencia/duración), déjalo como string vacío "", NO inventes.
+        5. Action por defecto: "NUEVO" salvo que el texto diga "continuar" o "suspender".
+
+        SALIDA REQUERIDA (JSON Array puro de MedicationItem):
+        [{
+          "drug": "Nombre del Fármaco",
+          "details": "Concentración/Dosis (ej: 500mg)",
+          "frequency": "Frecuencia (ej: cada 8 horas)",
+          "duration": "Duración (ej: por 3 días)",
+          "notes": "Instrucciones adicionales si las hay",
+          "action": "NUEVO"
+        }]
       `;
+      
       const rawText = await generateWithFailover(prompt, true);
       const res = JSON.parse(cleanJSON(rawText));
       return Array.isArray(res) ? res : [];
-    } catch (e) { return []; }
+    } catch (e) { 
+        console.error("Error extrayendo medicamentos:", e);
+        return []; 
+    }
   },
 
   // --- D. AUDITORÍA CALIDAD ---
