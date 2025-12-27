@@ -38,6 +38,44 @@ interface PendingItem {
    id: string; type: 'note' | 'lab' | 'appt'; title: string; subtitle: string; date: string;
 }
 
+// --- SUB-COMPONENTE: RELOJ ATÓMICO (Precisión Milimétrica) ---
+const AtomicClock = ({ location }: { location: string }) => {
+    const [date, setDate] = useState(new Date());
+
+    useEffect(() => {
+        // Sincronización inicial para golpear el segundo exacto
+        const timer = setInterval(() => setDate(new Date()), 1000);
+        return () => clearInterval(timer);
+    }, []);
+
+    return (
+        <div>
+            <div className="flex items-baseline gap-1">
+                {/* tabular-nums evita que el texto "salte" cuando cambian los números anchos */}
+                <p className="text-4xl font-black text-slate-800 dark:text-white tracking-tighter tabular-nums leading-none">
+                    {format(date, 'h:mm')}
+                </p>
+                <div className="flex flex-col">
+                    <span className="text-sm font-bold text-slate-400 dark:text-slate-500 tabular-nums leading-none">
+                        :{format(date, 'ss')}
+                    </span>
+                    <span className="text-[10px] font-bold text-slate-300 dark:text-slate-600 uppercase leading-none mt-0.5">
+                        {format(date, 'a')}
+                    </span>
+                </div>
+            </div>
+            <div className="flex flex-col mt-2">
+                <p className="text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest">
+                    {format(date, "EEEE, d 'de' MMMM", { locale: es })}
+                </p>
+                <p className="text-[10px] font-semibold text-slate-400 flex items-center gap-1 mt-0.5">
+                    <MapPin size={10} /> {location}
+                </p>
+            </div>
+        </div>
+    );
+};
+
 // --- Assistant Modal ---
 const AssistantModal = ({ isOpen, onClose, onActionComplete }: { isOpen: boolean; onClose: () => void; onActionComplete: () => void }) => {
   const { isListening, transcript, startListening, stopListening, resetTranscript } = useSpeechRecognition();
@@ -137,32 +175,28 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete }: { isOpen: boolean
 
 // --- Widgets ---
 const StatusWidget = ({ weather, totalApts, pendingApts, location }: any) => {
-    const [time, setTime] = useState(new Date());
-    useEffect(() => { const t = setInterval(() => setTime(new Date()), 1000); return () => clearInterval(t); }, []);
-    
     // Cálculo seguro interno
     const completed = totalApts - pendingApts;
     const progress = totalApts > 0 ? (completed / totalApts) * 100 : 0;
     
-    // Definimos isNight internamente basado en la hora local del widget
-    const hour = time.getHours();
-    
     return (
         <div className="bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl rounded-[2rem] p-6 border border-white/50 dark:border-slate-700 shadow-xl h-full flex flex-col justify-between relative overflow-hidden">
              <div className="absolute inset-0 bg-gradient-to-br from-white via-transparent to-blue-50/50 opacity-50"></div>
+             
+             {/* HEADER: Reloj Atómico y Clima */}
              <div className="flex justify-between items-start z-10 relative">
-                 <div>
-                     <div className="flex items-baseline gap-1">
-                        <p className="text-4xl font-black text-slate-800 dark:text-white tracking-tighter">{format(time, 'h:mm')}</p>
-                        <span className="text-sm font-bold text-slate-400">{format(time, 'a')}</span>
-                     </div>
-                     <p className="text-xs font-bold text-indigo-500 uppercase tracking-widest mt-1 flex items-center gap-1"><MapPin size={12} /> {location}</p>
+                 <AtomicClock location={location} />
+                 <div className="text-right bg-white/50 dark:bg-slate-800/50 p-2 rounded-2xl backdrop-blur-sm border border-white/50 dark:border-slate-600">
+                    <span className="text-2xl font-bold text-slate-700 dark:text-slate-200">{weather.temp}°</span>
                  </div>
-                 <div className="text-right bg-white/50 p-2 rounded-2xl backdrop-blur-sm"><span className="text-2xl font-bold text-slate-700">{weather.temp}°</span></div>
              </div>
+
+             {/* FOOTER: Barra de Progreso */}
              <div className="mt-4 z-10 relative">
-                 <div className="flex justify-between text-xs font-bold mb-2"><span className="text-slate-500">Progreso</span><span className="text-indigo-600">{completed}/{totalApts} Pacientes</span></div>
-                 <div className="h-3 w-full bg-slate-100 rounded-full overflow-hidden"><div className="h-full bg-gradient-to-r from-indigo-400 to-purple-500 transition-all duration-1000" style={{width: `${progress}%`}}></div></div>
+                 <div className="flex justify-between text-xs font-bold mb-2"><span className="text-slate-500">Progreso Diario</span><span className="text-indigo-600">{completed}/{totalApts} Pacientes</span></div>
+                 <div className="h-3 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden border border-slate-200 dark:border-slate-700">
+                    <div className="h-full bg-gradient-to-r from-indigo-400 to-purple-500 transition-all duration-1000 shadow-[0_0_10px_rgba(99,102,241,0.5)]" style={{width: `${progress}%`}}></div>
+                 </div>
              </div>
         </div>
     );
@@ -375,22 +409,55 @@ const Dashboard: React.FC = () => {
       } catch (e) { setSystemStatus(false); console.error(e); }
   }, []);
 
+  const updateWeather = useCallback(async (latitude: number, longitude: number) => {
+      try {
+          const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,weather_code&timezone=auto`);
+          const data = await res.json();
+          setWeather({ temp: Math.round(data.current.temperature_2m).toString(), code: data.current.weather_code });
+      } catch (e) {
+          console.error("Error actualizando clima:", e);
+      }
+  }, []);
+
   useEffect(() => {
     fetchData();
+    
+    // --- LÓGICA DE UBICACIÓN Y CLIMA MEJORADA ---
+    const cachedLocation = localStorage.getItem('last_known_location');
+    if (cachedLocation) {
+        setLocationName(cachedLocation);
+    }
+
     if ("geolocation" in navigator) {
         navigator.geolocation.getCurrentPosition(async (position) => {
+            const { latitude, longitude } = position.coords;
+            
+            // 1. Obtener ubicación
             try {
-                const { latitude, longitude } = position.coords;
-                const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,weather_code&timezone=auto`);
-                const data = await res.json();
-                setWeather({ temp: Math.round(data.current.temperature_2m).toString(), code: data.current.weather_code });
                 const geoRes = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=es`);
                 const geoData = await geoRes.json();
-                if(geoData.city || geoData.locality) setLocationName(geoData.city || geoData.locality);
-            } catch (e) { setLocationName("México"); }
-        }, () => setLocationName("Ubicación n/a"));
+                const newLoc = geoData.city || geoData.locality || "México";
+                setLocationName(newLoc);
+                localStorage.setItem('last_known_location', newLoc);
+            } catch (e) { 
+                if(!cachedLocation) setLocationName("México"); 
+            }
+
+            // 2. Obtener clima inicial
+            await updateWeather(latitude, longitude);
+
+            // 3. Configurar intervalo para actualizar clima cada 30 min
+            const weatherInterval = setInterval(() => {
+                updateWeather(latitude, longitude);
+            }, 30 * 60 * 1000); 
+
+            return () => clearInterval(weatherInterval);
+
+        }, () => {
+            if(!cachedLocation) setLocationName("Ubicación n/a");
+        });
     }
-  }, [fetchData]);
+  }, [fetchData, updateWeather]);
 
   const openDocModal = (type: 'justificante' | 'certificado' | 'receta') => { setDocType(type); setIsDocModalOpen(true); };
   const nextPatient = useMemo(() => appointments.find(a => a.status === 'scheduled') || null, [appointments]);
