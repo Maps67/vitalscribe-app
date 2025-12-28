@@ -962,7 +962,7 @@ const ConsultationView: React.FC = () => {
   return (
     <div className="flex flex-col md:flex-row h-[calc(100vh-64px)] bg-slate-100 dark:bg-slate-950 relative">
       
-      <div className={`w-full md:w-1/4 p-4 flex flex-col gap-4 border-r dark:border-slate-800 bg-white dark:bg-slate-900 overflow-y-auto ${generatedNote ? 'hidden md:flex' : 'flex'}`}>
+      <div className={`w-full md:w-1/4 p-4 flex flex-col gap-2 border-r dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden ${generatedNote ? 'hidden md:flex' : 'flex'}`}>
         {/* Header de la columna */}
         <div className="flex justify-between items-center">
             <h2 className="text-xl font-bold dark:text-white flex items-center gap-2">
@@ -1044,7 +1044,7 @@ const ConsultationView: React.FC = () => {
         <div onClick={()=>setConsentGiven(!consentGiven)} className="flex items-center gap-2 p-3 rounded-lg border cursor-pointer select-none dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"><div className={`w-5 h-5 rounded border flex items-center justify-center ${consentGiven?'bg-green-500 border-green-500 text-white':'bg-white dark:bg-slate-700'}`}>{consentGiven&&<Check size={14}/>}</div><label className="text-xs dark:text-white cursor-pointer">Consentimiento otorgado.</label></div>
         
         {/* === ÁREA DE CHAT (HISTORIAL) === */}
-        <div className={`flex-1 flex flex-col p-2 overflow-hidden border rounded-xl bg-slate-50 dark:bg-slate-900/50 dark:border-slate-800 min-h-[150px]`}>
+        <div className={`flex-1 flex flex-col p-2 overflow-hidden border rounded-xl bg-slate-50 dark:bg-slate-900/50 dark:border-slate-800 min-h-0`}>
             {segments.length === 0 ? (
                 <div className="flex-1 flex flex-col items-center justify-center text-slate-400 opacity-50 text-xs">
                     <MessageSquare size={24} className="mb-2"/>
@@ -1068,7 +1068,7 @@ const ConsultationView: React.FC = () => {
         </div>
 
         {/* === ZONA DE ENTRADA HÍBRIDA (TEXTO / VOZ) === */}
-        <div className="flex flex-col gap-2 mt-2">
+        <div className="flex flex-col gap-2 mt-2 h-[50%] shrink-0 border-t dark:border-slate-800 pt-2 pb-2">
             
             {/* SWITCH DE HABLANTE */}
             <div className="flex justify-between items-center px-1">
@@ -1090,7 +1090,7 @@ const ConsultationView: React.FC = () => {
             </div>
 
             {/* CAJA DE TEXTO EDITABLE (BUFFER) */}
-            <div className={`relative border-2 rounded-xl transition-colors bg-white dark:bg-slate-900 overflow-hidden ${isListening ? 'border-red-400 shadow-red-100 dark:shadow-none' : 'border-slate-200 dark:border-slate-700'}`}>
+            <div className={`relative border-2 rounded-xl transition-colors bg-white dark:bg-slate-900 overflow-hidden flex-1 ${isListening ? 'border-red-400 shadow-red-100 dark:shadow-none' : 'border-slate-200 dark:border-slate-700'}`}>
                 {isListening && (
                     <div className="absolute top-2 right-2 flex gap-1">
                         <span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse"/>
@@ -1102,7 +1102,7 @@ const ConsultationView: React.FC = () => {
                     value={transcript}
                     onChange={(e) => setTranscript(e.target.value)}
                     placeholder={isListening ? "Escuchando..." : "Escribe o dicta aquí..."}
-                    className="w-full h-24 p-3 bg-transparent resize-none outline-none text-sm dark:text-white"
+                    className="w-full h-full p-3 bg-transparent resize-none outline-none text-sm dark:text-white"
                 />
                 {/* Botón manual para enviar texto si no se usa voz */}
                 {transcript && !isListening && (
@@ -1117,7 +1117,7 @@ const ConsultationView: React.FC = () => {
             </div>
 
             {/* BOTONES DE CONTROL */}
-            <div className="flex w-full gap-2">
+            <div className="flex w-full gap-2 shrink-0">
                 <button 
                     onClick={handleToggleRecording} 
                     disabled={!isOnline || !consentGiven || (!isAPISupported && !isListening)} 
@@ -1164,7 +1164,7 @@ const ConsultationView: React.FC = () => {
             <button 
                 onClick={handleLoadInsights} 
                 disabled={isLoadingInsights}
-                className="w-full mt-2 py-3 bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-bold rounded-xl shadow-lg shadow-indigo-200 dark:shadow-none hover:shadow-xl hover:scale-[1.02] transition-all flex items-center justify-center gap-2 group z-20"
+                className="w-full mt-2 py-3 bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-bold rounded-xl shadow-lg shadow-indigo-200 dark:shadow-none hover:shadow-xl hover:scale-[1.02] transition-all flex items-center justify-center gap-2 group z-20 shrink-0"
             >
                 {isLoadingInsights ? <RefreshCw className="animate-spin" size={18}/> : <Sparkles className="text-yellow-300 group-hover:rotate-12 transition-transform" size={18} />}
                 <span>Análisis Clínico 360°</span>
