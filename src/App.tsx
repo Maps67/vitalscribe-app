@@ -22,6 +22,8 @@ import SplashScreen from './components/SplashScreen';
 import MobileTabBar from './components/MobileTabBar';
 import TermsOfService from './pages/TermsOfService';
 import { TrialMonitor } from './components/TrialMonitor';
+// NUEVO: Importamos la Presentación
+import Presentation from './components/Presentation';
 // PÁGINA DE RECUPERACIÓN
 import UpdatePassword from './pages/UpdatePassword';
 
@@ -85,6 +87,8 @@ const MainLayout: React.FC<MainLayoutProps> = ({ session, onLogout }) => {
                 <Route path="/settings" element={<SettingsView />} />
                 <Route path="/privacy" element={<PrivacyPolicy />} />
                 <Route path="/terms" element={<TermsOfService />} />
+                {/* RUTA DE PRESENTACIÓN AÑADIDA */}
+                <Route path="/presentacion" element={<Presentation />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </div>

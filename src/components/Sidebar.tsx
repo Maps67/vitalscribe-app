@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom'; 
 import { 
   LayoutDashboard, Stethoscope, Users, Briefcase, LogOut, X, 
-  Settings, Download, Share, Calendar, Moon, Sun 
+  Settings, Download, Share, Calendar, Moon, Sun, Presentation
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useTheme } from '../context/ThemeContext';
@@ -85,6 +85,16 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, onLogout }) => {
               <span>{item.label}</span>
             </NavLink>
           ))}
+
+          {/* LINK A LA PRESENTACIÓN CORPORATIVA */}
+          <NavLink 
+            to="/presentacion" 
+            onClick={onClose} 
+            className={({ isActive }) => `flex items-center space-x-3 px-4 py-3 rounded-xl transition-colors duration-200 font-medium mt-4 ${isActive ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-800/50' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-indigo-600 dark:hover:text-indigo-400'}`}
+          >
+            <Presentation size={20} />
+            <span>Protocolo VitalScribe</span>
+          </NavLink>
 
           {/* ZONA DE TOGGLES E INSTALACIÓN */}
           <div className="pt-4 mt-2 border-t border-slate-100 dark:border-slate-800">
