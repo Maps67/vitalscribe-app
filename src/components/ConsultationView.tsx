@@ -133,6 +133,9 @@ const ConsultationView: React.FC = () => {
   const [segments, setSegments] = useState<TranscriptSegment[]>([]);
   const [activeSpeaker, setActiveSpeaker] = useState<'doctor' | 'patient'>('doctor');
 
+  // --- ESTADO UI MÓVIL ---
+  const [isMobileContextExpanded, setIsMobileContextExpanded] = useState(false);
+
   const startTimeRef = useRef<number>(Date.now());
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -960,7 +963,6 @@ const ConsultationView: React.FC = () => {
   };
 
   // --- LÓGICA DE VISUAL CUE PARA "GENERAR" ---
-  // CORRECCIÓN: La animación se detiene inmediatamente si generatedNote existe.
   const isReadyToGenerate = isOnline && !isListening && !isPaused && !isProcessing && (transcript || segments.length > 0) && !generatedNote;
 
   return (
@@ -1012,11 +1014,14 @@ const ConsultationView: React.FC = () => {
             )}
         </div>
         
-        {/* Contexto Médico - TARJETA FLOTANTE INTELIGENTE */}
+        {/* Contexto Médico - TARJETA INTELIGENTE (TAP MÓVIL / HOVER DESKTOP) */}
         {activeMedicalContext && !generatedNote && (
-            <div className="relative z-30 group">
-                {/* 1. ESTADO BASE (Compacto) - Mantiene el espacio en el layout */}
-                <div className="bg-amber-50 dark:bg-amber-900/20 p-3 rounded-lg border border-amber-200 dark:border-amber-800 text-xs shadow-sm cursor-help transition-opacity duration-200 group-hover:opacity-0">
+            <div 
+                className="relative z-30 group"
+                onClick={() => setIsMobileContextExpanded(!isMobileContextExpanded)} // INTERACCIÓN MÓVIL
+            >
+                {/* 1. ESTADO BASE (Compacto) */}
+                <div className={`bg-amber-50 dark:bg-amber-900/20 p-3 rounded-lg border border-amber-200 dark:border-amber-800 text-xs shadow-sm cursor-help transition-opacity duration-200 ${isMobileContextExpanded ? 'opacity-0' : 'opacity-100 md:group-hover:opacity-0'}`}>
                     <div className="flex items-center gap-2 mb-2 text-amber-700 dark:text-amber-400 font-bold border-b border-amber-200 dark:border-amber-800 pb-1">
                         <AlertCircle size={14} />
                         <span>Antecedentes Activos</span>
@@ -1045,9 +1050,9 @@ const ConsultationView: React.FC = () => {
                     </div>
                 </div>
 
-                {/* 2. ESTADO EXPANDIDO (Overlay Flotante) - Aparece on Hover */}
-                <div className="absolute top-0 left-0 w-full opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 ease-out z-50 pointer-events-none group-hover:pointer-events-auto">
-                    <div className="bg-amber-50 dark:bg-slate-800 p-4 rounded-xl border-2 border-amber-300 dark:border-amber-600 text-xs shadow-2xl scale-100 group-hover:scale-105 origin-top">
+                {/* 2. ESTADO EXPANDIDO (Overlay) - Tap Móvil o Hover Desktop */}
+                <div className={`absolute top-0 left-0 w-full transition-all duration-200 ease-out z-50 pointer-events-none group-hover:pointer-events-auto ${isMobileContextExpanded ? 'opacity-100 visible' : 'opacity-0 invisible md:group-hover:opacity-100 md:group-hover:visible'}`}>
+                    <div className="bg-amber-50 dark:bg-slate-800 p-4 rounded-xl border-2 border-amber-300 dark:border-amber-600 text-xs shadow-2xl scale-100 origin-top">
                          <div className="flex items-center gap-2 mb-2 text-amber-700 dark:text-amber-400 font-bold border-b border-amber-200 dark:border-amber-800 pb-1">
                             <AlertCircle size={14} />
                             <span>Antecedentes Activos (Detalle Completo)</span>
