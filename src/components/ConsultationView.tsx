@@ -6,7 +6,7 @@ import {
   Stethoscope, Trash2, WifiOff, Save, Share2, Download, Printer,
   Paperclip, Calendar, Clock, UserCircle, Activity, ClipboardList, Brain, FileSignature, Keyboard,
   Quote, AlertTriangle, ChevronDown, ChevronUp, Sparkles, PenLine, UserPlus, ShieldCheck, AlertCircle,
-  Pause, Play, Pill, Plus, Zap
+  Pause, Play, Pill, Plus, Zap, CornerDownLeft
 } from 'lucide-react';
 
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition'; 
@@ -26,7 +26,6 @@ import { RiskBadge } from './RiskBadge';
 
 type TabType = 'record' | 'patient' | 'chat';
 
-// Extensión local de tipo para soportar la nueva estructura de medicamentos que viene de la IA v5.6
 interface EnhancedGeminiResponse extends GeminiResponse {
    prescriptions?: MedicationItem[];
 }
@@ -69,11 +68,10 @@ const SPECIALTIES = [
 ];
 
 const ConsultationView: React.FC = () => {
-  // --- HOOK OPTIMIZADO V5.1 ---
   const { 
       isListening, 
       isPaused, 
-      isDetectingSpeech, // <--- NUEVA SEÑAL VISUAL
+      isDetectingSpeech,
       transcript, 
       startListening, 
       pauseListening, 
@@ -90,7 +88,6 @@ const ConsultationView: React.FC = () => {
   const [doctorProfile, setDoctorProfile] = useState<DoctorProfile | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null); 
   
-  // --- CONTEXTO MÉDICO ACTIVO (Híbrido: Fijo + Dinámico) ---
   const [activeMedicalContext, setActiveMedicalContext] = useState<{ 
       history: string; 
       allergies: string; 
@@ -101,7 +98,6 @@ const ConsultationView: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   
-  // Usamos el tipo extendido para soportar el array de prescriptions
   const [generatedNote, setGeneratedNote] = useState<EnhancedGeminiResponse | null>(null);
   
   const [consentGiven, setConsentGiven] = useState(false);
@@ -109,9 +105,6 @@ const ConsultationView: React.FC = () => {
   
   const [selectedSpecialty, setSelectedSpecialty] = useState('Medicina General');
   
-  // --- ESTADOS SEPARADOS PARA EL PLAN (NUEVO v5.6) ---
-  // editableInstructions: Solo texto narrativo (Dieta, Cuidados)
-  // editablePrescriptions: Array estructurado de medicamentos
   const [editableInstructions, setEditableInstructions] = useState('');
   const [editablePrescriptions, setEditablePrescriptions] = useState<MedicationItem[]>([]);
   const [isEditingInstructions, setIsEditingInstructions] = useState(false);
@@ -134,10 +127,9 @@ const ConsultationView: React.FC = () => {
   
   const [linkedAppointmentId, setLinkedAppointmentId] = useState<string | null>(null);
   
-  // Nuevo estado para controlar qué sección del SOAP se está editando
   const [editingSection, setEditingSection] = useState<string | null>(null);
 
-  // --- NUEVOS ESTADOS PARA EL CHAT DE TRANSCRIPCIÓN ---
+  // --- ESTADOS DE CHAT ---
   const [segments, setSegments] = useState<TranscriptSegment[]>([]);
   const [activeSpeaker, setActiveSpeaker] = useState<'doctor' | 'patient'>('doctor');
 
@@ -378,23 +370,27 @@ const ConsultationView: React.FC = () => {
     }
   }, [selectedPatient]); 
 
-  // Auto-scroll al final del chat de transcripción
+  // Auto-scroll del textarea cuando hay dictado
   useEffect(() => { 
-    if (transcriptEndRef.current) {
-        transcriptEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    if (isListening && textareaRef.current) {
+        textareaRef.current.scrollTop = textareaRef.current.scrollHeight;
     }
-  }, [segments, transcript]);
+    if (transcript && currentUserId) localStorage.setItem(`draft_${currentUserId}`, transcript);
+  }, [transcript, isListening, currentUserId]);
 
   useEffect(() => { 
       chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); 
-  }, [chatMessages, activeTab]);
+      if (transcriptEndRef.current) {
+          transcriptEndRef.current.scrollIntoView({ behavior: 'smooth' });
+      }
+  }, [chatMessages, activeTab, segments]);
 
   const filteredPatients = useMemo(() => {
     if (!searchTerm) return [];
     return patients.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()));
   }, [patients, searchTerm]);
 
-  // --- FUNCIÓN: CONFIRMAR TEXTO AL CAMBIAR DE HABLANTE ---
+  // --- LÓGICA DE SEGMENTACIÓN ---
   const commitCurrentTranscript = () => {
       if (transcript.trim()) {
           setSegments(prev => [...prev, {
@@ -408,7 +404,7 @@ const ConsultationView: React.FC = () => {
 
   const handleSpeakerSwitch = (newRole: 'doctor' | 'patient') => {
       if (activeSpeaker === newRole) return;
-      commitCurrentTranscript();
+      commitCurrentTranscript(); // Guarda lo que haya antes de cambiar
       setActiveSpeaker(newRole);
   };
 
@@ -494,6 +490,11 @@ const ConsultationView: React.FC = () => {
       toast.success("Dictado finalizado. Listo para generar.");
   };
 
+  // Función manual para enviar texto desde la caja
+  const handleManualSend = () => {
+      commitCurrentTranscript();
+  };
+
   const handleClearTranscript = () => {
       if(confirm("¿Borrar borrador permanentemente?")) { 
           resetTranscript(); 
@@ -554,7 +555,7 @@ const ConsultationView: React.FC = () => {
 
   const handleGenerate = async () => {
     // Commit final para asegurar que todo el texto está procesado
-    commitCurrentTranscript();
+    commitCurrentTranscript(); // Guardar lo que esté en la caja
     
     // Reconstruimos el texto completo desde los segmentos para enviarlo a la IA
     // Combinamos segmentos + el transcript actual (si quedó algo sin commitear por alguna razón)
@@ -962,6 +963,7 @@ const ConsultationView: React.FC = () => {
     <div className="flex flex-col md:flex-row h-[calc(100vh-64px)] bg-slate-100 dark:bg-slate-950 relative">
       
       <div className={`w-full md:w-1/4 p-4 flex flex-col gap-4 border-r dark:border-slate-800 bg-white dark:bg-slate-900 overflow-y-auto ${generatedNote ? 'hidden md:flex' : 'flex'}`}>
+        {/* Header de la columna */}
         <div className="flex justify-between items-center">
             <h2 className="text-xl font-bold dark:text-white flex items-center gap-2">
                 Consulta IA
@@ -969,9 +971,11 @@ const ConsultationView: React.FC = () => {
             </h2>
             <div className="flex gap-2">
                 {!isOnline && <span className="text-xs bg-red-100 text-red-600 px-2 py-1 rounded font-bold flex items-center gap-1 animate-pulse"><WifiOff size={12}/> Offline</span>}
-                {transcript && <button onClick={handleClearTranscript} className="text-slate-400 hover:text-red-500"><Trash2 size={18}/></button>}
+                {(transcript || segments.length > 0) && <button onClick={handleClearTranscript} className="text-slate-400 hover:text-red-500"><Trash2 size={18}/></button>}
             </div>
         </div>
+
+        {/* Buscador y Especialidad */}
         <div className="bg-indigo-50 dark:bg-indigo-900/20 p-3 rounded-lg border border-indigo-100 dark:border-indigo-800">
             <div className="flex justify-between items-center mb-1">
                 <label className="text-xs font-bold text-indigo-600 dark:text-indigo-300 uppercase flex gap-1"><Stethoscope size={14}/> Especialidad</label>
@@ -1004,7 +1008,7 @@ const ConsultationView: React.FC = () => {
             )}
         </div>
         
-        {/* === TARJETA DE CONTEXTO MÉDICO ACTIVO (Perfil + Última Consulta) === */}
+        {/* Contexto Médico */}
         {activeMedicalContext && !generatedNote && (
             <div className="bg-amber-50 dark:bg-amber-900/20 p-3 rounded-lg border border-amber-200 dark:border-amber-800 text-xs shadow-sm animate-fade-in-up">
                 <div className="flex items-center gap-2 mb-2 text-amber-700 dark:text-amber-400 font-bold border-b border-amber-200 dark:border-amber-800 pb-1">
@@ -1039,149 +1043,137 @@ const ConsultationView: React.FC = () => {
 
         <div onClick={()=>setConsentGiven(!consentGiven)} className="flex items-center gap-2 p-3 rounded-lg border cursor-pointer select-none dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"><div className={`w-5 h-5 rounded border flex items-center justify-center ${consentGiven?'bg-green-500 border-green-500 text-white':'bg-white dark:bg-slate-700'}`}>{consentGiven&&<Check size={14}/>}</div><label className="text-xs dark:text-white cursor-pointer">Consentimiento otorgado.</label></div>
         
-        {/* --- ÁREA DE CHAT EN VIVO (REEMPLAZO DEL TEXTAREA PLANO) --- */}
-        <div className={`flex-1 border-2 border-dashed rounded-2xl flex flex-col p-4 relative transition-colors min-h-[300px] overflow-hidden ${!isOnline ? 'border-amber-300 bg-amber-50 dark:bg-amber-900/10' : (isListening ? 'border-red-400 bg-red-50 dark:bg-red-900/10' : isPaused ? 'border-amber-400 bg-amber-50 dark:bg-amber-900/10' : 'border-slate-200 dark:border-slate-700')}`}>
-            
-            {/* Si está vacío y no hay historial */}
-            {!transcript && segments.length === 0 && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none opacity-50">
-                    <div className={`w-20 h-20 rounded-full flex items-center justify-center mb-4 ${!isOnline ? 'bg-amber-100 text-amber-500' : 'bg-slate-100 dark:bg-slate-800 text-slate-300'}`}>
-                        {!isOnline ? <WifiOff size={32}/> : <Mic size={32}/>}
-                    </div>
-                    <p className="text-sm font-medium text-slate-400">
-                        {!isOnline ? "Modo Offline" : "Listo para iniciar"}
-                    </p>
+        {/* === ÁREA DE CHAT (HISTORIAL) === */}
+        <div className={`flex-1 flex flex-col p-2 overflow-hidden border rounded-xl bg-slate-50 dark:bg-slate-900/50 dark:border-slate-800 min-h-[150px]`}>
+            {segments.length === 0 ? (
+                <div className="flex-1 flex flex-col items-center justify-center text-slate-400 opacity-50 text-xs">
+                    <MessageSquare size={24} className="mb-2"/>
+                    <p>El historial aparecerá aquí</p>
                 </div>
-            )}
-
-            {!isOnline && (
-                <div className="relative w-full z-10 bg-white/80 dark:bg-slate-800/80 p-2 rounded-lg text-xs text-center text-amber-700 dark:text-amber-400 mb-2 border border-amber-200 dark:border-amber-800">
-                    <Keyboard size={14} className="inline mr-1"/>
-                    Use el micrófono de su <b>teclado</b> para dictar.
-                </div>
-            )}
-            
-            {/* CONTAINER DEL CHAT (SCROLLABLE) */}
-            <div className="flex-1 overflow-y-auto custom-scrollbar space-y-3 pb-2 z-10 w-full px-1" ref={transcriptEndRef}>
-                
-                {/* 1. HISTORIAL DE SEGMENTOS CONFIRMADOS */}
-                {segments.map((seg, idx) => (
-                    <div key={idx} className={`flex w-full ${seg.role === 'doctor' ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-2 duration-300`}>
-                        <div className={`max-w-[85%] p-3 rounded-2xl shadow-sm text-sm border ${
-                            seg.role === 'doctor' 
-                            ? 'bg-indigo-600 text-white rounded-tr-none border-indigo-600' 
-                            : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-tl-none border-slate-200 dark:border-slate-700'
-                        }`}>
-                            <p className="whitespace-pre-wrap leading-relaxed">{seg.text}</p>
-                        </div>
-                    </div>
-                ))}
-
-                {/* 2. TEXTO EN VIVO (BUFFER ACTUAL) */}
-                {transcript && (
-                    <div className={`flex w-full ${activeSpeaker === 'doctor' ? 'justify-end' : 'justify-start'}`}>
-                        <div className={`max-w-[85%] p-3 rounded-2xl shadow-sm text-sm border relative overflow-hidden ${
-                            activeSpeaker === 'doctor' 
-                            ? 'bg-indigo-500/90 text-white rounded-tr-none border-indigo-500' 
-                            : 'bg-white/90 dark:bg-slate-800/90 text-slate-600 dark:text-slate-300 rounded-tl-none border-slate-200 dark:border-slate-700'
-                        }`}>
-                            {/* Indicador de "Escribiendo..." */}
-                            <div className="absolute top-1 right-2 flex gap-0.5 opacity-50">
-                                <span className="w-1 h-1 bg-current rounded-full animate-bounce"/>
-                                <span className="w-1 h-1 bg-current rounded-full animate-bounce delay-75"/>
-                                <span className="w-1 h-1 bg-current rounded-full animate-bounce delay-150"/>
+            ) : (
+                <div className="flex-1 overflow-y-auto custom-scrollbar space-y-2" ref={transcriptEndRef}>
+                    {segments.map((seg, idx) => (
+                        <div key={idx} className={`flex w-full ${seg.role === 'doctor' ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-1`}>
+                            <div className={`max-w-[90%] p-2 rounded-xl text-xs border ${
+                                seg.role === 'doctor' 
+                                ? 'bg-indigo-100 text-indigo-900 border-indigo-200 rounded-tr-none dark:bg-indigo-900/50 dark:text-indigo-100 dark:border-indigo-800' 
+                                : 'bg-white text-slate-700 border-slate-200 rounded-tl-none dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'
+                            }`}>
+                                <p className="whitespace-pre-wrap">{seg.text}</p>
                             </div>
-                            <p className="whitespace-pre-wrap leading-relaxed pr-4">{transcript}</p>
                         </div>
-                    </div>
-                )}
-                
-                {/* Elemento dummy para scroll */}
-                <div style={{ height: '1px' }} />
-            </div>
+                    ))}
+                </div>
+            )}
+        </div>
+
+        {/* === ZONA DE ENTRADA HÍBRIDA (TEXTO / VOZ) === */}
+        <div className="flex flex-col gap-2 mt-2">
             
-            {/* CONTROLES INFERIORES */}
-            <div className="flex flex-col gap-2 mt-2 z-20">
-                
-                {/* SWITCH DE HABLANTE (SOLO APARECE AL GRABAR O SI HAY TEXTO) */}
-                {(isListening || isPaused || transcript || segments.length > 0) && (
-                    <div className="flex justify-center mb-2">
-                        <div className="bg-slate-100 dark:bg-slate-800 p-1 rounded-full flex gap-1 shadow-sm border border-slate-200 dark:border-slate-700">
-                            <button 
-                                onClick={() => handleSpeakerSwitch('patient')}
-                                className={`px-3 py-1 rounded-full text-xs font-bold transition-all flex items-center gap-1 ${activeSpeaker === 'patient' ? 'bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
-                            >
-                                <User size={12}/> Paciente
-                            </button>
-                            <button 
-                                onClick={() => handleSpeakerSwitch('doctor')}
-                                className={`px-3 py-1 rounded-full text-xs font-bold transition-all flex items-center gap-1 ${activeSpeaker === 'doctor' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
-                            >
-                                <Stethoscope size={12}/> Doctor
-                            </button>
-                        </div>
-                    </div>
-                )}
-
-                <div className="flex w-full gap-2 flex-col xl:flex-row">
-                    {/* BOTÓN 1: GRABAR / PAUSAR / REANUDAR */}
+            {/* SWITCH DE HABLANTE */}
+            <div className="flex justify-between items-center px-1">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Entrada Activa:</span>
+                <div className="flex bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700">
                     <button 
-                        onClick={handleToggleRecording} 
-                        disabled={!isOnline || !consentGiven || (!isAPISupported && !isListening)} 
-                        className={`flex-1 py-3 rounded-xl font-bold flex justify-center gap-2 text-white shadow-lg text-sm transition-all ${
-                            !isOnline ? 'bg-slate-300 dark:bg-slate-700 cursor-not-allowed text-slate-500' :
-                            isListening ? 'bg-amber-500 hover:bg-amber-600' : // Si graba, botón amarillo de pausa
-                            isPaused ? 'bg-red-600 hover:bg-red-700' : // Si pausa, botón rojo de reanudar
-                            'bg-slate-900 hover:bg-slate-800' // Si está detenido, botón negro de grabar
-                        }`}
+                        onClick={() => handleSpeakerSwitch('patient')}
+                        className={`px-2 py-1 rounded-md text-[10px] font-bold transition-all flex items-center gap-1 ${activeSpeaker === 'patient' ? 'bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
                     >
-                        {isListening ? (
-                            <><Pause size={16} fill="currentColor"/> Pausar</>
-                        ) : isPaused ? (
-                            <><Play size={16} fill="currentColor"/> Reanudar</>
-                        ) : (
-                            <><Mic size={16}/> Grabar</>
-                        )}
+                        <User size={10}/> Paciente
                     </button>
-
-                    {/* BOTÓN 2: GENERAR / TERMINAR Y GENERAR */}
                     <button 
-                        onClick={isListening || isPaused ? handleFinishRecording : handleGenerate} 
-                        disabled={(!transcript && segments.length === 0) || isProcessing} 
-                        className={`flex-1 text-white py-3 rounded-xl font-bold shadow-lg flex justify-center gap-2 disabled:opacity-50 text-sm transition-all ${
-                            !isOnline ? 'bg-amber-500 hover:bg-amber-600' : 
-                            (isListening || isPaused) ? 'bg-green-600 hover:bg-green-700' : // Verde si es para terminar
-                            'bg-brand-teal hover:bg-teal-600' // Teal si es para generar directo
-                        }`}
+                        onClick={() => handleSpeakerSwitch('doctor')}
+                        className={`px-2 py-1 rounded-md text-[10px] font-bold transition-all flex items-center gap-1 ${activeSpeaker === 'doctor' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
                     >
-                        {isProcessing ? <RefreshCw className="animate-spin" size={16}/> : 
-                         (isListening || isPaused) ? <Check size={16}/> : 
-                         (isOnline ? <RefreshCw size={16}/> : <Save size={16}/>)
-                        } 
-                        
-                        {isProcessing ? '...' : 
-                         (isListening || isPaused) ? 'Terminar' : 
-                         (isOnline ? 'Generar' : 'Guardar')
-                        }
+                        <Stethoscope size={10}/> Doctor
                     </button>
                 </div>
             </div>
-            
-            {/* === BALANCE 360 (NUEVA UBICACIÓN PREMIUM) === */}
-            {selectedPatient && !(selectedPatient as any).isTemporary && (
+
+            {/* CAJA DE TEXTO EDITABLE (BUFFER) */}
+            <div className={`relative border-2 rounded-xl transition-colors bg-white dark:bg-slate-900 overflow-hidden ${isListening ? 'border-red-400 shadow-red-100 dark:shadow-none' : 'border-slate-200 dark:border-slate-700'}`}>
+                {isListening && (
+                    <div className="absolute top-2 right-2 flex gap-1">
+                        <span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse"/>
+                        <span className="text-[10px] text-red-500 font-bold">GRABANDO</span>
+                    </div>
+                )}
+                <textarea 
+                    ref={textareaRef}
+                    value={transcript}
+                    onChange={(e) => setTranscript(e.target.value)}
+                    placeholder={isListening ? "Escuchando..." : "Escribe o dicta aquí..."}
+                    className="w-full h-24 p-3 bg-transparent resize-none outline-none text-sm dark:text-white"
+                />
+                {/* Botón manual para enviar texto si no se usa voz */}
+                {transcript && !isListening && (
+                    <button 
+                        onClick={handleManualSend} 
+                        className="absolute bottom-2 right-2 p-1.5 bg-indigo-600 text-white rounded-full shadow-lg hover:bg-indigo-700 transition-colors" 
+                        title="Agregar al historial"
+                    >
+                        <CornerDownLeft size={14}/>
+                    </button>
+                )}
+            </div>
+
+            {/* BOTONES DE CONTROL */}
+            <div className="flex w-full gap-2">
                 <button 
-                    onClick={handleLoadInsights} 
-                    disabled={isLoadingInsights}
-                    className="w-full mt-4 py-3 bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-bold rounded-xl shadow-lg shadow-indigo-200 dark:shadow-none hover:shadow-xl hover:scale-[1.02] transition-all flex items-center justify-center gap-2 group z-20"
+                    onClick={handleToggleRecording} 
+                    disabled={!isOnline || !consentGiven || (!isAPISupported && !isListening)} 
+                    className={`flex-1 py-3 rounded-xl font-bold flex justify-center gap-2 text-white shadow-lg text-sm transition-all ${
+                        !isOnline ? 'bg-slate-300 dark:bg-slate-700 cursor-not-allowed text-slate-500' :
+                        isListening ? 'bg-amber-500 hover:bg-amber-600' : // Si graba, botón amarillo de pausa
+                        isPaused ? 'bg-red-600 hover:bg-red-700' : // Si pausa, botón rojo de reanudar
+                        'bg-slate-900 hover:bg-slate-800' // Si está detenido, botón negro de grabar
+                    }`}
                 >
-                    {isLoadingInsights ? <RefreshCw className="animate-spin" size={18}/> : <Sparkles className="text-yellow-300 group-hover:rotate-12 transition-transform" size={18} />}
-                    <span>Análisis Clínico 360°</span>
+                    {isListening ? (
+                        <><Pause size={16} fill="currentColor"/> Pausar</>
+                    ) : isPaused ? (
+                        <><Play size={16} fill="currentColor"/> Reanudar</>
+                    ) : (
+                        <><Mic size={16}/> Grabar</>
+                    )}
                 </button>
-            )}
-            
+
+                <button 
+                    onClick={isListening || isPaused ? handleFinishRecording : handleGenerate} 
+                    disabled={(!transcript && segments.length === 0) || isProcessing} 
+                    className={`flex-1 text-white py-3 rounded-xl font-bold shadow-lg flex justify-center gap-2 disabled:opacity-50 text-sm transition-all ${
+                        !isOnline ? 'bg-amber-500 hover:bg-amber-600' : 
+                        (isListening || isPaused) ? 'bg-green-600 hover:bg-green-700' : // Verde si es para terminar
+                        'bg-brand-teal hover:bg-teal-600' // Teal si es para generar directo
+                    }`}
+                >
+                    {isProcessing ? <RefreshCw className="animate-spin" size={16}/> : 
+                     (isListening || isPaused) ? <Check size={16}/> : 
+                     (isOnline ? <RefreshCw size={16}/> : <Save size={16}/>)
+                    } 
+                    
+                    {isProcessing ? '...' : 
+                     (isListening || isPaused) ? 'Terminar' : 
+                     (isOnline ? 'Generar' : 'Guardar')
+                    }
+                </button>
+            </div>
         </div>
+        
+        {/* Balance 360 */}
+        {selectedPatient && !(selectedPatient as any).isTemporary && (
+            <button 
+                onClick={handleLoadInsights} 
+                disabled={isLoadingInsights}
+                className="w-full mt-2 py-3 bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-bold rounded-xl shadow-lg shadow-indigo-200 dark:shadow-none hover:shadow-xl hover:scale-[1.02] transition-all flex items-center justify-center gap-2 group z-20"
+            >
+                {isLoadingInsights ? <RefreshCw className="animate-spin" size={18}/> : <Sparkles className="text-yellow-300 group-hover:rotate-12 transition-transform" size={18} />}
+                <span>Análisis Clínico 360°</span>
+            </button>
+        )}
+        
       </div>
       
+      {/* --- COLUMNA DERECHA (RESULTADOS) --- */}
       <div className={`w-full md:w-3/4 bg-slate-100 dark:bg-slate-950 flex flex-col border-l dark:border-slate-800 ${!generatedNote?'hidden md:flex':'flex h-full'}`}>
           <div className="flex border-b dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0 items-center px-2">
              <button onClick={()=>setGeneratedNote(null)} className="md:hidden p-4 text-slate-500"><ArrowLeft/></button>
@@ -1455,9 +1447,28 @@ const ConsultationView: React.FC = () => {
         </div>
       )}
 
-      {isAppointmentModalOpen && <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"><div className="bg-white dark:bg-slate-900 rounded-2xl p-6 max-w-sm w-full animate-fade-in-up"><h3 className="font-bold text-lg mb-4 dark:text-white">Agendar Seguimiento</h3><input type="datetime-local" className="w-full border dark:border-slate-700 p-3 rounded-xl mb-6 bg-slate-50 dark:bg-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-brand-teal" value={nextApptDate} onChange={e=>setNextApptDate(e.target.value)}/><div className="flex justify-end gap-3"><button onClick={()=>setIsAppointmentModalOpen(false)} className="text-slate-500 font-medium">Cancelar</button><button onClick={handleConfirmAppointment} className="bg-brand-teal text-white px-4 py-2 rounded-xl font-bold">Confirmar</button></div></div></div>}
+      {isAppointmentModalOpen && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 max-w-sm w-full animate-fade-in-up">
+                <h3 className="font-bold text-lg mb-4 dark:text-white">Agendar Seguimiento</h3>
+                <input type="datetime-local" className="w-full border dark:border-slate-700 p-3 rounded-xl mb-6 bg-slate-50 dark:bg-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-brand-teal" value={nextApptDate} onChange={e=>setNextApptDate(e.target.value)}/>
+                <div className="flex justify-end gap-3">
+                    <button onClick={()=>setIsAppointmentModalOpen(false)} className="text-slate-500 font-medium">Cancelar</button>
+                    <button onClick={handleConfirmAppointment} className="bg-brand-teal text-white px-4 py-2 rounded-xl font-bold">Confirmar</button>
+                </div>
+            </div>
+        </div>
+      )}
       
-      {isQuickRxModalOpen && selectedPatient && doctorProfile && <QuickRxModal isOpen={isQuickRxModalOpen} onClose={()=>setIsQuickRxModalOpen(false)} initialTranscript={transcript} patientName={selectedPatient.name} doctorProfile={doctorProfile}/>}
+      {isQuickRxModalOpen && selectedPatient && doctorProfile && (
+        <QuickRxModal 
+            isOpen={isQuickRxModalOpen} 
+            onClose={()=>setIsQuickRxModalOpen(false)} 
+            initialTranscript={transcript} 
+            patientName={selectedPatient.name} 
+            doctorProfile={doctorProfile}
+        />
+      )}
       
       {selectedPatient && (
         <InsightsPanel 
