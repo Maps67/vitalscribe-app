@@ -31,6 +31,12 @@ interface EnhancedGeminiResponse extends GeminiResponse {
    prescriptions?: MedicationItem[];
 }
 
+interface TranscriptSegment {
+    role: 'doctor' | 'patient';
+    text: string;
+    timestamp: number;
+}
+
 const SPECIALTIES = [
   "Medicina General", 
   "Cardiología", 
@@ -130,6 +136,10 @@ const ConsultationView: React.FC = () => {
   
   // Nuevo estado para controlar qué sección del SOAP se está editando
   const [editingSection, setEditingSection] = useState<string | null>(null);
+
+  // --- NUEVOS ESTADOS PARA EL CHAT DE TRANSCRIPCIÓN ---
+  const [segments, setSegments] = useState<TranscriptSegment[]>([]);
+  const [activeSpeaker, setActiveSpeaker] = useState<'doctor' | 'patient'>('doctor');
 
   const startTimeRef = useRef<number>(Date.now());
 
@@ -356,6 +366,7 @@ const ConsultationView: React.FC = () => {
 
         if (!isTemp && transcript && confirm("¿Desea limpiar el dictado anterior para el nuevo paciente?")) {
             resetTranscript();
+            setSegments([]); // Limpiar segmentos también
             if (currentUserId) localStorage.removeItem(`draft_${currentUserId}`);
             setGeneratedNote(null);
             setIsRiskExpanded(false);
@@ -367,14 +378,12 @@ const ConsultationView: React.FC = () => {
     }
   }, [selectedPatient]); 
 
+  // Auto-scroll al final del chat de transcripción
   useEffect(() => { 
-    if (isListening && textareaRef.current) {
-        textareaRef.current.scrollTop = textareaRef.current.scrollHeight;
+    if (transcriptEndRef.current) {
+        transcriptEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
-    if (transcript && currentUserId) {
-        localStorage.setItem(`draft_${currentUserId}`, transcript);
-    }
-  }, [transcript, isListening, currentUserId]);
+  }, [segments, transcript]);
 
   useEffect(() => { 
       chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); 
@@ -384,6 +393,24 @@ const ConsultationView: React.FC = () => {
     if (!searchTerm) return [];
     return patients.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()));
   }, [patients, searchTerm]);
+
+  // --- FUNCIÓN: CONFIRMAR TEXTO AL CAMBIAR DE HABLANTE ---
+  const commitCurrentTranscript = () => {
+      if (transcript.trim()) {
+          setSegments(prev => [...prev, {
+              role: activeSpeaker,
+              text: transcript.trim(),
+              timestamp: Date.now()
+          }]);
+          resetTranscript();
+      }
+  };
+
+  const handleSpeakerSwitch = (newRole: 'doctor' | 'patient') => {
+      if (activeSpeaker === newRole) return;
+      commitCurrentTranscript();
+      setActiveSpeaker(newRole);
+  };
 
   // --- HIDRATACIÓN REACTIVA ---
   const handleSelectPatient = async (patient: any) => {
@@ -452,6 +479,7 @@ const ConsultationView: React.FC = () => {
     // LÓGICA DE ESTADOS
     if (isListening) {
         pauseListening(); // Si estaba grabando, pausamos
+        // No commiteamos automáticamente al pausar para permitir continuar la frase
     } else if (isPaused) {
         startListening(); // Si estaba en pausa, reanudamos
     } else {
@@ -461,6 +489,7 @@ const ConsultationView: React.FC = () => {
 
   // Función explícita para el botón "Terminar"
   const handleFinishRecording = () => {
+      commitCurrentTranscript(); // Guardar lo último dicho
       stopListening();
       toast.success("Dictado finalizado. Listo para generar.");
   };
@@ -468,6 +497,7 @@ const ConsultationView: React.FC = () => {
   const handleClearTranscript = () => {
       if(confirm("¿Borrar borrador permanentemente?")) { 
           resetTranscript(); 
+          setSegments([]);
           if (currentUserId) localStorage.removeItem(`draft_${currentUserId}`); 
           setGeneratedNote(null); 
           setIsRiskExpanded(false); 
@@ -523,7 +553,15 @@ const ConsultationView: React.FC = () => {
   };
 
   const handleGenerate = async () => {
-    if (!transcript) return toast.error("Sin audio.");
+    // Commit final para asegurar que todo el texto está procesado
+    commitCurrentTranscript();
+    
+    // Reconstruimos el texto completo desde los segmentos para enviarlo a la IA
+    // Combinamos segmentos + el transcript actual (si quedó algo sin commitear por alguna razón)
+    const currentText = transcript.trim() ? `\n[${activeSpeaker.toUpperCase()}]: ${transcript}` : '';
+    const fullTranscript = segments.map(s => `[${s.role === 'doctor' ? 'DOCTOR' : 'PACIENTE'}]: ${s.text}`).join('\n') + currentText;
+
+    if (!fullTranscript.trim()) return toast.error("Sin audio o texto registrado.");
     
     if (!isOnline) { 
         toast.warning("Modo Offline activo: La IA requiere internet.", { icon: <WifiOff/> });
@@ -584,9 +622,9 @@ const ConsultationView: React.FC = () => {
           fullMedicalContext = activeContextString;
       }
 
-      // Usamos el tipo Enhanced para soportar el array de prescriptions
+      // Usamos el texto completo estructurado
       const response = await GeminiMedicalService.generateClinicalNote(
-          transcript, 
+          fullTranscript, 
           selectedSpecialty, 
           fullMedicalContext 
       ) as EnhancedGeminiResponse;
@@ -737,6 +775,11 @@ const ConsultationView: React.FC = () => {
     
     setIsSaving(true);
     try {
+        // Aseguramos que lo último dicho también se guarde en la BD
+        commitCurrentTranscript();
+        const currentText = transcript.trim() ? `\n[${activeSpeaker.toUpperCase()}]: ${transcript}` : '';
+        const fullTranscriptToSave = segments.map(s => `[${s.role === 'doctor' ? 'DOCTOR' : 'PACIENTE'}]: ${s.text}`).join('\n') + currentText;
+
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) throw new Error("Sesión expirada");
         
@@ -779,7 +822,7 @@ const ConsultationView: React.FC = () => {
         const payload = {
             doctor_id: user.id, 
             patient_id: finalPatientId, 
-            transcript: transcript || 'N/A', 
+            transcript: fullTranscriptToSave || 'N/A', 
             summary: summaryToSave,
             status: 'completed',
             ai_analysis_data: generatedNote, 
@@ -794,6 +837,7 @@ const ConsultationView: React.FC = () => {
         toast.success("Nota validada y guardada");
         
         resetTranscript(); 
+        setSegments([]);
         if (currentUserId) localStorage.removeItem(`draft_${currentUserId}`); 
         setGeneratedNote(null); 
         setEditableInstructions(''); 
@@ -995,9 +1039,11 @@ const ConsultationView: React.FC = () => {
 
         <div onClick={()=>setConsentGiven(!consentGiven)} className="flex items-center gap-2 p-3 rounded-lg border cursor-pointer select-none dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"><div className={`w-5 h-5 rounded border flex items-center justify-center ${consentGiven?'bg-green-500 border-green-500 text-white':'bg-white dark:bg-slate-700'}`}>{consentGiven&&<Check size={14}/>}</div><label className="text-xs dark:text-white cursor-pointer">Consentimiento otorgado.</label></div>
         
-        <div className={`flex-1 border-2 border-dashed rounded-2xl flex flex-col items-center justify-center p-4 relative transition-colors min-h-[300px] ${!isOnline ? 'border-amber-300 bg-amber-50 dark:bg-amber-900/10' : (isListening ? 'border-red-400 bg-red-50 dark:bg-red-900/10' : isPaused ? 'border-amber-400 bg-amber-50 dark:bg-amber-900/10' : 'border-slate-200 dark:border-slate-700')}`}>
+        {/* --- ÁREA DE CHAT EN VIVO (REEMPLAZO DEL TEXTAREA PLANO) --- */}
+        <div className={`flex-1 border-2 border-dashed rounded-2xl flex flex-col p-4 relative transition-colors min-h-[300px] overflow-hidden ${!isOnline ? 'border-amber-300 bg-amber-50 dark:bg-amber-900/10' : (isListening ? 'border-red-400 bg-red-50 dark:bg-red-900/10' : isPaused ? 'border-amber-400 bg-amber-50 dark:bg-amber-900/10' : 'border-slate-200 dark:border-slate-700')}`}>
             
-            {!transcript && (
+            {/* Si está vacío y no hay historial */}
+            {!transcript && segments.length === 0 && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none opacity-50">
                     <div className={`w-20 h-20 rounded-full flex items-center justify-center mb-4 ${!isOnline ? 'bg-amber-100 text-amber-500' : 'bg-slate-100 dark:bg-slate-800 text-slate-300'}`}>
                         {!isOnline ? <WifiOff size={32}/> : <Mic size={32}/>}
@@ -1015,78 +1061,110 @@ const ConsultationView: React.FC = () => {
                 </div>
             )}
             
-            {/* INDICADOR VISUAL EN TIEMPO REAL (NUEVO) */}
-            {isListening && !isPaused && (
-                 <div className={`absolute top-2 right-2 z-20 px-2 py-1 rounded-full text-[10px] font-bold border flex items-center gap-1.5 transition-all duration-300 ${
-                     isDetectingSpeech 
-                     ? 'bg-indigo-100 text-indigo-600 border-indigo-200 shadow-sm' 
-                     : 'bg-slate-100 text-slate-400 border-slate-200 opacity-70'
-                 }`}>
-                    <div className={`w-1.5 h-1.5 rounded-full ${isDetectingSpeech ? 'bg-indigo-500 animate-ping' : 'bg-slate-400'}`} />
-                    {isDetectingSpeech ? 'Detectando voz...' : 'Escuchando...'}
-                 </div>
-            )}
-
-            {/* INDICADOR DE PAUSA */}
-            {isPaused && (
-                 <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20 bg-amber-100 text-amber-600 px-3 py-1 rounded-full text-xs font-bold border border-amber-200 shadow-sm animate-pulse flex items-center gap-1">
-                    <Pause size={10} className="fill-amber-600" />
-                    PAUSADO (Texto guardado)
-                 </div>
-            )}
-
-            <textarea 
-                ref={textareaRef}
-                className={`w-full flex-1 bg-transparent p-2 rounded-xl text-base leading-relaxed resize-none focus:outline-none dark:text-slate-200 z-10 custom-scrollbar ${!transcript ? 'opacity-0' : 'opacity-100'}`}
-                value={transcript}
-                onChange={(e) => setTranscript(e.target.value)}
-                placeholder="" 
-            />
-            
-            <div ref={transcriptEndRef}/>
-            
-            <div className="flex w-full gap-2 mt-auto flex-col xl:flex-row z-20 pt-4">
+            {/* CONTAINER DEL CHAT (SCROLLABLE) */}
+            <div className="flex-1 overflow-y-auto custom-scrollbar space-y-3 pb-2 z-10 w-full px-1" ref={transcriptEndRef}>
                 
-                {/* BOTÓN 1: GRABAR / PAUSAR / REANUDAR */}
-                <button 
-                    onClick={handleToggleRecording} 
-                    disabled={!isOnline || !consentGiven || (!isAPISupported && !isListening)} 
-                    className={`flex-1 py-3 rounded-xl font-bold flex justify-center gap-2 text-white shadow-lg text-sm transition-all ${
-                        !isOnline ? 'bg-slate-300 dark:bg-slate-700 cursor-not-allowed text-slate-500' :
-                        isListening ? 'bg-amber-500 hover:bg-amber-600' : // Si graba, botón amarillo de pausa
-                        isPaused ? 'bg-red-600 hover:bg-red-700' : // Si pausa, botón rojo de reanudar
-                        'bg-slate-900 hover:bg-slate-800' // Si está detenido, botón negro de grabar
-                    }`}
-                >
-                    {isListening ? (
-                        <><Pause size={16} fill="currentColor"/> Pausar</>
-                    ) : isPaused ? (
-                        <><Play size={16} fill="currentColor"/> Reanudar</>
-                    ) : (
-                        <><Mic size={16}/> Grabar</>
-                    )}
-                </button>
+                {/* 1. HISTORIAL DE SEGMENTOS CONFIRMADOS */}
+                {segments.map((seg, idx) => (
+                    <div key={idx} className={`flex w-full ${seg.role === 'doctor' ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-2 duration-300`}>
+                        <div className={`max-w-[85%] p-3 rounded-2xl shadow-sm text-sm border ${
+                            seg.role === 'doctor' 
+                            ? 'bg-indigo-600 text-white rounded-tr-none border-indigo-600' 
+                            : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-tl-none border-slate-200 dark:border-slate-700'
+                        }`}>
+                            <p className="whitespace-pre-wrap leading-relaxed">{seg.text}</p>
+                        </div>
+                    </div>
+                ))}
 
-                {/* BOTÓN 2: GENERAR / TERMINAR Y GENERAR */}
-                <button 
-                    onClick={isListening || isPaused ? handleFinishRecording : handleGenerate} 
-                    disabled={!transcript || isProcessing} 
-                    className={`flex-1 text-white py-3 rounded-xl font-bold shadow-lg flex justify-center gap-2 disabled:opacity-50 text-sm transition-all ${
-                        !isOnline ? 'bg-amber-500 hover:bg-amber-600' : 
-                        (isListening || isPaused) ? 'bg-green-600 hover:bg-green-700' : // Verde si es para terminar
-                        'bg-brand-teal hover:bg-teal-600' // Teal si es para generar directo
-                    }`}
-                >
-                    {isProcessing ? <RefreshCw className="animate-spin" size={16}/> : 
-                     (isListening || isPaused) ? <Check size={16}/> : 
-                     (isOnline ? <RefreshCw size={16}/> : <Save size={16}/>)
-                    } 
-                    
-                    {isProcessing ? '...' : 
-                     (isListening || isPaused) ? 'Terminar' : 
-                     (isOnline ? 'Generar' : 'Guardar')
-                    }
-                </button>
+                {/* 2. TEXTO EN VIVO (BUFFER ACTUAL) */}
+                {transcript && (
+                    <div className={`flex w-full ${activeSpeaker === 'doctor' ? 'justify-end' : 'justify-start'}`}>
+                        <div className={`max-w-[85%] p-3 rounded-2xl shadow-sm text-sm border relative overflow-hidden ${
+                            activeSpeaker === 'doctor' 
+                            ? 'bg-indigo-500/90 text-white rounded-tr-none border-indigo-500' 
+                            : 'bg-white/90 dark:bg-slate-800/90 text-slate-600 dark:text-slate-300 rounded-tl-none border-slate-200 dark:border-slate-700'
+                        }`}>
+                            {/* Indicador de "Escribiendo..." */}
+                            <div className="absolute top-1 right-2 flex gap-0.5 opacity-50">
+                                <span className="w-1 h-1 bg-current rounded-full animate-bounce"/>
+                                <span className="w-1 h-1 bg-current rounded-full animate-bounce delay-75"/>
+                                <span className="w-1 h-1 bg-current rounded-full animate-bounce delay-150"/>
+                            </div>
+                            <p className="whitespace-pre-wrap leading-relaxed pr-4">{transcript}</p>
+                        </div>
+                    </div>
+                )}
+                
+                {/* Elemento dummy para scroll */}
+                <div style={{ height: '1px' }} />
+            </div>
+            
+            {/* CONTROLES INFERIORES */}
+            <div className="flex flex-col gap-2 mt-2 z-20">
+                
+                {/* SWITCH DE HABLANTE (SOLO APARECE AL GRABAR O SI HAY TEXTO) */}
+                {(isListening || isPaused || transcript || segments.length > 0) && (
+                    <div className="flex justify-center mb-2">
+                        <div className="bg-slate-100 dark:bg-slate-800 p-1 rounded-full flex gap-1 shadow-sm border border-slate-200 dark:border-slate-700">
+                            <button 
+                                onClick={() => handleSpeakerSwitch('patient')}
+                                className={`px-3 py-1 rounded-full text-xs font-bold transition-all flex items-center gap-1 ${activeSpeaker === 'patient' ? 'bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                            >
+                                <User size={12}/> Paciente
+                            </button>
+                            <button 
+                                onClick={() => handleSpeakerSwitch('doctor')}
+                                className={`px-3 py-1 rounded-full text-xs font-bold transition-all flex items-center gap-1 ${activeSpeaker === 'doctor' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                            >
+                                <Stethoscope size={12}/> Doctor
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                <div className="flex w-full gap-2 flex-col xl:flex-row">
+                    {/* BOTÓN 1: GRABAR / PAUSAR / REANUDAR */}
+                    <button 
+                        onClick={handleToggleRecording} 
+                        disabled={!isOnline || !consentGiven || (!isAPISupported && !isListening)} 
+                        className={`flex-1 py-3 rounded-xl font-bold flex justify-center gap-2 text-white shadow-lg text-sm transition-all ${
+                            !isOnline ? 'bg-slate-300 dark:bg-slate-700 cursor-not-allowed text-slate-500' :
+                            isListening ? 'bg-amber-500 hover:bg-amber-600' : // Si graba, botón amarillo de pausa
+                            isPaused ? 'bg-red-600 hover:bg-red-700' : // Si pausa, botón rojo de reanudar
+                            'bg-slate-900 hover:bg-slate-800' // Si está detenido, botón negro de grabar
+                        }`}
+                    >
+                        {isListening ? (
+                            <><Pause size={16} fill="currentColor"/> Pausar</>
+                        ) : isPaused ? (
+                            <><Play size={16} fill="currentColor"/> Reanudar</>
+                        ) : (
+                            <><Mic size={16}/> Grabar</>
+                        )}
+                    </button>
+
+                    {/* BOTÓN 2: GENERAR / TERMINAR Y GENERAR */}
+                    <button 
+                        onClick={isListening || isPaused ? handleFinishRecording : handleGenerate} 
+                        disabled={(!transcript && segments.length === 0) || isProcessing} 
+                        className={`flex-1 text-white py-3 rounded-xl font-bold shadow-lg flex justify-center gap-2 disabled:opacity-50 text-sm transition-all ${
+                            !isOnline ? 'bg-amber-500 hover:bg-amber-600' : 
+                            (isListening || isPaused) ? 'bg-green-600 hover:bg-green-700' : // Verde si es para terminar
+                            'bg-brand-teal hover:bg-teal-600' // Teal si es para generar directo
+                        }`}
+                    >
+                        {isProcessing ? <RefreshCw className="animate-spin" size={16}/> : 
+                         (isListening || isPaused) ? <Check size={16}/> : 
+                         (isOnline ? <RefreshCw size={16}/> : <Save size={16}/>)
+                        } 
+                        
+                        {isProcessing ? '...' : 
+                         (isListening || isPaused) ? 'Terminar' : 
+                         (isOnline ? 'Generar' : 'Guardar')
+                        }
+                    </button>
+                </div>
             </div>
             
             {/* === BALANCE 360 (NUEVA UBICACIÓN PREMIUM) === */}
@@ -1348,7 +1426,7 @@ const ConsultationView: React.FC = () => {
                                   {/* AQUÍ ESTÁ EL CAMBIO: Usamos FormattedText en lugar de texto plano */}
                                   {chatMessages.map((m,i)=>(
                                       <div key={i} className={`p-3 mb-3 rounded-2xl max-w-[85%] text-sm shadow-sm ${m.role==='user'?'bg-brand-teal text-white self-end ml-auto rounded-tr-none':'bg-slate-100 dark:bg-slate-800 dark:text-slate-200 self-start mr-auto rounded-tl-none'}`}>
-                                                  <FormattedText content={m.text} />
+                                          <FormattedText content={m.text} />
                                       </div>
                                   ))}
                                   <div ref={chatEndRef}/>
