@@ -959,6 +959,9 @@ const ConsultationView: React.FC = () => {
       } catch { toast.error("Error agendando"); }
   };
 
+  // --- LÓGICA DE VISUAL CUE PARA "GENERAR" ---
+  const isReadyToGenerate = isOnline && !isListening && !isPaused && !isProcessing && (transcript || segments.length > 0);
+
   return (
     <div className="flex flex-col md:flex-row h-[calc(100vh-64px)] bg-slate-100 dark:bg-slate-950 relative">
       
@@ -1178,8 +1181,8 @@ const ConsultationView: React.FC = () => {
                     disabled={(!transcript && segments.length === 0) || isProcessing} 
                     className={`flex-1 text-white py-3 rounded-xl font-bold shadow-lg flex justify-center gap-2 disabled:opacity-50 text-sm transition-all ${
                         !isOnline ? 'bg-amber-500 hover:bg-amber-600' : 
-                        (isListening || isPaused) ? 'bg-green-600 hover:bg-green-700' : // Verde si es para terminar
-                        'bg-brand-teal hover:bg-teal-600' // Teal si es para generar directo
+                        (isListening || isPaused) ? 'bg-green-600 hover:bg-green-700' : 
+                        `bg-brand-teal hover:bg-teal-600 ${isReadyToGenerate ? 'animate-pulse ring-2 ring-teal-300 ring-offset-2 shadow-xl shadow-teal-500/40' : ''}`
                     }`}
                 >
                     {isProcessing ? <RefreshCw className="animate-spin" size={16}/> : 
