@@ -1008,35 +1008,71 @@ const ConsultationView: React.FC = () => {
             )}
         </div>
         
-        {/* Contexto Médico */}
+        {/* Contexto Médico - TARJETA FLOTANTE INTELIGENTE */}
         {activeMedicalContext && !generatedNote && (
-            <div className="bg-amber-50 dark:bg-amber-900/20 p-3 rounded-lg border border-amber-200 dark:border-amber-800 text-xs shadow-sm animate-fade-in-up">
-                <div className="flex items-center gap-2 mb-2 text-amber-700 dark:text-amber-400 font-bold border-b border-amber-200 dark:border-amber-800 pb-1">
-                    <AlertCircle size={14} />
-                    <span>Antecedentes Activos</span>
-                </div>
-                <div className="space-y-2 text-slate-700 dark:text-slate-300">
-                    <div>
-                        <span className="font-semibold block text-[10px] uppercase text-amber-600">Patológicos / Historial:</span>
-                        {activeMedicalContext.history}
+            <div className="relative z-30 group">
+                {/* 1. ESTADO BASE (Compacto) - Mantiene el espacio en el layout */}
+                <div className="bg-amber-50 dark:bg-amber-900/20 p-3 rounded-lg border border-amber-200 dark:border-amber-800 text-xs shadow-sm cursor-help transition-opacity duration-200 group-hover:opacity-0">
+                    <div className="flex items-center gap-2 mb-2 text-amber-700 dark:text-amber-400 font-bold border-b border-amber-200 dark:border-amber-800 pb-1">
+                        <AlertCircle size={14} />
+                        <span>Antecedentes Activos</span>
                     </div>
-                    {activeMedicalContext.allergies && activeMedicalContext.allergies !== "No registradas" && (
+                    <div className="space-y-2 text-slate-700 dark:text-slate-300">
                         <div>
-                             <span className="font-semibold block text-[10px] uppercase text-amber-600">Alergias:</span>
-                             {activeMedicalContext.allergies}
+                            <span className="font-semibold block text-[10px] uppercase text-amber-600">Patológicos / Historial:</span>
+                            <p className="line-clamp-1">{activeMedicalContext.history}</p>
                         </div>
-                    )}
-                    {/* SECCIÓN ÚLTIMA CONSULTA */}
-                    {activeMedicalContext.lastConsultation && (
-                        <div className="mt-2 pt-2 border-t border-amber-200 dark:border-amber-800/50">
-                             <span className="font-semibold block text-[10px] uppercase text-amber-600 mb-1">
-                                Última Visita ({new Date(activeMedicalContext.lastConsultation.date).toLocaleDateString()}):
-                             </span>
-                             <p className="line-clamp-3 italic opacity-90 pl-1 border-l-2 border-amber-300 dark:border-amber-700">
-                                {activeMedicalContext.lastConsultation.summary}
-                             </p>
+                        {activeMedicalContext.allergies && activeMedicalContext.allergies !== "No registradas" && (
+                            <div>
+                                 <span className="font-semibold block text-[10px] uppercase text-amber-600">Alergias:</span>
+                                 <p className="font-bold text-red-600 dark:text-red-400 truncate">{activeMedicalContext.allergies}</p>
+                            </div>
+                        )}
+                        {activeMedicalContext.lastConsultation && (
+                            <div className="mt-2 pt-2 border-t border-amber-200 dark:border-amber-800/50">
+                                 <span className="font-semibold block text-[10px] uppercase text-amber-600 mb-1">
+                                    Última Visita ({new Date(activeMedicalContext.lastConsultation.date).toLocaleDateString()}):
+                                 </span>
+                                 <p className="line-clamp-2 italic opacity-90 pl-1 border-l-2 border-amber-300 dark:border-amber-700">
+                                    {activeMedicalContext.lastConsultation.summary}
+                                 </p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* 2. ESTADO EXPANDIDO (Overlay Flotante) - Aparece on Hover */}
+                <div className="absolute top-0 left-0 w-full opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 ease-out z-50 pointer-events-none group-hover:pointer-events-auto">
+                    <div className="bg-amber-50 dark:bg-slate-800 p-4 rounded-xl border-2 border-amber-300 dark:border-amber-600 text-xs shadow-2xl scale-100 group-hover:scale-105 origin-top">
+                         <div className="flex items-center gap-2 mb-2 text-amber-700 dark:text-amber-400 font-bold border-b border-amber-200 dark:border-amber-800 pb-1">
+                            <AlertCircle size={14} />
+                            <span>Antecedentes Activos (Detalle Completo)</span>
                         </div>
-                    )}
+                        <div className="space-y-3 text-slate-800 dark:text-slate-200 max-h-[60vh] overflow-y-auto custom-scrollbar">
+                             <div>
+                                <span className="font-bold block text-[10px] uppercase text-amber-600">Historial Completo:</span>
+                                <p className="whitespace-pre-wrap leading-relaxed">{activeMedicalContext.history}</p>
+                            </div>
+                             {activeMedicalContext.allergies && activeMedicalContext.allergies !== "No registradas" && (
+                                <div className="bg-red-50 dark:bg-red-900/20 p-2 rounded border border-red-100 dark:border-red-800">
+                                     <span className="font-bold block text-[10px] uppercase text-red-600">⚠ Alergias Críticas:</span>
+                                     <p className="font-black text-red-700 dark:text-red-300 text-sm">{activeMedicalContext.allergies}</p>
+                                </div>
+                            )}
+                            {activeMedicalContext.lastConsultation && (
+                                <div className="mt-2 pt-2 border-t border-amber-200 dark:border-amber-800/50">
+                                     <span className="font-bold block text-[10px] uppercase text-amber-600 mb-1">
+                                        Resumen Última Visita ({new Date(activeMedicalContext.lastConsultation.date).toLocaleDateString()}):
+                                     </span>
+                                     <div className="p-2 bg-white dark:bg-slate-900 rounded border border-amber-100 dark:border-amber-900/50">
+                                         <p className="italic opacity-100 text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">
+                                            {activeMedicalContext.lastConsultation.summary}
+                                         </p>
+                                     </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
                 </div>
             </div>
         )}
