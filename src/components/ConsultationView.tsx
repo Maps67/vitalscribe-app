@@ -92,7 +92,8 @@ const ConsultationView: React.FC = () => {
   const [activeMedicalContext, setActiveMedicalContext] = useState<{ 
       history: string; 
       allergies: string; 
-      lastConsultation?: { date: string; summary: string; } 
+      lastConsultation?: { date: string; summary: string; };
+      insurance?: { provider: string; policyNumber: string; accidentDate: string };
   } | null>(null);
 
   const [isProcessing, setIsProcessing] = useState(false);
@@ -313,7 +314,7 @@ const ConsultationView: React.FC = () => {
                 // 2. OBTENER ÚLTIMA CONSULTA (DINÁMICO)
                 const { data: lastCons, error: consError } = await supabase
                     .from('consultations')
-                    .select('summary, created_at')
+                    .select('summary, created_at, ai_analysis_data')
                     .eq('patient_id', selectedPatient.id)
                     .order('created_at', { ascending: false })
                     .limit(1)
@@ -323,6 +324,7 @@ const ConsultationView: React.FC = () => {
                 let cleanHistory = "";
                 let cleanAllergies = "";
                 let lastConsultationData = undefined;
+                let lastInsuranceData = undefined;
 
                 if (!patientError && patientData) {
                     const rawHistory = patientData.pathological_history || patientData.history;
@@ -331,22 +333,36 @@ const ConsultationView: React.FC = () => {
                     cleanAllergies = cleanHistoryString(rawAllergies);
                 }
 
-                if (!consError && lastCons && lastCons.summary) {
-                    lastConsultationData = {
-                        date: lastCons.created_at,
-                        summary: lastCons.summary
-                    };
+                if (!consError && lastCons) {
+                    if (lastCons.summary) {
+                        lastConsultationData = {
+                            date: lastCons.created_at,
+                            summary: lastCons.summary
+                        };
+                    }
+                    
+                    if (lastCons.ai_analysis_data) {
+                        const analysis = typeof lastCons.ai_analysis_data === 'string'
+                            ? JSON.parse(lastCons.ai_analysis_data)
+                            : lastCons.ai_analysis_data;
+                        
+                        if (analysis && analysis.insurance_data && analysis.insurance_data.provider) {
+                            lastInsuranceData = analysis.insurance_data;
+                        }
+                    }
                 }
 
                 // LÓGICA DE VISIBILIDAD: Mostrar si hay perfil O si hay consulta previa
                 const hasStaticData = (cleanHistory && cleanHistory.length > 2) || (cleanAllergies && cleanAllergies.length > 2);
                 const hasDynamicData = !!lastConsultationData;
+                const hasInsurance = !!lastInsuranceData;
 
-                if (hasStaticData || hasDynamicData) {
+                if (hasStaticData || hasDynamicData || hasInsurance) {
                       setActiveMedicalContext({
                         history: cleanHistory || "No registrados",
                         allergies: cleanAllergies || "No registradas",
-                        lastConsultation: lastConsultationData
+                        lastConsultation: lastConsultationData,
+                        insurance: lastInsuranceData
                       });
                 }
 
@@ -828,7 +844,6 @@ const ConsultationView: React.FC = () => {
         const durationSeconds = Math.round((Date.now() - startTimeRef.current) / 1000);
 
         // --- PREPARACIÓN DEL PAYLOAD CON DATOS DE SEGUROS ---
-        // Combinamos la respuesta de la IA con los datos capturados manualmente en el panel de seguros
         const finalAiData = {
             ...generatedNote,
             insurance_data: insuranceData // Aquí se inyectan los datos de Póliza/Fecha
@@ -1060,6 +1075,18 @@ const ConsultationView: React.FC = () => {
                                  </p>
                             </div>
                         )}
+                        
+                        {/* VISUALIZACIÓN DE SEGURO PREVIO (EN ESTADO COMPACTO) */}
+                        {activeMedicalContext.insurance && (
+                            <div className="mt-2 pt-2 border-t border-amber-200 dark:border-amber-800/50">
+                                 <span className="font-bold block text-[10px] uppercase text-emerald-600 mb-1 flex items-center gap-1">
+                                    <ShieldCheck size={10} /> Cobertura ({activeMedicalContext.insurance.provider})
+                                 </span>
+                                 <div className="text-[10px] text-slate-600 dark:text-slate-400 pl-1 border-l-2 border-emerald-300">
+                                    <p className="truncate">Póliza: {activeMedicalContext.insurance.policyNumber}</p>
+                                 </div>
+                            </div>
+                        )}
                     </div>
                 </div>
 
@@ -1090,6 +1117,31 @@ const ConsultationView: React.FC = () => {
                                           <p className="italic opacity-100 text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">
                                              {activeMedicalContext.lastConsultation.summary}
                                           </p>
+                                     </div>
+                                </div>
+                            )}
+
+                            {/* VISUALIZACIÓN DE SEGURO PREVIO (EN ESTADO EXPANDIDO) */}
+                            {activeMedicalContext.insurance && (
+                                <div className="mt-2 pt-2 border-t border-amber-200 dark:border-amber-800/50">
+                                     <span className="font-bold block text-[10px] uppercase text-emerald-600 mb-1 flex items-center gap-1">
+                                        <ShieldCheck size={12} /> Último Trámite de Seguro Registrado
+                                     </span>
+                                     <div className="p-2 bg-emerald-50 dark:bg-emerald-900/10 rounded border border-emerald-200 dark:border-emerald-800">
+                                          <div className="grid grid-cols-2 gap-2 text-slate-700 dark:text-slate-300">
+                                              <div>
+                                                  <span className="block font-bold text-emerald-700 dark:text-emerald-400">Aseguradora</span>
+                                                  {activeMedicalContext.insurance.provider}
+                                              </div>
+                                              <div>
+                                                  <span className="block font-bold text-emerald-700 dark:text-emerald-400">Póliza</span>
+                                                  {activeMedicalContext.insurance.policyNumber || "No registrada"}
+                                              </div>
+                                              <div className="col-span-2">
+                                                  <span className="block font-bold text-emerald-700 dark:text-emerald-400">Fecha Siniestro</span>
+                                                  {activeMedicalContext.insurance.accidentDate}
+                                              </div>
+                                          </div>
                                      </div>
                                 </div>
                             )}
