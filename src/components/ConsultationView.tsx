@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { useLocation } from 'react-router-dom'; 
 import { 
   Mic, Square, RefreshCw, FileText, Search, X, 
   MessageSquare, User, Send, Edit2, Check, ArrowLeft, 
@@ -843,11 +842,15 @@ const ConsultationView: React.FC = () => {
 
         const durationSeconds = Math.round((Date.now() - startTimeRef.current) / 1000);
 
-        // --- PREPARACIÓN DEL PAYLOAD CON DATOS DE SEGUROS ---
+        // --- PREPARACIÓN DEL PAYLOAD CON DATOS DE SEGUROS (CORREGIDO) ---
         // Combinamos la respuesta de la IA con los datos capturados manualmente en el panel de seguros
+        // SOLO si hay una póliza real escrita (Evita "GNP/No Registrada" basura)
+        
+        const hasValidInsurance = insuranceData && insuranceData.policyNumber && insuranceData.policyNumber.trim().length > 0;
+
         const finalAiData = {
             ...generatedNote,
-            insurance_data: insuranceData // Aquí se inyectan los datos de Póliza/Fecha
+            insurance_data: hasValidInsurance ? insuranceData : null // Filtro de seguridad
         };
 
         const payload = {
@@ -1326,7 +1329,7 @@ const ConsultationView: React.FC = () => {
                                       <div className="flex items-start justify-end gap-1.5 max-w-xs text-right opacity-60 hover:opacity-100 transition-opacity duration-300 group cursor-help">
                                         <ShieldCheck className="w-3 h-3 text-slate-400 mt-[2px] flex-shrink-0 group-hover:text-brand-teal" />
                                         <p className="text-[10px] leading-3 text-slate-400 group-hover:text-slate-600 transition-colors">
-                                          <span className="font-semibold text-brand-teal">VitalScribe AI</span> es una herramienta de soporte. La responsabilidad final del diagnóstico, tratamiento y el uso de los formatos administrativos recae exclusivamente en el médico tratante.
+                                          <span className="font-semibold text-brand-teal">MediScribe AI</span> es una herramienta de soporte. La responsabilidad final del diagnóstico, tratamiento y el uso de los formatos administrativos recae exclusivamente en el médico tratante.
                                         </p>
                                       </div>
                                     </div>
