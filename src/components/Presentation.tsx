@@ -2,7 +2,8 @@ import React from 'react';
 import { 
   WifiOff, Shield, Mic, Brain, FileCheck, 
   Pill, ShieldAlert, TrendingUp, Bot, Scale, Network, Lock,
-  Check, FileText, Server, Cloud, Database
+  Check, FileText, Server, Cloud, Database, Clock, 
+  AlertTriangle, HeartPulse, DollarSign
 } from 'lucide-react';
 
 // --- SUB-COMPONENTES REUTILIZABLES ---
@@ -15,13 +16,11 @@ const Slide = ({ children, className = "", id }: { children: React.ReactNode; cl
     
     {/* Header Constante con LOGO REAL (UBICADO A LA DERECHA) */}
     <div className="absolute top-10 right-10 md:right-16 flex items-center gap-3 z-10">
-      {/* Busca el archivo logo.png en tu carpeta public/img/ */}
       <img 
         src="/img/logo.png" 
         alt="VitalScribe Logo" 
         className="h-20 w-auto object-contain"
         onError={(e) => {
-          // Fallback por si no has subido el logo aún: oculta la imagen y muestra texto
           e.currentTarget.style.display = 'none';
           e.currentTarget.nextElementSibling?.classList.remove('hidden');
         }}
@@ -81,7 +80,6 @@ const Presentation = () => {
         <SlideTitle>La Crisis de Eficiencia y Burnout</SlideTitle>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
           <div className="rounded-3xl overflow-hidden shadow-lg h-[400px] bg-slate-200">
-            {/* REFERENCIA A IMAGEN LOCAL .PNG */}
             <img 
               src="/img/doctor-stress.png" 
               alt="Doctor bajo estrés" 
@@ -138,7 +136,6 @@ const Presentation = () => {
             </div>
          </div>
          <div className="h-full w-full relative order-1 md:order-2 min-h-[400px] bg-slate-800">
-            {/* REFERENCIA A IMAGEN LOCAL .PNG */}
             <img 
               src="/img/interface.png" 
               alt="Interfaz IA" 
@@ -181,39 +178,102 @@ const Presentation = () => {
         </div>
       </Slide>
 
-      {/* Slide 6: Tabla Competencia */}
+      {/* Slide 6: Matriz de Impacto Clínico (Nueva Estructura) */}
       <Slide id="slide6">
-        <SlideTitle>Posicionamiento Competitivo</SlideTitle>
-        <div className="overflow-x-auto rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-sky-700 text-white">
-                <th className="p-5 font-bold">Ventaja Estratégica</th>
-                <th className="p-5 font-bold bg-sky-600">VitalScribe AI</th>
-                <th className="p-5 font-bold">Nimbo</th>
-                <th className="p-5 font-bold">Eleonor</th>
-                <th className="p-5 font-bold">HuliPractice</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200">
-              {[
-                { feat: "Modelo de IA", vs: "Ilimitada (Flat)", n: "Tier Pro", e: "Básica", h: "Pago por Nota" },
-                { feat: "Tecnología de Captura", vs: "Ambiental", n: "Dictado", e: "Dictado", h: "Dictado" },
-                { feat: "Infraestructura", vs: "Offline-First", n: "Cloud-Only", e: "Cloud/Mobile", h: "Cloud-Only" },
-                { feat: "Blindaje Legal (NOM-004)", vs: "Estructura Auto.", n: "Manual", e: "Plantillas", h: "Manual" },
-                { feat: "Seguridad Farmacológica", vs: "Contextual IA", n: "Medispan (Add-on)", e: "Básica", h: "N/A" },
-              ].map((row, idx) => (
-                <tr key={idx} className="border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50">
-                  <td className="p-4 font-bold">{row.feat}</td>
-                  <td className="p-4 font-bold text-sky-600 dark:text-sky-400 bg-sky-50/50 dark:bg-sky-900/10">{row.vs}</td>
-                  <td className="p-4 opacity-75">{row.n}</td>
-                  <td className="p-4 opacity-75">{row.e}</td>
-                  <td className="p-4 opacity-75">{row.h}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <SlideTitle>Matriz de Impacto en la Práctica Médica</SlideTitle>
+        <p className="text-center max-w-3xl mx-auto text-lg text-slate-600 dark:text-slate-300 mb-10">
+          Transformamos la carga administrativa en tiempo clínico de calidad. No es solo software, es calidad de vida.
+        </p>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-10">
+          {/* Columna 1: Práctica Convencional (El Dolor) */}
+          <div className="bg-slate-50 dark:bg-slate-800/50 p-8 rounded-3xl border border-slate-200 dark:border-slate-700 relative overflow-hidden">
+             <div className="absolute top-0 left-0 w-full h-2 bg-slate-300"></div>
+             <h3 className="text-2xl font-bold text-slate-500 mb-6 flex items-center gap-3">
+               <AlertTriangle className="text-amber-500"/> Práctica Convencional
+             </h3>
+             <ul className="space-y-6">
+                <li className="flex gap-4">
+                  <Clock className="w-6 h-6 text-slate-400 shrink-0"/>
+                  <div>
+                    <strong className="block text-slate-700 dark:text-slate-300">15-20 min / paciente</strong>
+                    <span className="text-sm text-slate-500">en documentación y llenado de ECE.</span>
+                  </div>
+                </li>
+                <li className="flex gap-4">
+                  <FileText className="w-6 h-6 text-slate-400 shrink-0"/>
+                  <div>
+                    <strong className="block text-slate-700 dark:text-slate-300">Riesgo Legal Latente</strong>
+                    <span className="text-sm text-slate-500">Notas incompletas por fatiga (NOM-004).</span>
+                  </div>
+                </li>
+                <li className="flex gap-4">
+                  <HeartPulse className="w-6 h-6 text-slate-400 shrink-0"/>
+                  <div>
+                    <strong className="block text-slate-700 dark:text-slate-300">Atención Fragmentada</strong>
+                    <span className="text-sm text-slate-500">Mirada fija en la pantalla, no en el paciente.</span>
+                  </div>
+                </li>
+             </ul>
+          </div>
+
+          {/* Columna 2: Práctica Aumentada (La Solución) */}
+          <div className="bg-white dark:bg-slate-800 p-8 rounded-3xl border-2 border-sky-500 shadow-xl relative overflow-hidden">
+             <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-sky-500 to-indigo-600"></div>
+             <h3 className="text-2xl font-bold text-slate-800 dark:text-white mb-6 flex items-center gap-3">
+               <Sparkles className="text-sky-500 fill-sky-500"/> Con VitalScribe AI
+             </h3>
+             <ul className="space-y-6">
+                <li className="flex gap-4">
+                  <div className="p-1 bg-green-100 dark:bg-green-900/30 rounded-full h-fit"><Check className="w-4 h-4 text-green-600 dark:text-green-400" strokeWidth={3}/></div>
+                  <div>
+                    <strong className="block text-slate-900 dark:text-white text-lg">2-3 min / paciente</strong>
+                    <span className="text-slate-600 dark:text-slate-300">Solo revisión y validación final.</span>
+                  </div>
+                </li>
+                <li className="flex gap-4">
+                  <div className="p-1 bg-green-100 dark:bg-green-900/30 rounded-full h-fit"><Check className="w-4 h-4 text-green-600 dark:text-green-400" strokeWidth={3}/></div>
+                  <div>
+                    <strong className="block text-slate-900 dark:text-white text-lg">Blindaje Jurídico Total</strong>
+                    <span className="text-slate-600 dark:text-slate-300">Estructura SOAP perfecta y exhaustiva siempre.</span>
+                  </div>
+                </li>
+                <li className="flex gap-4">
+                  <div className="p-1 bg-green-100 dark:bg-green-900/30 rounded-full h-fit"><Check className="w-4 h-4 text-green-600 dark:text-green-400" strokeWidth={3}/></div>
+                  <div>
+                    <strong className="block text-slate-900 dark:text-white text-lg">Retorno de Inversión</strong>
+                    <span className="text-slate-600 dark:text-slate-300">Capacidad de ver +2 pacientes extra por día.</span>
+                  </div>
+                </li>
+             </ul>
+          </div>
         </div>
+
+        {/* Indicador de Ahorro de Tiempo */}
+        <div className="bg-slate-100 dark:bg-slate-800 rounded-xl p-6 flex flex-col md:flex-row items-center justify-between gap-6 border border-slate-200 dark:border-slate-700">
+           <div className="flex items-center gap-4">
+              <div className="p-3 bg-sky-100 text-sky-600 rounded-full"><Clock size={24}/></div>
+              <div>
+                <h4 className="font-bold text-slate-700 dark:text-white text-lg">Tiempo Administrativo Recuperado</h4>
+                <p className="text-sm text-slate-500">Promedio diario estimado</p>
+              </div>
+           </div>
+           <div className="flex-1 w-full max-w-lg">
+              <div className="flex justify-between text-xs font-bold text-slate-400 mb-1 uppercase tracking-widest">
+                <span>Antes</span>
+                <span>Ahora (85% Ahorro)</span>
+              </div>
+              <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden relative">
+                 <div className="absolute top-0 left-0 h-full bg-slate-400 w-full opacity-30"></div> {/* Barra base */}
+                 <div className="absolute top-0 left-0 h-full bg-gradient-to-r from-sky-500 to-indigo-500 w-[15%] rounded-full shadow-[0_0_10px_rgba(59,130,246,0.5)]"></div> {/* Barra nueva */}
+              </div>
+              <div className="flex justify-between mt-2">
+                 <span className="text-slate-400 font-medium">~2 Horas/día perdidas</span>
+                 <span className="text-sky-600 dark:text-sky-400 font-bold">~20 Min/día totales</span>
+              </div>
+           </div>
+        </div>
+
       </Slide>
 
       {/* Slide 7: Arquitectura */}
