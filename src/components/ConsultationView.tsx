@@ -6,7 +6,7 @@ import {
   Stethoscope, Trash2, WifiOff, Save, Share2, Download, Printer,
   Paperclip, Calendar, Clock, UserCircle, Activity, ClipboardList, Brain, FileSignature, Keyboard,
   Quote, AlertTriangle, ChevronDown, ChevronUp, Sparkles, PenLine, UserPlus, ShieldCheck, AlertCircle,
-  Pause, Play, Pill, Plus, Zap, CornerDownLeft
+  Pause, Play, Pill, Plus, Zap, CornerDownLeft, Building2
 } from 'lucide-react';
 
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition'; 
@@ -23,8 +23,9 @@ import { DoctorFileGallery } from './DoctorFileGallery';
 import { UploadMedico } from './UploadMedico';
 import { InsightsPanel } from './InsightsPanel';
 import { RiskBadge } from './RiskBadge';
+import InsurancePanel from './Insurance/InsurancePanel';
 
-type TabType = 'record' | 'patient' | 'chat';
+type TabType = 'record' | 'patient' | 'chat' | 'insurance';
 
 interface EnhancedGeminiResponse extends GeminiResponse {
    prescriptions?: MedicationItem[];
@@ -1072,12 +1073,12 @@ const ConsultationView: React.FC = () => {
                             {activeMedicalContext.lastConsultation && (
                                 <div className="mt-2 pt-2 border-t border-amber-200 dark:border-amber-800/50">
                                      <span className="font-bold block text-[10px] uppercase text-amber-600 mb-1">
-                                        Resumen Última Visita ({new Date(activeMedicalContext.lastConsultation.date).toLocaleDateString()}):
+                                         Resumen Última Visita ({new Date(activeMedicalContext.lastConsultation.date).toLocaleDateString()}):
                                      </span>
                                      <div className="p-2 bg-white dark:bg-slate-900 rounded border border-amber-100 dark:border-amber-900/50">
-                                         <p className="italic opacity-100 text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">
-                                            {activeMedicalContext.lastConsultation.summary}
-                                         </p>
+                                          <p className="italic opacity-100 text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">
+                                             {activeMedicalContext.lastConsultation.summary}
+                                          </p>
                                      </div>
                                 </div>
                             )}
@@ -1224,7 +1225,7 @@ const ConsultationView: React.FC = () => {
       <div className={`w-full md:w-3/4 bg-slate-100 dark:bg-slate-950 flex flex-col border-l dark:border-slate-800 ${!generatedNote?'hidden md:flex':'flex h-full'}`}>
           <div className="flex border-b dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0 items-center px-2">
              <button onClick={()=>setGeneratedNote(null)} className="md:hidden p-4 text-slate-500"><ArrowLeft/></button>
-             {[{id:'record',icon:FileText,l:'EXPEDIENTE CLÍNICO'},{id:'patient',icon:User,l:'PLAN PACIENTE'},{id:'chat',icon:MessageSquare,l:'ASISTENTE'}].map(t=><button key={t.id} onClick={()=>setActiveTab(t.id as TabType)} disabled={!generatedNote&&t.id!=='record'} className={`flex-1 py-4 flex justify-center gap-2 text-sm font-bold border-b-4 transition-colors ${activeTab===t.id?'text-brand-teal border-brand-teal':'text-slate-400 border-transparent hover:text-slate-600'}`}><t.icon size={18}/><span className="hidden sm:inline">{t.l}</span></button>)}
+             {[{id:'record',icon:FileText,l:'EXPEDIENTE CLÍNICO'},{id:'patient',icon:User,l:'PLAN PACIENTE'},{id:'chat',icon:MessageSquare,l:'ASISTENTE'}, {id:'insurance', icon:Building2, l:'SEGUROS'}].map(t=><button key={t.id} onClick={()=>setActiveTab(t.id as TabType)} disabled={!generatedNote&&t.id!=='record'} className={`flex-1 py-4 flex justify-center gap-2 text-sm font-bold border-b-4 transition-colors ${activeTab===t.id?'text-brand-teal border-brand-teal':'text-slate-400 border-transparent hover:text-slate-600'}`}><t.icon size={18}/><span className="hidden sm:inline">{t.l}</span></button>)}
           </div>
           
           <div className="flex-1 overflow-y-auto p-4 md:p-8 bg-slate-100 dark:bg-slate-950">
@@ -1273,7 +1274,7 @@ const ConsultationView: React.FC = () => {
                                 {generatedNote.risk_analysis && (
                                   <div className="mt-2">
                                     <RiskBadge 
-                                      level={generatedNote.risk_analysis.level} 
+                                      level={generatedNote.risk_analysis.level as "Alto" | "Medio" | "Bajo"} 
                                       reason={generatedNote.risk_analysis.reason} 
                                     />
                                   </div>
@@ -1473,6 +1474,19 @@ const ConsultationView: React.FC = () => {
                               <form onSubmit={handleChatSend} className="flex gap-2 relative"><input className="flex-1 border dark:border-slate-700 p-4 pr-12 rounded-xl bg-slate-50 dark:bg-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-brand-teal shadow-sm" value={chatInput} onChange={e=>setChatInput(e.target.value)} placeholder="Pregunta al asistente..."/><button disabled={isChatting||!chatInput.trim()} className="absolute right-3 top-1/2 -translate-y-1/2 bg-brand-teal text-white p-2 rounded-lg hover:bg-teal-600 disabled:opacity-50 transition-all hover:scale-105 active:scale-95">{isChatting?<RefreshCw className="animate-spin" size={18}/>:<Send size={18}/>}</button></form>
                           </div>
                       )}
+
+                      {/* === PESTAÑA 4: SEGUROS (NUEVO) === */}
+                      {activeTab==='insurance' && generatedNote && (
+                          <div className="h-full animate-fade-in-up">
+                              <InsurancePanel 
+                                  patientName={selectedPatient?.name || "Paciente no registrado"}
+                                  diagnosis={generatedNote.soapData?.analysis || generatedNote.clinicalNote || "Diagnóstico pendiente"}
+                                  clinicalSummary={`S: ${generatedNote.soapData?.subjective || ''}\nO: ${generatedNote.soapData?.objective || ''}`}
+                                  icd10={generatedNote.soapData?.analysis?.match(/\(([A-Z][0-9][0-9](\.[0-9])?)\)/)?.[1] || ''}
+                              />
+                          </div>
+                      )}
+
                  </div>
              )}
           </div>
@@ -1484,7 +1498,7 @@ const ConsultationView: React.FC = () => {
             <div className="relative w-full max-w-2xl bg-white dark:bg-slate-900 h-full shadow-2xl p-4 flex flex-col border-l dark:border-slate-800 animate-slide-in-right">
                 <div className="flex justify-between items-center mb-4 pb-2 border-b dark:border-slate-800">
                     <div><h3 className="font-bold text-lg dark:text-white flex items-center gap-2"><Paperclip size={20} className="text-brand-teal"/> Expediente Digital</h3><p className="text-xs text-slate-500">Paciente: {selectedPatient.name}</p></div>
-                    <button onClick={() => setIsAttachmentsOpen(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors"><X size={20} className="text-slate-500"/></button>
+                    <button onClick={() => setIsAttachmentsOpen(false)} className="p-2 hover:bg-slate-100 dark:bg-slate-800 rounded-full transition-colors"><X size={20} className="text-slate-500"/></button>
                 </div>
                 <div className="flex-1 overflow-y-auto flex flex-col gap-4">
                     <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-lg"><p className="text-xs font-bold text-slate-500 mb-2 uppercase">Agregar archivo:</p><UploadMedico preSelectedPatient={selectedPatient} onUploadComplete={() => { toast.success("Archivo agregado."); }} /></div>
