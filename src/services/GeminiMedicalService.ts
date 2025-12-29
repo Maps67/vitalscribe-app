@@ -1,7 +1,7 @@
 import { supabase } from '../lib/supabase';
 import { GeminiResponse, PatientInsight, MedicationItem, FollowUpMessage } from '../types';
 
-console.log("🚀 V-STABLE DEPLOY: Deterministic Rx Action Protocol (v6.2) [Few-Shot Logic]");
+console.log("🚀 V-STABLE DEPLOY: Deterministic Rx Action Protocol (v6.2) [Few-Shot Logic + Mexican Compliance]");
 
 // ==========================================
 // 1. UTILIDADES DE LIMPIEZA & CONEXIÓN
@@ -148,6 +148,21 @@ export const GeminiMedicalService = {
 
         HISTORIA CLÍNICA PREVIA (CONTEXTO):
         "${patientHistory || 'No disponible'}"
+
+        ===================================================
+        🇲🇽 REGLAS DE SINTAXIS Y TERMINOLOGÍA MEXICANA (NOM-004)
+        ===================================================
+        1. DICCIONARIO DE TRADUCCIÓN EN TIEMPO REAL:
+           - Si el paciente usa lenguaje coloquial ("me duele la panza", "siento hormigas", "me zumban los oídos"), DEBES transformarlo a terminología médica técnica ("algía abdominal", "parestesias", "acúfenos").
+           - La nota clínica NUNCA debe contener jerga coloquial en las secciones Objetivas o de Análisis.
+
+        2. ABREVIATURAS ESTÁNDAR:
+           - Utiliza ÚNICAMENTE abreviaturas estandarizadas y aceptadas en el entorno clínico mexicano (ej: HAS, DM2, IVU, EPOC, IRC). Evita abreviaturas ambiguas.
+
+        3. CORRECCIÓN FONÉTICA DE MEDICAMENTOS:
+           - El audio puede tener errores. Si escuchas algo fonéticamente similar a un fármaco en un contexto lógico, corrígelo.
+           - Ejemplo: "Metformina de 8 50" -> "Metformina 850 mg". "Que todo flaco" -> "Ketorolaco".
+           - Prioriza siempre nombres de fármacos reales sobre palabras comunes si el contexto es terapéutico.
 
         ===================================================
         📚 CODIFICACIÓN CLÍNICA (CIE-10 / ICD-10)
