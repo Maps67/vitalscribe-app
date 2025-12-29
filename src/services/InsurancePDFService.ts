@@ -2,10 +2,12 @@ import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { MedicalReportData, InsuranceProvider } from '../types/insurance';
 
 /**
- * SERVICIO DE MAPEO Y LLENADO DE PDFs (CALIBRADO V2)
+ * SERVICIO DE MAPEO Y LLENADO DE PDFs (CALIBRACIÓN V3 - AGRESIVA)
  * -----------------------------------------------------
- * Coordenadas ajustadas visualmente basadas en las capturas de pantalla reales.
- * Origen (0,0) = Esquina Inferior Izquierda.
+ * Ajustes drásticos basados en evidencia fotográfica.
+ * - GNP: Se movió todo a la derecha para evitar la barra lateral azul oscuro.
+ * - AXA: Se bajó todo el contenido para salir de la zona de encabezados.
+ * - METLIFE: Se bajó el nombre casi 100 puntos.
  */
 
 export const InsurancePDFService = {
@@ -32,7 +34,7 @@ export const InsurancePDFService = {
   },
 
   // ---------------------------------------------------------
-  // 1. GNP (Calibrado con image_8ab4e8.png)
+  // 1. GNP (Ajuste: Mover a la derecha por barra lateral y bajar Y)
   // ---------------------------------------------------------
   async fillGNPForm(data: MedicalReportData): Promise<Uint8Array> {
     const formBytes = await this.loadPDFTemplate('gnp_informe_medico.pdf');
@@ -42,44 +44,42 @@ export const InsurancePDFService = {
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
     const fontSize = 10;
 
-    const nameParts = data.patientName.split(" ");
-    const apPaterno = nameParts[0] || "";
-    const apMaterno = nameParts[1] || "";
-    const nombres = nameParts.slice(2).join(" ");
+    // Split de nombre para campos separados
+    const parts = data.patientName.split(" ");
+    const ap = parts[0] || "";
+    const am = parts[1] || "";
+    const nom = parts.slice(2).join(" ");
 
-    // --- DATOS DEL PACIENTE (Tabla Superior Azul) ---
-    // Ajuste Y: Bajamos de 580 a ~640 (GNP tiene el header muy grande)
-    // Coordenadas estimadas para caer dentro de los cuadros blancos
-    page1.drawText(apPaterno, { x: 35, y: 645, size: fontSize, font }); // Apellido P
-    page1.drawText(apMaterno, { x: 200, y: 645, size: fontSize, font }); // Apellido M
-    page1.drawText(nombres, { x: 380, y: 645, size: fontSize, font }); // Nombres
+    // --- ENCABEZADO (Ficha de Identificación) ---
+    // En tu foto, "Mariana" estaba muy a la izquierda.
+    // X original: 35 -> Nuevo X: 160 (Para saltar la barra azul lateral)
+    const headerY = 665; 
+    
+    page1.drawText(ap, { x: 160, y: headerY, size: fontSize, font });
+    page1.drawText(am, { x: 300, y: headerY, size: fontSize, font });
+    page1.drawText(nom, { x: 450, y: headerY, size: fontSize, font });
 
-    // Fecha Nacimiento (Derecha)
-    page1.drawText(data.age.toString(), { x: 550, y: 645, size: fontSize, font }); 
+    // Edad
+    page1.drawText(data.age.toString(), { x: 280, y: 635, size: fontSize, font });
 
-    // Sexo (M/F) - Bajamos un poco
-    if (data.gender === 'M') {
-        page1.drawText('X', { x: 35, y: 615, size: 12, font }); 
-    } else {
-        page1.drawText('X', { x: 65, y: 615, size: 12, font }); 
-    }
-
-    // --- PADECIMIENTO ACTUAL (Cuadro Grande Inferior) ---
-    // En tu imagen, el texto caía en "Antecedentes". 
-    // El cuadro "Padecimiento actual" está mucho más abajo, casi al pie de página.
+    // --- PADECIMIENTO ACTUAL (El problema mayor) ---
+    // En tu foto, el texto chocaba con la barra "HISTORIA CLÍNICA" a la izquierda
+    // y estaba sobre el título "Padecimiento actual".
+    // Corrección: X = 130 (Derecha), Y = 280 (Más abajo del título)
+    
     page1.drawText(data.clinicalSummary, {
-        x: 35,
-        y: 220, // Bajamos drásticamente la altura
-        size: 8,
+        x: 130, // Margen izquierdo grande para evitar barra azul
+        y: 280, 
+        size: 9,
         font,
-        maxWidth: 530,
-        lineHeight: 10
+        maxWidth: 450, // Más angosto para no salirse a la derecha
+        lineHeight: 11
     });
 
     // Diagnóstico (Pie de página)
     page1.drawText(`${data.diagnosis} (CIE: ${data.icd10})`, {
-        x: 35,
-        y: 100, 
+        x: 130,
+        y: 80, // Bien abajo
         size: 9,
         font
     });
@@ -88,7 +88,7 @@ export const InsurancePDFService = {
   },
 
   // ---------------------------------------------------------
-  // 2. AXA (Calibrado con image_8ab583.png)
+  // 2. AXA (Ajuste: Bajar todo drásticamente)
   // ---------------------------------------------------------
   async fillAXAForm(data: MedicalReportData): Promise<Uint8Array> {
     const formBytes = await this.loadPDFTemplate('axa_informe_medico.pdf');
@@ -96,52 +96,45 @@ export const InsurancePDFService = {
     const pages = pdfDoc.getPages();
     const page1 = pages[0]; 
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-    const fontSize = 9;
+    const fontSize = 10;
 
-    const nameParts = data.patientName.split(" ");
-    
     // --- DATOS DEL PACIENTE ---
-    // En tu imagen "Mariana" salía flotando en las instrucciones.
-    // El cuadro azul "Datos del Asegurado" empieza aprox a 1/4 de página.
-    const rowY = 575; // Altura de la fila de nombres
+    // En tu foto salía en "Instrucciones". Bajamos ~100 puntos.
+    const rowY = 530; // Antes 635. Bajamos mucho.
 
-    page1.drawText(nameParts[0] || "", { x: 35, y: rowY, size: fontSize, font }); // Ap. Paterno
-    page1.drawText(nameParts[1] || "", { x: 200, y: rowY, size: fontSize, font }); // Ap. Materno
-    page1.drawText(nameParts.slice(2).join(" "), { x: 370, y: rowY, size: fontSize, font }); // Nombres
+    const parts = data.patientName.split(" ");
+    page1.drawText(parts[0] || "", { x: 35, y: rowY, size: fontSize, font }); // Paterno
+    page1.drawText(parts[1] || "", { x: 200, y: rowY, size: fontSize, font }); // Materno
+    page1.drawText(parts.slice(2).join(" "), { x: 380, y: rowY, size: fontSize, font }); // Nombres
 
-    // Edad y Fecha (Fila siguiente, más abajo)
-    page1.drawText(data.age.toString(), { x: 35, y: 545, size: fontSize, font });
+    // Edad
+    page1.drawText(data.age.toString(), { x: 35, y: 495, size: fontSize, font });
 
-    // --- ANTECEDENTES (Tabla inferior) ---
-    // AXA es estricto con las cajas.
-    // Escribiremos el resumen clínico en el área blanca grande si existe, 
-    // o en "Padecimiento Actual" que suele estar en la Página 2.
-    
+    // --- PÁGINA 2: PADECIMIENTO ---
+    // En tu foto salía sobre el encabezado azul.
     if (pages.length > 1) {
         const page2 = pages[1];
-        // Cuadro "Padecimiento actual" en Pag 2 (Tope de página)
+        
+        // Padecimiento Actual (Bajamos de 700 a 620 para librar el header azul)
         page2.drawText(data.clinicalSummary, {
             x: 35,
-            y: 700,
-            size: 8,
+            y: 620, 
+            size: 9,
             font,
             maxWidth: 540,
-            lineHeight: 10
+            lineHeight: 11
         });
         
-        // Diagnóstico en Pag 2
-        page2.drawText(data.diagnosis, { x: 35, y: 520, size: 9, font });
-        page2.drawText(data.icd10, { x: 450, y: 520, size: 9, font });
-    } else {
-        // Fallback si solo hay 1 página: escribir en margen inferior
-        page1.drawText("Ver anexo para detalle clínico.", { x: 35, y: 100, size: 8, font });
+        // Diagnóstico (Bajamos a la zona correcta)
+        page2.drawText(data.diagnosis, { x: 35, y: 480, size: 9, font });
+        page2.drawText(data.icd10, { x: 450, y: 480, size: 9, font });
     }
 
     return await pdfDoc.save();
   },
 
   // ---------------------------------------------------------
-  // 3. MetLife (Calibrado con image_8ab8a7.png)
+  // 3. MetLife (Ajuste: Bajar nombre fuera del título)
   // ---------------------------------------------------------
    async fillMetLifeForm(data: MedicalReportData): Promise<Uint8Array> {
     const formBytes = await this.loadPDFTemplate('metlife_informe_medico.pdf');
@@ -151,34 +144,26 @@ export const InsurancePDFService = {
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
     
     // --- DATOS DEL PACIENTE ---
-    // En tu imagen, "Mariana" salía en el título. Bajamos al recuadro gris.
-    // El campo "Nombre completo" es una línea larga.
-    page1.drawText(data.patientName, { x: 130, y: 610, size: 10, font }); 
+    // En tu foto "Mariana" estaba en el título "Informe Médico".
+    // Bajamos ~100 puntos hacia la caja gris "1. Datos del paciente"
+    const nameY = 525; // Antes 610
 
-    // Fecha (Día/Mes/Año a la derecha)
+    page1.drawText(data.patientName, { x: 130, y: nameY, size: 10, font }); 
+
+    // Fecha
     const today = new Date();
-    page1.drawText(today.getDate().toString(), { x: 450, y: 640, size: 10, font });
+    page1.drawText(today.getDate().toString(), { x: 435, y: nameY + 30, size: 10, font });
 
-    // --- PADECIMIENTO ACTUAL ---
-    // MetLife tiene "Antecedentes" (Sección 2) y "Padecimiento" (Sección 3, usualmente pag 2).
-    
-    // Escribimos un resumen breve en "Historia clínica breve" (Sección 2, fondo blanco)
-    page1.drawText(data.clinicalSummary.substring(0, 400), {
+    // --- HISTORIA CLÍNICA (Sección 2) ---
+    // En tu foto estaba bien, pero quizá un poco alto. Ajustamos fino.
+    page1.drawText(data.clinicalSummary.substring(0, 500), {
         x: 35,
-        y: 430, // Altura media-baja
-        size: 8,
+        y: 380, 
+        size: 9,
         font,
         maxWidth: 530,
-        lineHeight: 10
+        lineHeight: 11
     });
-
-    // Si hay página 2 (Padecimiento Actual)
-    if (pages.length > 1) {
-        const page2 = pages[1];
-        page2.drawText(data.clinicalSummary, {
-            x: 35, y: 700, size: 8, font, maxWidth: 530, lineHeight: 10
-        });
-    }
 
     return await pdfDoc.save();
   }
