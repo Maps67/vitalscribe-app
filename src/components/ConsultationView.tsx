@@ -342,8 +342,8 @@ const ConsultationView: React.FC = () => {
                     }
                     
                     if (lastCons.ai_analysis_data) {
-                        const analysis = typeof lastCons.ai_analysis_data === 'string'
-                            ? JSON.parse(lastCons.ai_analysis_data)
+                        const analysis = typeof lastCons.ai_analysis_data === 'string' 
+                            ? JSON.parse(lastCons.ai_analysis_data) 
                             : lastCons.ai_analysis_data;
                         
                         if (analysis && analysis.insurance_data && analysis.insurance_data.provider) {
@@ -844,6 +844,7 @@ const ConsultationView: React.FC = () => {
         const durationSeconds = Math.round((Date.now() - startTimeRef.current) / 1000);
 
         // --- PREPARACIÓN DEL PAYLOAD CON DATOS DE SEGUROS ---
+        // Combinamos la respuesta de la IA con los datos capturados manualmente en el panel de seguros
         const finalAiData = {
             ...generatedNote,
             insurance_data: insuranceData // Aquí se inyectan los datos de Póliza/Fecha

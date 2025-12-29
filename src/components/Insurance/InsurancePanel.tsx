@@ -171,9 +171,14 @@ const InsurancePanel: React.FC<InsurancePanelProps> = ({
               )}
             </button>
             
-            <p className="text-[10px] text-center text-slate-400">
-              * Descargue el formato editable. Los datos de póliza y fecha se guardarán en el historial digital del paciente.
-            </p>
+            {/* Disclaimer Legal Actualizado */}
+            <div className="mt-4 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-100 dark:border-slate-700">
+              <p className="text-[10px] text-center text-slate-400 leading-tight">
+                * Los formatos provistos son propiedad de sus respectivas instituciones y se facilitan únicamente para fines de gestión. 
+                <span className="font-bold"> VitalScribe</span> no tiene afiliación comercial con las aseguradoras; el uso correcto del documento es responsabilidad del usuario.
+                Los datos capturados se guardarán en el historial para fines de trazabilidad.
+              </p>
+            </div>
           </div>
         ) : (
           <TabulatorCalculator />
