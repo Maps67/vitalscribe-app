@@ -197,11 +197,11 @@ const Presentation = () => {
             </thead>
             <tbody className="bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200">
               {[
-                { feat: "Modelo de IA", vs: "Ilimitada (Sin Costos Ocultos)", n: "Solo en Planes Pro", e: "Básica", h: "Pago por Nota (Taxímetro)" },
-                { feat: "Tecnología de Captura", vs: "Escucha Ambiental", n: "Dictado Simple", e: "Dictado Simple", h: "Dictado Simple" },
-                { feat: "Infraestructura", vs: "Offline-First (Rural Ready)", n: "Cloud-Only", e: "Cloud/Mobile", h: "Cloud-Only" },
-                { feat: "Blindaje Legal (NOM-004)", vs: "Automatización Estructural", n: "Responsabilidad Usuario", e: "Plantillas Manuales", h: "Manual" },
-                { feat: "Seguridad Farmacológica", vs: "Análisis Contextual IA", n: "Medispan (Extra)", e: "Básica", h: "N/A" },
+                { feat: "Modelo de IA", vs: "Ilimitada (Flat)", n: "Tier Pro", e: "Básica", h: "Pago por Nota" },
+                { feat: "Tecnología de Captura", vs: "Ambiental", n: "Dictado", e: "Dictado", h: "Dictado" },
+                { feat: "Infraestructura", vs: "Offline-First", n: "Cloud-Only", e: "Cloud/Mobile", h: "Cloud-Only" },
+                { feat: "Blindaje Legal (NOM-004)", vs: "Estructura Auto.", n: "Manual", e: "Plantillas", h: "Manual" },
+                { feat: "Seguridad Farmacológica", vs: "Contextual IA", n: "Medispan (Add-on)", e: "Básica", h: "N/A" },
               ].map((row, idx) => (
                 <tr key={idx} className="border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50">
                   <td className="p-4 font-bold">{row.feat}</td>
