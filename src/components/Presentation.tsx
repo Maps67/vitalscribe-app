@@ -3,7 +3,8 @@ import {
   WifiOff, Shield, Mic, Brain, FileCheck, 
   Pill, ShieldAlert, TrendingUp, Bot, Scale, Network, Lock,
   Check, FileText, Server, Cloud, Database, Clock, 
-  AlertTriangle, HeartPulse, DollarSign, Sparkles
+  AlertTriangle, HeartPulse, DollarSign, Sparkles,
+  Building2, Calculator, Download, ShieldCheck
 } from 'lucide-react';
 
 // --- SUB-COMPONENTES REUTILIZABLES ---
@@ -49,12 +50,12 @@ const SlideTitle = ({ children }: { children: React.ReactNode }) => (
 );
 
 const Tile = ({ icon: Icon, title, text }: { icon: any, title: string, text: string }) => (
-  <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-8 text-center hover:-translate-y-2 hover:shadow-xl transition-all duration-300">
-    <div className="flex justify-center mb-6">
-      <Icon className="w-12 h-12 text-sky-500" />
+  <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-8 text-center hover:-translate-y-2 hover:shadow-xl transition-all duration-300 h-full flex flex-col items-center">
+    <div className="flex justify-center mb-6 p-4 bg-sky-50 dark:bg-sky-900/20 rounded-full">
+      <Icon className="w-10 h-10 text-sky-500" />
     </div>
     <h3 className="text-xl font-bold text-slate-800 dark:text-white mb-3">{title}</h3>
-    <p className="text-slate-600 dark:text-slate-300 leading-relaxed">{text}</p>
+    <p className="text-slate-600 dark:text-slate-300 leading-relaxed text-sm">{text}</p>
   </div>
 );
 
@@ -182,7 +183,7 @@ const Presentation = () => {
         </div>
       </Slide>
 
-      {/* Slide 6: Matriz de Impacto Clínico (Nueva Estructura) */}
+      {/* Slide 6: Matriz de Impacto Clínico */}
       <Slide id="slide6">
         <SlideTitle>Matriz de Impacto en la Práctica Médica</SlideTitle>
         <p className="text-center max-w-3xl mx-auto text-lg text-slate-600 dark:text-slate-300 mb-10">
@@ -320,6 +321,92 @@ const Presentation = () => {
           <Tile icon={Scale} title="NOM-004-SSA3" text="Cumplimiento estricto de la estructura del Expediente Clínico: trazabilidad, fecha, hora y firma electrónica." />
           <Tile icon={Network} title="NOM-024-SSA3" text="Interoperabilidad garantizada mediante estándares HL7 y codificación CIE-10 automática (IA), lista para certificación DGIS." />
           <Tile icon={Lock} title="LFPDPPP" text="Protección de datos sensibles con consentimiento expreso digital y aviso de privacidad sobre nube soberana." />
+        </div>
+      </Slide>
+
+      {/* Slide 9: NUEVO - Gestión de Aseguradoras */}
+      <Slide id="slide9">
+        <SlideTitle>El Fin del Caos Administrativo</SlideTitle>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
+          <div>
+            <h3 className="text-3xl font-bold text-slate-800 dark:text-white mb-4">Central de Trámites Médicos</h3>
+            <p className="text-lg text-slate-600 dark:text-slate-300 mb-8 leading-relaxed">
+              VitalScribe no solo diagnostica, gestiona. Hemos integrado un módulo completo para eliminar la fricción burocrática con las aseguradoras.
+            </p>
+            <ul className="space-y-6">
+              <li className="flex gap-4">
+                <div className="p-2 bg-indigo-50 dark:bg-indigo-900/30 rounded-lg text-indigo-600"><Building2 size={24}/></div>
+                <div>
+                  <strong className="block text-slate-900 dark:text-white">Formatos Oficiales Centralizados</strong>
+                  <span className="text-slate-600 dark:text-slate-400 text-sm">GNP, AXA, MetLife siempre actualizados y listos para descargar.</span>
+                </div>
+              </li>
+              <li className="flex gap-4">
+                <div className="p-2 bg-teal-50 dark:bg-teal-900/30 rounded-lg text-teal-600"><Brain size={24}/></div>
+                <div>
+                  <strong className="block text-slate-900 dark:text-white">Memoria Inteligente</strong>
+                  <span className="text-slate-600 dark:text-slate-400 text-sm">El sistema "recuerda" la póliza y el siniestro del paciente en sus visitas subsecuentes.</span>
+                </div>
+              </li>
+              <li className="flex gap-4">
+                <div className="p-2 bg-sky-50 dark:bg-sky-900/30 rounded-lg text-sky-600"><Download size={24}/></div>
+                <div>
+                  <strong className="block text-slate-900 dark:text-white">Descarga Instantánea</strong>
+                  <span className="text-slate-600 dark:text-slate-400 text-sm">Entrega formatos editables al paciente en segundos, sin buscar en archivos.</span>
+                </div>
+              </li>
+            </ul>
+          </div>
+          <div className="rounded-3xl overflow-hidden shadow-2xl border-4 border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 flex items-center justify-center min-h-[400px]">
+             {/* Aquí iría una captura del panel, por ahora un placeholder visual */}
+             <div className="text-center p-8">
+                <Building2 size={80} className="mx-auto text-slate-300 mb-4" />
+                <p className="text-slate-400 font-medium">Panel de Gestión de Seguros</p>
+                <div className="flex gap-2 justify-center mt-4">
+                   <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-md text-xs font-bold">GNP</span>
+                   <span className="px-3 py-1 bg-red-100 text-red-700 rounded-md text-xs font-bold">AXA</span>
+                   <span className="px-3 py-1 bg-cyan-100 text-cyan-700 rounded-md text-xs font-bold">MetLife</span>
+                </div>
+             </div>
+          </div>
+        </div>
+      </Slide>
+
+      {/* Slide 10: NUEVO - Financiero y Legal */}
+      <Slide id="slide10">
+        <SlideTitle>Rentabilidad y Protección Legal</SlideTitle>
+        <p className="text-center max-w-3xl mx-auto text-lg text-slate-600 dark:text-slate-300 mb-12">
+          Herramientas diseñadas para proteger los ingresos y la integridad jurídica del profesional de la salud.
+        </p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl p-10 hover:shadow-xl transition-all duration-300 group">
+             <div className="w-14 h-14 bg-emerald-100 dark:bg-emerald-900/30 rounded-2xl flex items-center justify-center text-emerald-600 dark:text-emerald-400 mb-6 group-hover:scale-110 transition-transform">
+                <Calculator size={32} />
+             </div>
+             <h3 className="text-2xl font-bold text-slate-800 dark:text-white mb-4">Calculadora de Honorarios</h3>
+             <p className="text-slate-600 dark:text-slate-300 leading-relaxed mb-6">
+               Desglose automático y transparente para el equipo quirúrgico. Evita errores de cálculo entre Tabulador vs. Honorario Privado.
+             </p>
+             <ul className="text-sm text-slate-500 space-y-2">
+               <li className="flex items-center gap-2"><Check size={14} className="text-emerald-500"/> Cálculo automático Cirujano / Anestesiólogo</li>
+               <li className="flex items-center gap-2"><Check size={14} className="text-emerald-500"/> Detección de diferenciales a cobrar al paciente</li>
+             </ul>
+          </div>
+
+          <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl p-10 hover:shadow-xl transition-all duration-300 group">
+             <div className="w-14 h-14 bg-amber-100 dark:bg-amber-900/30 rounded-2xl flex items-center justify-center text-amber-600 dark:text-amber-400 mb-6 group-hover:scale-110 transition-transform">
+                <ShieldCheck size={32} />
+             </div>
+             <h3 className="text-2xl font-bold text-slate-800 dark:text-white mb-4">Respaldo Legal Automático</h3>
+             <p className="text-slate-600 dark:text-slate-300 leading-relaxed mb-6">
+               Registro inmutable de la "Fecha de Inicio de Síntomas" en la base de datos.
+             </p>
+             <div className="bg-amber-50 dark:bg-amber-900/10 p-4 rounded-xl border border-amber-100 dark:border-amber-800">
+               <p className="text-xs text-amber-800 dark:text-amber-200 font-medium">
+                 "Si la aseguradora alega preexistencia meses después, usted tiene la evidencia histórica guardada y validada en el momento de la consulta."
+               </p>
+             </div>
+          </div>
         </div>
       </Slide>
 
