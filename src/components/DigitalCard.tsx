@@ -7,7 +7,7 @@ import {
   Search, BookOpen, Activity, Globe, 
   ExternalLink, Download, 
   Calendar, Stethoscope, Briefcase,
-  ShieldCheck, FileCheck, AlertTriangle
+  Thermometer, Droplet, HeartPulse, Brain
 } from 'lucide-react';
 
 // IMPORTACIÓN DE MÓDULOS
@@ -70,6 +70,9 @@ const DigitalCard: React.FC = () => {
   const [stats, setStats] = useState({ patientsCount: 0, avgDuration: 0, loadingStats: true });
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+
+  // ESTADO PARA EL MÓDULO DE REFERENCIA
+  const [activeRefTab, setActiveRefTab] = useState<'vitals' | 'labs'>('vitals');
 
   useEffect(() => {
     let mounted = true;
@@ -139,15 +142,6 @@ const DigitalCard: React.FC = () => {
     if (navigator.share) try { await navigator.share({ title: `Dr. ${profile?.full_name}`, url: getQRTarget() }); } catch (e) {}
     else alert("Enlace copiado manualmente.");
   };
-
-  // --- RECURSOS OFICIALES (SEGURIDAD Y TRÁMITES) ---
-  // CORRECCIÓN: Usamos enlaces a los Portales de Formatos, no a los PDFs directos que caducan.
-  const OFFICIAL_RESOURCES = [
-      { name: 'Portal Formatos GNP', url: 'https://www.gnp.com.mx/personas/seguros-medicos', color: 'blue' },
-      { name: 'Portal Formatos AXA', url: 'https://axa.mx/personas/servicios/formatos', color: 'red' },
-      { name: 'Portal Formatos MetLife', url: 'https://www.metlife.com.mx/servicio-y-apoyo/centro-de-formatos/', color: 'cyan' },
-      { name: 'Alertas COFEPRIS', url: 'https://www.gob.mx/cofepris', color: 'amber' }
-  ];
 
   if (loading) return <div className="flex justify-center items-center h-full text-slate-400 gap-2"><Activity className="animate-spin"/> Cargando Hub...</div>;
 
@@ -265,47 +259,72 @@ const DigitalCard: React.FC = () => {
                 </div>
             </div>
 
-            {/* SECCIÓN NUEVA: CENTRAL DE TRÁMITES Y SEGURIDAD */}
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex-1 relative p-6">
-                <div className="flex justify-between items-center mb-6">
+            {/* SECCIÓN NUEVA: REFERENCIA CLÍNICA RÁPIDA (LOCAL - NO FALLA) */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex-1 relative flex flex-col">
+                <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
                     <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                        <ShieldCheck size={20} className="text-indigo-600"/> 
-                        Gestión Administrativa y Seguridad
+                        <Activity size={20} className="text-teal-600"/> 
+                        Referencia Rápida
                     </h3>
-                    <span className="text-[10px] font-bold bg-indigo-50 text-indigo-700 px-2 py-1 rounded-md">Recursos Oficiales</span>
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4">
-                    {OFFICIAL_RESOURCES.map((resource, idx) => (
-                        <a 
-                            key={idx} 
-                            href={resource.url} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className={`flex items-center justify-between p-4 rounded-xl border transition-all hover:shadow-md group ${
-                                resource.color === 'blue' ? 'border-blue-100 bg-blue-50/50 hover:border-blue-300' :
-                                resource.color === 'red' ? 'border-red-100 bg-red-50/50 hover:border-red-300' :
-                                resource.color === 'cyan' ? 'border-cyan-100 bg-cyan-50/50 hover:border-cyan-300' :
-                                'border-amber-100 bg-amber-50/50 hover:border-amber-300'
-                            }`}
+                    <div className="flex bg-slate-200/50 p-1 rounded-lg">
+                        <button 
+                            onClick={() => setActiveRefTab('vitals')}
+                            className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${activeRefTab === 'vitals' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                         >
-                            <div className="flex items-center gap-3">
-                                <div className={`p-2 rounded-lg ${
-                                    resource.color === 'blue' ? 'bg-blue-100 text-blue-600' :
-                                    resource.color === 'red' ? 'bg-red-100 text-red-600' :
-                                    resource.color === 'cyan' ? 'bg-cyan-100 text-cyan-600' :
-                                    'bg-amber-100 text-amber-600'
-                                }`}>
-                                    {resource.name.includes('Alertas') ? <AlertTriangle size={18} /> : <FileCheck size={18} />}
-                                </div>
-                                <div>
-                                    <p className="font-bold text-sm text-slate-700 group-hover:text-slate-900">{resource.name}</p>
-                                    <p className="text-[10px] text-slate-500">Descarga directa oficial</p>
-                                </div>
-                            </div>
-                            <ExternalLink size={16} className="text-slate-300 group-hover:text-slate-500"/>
-                        </a>
-                    ))}
+                            Signos Vitales
+                        </button>
+                        <button 
+                            onClick={() => setActiveRefTab('labs')}
+                            className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${activeRefTab === 'labs' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                        >
+                            Laboratorios
+                        </button>
+                    </div>
+                </div>
+
+                <div className="p-0 overflow-x-auto">
+                    {activeRefTab === 'vitals' ? (
+                        <table className="w-full text-xs text-left">
+                            <thead className="bg-slate-50 text-slate-500 font-semibold border-b border-slate-100">
+                                <tr>
+                                    <th className="p-3">Edad</th>
+                                    <th className="p-3"><div className="flex items-center gap-1"><HeartPulse size={12}/> FC (lpm)</div></th>
+                                    <th className="p-3"><div className="flex items-center gap-1"><Activity size={12}/> FR (rpm)</div></th>
+                                    <th className="p-3">TAS (mmHg)</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-50 text-slate-700">
+                                <tr><td className="p-3 font-medium bg-slate-50/30">R. Nacido</td><td>100-160</td><td>30-60</td><td>60-90</td></tr>
+                                <tr><td className="p-3 font-medium">Lactante</td><td>100-160</td><td>30-60</td><td>87-105</td></tr>
+                                <tr><td className="p-3 font-medium bg-slate-50/30">Preescolar</td><td>80-110</td><td>24-40</td><td>95-110</td></tr>
+                                <tr><td className="p-3 font-medium">Escolar</td><td>75-100</td><td>18-30</td><td>97-112</td></tr>
+                                <tr><td className="p-3 font-medium bg-slate-50/30">Adolescente</td><td>60-90</td><td>12-16</td><td>112-128</td></tr>
+                            </tbody>
+                        </table>
+                    ) : (
+                        <table className="w-full text-xs text-left">
+                            <thead className="bg-slate-50 text-slate-500 font-semibold border-b border-slate-100">
+                                <tr>
+                                    <th className="p-3">Analito</th>
+                                    <th className="p-3">Rango Normal</th>
+                                    <th className="p-3">Unidades</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-50 text-slate-700">
+                                <tr><td className="p-3 font-medium bg-slate-50/30"><div className="flex items-center gap-1"><Droplet size={12} className="text-red-400"/> Hb (H)</div></td><td>13.8 - 17.2</td><td>g/dL</td></tr>
+                                <tr><td className="p-3 font-medium"><div className="flex items-center gap-1"><Droplet size={12} className="text-red-400"/> Hb (M)</div></td><td>12.1 - 15.1</td><td>g/dL</td></tr>
+                                <tr><td className="p-3 font-medium bg-slate-50/30">Leucocitos</td><td>4.5 - 11.0</td><td>x10³/µL</td></tr>
+                                <tr><td className="p-3 font-medium">Plaquetas</td><td>150 - 450</td><td>x10³/µL</td></tr>
+                                <tr><td className="p-3 font-medium bg-slate-50/30">Glucosa</td><td>70 - 100</td><td>mg/dL</td></tr>
+                                <tr><td className="p-3 font-medium">Creatinina</td><td>0.7 - 1.3</td><td>mg/dL</td></tr>
+                                <tr><td className="p-3 font-medium bg-slate-50/30">Potasio (K)</td><td>3.5 - 5.0</td><td>mEq/L</td></tr>
+                                <tr><td className="p-3 font-medium">Sodio (Na)</td><td>135 - 145</td><td>mEq/L</td></tr>
+                            </tbody>
+                        </table>
+                    )}
+                </div>
+                <div className="bg-slate-50 p-2 text-[10px] text-slate-400 text-center border-t border-slate-100">
+                    Fuente: AHA / PALS 2020 & Referencias Internacionales Lab.
                 </div>
             </div>
 
