@@ -7,7 +7,8 @@ import {
   Search, BookOpen, Activity, Globe, 
   ExternalLink, Download, 
   Calendar, Stethoscope, Briefcase,
-  Thermometer, Droplet, HeartPulse, Brain
+  Thermometer, Droplet, HeartPulse, Brain,
+  FileSearch, GraduationCap
 } from 'lucide-react';
 
 // IMPORTACIÓN DE MÓDULOS
@@ -70,6 +71,7 @@ const DigitalCard: React.FC = () => {
   const [stats, setStats] = useState({ patientsCount: 0, avgDuration: 0, loadingStats: true });
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [searchMode, setSearchMode] = useState<'pubmed' | 'guias'>('guias'); // Nuevo selector
 
   // ESTADO PARA EL MÓDULO DE REFERENCIA
   const [activeRefTab, setActiveRefTab] = useState<'vitals' | 'labs'>('vitals');
@@ -129,7 +131,19 @@ const DigitalCard: React.FC = () => {
   const handleSearch = (e: React.FormEvent) => {
       e.preventDefault();
       if(!searchTerm.trim()) return;
-      window.open(`https://pubmed.ncbi.nlm.nih.gov/?term=${encodeURIComponent(searchTerm)}`, '_blank');
+      
+      let url = '';
+      if (searchMode === 'pubmed') {
+          // Búsqueda académica
+          url = `https://pubmed.ncbi.nlm.nih.gov/?term=${encodeURIComponent(searchTerm)}`;
+      } else {
+          // Búsqueda Táctica: Encuentra PDFs oficiales en sitios de gobierno MX
+          // El operador filetype:pdf filtra basura y va directo al documento.
+          const query = `${searchTerm} "guía de práctica clínica" site:gob.mx OR site:cenetec-difusion.com filetype:pdf`;
+          url = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+      }
+      
+      window.open(url, '_blank');
   };
 
   const getQRTarget = () => {
@@ -241,21 +255,48 @@ const DigitalCard: React.FC = () => {
                 </button>
             </div>
 
-            {/* Buscador de Evidencia */}
+            {/* BÚSQUEDA TÁCTICA MEJORADA */}
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden p-6 relative">
                 <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none"><Search size={100}/></div>
                 <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><Globe size={18} className="text-teal-500"/> Investigación Clínica</h3>
+                
+                {/* Selector de Modo de Búsqueda */}
+                <div className="flex gap-2 mb-3">
+                    <button 
+                        onClick={() => setSearchMode('guias')}
+                        className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${searchMode === 'guias' ? 'bg-teal-100 text-teal-800' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
+                    >
+                        <FileSearch size={14}/> Guías Clínicas (PDF)
+                    </button>
+                    <button 
+                        onClick={() => setSearchMode('pubmed')}
+                        className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${searchMode === 'pubmed' ? 'bg-blue-100 text-blue-800' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
+                    >
+                        <GraduationCap size={14}/> PubMed (Papers)
+                    </button>
+                </div>
+
                 <form onSubmit={handleSearch} className="relative mb-6 z-10">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                    <input type="text" placeholder="Buscar artículos en PubMed, guías, dosis..." className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-teal-500 focus:bg-white transition-all shadow-inner" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+                    <input 
+                        type="text" 
+                        placeholder={searchMode === 'guias' ? "Ej: Diabetes Tipo 2, Dengue, Hipertensión..." : "Ej: Covid-19 Treatment, Cardiology..."}
+                        className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-teal-500 focus:bg-white transition-all shadow-inner" 
+                        value={searchTerm} 
+                        onChange={e => setSearchTerm(e.target.value)} 
+                    />
                 </form>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 z-10 relative">
-                    {[{name:'PLM / Vademécum', url:'https://www.medicamentosplm.com/', icon:BookOpen}, {name:'MDCalc', url:'https://www.mdcalc.com/', icon:Activity}, {name:'CIE-10 OMS', url:'https://icd.who.int/', icon:FileText}, {name:'CENETEC Guías', url:'https://cenetec-difusion.com/', icon:Globe}].map((t, i) => (
-                        <a key={i} href={t.url} target="_blank" rel="noreferrer" className="flex items-center gap-2 p-3 rounded-xl border border-slate-100 hover:bg-teal-50 hover:border-teal-100 transition-all group">
-                            <div className="p-1.5 bg-slate-100 rounded-lg group-hover:bg-white group-hover:text-teal-600 transition-colors"><t.icon size={14} className="text-slate-500 group-hover:text-teal-600"/></div>
-                            <span className="text-[10px] font-bold text-slate-600 group-hover:text-slate-800 leading-tight">{t.name}</span>
-                        </a>
-                    ))}
+
+                <div className="grid grid-cols-2 gap-3 z-10 relative">
+                    {/* ENLACES BLINDADOS Y ESTABLES */}
+                    <a href="https://www.medicamentosplm.com/" target="_blank" rel="noreferrer" className="flex items-center gap-2 p-3 rounded-xl border border-slate-100 hover:bg-teal-50 hover:border-teal-100 transition-all group">
+                         <div className="p-1.5 bg-slate-100 rounded-lg group-hover:bg-white group-hover:text-teal-600 transition-colors"><BookOpen size={14} className="text-slate-500 group-hover:text-teal-600"/></div>
+                         <span className="text-[10px] font-bold text-slate-600 group-hover:text-slate-800 leading-tight">PLM / Vademécum</span>
+                    </a>
+                    <a href="https://icd.who.int/browse10/2019/en" target="_blank" rel="noreferrer" className="flex items-center gap-2 p-3 rounded-xl border border-slate-100 hover:bg-teal-50 hover:border-teal-100 transition-all group">
+                         <div className="p-1.5 bg-slate-100 rounded-lg group-hover:bg-white group-hover:text-teal-600 transition-colors"><FileText size={14} className="text-slate-500 group-hover:text-teal-600"/></div>
+                         <span className="text-[10px] font-bold text-slate-600 group-hover:text-slate-800 leading-tight">CIE-10 (Buscador)</span>
+                    </a>
                 </div>
             </div>
 
