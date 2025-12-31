@@ -1,14 +1,13 @@
 import React, { useState } from 'react';
 import Papa from 'papaparse';
 import { supabase } from '../lib/supabase';
-import { z } from 'zod'; // IMPORTACIÓN CRÍTICA: El motor de validación
+import { z } from 'zod'; 
 import { 
-  Upload, Database, X, ShieldCheck, Loader2, FileWarning, RefreshCw, History, CheckCircle, AlertTriangle
+  Upload, Database, X, ShieldCheck, Loader2, RefreshCw
 } from 'lucide-react';
 import { toast } from 'sonner';
 
 // --- 1. DEFINICIÓN DEL ESQUEMA BLINDADO (ZOD) ---
-// Esto actúa como el "Portero" de tu investigación. Nada entra si no cumple esto.
 const PatientSchema = z.object({
   name: z.string().min(2, "Nombre muy corto").transform(val => val.trim()),
   phone: z.string().optional().transform(val => {
@@ -21,12 +20,10 @@ const PatientSchema = z.object({
      if (!val) return null;
      const s = String(val).trim();
      if (["n/a", "na", ""].includes(s.toLowerCase())) return null;
-     // Intento de parseo seguro
      const d = Date.parse(s);
      return !isNaN(d) ? new Date(d).toISOString().split('T')[0] : null;
   }),
   allergies: z.string().optional().nullable(),
-  // Aquí capturamos el historial crudo para transformarlo después
   raw_history: z.any().optional()
 });
 
@@ -53,7 +50,6 @@ const PatientImporter: React.FC<{ onComplete: () => void; onClose: () => void }>
         setHeaders(fileHeaders);
         setRawFile(results.data);
         
-        // Auto-detección inteligente de columnas
         const newMap: any = {};
         fileHeaders.forEach(h => {
           const lower = h.toLowerCase();
@@ -83,7 +79,6 @@ const PatientImporter: React.FC<{ onComplete: () => void; onClose: () => void }>
       // A. Transformación y Validación en Memoria
       const validPayloads = rawFile.map((row, index) => {
         try {
-            // Mapeo inicial
             const rawData = {
                 name: row[columnMap.name],
                 phone: row[columnMap.phone],
@@ -93,16 +88,12 @@ const PatientImporter: React.FC<{ onComplete: () => void; onClose: () => void }>
                 raw_history: row[columnMap.history]
             };
 
-            // VALIDACIÓN ZOD (El Portero)
             const cleanData = PatientSchema.parse(rawData);
 
-            // TRANSFORMACIÓN DE HISTORIAL (El Cerebro)
-            // Convierte texto plano en el JSON que VitalScribe necesita
             let finalHistory = null;
             if (cleanData.raw_history) {
                 const val = String(cleanData.raw_history).trim();
                 if (val.length > 0) {
-                    // Si ya parece JSON, lo dejamos, si no, lo encapsulamos
                     if (val.startsWith('{') || val.startsWith('[')) {
                         try { JSON.parse(val); finalHistory = val; } 
                         catch { finalHistory = JSON.stringify({ resumen_clinico: val }); }
@@ -115,43 +106,52 @@ const PatientImporter: React.FC<{ onComplete: () => void; onClose: () => void }>
                 }
             }
 
-            // Objeto listo para SQL
             return {
                 doctor_id: user.id,
-                name: cleanData.name, // Ya viene trimado por Zod
+                name: cleanData.name,
                 phone: cleanData.phone,
                 email: cleanData.email,
                 birth_date: cleanData.birth_date,
                 allergies: cleanData.allergies,
-                history: finalHistory, // Aquí va el JSON stringificado correcto
+                history: finalHistory,
                 isTemporary: false,
                 created_at: new Date().toISOString()
             };
 
         } catch (validationError) {
-            // Si Zod falla, omitimos silenciosamente o logueamos
-            // console.warn(`Fila ${index} inválida:`, validationError);
             errorCount++;
             return null;
         }
-      }).filter(Boolean); // Eliminamos nulos
+      }).filter(Boolean);
 
       if (validPayloads.length === 0) throw new Error("No se encontraron registros válidos tras la validación.");
 
-      // B. CARGA BLINDADA (Upsert)
-      // onConflict coincide con tu UNIQUE INDEX: (doctor_id, name)
+      // --- CORRECCIÓN IMPLEMENTADA AQUÍ: DEDUPLICACIÓN INTERNA ---
+      // Filtramos duplicados DENTRO del mismo archivo antes de enviar a SQL
+      // para evitar el error "cannot affect row a second time".
+      const uniqueMap = new Map();
+      validPayloads.forEach((item: any) => {
+          // Usamos el nombre normalizado como llave
+          const key = item.name.toLowerCase().trim();
+          // Si ya existe, lo sobrescribe (se queda con el último del Excel)
+          uniqueMap.set(key, item);
+      });
+      
+      const finalPayloads = Array.from(uniqueMap.values());
+
+      // B. CARGA BLINDADA (Upsert) con lista limpia
       const { error } = await supabase
         .from('patients')
-        .upsert(validPayloads, { 
+        .upsert(finalPayloads, { 
             onConflict: 'doctor_id, name',
-            ignoreDuplicates: false // False = Actualizar datos si ya existe
+            ignoreDuplicates: false 
         });
 
       if (error) throw error;
 
-      successCount = validPayloads.length;
+      successCount = finalPayloads.length;
       toast.success(`Proceso ETL completado.`, {
-          description: `${successCount} procesados correctamente. ${errorCount} omitidos por datos inválidos.`
+          description: `${successCount} pacientes únicos procesados (Filtrados de ${validPayloads.length}). ${errorCount} omitidos por datos inválidos.`
       });
       
       onComplete();
