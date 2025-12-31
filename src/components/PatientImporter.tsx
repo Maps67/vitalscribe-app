@@ -1,104 +1,94 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import Papa from 'papaparse';
 import { supabase } from '../lib/supabase';
 import { 
   Upload, Database, AlertTriangle, CheckCircle, X, 
-  ArrowRight, FileText, ShieldCheck, HelpCircle, Loader2 
+  ShieldCheck, Loader2, FileWarning 
 } from 'lucide-react';
 import { toast } from 'sonner';
 
-// --- 1. DEFINICIÓN DEL ESQUEMA DE DESTINO (TARGET SCHEMA) ---
-// Esto define estrictamente qué acepta VitalScribe. No asumimos nada del Excel.
-type FieldType = 'string' | 'date' | 'phone' | 'email' | 'json_context';
+// --- 1. UTILIDADES DE SANITIZACIÓN ROBUSTA (CORE) ---
+
+// A. Limpiador de Fechas (Anti-Crash para PostgreSQL)
+const sanitizeDate = (value: any): string | null => {
+  if (value == null) return null;
+  const s = String(value).trim();
+  if (!s) return null;
+  
+  // Lista negra de basura común en Excels médicos
+  const invalidMarkers = ["n/a", "na", "sin dato", "-", "s/d", "nd", "no aplica", "desconocido", "null"];
+  if (invalidMarkers.includes(s.toLowerCase())) return null;
+
+  // Caso 1: Ya es formato ISO (YYYY-MM-DD)
+  const iso = /^\d{4}-\d{2}-\d{2}$/;
+  if (iso.test(s)) return s;
+
+  // Caso 2: Formatos latinos (dd/mm/yyyy o dd-mm-yyyy)
+  // Detecta dd/mm/yyyy
+  const dmy = /^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/;
+  const match = s.match(dmy);
+  
+  if (match) {
+    const [ , day, month, year ] = match;
+    // Retornar en formato ISO para SQL (YYYY-MM-DD)
+    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+  }
+
+  // Caso 3: Intento de parseo nativo como último recurso
+  const parsed = Date.parse(s);
+  if (!isNaN(parsed)) {
+    return new Date(parsed).toISOString().split('T')[0];
+  }
+
+  return null; // Si todo falla, devuelve NULL (SQL lo acepta) en vez de romper.
+};
+
+// B. Limpiador de Teléfonos
+const sanitizePhone = (value: any): string => {
+  if (!value) return '';
+  // Deja solo números y el símbolo +
+  return String(value).replace(/[^0-9+]/g, '').trim().substring(0, 20);
+};
+
+// C. Válvula de Seguridad de Esquema (Schema Guard)
+// CRÍTICO: Elimina cualquier campo que no esté explícitamente permitido en la BD
+const ALLOWED_COLUMNS = [
+  'doctor_id', 'name', 'phone', 'email', 'birth_date', 
+  'history', 'created_at', 'isTemporary', 'allergies'
+];
+
+const stripUnknownKeys = (obj: any) => {
+  const cleanObj: any = {};
+  Object.keys(obj).forEach(key => {
+    if (ALLOWED_COLUMNS.includes(key)) {
+      cleanObj[key] = obj[key];
+    }
+  });
+  return cleanObj;
+};
+
+// --- 2. CONFIGURACIÓN DE ESQUEMA ---
+type FieldType = 'string' | 'date' | 'phone' | 'email' | 'context';
 
 interface TargetField {
   key: string;
   label: string;
   type: FieldType;
   required: boolean;
-  description: string;
+  description?: string;
 }
 
-const TARGET_SCHEMA: TargetField[] = [
-  { 
-    key: 'name', 
-    label: 'Nombre del Paciente', 
-    type: 'string', 
-    required: true, 
-    description: 'Nombre completo para identificación.' 
-  },
-  { 
-    key: 'phone', 
-    label: 'Teléfono / Móvil', 
-    type: 'phone', 
-    required: false, 
-    description: 'Para contacto y notificaciones.' 
-  },
-  { 
-    key: 'email', 
-    label: 'Correo Electrónico', 
-    type: 'email', 
-    required: false, 
-    description: 'Para envío de recetas.' 
-  },
-  { 
-    key: 'birth_date', 
-    label: 'Fecha de Nacimiento', 
-    type: 'date', 
-    required: false, 
-    description: 'Formato ideal: YYYY-MM-DD. Si hay texto (N/A), se ignora.' 
-  },
-  { 
-    key: 'allergies', 
-    label: 'Alergias', 
-    type: 'string', 
-    required: false, 
-    description: 'Lista de alergias conocidas.' 
-  },
-  // EL CAMPO CLAVE: Contexto Agregado
-  { 
-    key: 'clinical_context', 
-    label: 'Historia Clínica y Notas', 
-    type: 'json_context', 
-    required: false, 
-    description: 'Selecciona TODAS las columnas que contengan información médica (Antecedentes, Notas, Diagnósticos).' 
-  },
+const TARGET_FIELDS: TargetField[] = [
+  { key: 'name', label: 'Nombre Completo', required: true, type: 'string', description: 'Obligatorio' },
+  { key: 'phone', label: 'Teléfono', required: false, type: 'phone' },
+  { key: 'email', label: 'Email', required: false, type: 'string' },
+  { key: 'birth_date', label: 'Fecha Nacimiento', required: false, type: 'date', description: 'YYYY-MM-DD o DD/MM/YYYY' },
+  { key: 'allergies', label: 'Alergias', required: false, type: 'string' },
+  // Contexto Clínico Agregado (Soporta múltiples columnas)
+  { key: 'clinical_context', label: 'Historial / Notas / Contexto', required: false, type: 'context', description: 'Selecciona antecedentes y notas' }
 ];
 
-// --- 2. MOTOR DE SANITIZACIÓN (DATA SANITIZERS) ---
-// Funciones puras para limpiar datos sucios antes de la inserción.
-
-const sanitizeDate = (value: any): string | null => {
-  if (!value) return null;
-  const str = String(value).trim();
-  // Lista negra extendida de valores no válidos
-  const invalidMarkers = ['n/a', 'na', 'no aplica', 'desconocido', 'sin dato', '-', '.', 'null', 'undefined'];
-  if (invalidMarkers.includes(str.toLowerCase()) || str === '') return null;
-
-  // Intento de parseo robusto
-  const date = new Date(str);
-  if (isNaN(date.getTime())) return null; // Si falla, retorna NULL, no error.
-  
-  // Normalización a ISO 8601 (YYYY-MM-DD) para PostgreSQL
-  try {
-    return date.toISOString().split('T')[0];
-  } catch (e) {
-    return null;
-  }
-};
-
-const sanitizeString = (value: any): string => {
-  if (!value) return '';
-  return String(value).trim();
-};
-
-const sanitizePhone = (value: any): string => {
-  if (!value) return '';
-  // Elimina caracteres no numéricos excepto '+'
-  return String(value).replace(/[^0-9+]/g, '').trim();
-};
-
-// --- COMPONENTE PRINCIPAL ---
+// --- 3. COMPONENTE PRINCIPAL ---
 
 interface PatientImporterProps {
   onComplete: () => void;
@@ -106,15 +96,14 @@ interface PatientImporterProps {
 }
 
 const PatientImporter: React.FC<PatientImporterProps> = ({ onComplete, onClose }) => {
-  const [step, setStep] = useState<1 | 2 | 3>(1);
-  const [rawFile, setRawFile] = useState<any[]>([]); // Datos crudos del CSV
+  const [step, setStep] = useState<1 | 2>(1);
+  const [rawFile, setRawFile] = useState<any[]>([]);
   const [fileHeaders, setFileHeaders] = useState<string[]>([]);
-  // Mapping: Clave del sistema -> Array de columnas del usuario (para permitir múltiples fuentes en contexto)
-  const [mapping, setMapping] = useState<Record<string, string[]>>({});
+  // Mapping: Clave del sistema -> Array de columnas (para permitir múltiples en contexto)
+  const [mapping, setMapping] = useState<Record<string, string[]>>({}); 
   const [isProcessing, setIsProcessing] = useState(false);
-  const [previewStats, setPreviewStats] = useState({ valid: 0, skipped: 0 });
 
-  // PASO 1: Ingesta (Parsing)
+  // --- PARSING ---
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -122,269 +111,225 @@ const PatientImporter: React.FC<PatientImporterProps> = ({ onComplete, onClose }
     Papa.parse(file, {
       header: true,
       skipEmptyLines: true,
-      encoding: "UTF-8", // Forzar UTF-8 para acentos
+      encoding: "UTF-8",
       complete: (results) => {
         if (results.meta.fields && results.meta.fields.length > 0) {
           setFileHeaders(results.meta.fields);
           setRawFile(results.data);
           setStep(2);
-          toast.info(`Archivo analizado: ${results.data.length} filas encontradas.`);
+          toast.info(`${results.data.length} filas leídas. Configura el mapeo.`);
         } else {
-          toast.error("El archivo no tiene encabezados válidos.");
+          toast.error("Archivo inválido o sin encabezados.");
         }
       },
-      error: (err: any) => toast.error(`Error de lectura: ${err.message}`)
+      error: (err: any) => toast.error(`Error CSV: ${err.message}`)
     });
   };
 
-  // Manejo del Mapping (Permite selección múltiple para contexto)
-  const handleMappingSelect = (targetKey: string, sourceCol: string) => {
+  const handleMapping = (target: string, source: string) => {
     setMapping(prev => {
-      const current = prev[targetKey] || [];
-      // Si es tipo 'json_context', permitimos múltiples. Si no, solo uno.
-      const targetType = TARGET_SCHEMA.find(t => t.key === targetKey)?.type;
-      
-      if (targetType === 'json_context') {
-        // Toggle selección
-        if (current.includes(sourceCol)) {
-          return { ...prev, [targetKey]: current.filter(c => c !== sourceCol) };
-        }
-        return { ...prev, [targetKey]: [...current, sourceCol] };
-      } else {
-        // Reemplazo simple para campos únicos
-        return { ...prev, [targetKey]: [sourceCol] };
+      const isContext = target === 'clinical_context';
+      // Si es contexto, permite array (toggle). Si no, reemplaza.
+      if (isContext) {
+        const current = prev[target] || [];
+        return current.includes(source) 
+          ? { ...prev, [target]: current.filter(c => c !== source) }
+          : { ...prev, [target]: [...current, source] };
       }
+      return { ...prev, [target]: [source] };
     });
   };
 
-  // PASO 3: Transformación y Carga (ETL)
+  // --- EJECUCIÓN (ETL) ---
   const executeImport = async () => {
     setIsProcessing(true);
     let successCount = 0;
-    let failCount = 0;
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Sesión expirada.");
+      if (!user) throw new Error("Sesión expirada");
 
-      // --- FASE DE TRANSFORMACIÓN ---
-      const cleanPatients = rawFile.map((row, index) => {
+      // Procesamiento en memoria
+      const validPatients = rawFile.map((row, index) => {
         try {
-          // CORRECCIÓN APLICADA: Se eliminó isTemporary: false
-          const patient: any = { 
-            doctor_id: user.id, 
-            created_at: new Date().toISOString()
+          // 1. Construcción inicial
+          const rawPatient: any = {
+            doctor_id: user.id,
+            created_at: new Date().toISOString(),
+            // Se asume que ejecutaste el SQL para crear esta columna.
+            // Si no, 'stripUnknownKeys' intentará protegerte, pero es vital tener la columna.
+            isTemporary: false, 
           };
 
-          // 1. Extraer campos simples
-          TARGET_SCHEMA.forEach(field => {
-            if (field.key === 'clinical_context') return; // Se maneja aparte
-            
-            const sourceCol = mapping[field.key]?.[0]; // Tomamos la primera columna mapeada
+          // 2. Extracción y Sanitización
+          TARGET_FIELDS.forEach(field => {
+            if (field.key === 'clinical_context') return;
+
+            const sourceCol = mapping[field.key]?.[0];
             if (!sourceCol) return;
 
-            const rawVal = row[sourceCol];
-
-            // Aplicar Sanitizers según tipo
+            const val = row[sourceCol];
+            
             if (field.type === 'date') {
-              patient[field.key] = sanitizeDate(rawVal);
+               rawPatient[field.key] = sanitizeDate(val);
             } else if (field.type === 'phone') {
-              patient[field.key] = sanitizePhone(rawVal);
+               rawPatient[field.key] = sanitizePhone(val);
             } else {
-              patient[field.key] = sanitizeString(rawVal);
+               rawPatient[field.key] = val?.toString().trim();
             }
           });
 
-          // Validación Crítica: Nombre Obligatorio
-          if (!patient.name || patient.name.length < 2) {
-            failCount++;
-            return null; // Descartar fila
-          }
+          // 3. Validación Mínima (Nombre obligatorio)
+          if (!rawPatient.name || rawPatient.name.length < 2) return null;
 
-          // 2. Construcción de Contexto Avanzado (Aggregator)
-          // Fusiona múltiples columnas del Excel en un objeto JSON estructurado
+          // 4. Construcción de Contexto (JSON)
+          // Guardamos esto dentro de 'history' con estructura para Gemini
           const contextCols = mapping['clinical_context'] || [];
-          const contextData: Record<string, any> = {
-            _generated_by: "VitalScribe Import Tool",
-            _import_date: new Date().toISOString().split('T')[0],
-            legacy_data: {} // Aquí guardamos los datos originales tal cual
+          const contextData: any = {
+            origen: "Importación Masiva",
+            fecha_importacion: new Date().toISOString().split('T')[0],
+            datos_historicos: {}
           };
-          
-          let combinedText = "";
 
+          let fullText = "";
           contextCols.forEach(col => {
-            const val = sanitizeString(row[col]);
+            const val = row[col]?.toString().trim();
             if (val) {
-              // Guardamos en estructura clave-valor
-              contextData.legacy_data[col] = val;
-              // Y creamos un string maestro para búsqueda vectorial futura
-              combinedText += `[${col}]: ${val} \n`;
+              contextData.datos_historicos[col] = val;
+              fullText += `${col.toUpperCase()}: ${val}\n`;
             }
           });
 
-          // Si hay texto combinado, lo ponemos como 'antecedentes' para que la IA lo lea
-          if (combinedText) {
-            contextData.summary = combinedText;
-            // Garantizar compatibilidad
-            if (!contextData.antecedentes) contextData.antecedentes = combinedText;
+          // Estructura que la IA de VitalScribe ya sabe leer:
+          if (fullText) {
+            contextData.resumen_clinico = fullText;
           }
+          
+          rawPatient.history = JSON.stringify(contextData);
 
-          // Asignar al campo 'history' de la BD (que es JSONB o String)
-          patient.history = JSON.stringify(contextData);
+          // 5. LIMPIEZA FINAL (Schema Guard)
+          // Eliminamos propiedades que no sean columnas reales de SQL
+          return stripUnknownKeys(rawPatient);
 
-          successCount++;
-          return patient;
         } catch (e) {
-          console.warn(`Error procesando fila ${index}`, e);
-          failCount++;
+          console.warn(`Fila ${index} omitida por error interno.`);
           return null;
         }
-      }).filter(p => p !== null);
+      }).filter(Boolean); // Filtra nulos
 
-      if (cleanPatients.length === 0) {
-        throw new Error("No se generaron pacientes válidos. Revisa el mapeo de 'Nombre'.");
-      }
+      if (validPatients.length === 0) throw new Error("Ningún paciente válido generado. Revisa el mapeo de Nombre.");
 
-      // --- FASE DE CARGA (LOAD) ---
-      // Inserción por lotes para eficiencia
-      const { error } = await supabase.from('patients').insert(cleanPatients);
+      // 6. Inserción por Lotes (Bulk Insert)
+      const { error } = await supabase.from('patients').insert(validPatients);
+      
       if (error) throw error;
 
-      toast.success(`Proceso finalizado: ${successCount} importados, ${failCount} omitidos.`);
+      toast.success(`Importación exitosa: ${validPatients.length} pacientes añadidos.`);
       onComplete();
       onClose();
 
     } catch (err: any) {
       console.error(err);
-      toast.error(`Error crítico en importación: ${err.message}`);
+      toast.error(`Fallo crítico: ${err.message}`);
     } finally {
       setIsProcessing(false);
     }
   };
 
-  // Renderizado del paso 2 (UI de Mapeo)
-  const renderMappingStep = () => (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
-      <div className="bg-indigo-50 dark:bg-indigo-900/20 p-4 rounded-lg border border-indigo-100 dark:border-indigo-800 flex gap-3">
-        <ShieldCheck className="text-indigo-600 shrink-0" />
-        <div>
-          <h4 className="font-bold text-indigo-900 dark:text-indigo-200">Normalización Activa</h4>
-          <p className="text-sm text-indigo-700 dark:text-indigo-300">
-            El sistema detectará automáticamente fechas inválidas ("N/A") y limpiará los teléfonos. 
-            Tú solo conecta qué columna corresponde a qué dato.
-          </p>
-        </div>
-      </div>
-
-      <div className="grid gap-4 max-h-[50vh] overflow-y-auto pr-2 custom-scrollbar">
-        {TARGET_SCHEMA.map(field => (
-          <div key={field.key} className="p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm">
-            <div className="flex justify-between items-start mb-3">
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className={`font-bold ${field.required ? 'text-slate-900 dark:text-white' : 'text-slate-600 dark:text-slate-300'}`}>
-                    {field.label}
-                  </span>
-                  {field.required && <span className="text-[10px] bg-red-100 text-red-600 px-1.5 rounded font-bold">REQ</span>}
-                  <span className="text-[10px] bg-slate-100 dark:bg-slate-700 text-slate-500 px-1.5 rounded font-mono uppercase">{field.type}</span>
-                </div>
-                <p className="text-xs text-slate-400 mt-1">{field.description}</p>
-              </div>
-            </div>
-
-            {/* Selector de Columnas */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {fileHeaders.map(header => {
-                const isSelected = mapping[field.key]?.includes(header);
-                
-                return (
-                  <button
-                    key={header}
-                    onClick={() => handleMappingSelect(field.key, header)}
-                    className={`
-                      text-xs px-3 py-2 rounded-lg border text-left truncate transition-all
-                      ${isSelected 
-                        ? 'bg-indigo-600 border-indigo-600 text-white shadow-md' 
-                        : 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-indigo-300'
-                      }
-                    `}
-                  >
-                    {isSelected && <CheckCircle size={12} className="inline mr-1 mb-0.5"/>}
-                    {header}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="bg-slate-50 dark:bg-slate-950 w-full max-w-4xl max-h-[90vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-slate-200 dark:border-slate-800">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+      <div className="bg-white dark:bg-slate-900 w-full max-w-3xl rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col max-h-[90vh]">
         
         {/* Header */}
-        <div className="p-6 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center">
-          <div>
-            <h2 className="text-xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
-              <Database className="text-indigo-600" /> Motor de Importación Clínica
-            </h2>
-            <p className="text-sm text-slate-500">Paso {step} de 2: {step === 1 ? 'Carga de Origen' : 'Mapeo y Validación'}</p>
-          </div>
+        <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
+          <h2 className="text-xl font-bold flex items-center gap-2 text-slate-800 dark:text-white">
+            <Database className="text-indigo-600"/> Importador Blindado
+          </h2>
           <button onClick={onClose} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors">
-            <X size={20} className="text-slate-500" />
+            <X size={20} className="text-slate-500"/>
           </button>
         </div>
 
-        {/* Body */}
+        {/* Content */}
         <div className="flex-1 overflow-y-auto p-6">
-          {step === 1 && (
-            <div className="h-full flex flex-col items-center justify-center space-y-6 py-12">
-              <div className="w-24 h-24 bg-indigo-50 dark:bg-indigo-900/20 rounded-full flex items-center justify-center">
-                <Upload size={40} className="text-indigo-600" />
+          {step === 1 ? (
+            <div className="text-center py-10 space-y-6">
+              <div className="inline-flex p-6 bg-indigo-50 dark:bg-indigo-900/30 rounded-full">
+                <Upload size={48} className="text-indigo-600"/>
               </div>
-              <div className="text-center max-w-md">
-                <h3 className="text-lg font-bold text-slate-800 dark:text-white">Sube tu base de pacientes</h3>
-                <p className="text-slate-500 mt-2">
-                  Soportamos archivos CSV exportados de Excel. El sistema limpiará formatos inconsistentes y unificará el historial automáticamente.
+              <div>
+                <h3 className="text-lg font-bold dark:text-white">Sube tu archivo CSV</h3>
+                <p className="text-slate-500 text-sm mt-1 max-w-md mx-auto">
+                  El sistema limpiará automáticamente fechas erróneas ("N/A") y protegerá la base de datos de formatos incorrectos.
                 </p>
               </div>
-              <label className="cursor-pointer bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-8 py-3 rounded-xl font-bold hover:opacity-90 transition-opacity shadow-lg">
-                Seleccionar Archivo CSV
-                <input type="file" accept=".csv" className="hidden" onChange={handleFileUpload} />
+              <label className="inline-block px-6 py-3 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-xl font-bold cursor-pointer hover:opacity-90 transition-all shadow-lg">
+                Seleccionar Archivo
+                <input type="file" accept=".csv" className="hidden" onChange={handleFileUpload}/>
               </label>
             </div>
-          )}
+          ) : (
+            <div className="space-y-6">
+              <div className="bg-emerald-50 dark:bg-emerald-900/20 p-4 rounded-lg flex gap-3 text-sm text-emerald-800 dark:text-emerald-200 border border-emerald-100 dark:border-emerald-800">
+                <ShieldCheck size={20} className="shrink-0"/>
+                <div>
+                  <span className="font-bold">Modo Seguro Activo:</span> Las fechas inválidas se convertirán en espacios vacíos en lugar de generar errores. El contexto se agrupará automáticamente.
+                </div>
+              </div>
 
-          {step === 2 && renderMappingStep()}
+              <div className="grid gap-3">
+                {TARGET_FIELDS.map(field => (
+                  <div key={field.key} className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700">
+                    <div className="flex justify-between mb-3">
+                      <div className="flex flex-col">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-slate-700 dark:text-slate-200">{field.label}</span>
+                          {field.required && <span className="text-[10px] bg-red-100 text-red-600 px-1.5 rounded font-bold">REQ</span>}
+                          <span className="text-[10px] bg-indigo-100 text-indigo-600 px-1.5 rounded font-mono uppercase">{field.type}</span>
+                        </div>
+                        {field.description && <span className="text-xs text-slate-400 mt-1">{field.description}</span>}
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {fileHeaders.map(header => {
+                        const isSelected = mapping[field.key]?.includes(header);
+                        return (
+                          <button
+                            key={header}
+                            onClick={() => handleMapping(field.key, header)}
+                            className={`text-xs px-3 py-1.5 rounded-md border transition-colors ${
+                              isSelected 
+                              ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' 
+                              : 'bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-400 hover:border-indigo-400'
+                            }`}
+                          >
+                            {isSelected && <CheckCircle size={10} className="inline mr-1"/>}
+                            {header}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Footer */}
         {step === 2 && (
-          <div className="p-6 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex justify-between items-center">
-            <button 
-              onClick={() => { setStep(1); setMapping({}); }} 
-              className="px-6 py-2 text-slate-600 font-bold hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"
-            >
-              Atrás
-            </button>
-            
+          <div className="p-5 border-t border-slate-100 dark:border-slate-800 flex justify-between bg-slate-50 dark:bg-slate-900/50">
+            <button onClick={() => setStep(1)} className="text-slate-500 font-bold hover:text-slate-700 px-4">Atrás</button>
             <div className="flex items-center gap-4">
-              {!mapping['name'] && (
-                <span className="text-xs text-red-500 font-bold flex items-center gap-1">
-                  <AlertTriangle size={12}/> Falta mapear Nombre
-                </span>
-              )}
-              <button 
+               {!mapping['name'] && <span className="text-xs text-red-500 font-bold flex items-center gap-1"><FileWarning size={14}/> Falta Nombre</span>}
+               <button 
                 onClick={executeImport}
                 disabled={isProcessing || !mapping['name']}
-                className="bg-indigo-600 text-white px-8 py-3 rounded-xl font-bold shadow-lg shadow-indigo-500/20 hover:bg-indigo-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-              >
-                {isProcessing ? <Loader2 className="animate-spin" /> : <CheckCircle size={20} />}
-                {isProcessing ? 'Procesando...' : 'Finalizar Importación'}
-              </button>
+                className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-bold flex items-center gap-2 disabled:opacity-50 hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-500/20"
+               >
+                 {isProcessing ? <Loader2 className="animate-spin" size={18}/> : <CheckCircle size={18}/>}
+                 {isProcessing ? 'Procesando...' : 'Importar Datos'}
+               </button>
             </div>
           </div>
         )}
