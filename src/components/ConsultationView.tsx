@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router-dom'; 
 import { 
   Mic, Square, RefreshCw, FileText, Search, X, 
   MessageSquare, User, Send, Edit2, Check, ArrowLeft, 
@@ -9,7 +9,7 @@ import {
   Pause, Play, Pill, Plus, Zap, CornerDownLeft, Building2
 } from 'lucide-react';
 
-import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
+import { useSpeechRecognition } from '../hooks/useSpeechRecognition'; 
 import { GeminiMedicalService } from '../services/GeminiMedicalService';
 import { ChatMessage, GeminiResponse, Patient, DoctorProfile, PatientInsight, MedicationItem } from '../types';
 import { supabase } from '../lib/supabase';
@@ -38,33 +38,33 @@ interface TranscriptSegment {
 }
 
 const SPECIALTIES = [
-  "Medicina General",
-  "Cardiología",
-  "Cirugía General",
-  "Cirugía de Columna",
-  "Cirugía de Mano",
-  "Cirugía Oncológica",
-  "Cirugía Pediátrica",
-  "Cirugía Plástica y Reconstructiva",
-  "Dermatología",
-  "Endocrinología",
-  "Gastroenterología",
-  "Geriatría",
-  "Ginecología y Obstetricia",
-  "Medicina del Deporte",
-  "Medicina Interna",
-  "Nefrología",
-  "Neumología",
-  "Neurocirugía",
-  "Neurología",
-  "Oftalmología",
-  "Otorrinolaringología",
-  "Pediatría",
-  "Psiquiatría",
-  "Reumatología",
-  "Traumatología y Ortopedia",
-  "Traumatología: Artroscopia",
-  "Urología",
+  "Medicina General", 
+  "Cardiología", 
+  "Cirugía General", 
+  "Cirugía de Columna", 
+  "Cirugía de Mano", 
+  "Cirugía Oncológica", 
+  "Cirugía Pediátrica", 
+  "Cirugía Plástica y Reconstructiva", 
+  "Dermatología", 
+  "Endocrinología", 
+  "Gastroenterología", 
+  "Geriatría", 
+  "Ginecología y Obstetricia", 
+  "Medicina del Deporte", 
+  "Medicina Interna", 
+  "Nefrología", 
+  "Neumología", 
+  "Neurocirugía", 
+  "Neurología", 
+  "Oftalmología", 
+  "Otorrinolaringología", 
+  "Pediatría", 
+  "Psiquiatría", 
+  "Reumatología", 
+  "Traumatología y Ortopedia", 
+  "Traumatología: Artroscopia", 
+  "Urología", 
   "Urgencias Médicas"
 ];
 
@@ -82,12 +82,12 @@ const ConsultationView: React.FC = () => {
       isAPISupported 
   } = useSpeechRecognition();
   
-  const location = useLocation();
+  const location = useLocation(); 
   
-  const [patients, setPatients] = useState<any[]>([]);
+  const [patients, setPatients] = useState<any[]>([]); 
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [doctorProfile, setDoctorProfile] = useState<DoctorProfile | null>(null);
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null); 
   
   const [activeMedicalContext, setActiveMedicalContext] = useState<{ 
       history: string; 
@@ -116,7 +116,7 @@ const ConsultationView: React.FC = () => {
 
   const [isAppointmentModalOpen, setIsAppointmentModalOpen] = useState(false);
   const [nextApptDate, setNextApptDate] = useState('');
-  const [isQuickRxModalOpen, setIsQuickRxModalOpen] = useState(false);
+  const [isQuickRxModalOpen, setIsQuickRxModalOpen] = useState(false); 
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [isChatting, setIsChatting] = useState(false);
@@ -149,22 +149,22 @@ const ConsultationView: React.FC = () => {
   const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
-    const handleOnline = () => {
-        setIsOnline(true);
-        toast.success("Conexión restablecida");
+    const handleOnline = () => { 
+        setIsOnline(true); 
+        toast.success("Conexión restablecida"); 
     };
-    const handleOffline = () => {
-        setIsOnline(false);
-        toast.warning("Sin conexión. Modo Offline activo.");
+    const handleOffline = () => { 
+        setIsOnline(false); 
+        toast.warning("Sin conexión. Modo Offline activo."); 
     };
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
     
     startTimeRef.current = Date.now();
 
-    return () => {
-        window.removeEventListener('online', handleOnline);
-        window.removeEventListener('offline', handleOffline);
+    return () => { 
+        window.removeEventListener('online', handleOnline); 
+        window.removeEventListener('offline', handleOffline); 
     };
   }, []);
 
@@ -173,10 +173,10 @@ const ConsultationView: React.FC = () => {
     const loadInitialData = async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
+        if (!user) return; 
 
         if (mounted) {
-            setCurrentUserId(user.id);
+            setCurrentUserId(user.id); 
 
             // 1. Cargar Pacientes Registrados
             const { data: patientsData } = await supabase.from('patients').select('*').order('created_at', { ascending: false });
@@ -191,7 +191,7 @@ const ConsultationView: React.FC = () => {
                 .is('patient_id', null)
                 .eq('doctor_id', user.id)
                 .neq('status', 'cancelled')
-                .gte('start_time', today.toISOString())
+                .gte('start_time', today.toISOString()) 
                 .limit(20);
 
             const loadedPatients = patientsData || [];
@@ -200,9 +200,9 @@ const ConsultationView: React.FC = () => {
             
             if (ghostAppointments && ghostAppointments.length > 0) {
                 const ghosts = ghostAppointments.map(apt => ({
-                    id: `ghost_${apt.id}`,
+                    id: `ghost_${apt.id}`, 
                     name: apt.title,
-                    isGhost: true,
+                    isGhost: true, 
                     appointmentId: apt.id,
                     created_at: apt.start_time
                 }));
@@ -227,8 +227,8 @@ const ConsultationView: React.FC = () => {
                 if (incoming.isGhost) {
                       const tempPatient = {
                           ...incoming,
-                          id: `temp_${Date.now()}`,
-                          isTemporary: true,
+                          id: `temp_${Date.now()}`, 
+                          isTemporary: true, 
                           appointmentId: incoming.appointmentId || incoming.id.replace('ghost_', '')
                       };
                       setSelectedPatient(tempPatient);
@@ -237,7 +237,7 @@ const ConsultationView: React.FC = () => {
                 } else {
                       const realPatient = loadedPatients.find(p => p.id === incoming.id);
                       if (realPatient) setSelectedPatient(realPatient);
-                      else setSelectedPatient(incoming);
+                      else setSelectedPatient(incoming); 
                       
                       toast.success(`Paciente cargado: ${incoming.name}`);
                 }
@@ -257,20 +257,20 @@ const ConsultationView: React.FC = () => {
                     setSelectedPatient(existingPatient);
                     toast.success(`Paciente cargado: ${incomingName}`);
                 } else {
-                    const tempPatient: any = {
-                        id: 'temp_' + Date.now(),
+                    const tempPatient: any = { 
+                        id: 'temp_' + Date.now(), 
                         name: incomingName,
-                        isTemporary: true
+                        isTemporary: true 
                     };
                     setSelectedPatient(tempPatient);
                     toast.info(`Consulta libre para: ${incomingName}`);
                 }
                 window.history.replaceState({}, document.title);
             } else {
-                const savedDraft = localStorage.getItem(`draft_${user.id}`);
-                if (savedDraft && !transcript) {
-                    setTranscript(savedDraft);
-                    toast.info("Borrador recuperado.", { icon: <Save size={16}/> });
+                const savedDraft = localStorage.getItem(`draft_${user.id}`); 
+                if (savedDraft && !transcript) { 
+                    setTranscript(savedDraft); 
+                    toast.info("Borrador recuperado.", { icon: <Save size={16}/> }); 
                 }
             }
         }
@@ -278,7 +278,7 @@ const ConsultationView: React.FC = () => {
     };
     loadInitialData();
     return () => { mounted = false; };
-  }, [location.state, setTranscript]);
+  }, [location.state, setTranscript]); 
 
   // --- FUNCIÓN DE LIMPIEZA DE JSON ---
   const cleanHistoryString = (input: string | null | undefined): string => {
@@ -290,12 +290,12 @@ const ConsultationView: React.FC = () => {
               if (parsed.legacyNote && typeof parsed.legacyNote === 'string' && parsed.legacyNote.trim() !== "") {
                   return parsed.legacyNote;
               }
-              return "";
+              return ""; 
           } catch (e) {
               return input;
           }
       }
-      return input;
+      return input; 
   };
 
   // --- EFECTO: Carga de Contexto Médico (Perfil + Última Consulta) ---
@@ -307,7 +307,7 @@ const ConsultationView: React.FC = () => {
                 // 1. OBTENER DATOS FIJOS (PERFIL)
                 const { data: patientData, error: patientError } = await supabase
                     .from('patients')
-                    .select('pathological_history, allergies, history')
+                    .select('pathological_history, allergies, history') 
                     .eq('id', selectedPatient.id)
                     .single();
 
@@ -342,8 +342,8 @@ const ConsultationView: React.FC = () => {
                     }
                     
                     if (lastCons.ai_analysis_data) {
-                        const analysis = typeof lastCons.ai_analysis_data === 'string'
-                            ? JSON.parse(lastCons.ai_analysis_data)
+                        const analysis = typeof lastCons.ai_analysis_data === 'string' 
+                            ? JSON.parse(lastCons.ai_analysis_data) 
                             : lastCons.ai_analysis_data;
                         
                         if (analysis && analysis.insurance_data && analysis.insurance_data.provider) {
@@ -385,24 +385,24 @@ const ConsultationView: React.FC = () => {
             if (currentUserId) localStorage.removeItem(`draft_${currentUserId}`);
             setGeneratedNote(null);
             setIsRiskExpanded(false);
-            startTimeRef.current = Date.now();
+            startTimeRef.current = Date.now(); 
         } else if (!transcript) {
             setGeneratedNote(null);
             setIsRiskExpanded(false);
         }
     }
-  }, [selectedPatient]);
+  }, [selectedPatient]); 
 
   // Auto-scroll del textarea cuando hay dictado
-  useEffect(() => {
+  useEffect(() => { 
     if (isListening && textareaRef.current) {
         textareaRef.current.scrollTop = textareaRef.current.scrollHeight;
     }
     if (transcript && currentUserId) localStorage.setItem(`draft_${currentUserId}`, transcript);
   }, [transcript, isListening, currentUserId]);
 
-  useEffect(() => {
-      chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  useEffect(() => { 
+      chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); 
       if (transcriptEndRef.current) {
           transcriptEndRef.current.scrollIntoView({ behavior: 'smooth' });
       }
@@ -438,21 +438,21 @@ const ConsultationView: React.FC = () => {
               ...patient,
               id: `temp_${Date.now()}`,
               isTemporary: true,
-              appointmentId: patient.appointmentId
+              appointmentId: patient.appointmentId 
           };
           setSelectedPatient(tempPatient);
           if (patient.appointmentId) setLinkedAppointmentId(patient.appointmentId);
           toast.info(`Paciente temporal: ${patient.name} (Se registrará al guardar)`);
-      }
+      } 
       else {
           setSelectedPatient(patient);
-          setSearchTerm('');
+          setSearchTerm(''); 
 
           try {
               const loadingHistory = toast.loading("Sincronizando historial...");
               const { data: fullPatientData, error } = await supabase
                   .from('patients')
-                  .select('*')
+                  .select('*') 
                   .eq('id', patient.id)
                   .single();
 
@@ -471,19 +471,21 @@ const ConsultationView: React.FC = () => {
   };
 
   const handleCreateTemporary = (name: string) => {
-      const tempPatient: any = {
-          id: 'temp_' + Date.now(),
+      const tempPatient: any = { 
+          id: 'temp_' + Date.now(), 
           name: name,
-          isTemporary: true
+          isTemporary: true 
       };
       setSelectedPatient(tempPatient);
       setSearchTerm('');
-      startTimeRef.current = Date.now();
+      startTimeRef.current = Date.now(); 
       toast.info(`Nuevo paciente temporal: ${name}`);
   };
 
   // --- MANEJO DE GRABACIÓN (MEJORADO CON PAUSA) ---
   const handleToggleRecording = () => {
+    // CORRECCIÓN: El check de 'isOnline' se mantiene aquí, porque es la lógica
+    // que se ejecuta cuando el botón YA fue presionado.
     if (!isOnline) {
         toast.info("Sin internet: Use el teclado o el dictado de su dispositivo.");
         return;
@@ -519,12 +521,12 @@ const ConsultationView: React.FC = () => {
   };
 
   const handleClearTranscript = () => {
-      if(confirm("¿Borrar borrador permanentemente?")) {
-          resetTranscript();
+      if(confirm("¿Borrar borrador permanentemente?")) { 
+          resetTranscript(); 
           setSegments([]);
-          if (currentUserId) localStorage.removeItem(`draft_${currentUserId}`);
-          setGeneratedNote(null);
-          setIsRiskExpanded(false);
+          if (currentUserId) localStorage.removeItem(`draft_${currentUserId}`); 
+          setGeneratedNote(null); 
+          setIsRiskExpanded(false); 
       }
   };
 
@@ -561,8 +563,8 @@ const ConsultationView: React.FC = () => {
           const consultationsText = history?.map(h => `[Fecha: ${new Date(h.created_at).toLocaleDateString()}] ${h.summary}`) || [];
           
           const analysis = await GeminiMedicalService.generatePatient360Analysis(
-              selectedPatient.name,
-              selectedPatient.history || "No registrado",
+              selectedPatient.name, 
+              selectedPatient.history || "No registrado", 
               consultationsText
           );
           
@@ -587,10 +589,10 @@ const ConsultationView: React.FC = () => {
 
     if (!fullTranscript.trim()) return toast.error("Sin audio o texto registrado.");
     
-    if (!isOnline) {
+    if (!isOnline) { 
         toast.warning("Modo Offline activo: La IA requiere internet.", { icon: <WifiOff/> });
         toast.info("La nota se ha guardado localmente. Genérela cuando recupere la conexión.");
-        return;
+        return; 
     }
 
     // Aseguramos detener grabación antes de enviar
@@ -617,7 +619,7 @@ const ConsultationView: React.FC = () => {
           
           if (activeMedicalContext.lastConsultation) {
               activeContextString += `
-              - RESUMEN ÚLTIMA CONSULTA (${new Date(activeMedicalContext.lastConsultation.date).toLocaleDateString()}):
+              - RESUMEN ÚLTIMA CONSULTA (${new Date(activeMedicalContext.lastConsultation.date).toLocaleDateString()}): 
               ${activeMedicalContext.lastConsultation.summary}
               `;
           }
@@ -629,7 +631,7 @@ const ConsultationView: React.FC = () => {
               .select('created_at, summary')
               .eq('patient_id', selectedPatient.id)
               .order('created_at', { ascending: false })
-              .limit(3);
+              .limit(3); 
 
           const episodicHistory = historyData && historyData.length > 0
               ? historyData.map(h => `[FECHA: ${new Date(h.created_at).toLocaleDateString()}] RESUMEN: ${h.summary.substring(0, 300)}...`).join("\n\n")
@@ -648,9 +650,9 @@ const ConsultationView: React.FC = () => {
 
       // Usamos el texto completo estructurado
       const response = await GeminiMedicalService.generateClinicalNote(
-          fullTranscript,
-          selectedSpecialty,
-          fullMedicalContext
+          fullTranscript, 
+          selectedSpecialty, 
+          fullMedicalContext 
       ) as EnhancedGeminiResponse;
       
       if (!response || (!response.soapData && !response.clinicalNote)) {
@@ -679,18 +681,18 @@ const ConsultationView: React.FC = () => {
       
       setActiveTab('record');
       
-      const chatWelcome = fullMedicalContext
-          ? `He analizado la transcripción y separado los medicamentos de las instrucciones narrativas. Por favor revise la pestaña 'Plan Paciente'.`
+      const chatWelcome = fullMedicalContext 
+          ? `He analizado la transcripción y separado los medicamentos de las instrucciones narrativas. Por favor revise la pestaña 'Plan Paciente'.` 
           : `Nota de primera vez generada con receta estructurada. ¿Dudas?`;
           
       setChatMessages([{ role: 'model', text: chatWelcome }]);
 
-    } catch (e: any) {
+    } catch (e: any) { 
         console.error("❌ Error Critical en handleGenerate:", e);
         toast.dismiss(loadingToast);
-        if(e instanceof Error && e.name !== 'AbortError') toast.error(`Error IA: ${e.message}`);
-    } finally {
-        setIsProcessing(false);
+        if(e instanceof Error && e.name !== 'AbortError') toast.error(`Error IA: ${e.message}`); 
+    } finally { 
+        setIsProcessing(false); 
     }
   };
 
@@ -739,21 +741,21 @@ const ConsultationView: React.FC = () => {
 
       try {
         return await pdf(
-            <PrescriptionPDF
-                doctorName={doctorProfile.full_name}
-                specialty={doctorProfile.specialty}
-                license={doctorProfile.license_number}
-                university={doctorProfile.university || "Universidad Nacional"}
+            <PrescriptionPDF 
+                doctorName={doctorProfile.full_name} 
+                specialty={doctorProfile.specialty} 
+                license={doctorProfile.license_number} 
+                university={doctorProfile.university || "Universidad Nacional"} 
                 phone={doctorProfile.phone || ""}
                 address={doctorProfile.address || ""}
-                logoUrl={doctorProfile.logo_url}
-                signatureUrl={doctorProfile.signature_url}
+                logoUrl={doctorProfile.logo_url} 
+                signatureUrl={doctorProfile.signature_url} 
                 patientName={selectedPatient.name}
-                patientAge={ageDisplay}
+                patientAge={ageDisplay} 
                 date={new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' })}
                 
                 // --- NUEVOS PROPS ESTRUCTURADOS ---
-                prescriptions={editablePrescriptions}
+                prescriptions={editablePrescriptions} 
                 instructions={editableInstructions}
                 riskAnalysis={generatedNote?.risk_analysis}
                 // ----------------------------------
@@ -771,16 +773,16 @@ const ConsultationView: React.FC = () => {
       }
   };
 
-  const handlePrint = async () => {
+  const handlePrint = async () => { 
       const loadingToast = toast.loading("Generando receta...");
-      const blob = await generatePDFBlob();
+      const blob = await generatePDFBlob(); 
       toast.dismiss(loadingToast);
       if(blob) {
           window.open(URL.createObjectURL(blob), '_blank');
       }
   };
   
-  const handleShareWhatsApp = async () => {
+  const handleShareWhatsApp = async () => { 
     if (!editableInstructions || !selectedPatient) return toast.error("No hay instrucciones.");
     const drName = doctorProfile?.full_name || 'su médico';
     const message = `*Hola ${selectedPatient.name}, soy el Dr. ${drName}.*\n\n${editableInstructions}\n\n*Saludos.*`;
@@ -822,19 +824,19 @@ const ConsultationView: React.FC = () => {
         }
 
         // Construimos un resumen de texto plano para la base de datos que incluya los medicamentos
-        const medsSummary = editablePrescriptions.length > 0
+        const medsSummary = editablePrescriptions.length > 0 
             ? "\n\nMEDICAMENTOS:\n" + editablePrescriptions.map(m => `- ${m.drug} ${m.dose} (${m.frequency})`).join('\n')
             : "";
 
-        const summaryToSave = generatedNote.soapData
+        const summaryToSave = generatedNote.soapData 
             ? `FECHA: ${new Date().toLocaleDateString()}\nS: ${generatedNote.soapData.subjective}\nO: ${generatedNote.soapData.objective}\nA: ${generatedNote.soapData.analysis}\nP: ${generatedNote.soapData.plan}\n\nPLAN PACIENTE:${medsSummary}\n\nINSTRUCCIONES:\n${editableInstructions}`
             : (generatedNote.clinicalNote + `\n\nPLAN PACIENTE:${medsSummary}\n\nINSTRUCCIONES:\n` + editableInstructions);
 
         if (linkedAppointmentId) {
               await supabase.from('appointments')
-                .update({
+                .update({ 
                     status: 'completed',
-                    patient_id: finalPatientId
+                    patient_id: finalPatientId 
                 })
                 .eq('id', linkedAppointmentId);
         } else {
@@ -855,14 +857,14 @@ const ConsultationView: React.FC = () => {
         };
 
         const payload = {
-            doctor_id: user.id,
-            patient_id: finalPatientId,
-            transcript: fullTranscriptToSave || 'N/A',
+            doctor_id: user.id, 
+            patient_id: finalPatientId, 
+            transcript: fullTranscriptToSave || 'N/A', 
             summary: summaryToSave,
             status: 'completed',
             ai_analysis_data: finalAiData, // Guardamos el objeto enriquecido
             legal_status: 'validated',
-            real_duration_seconds: durationSeconds
+            real_duration_seconds: durationSeconds 
         };
 
         const { error } = await supabase.from('consultations').insert(payload);
@@ -871,25 +873,25 @@ const ConsultationView: React.FC = () => {
         
         toast.success("Nota validada y guardada");
         
-        resetTranscript();
+        resetTranscript(); 
         setSegments([]);
-        if (currentUserId) localStorage.removeItem(`draft_${currentUserId}`);
-        setGeneratedNote(null);
-        setEditableInstructions('');
-        setEditablePrescriptions([]);
+        if (currentUserId) localStorage.removeItem(`draft_${currentUserId}`); 
+        setGeneratedNote(null); 
+        setEditableInstructions(''); 
+        setEditablePrescriptions([]); 
         setInsuranceData(null); // Limpiar datos de seguros
-        setSelectedPatient(null);
-        setConsentGiven(false);
+        setSelectedPatient(null); 
+        setConsentGiven(false); 
         setIsRiskExpanded(false);
         setPatientInsights(null);
         setLinkedAppointmentId(null);
-        startTimeRef.current = Date.now();
+        startTimeRef.current = Date.now(); 
 
-    } catch (e:any) {
+    } catch (e:any) { 
         console.error("Error guardando:", e);
-        toast.error("Error al guardar: " + e.message);
-    } finally {
-        setIsSaving(false);
+        toast.error("Error al guardar: " + e.message); 
+    } finally { 
+        setIsSaving(false); 
     }
   };
 
@@ -926,7 +928,7 @@ const ConsultationView: React.FC = () => {
       if (!chatInput.trim() || !generatedNote) return;
       if (!isOnline) return toast.error("Requiere internet");
       
-      const msg = chatInput;
+      const msg = chatInput; 
       setChatInput('');
       setChatMessages(p => [...p, { role: 'user', text: msg }]);
       setIsChatting(true);
@@ -975,11 +977,11 @@ const ConsultationView: React.FC = () => {
 
           setChatMessages(p => [...p, { role: 'model', text: finalCleanText }]);
 
-      } catch (error) {
+      } catch (error) { 
           console.error("Chat Error:", error);
-          toast.error("Error conectando con el asistente");
-      } finally {
-          setIsChatting(false);
+          toast.error("Error conectando con el asistente"); 
+      } finally { 
+          setIsChatting(false); 
       }
   };
 
@@ -1236,7 +1238,8 @@ const ConsultationView: React.FC = () => {
             <div className="flex w-full gap-2 shrink-0">
                 <button 
                     onClick={handleToggleRecording} 
-                    disabled={!isOnline || !consentGiven || (!isAPISupported && !isListening)} 
+                    // CORRECCIÓN CRÍTICA: Quitamos !isOnline del disabled para permitir que el clic dispare la alerta.
+                    disabled={!consentGiven || (!isAPISupported && !isListening)} 
                     className={`flex-1 py-3 rounded-xl font-bold flex justify-center gap-2 text-white shadow-lg text-sm transition-all ${
                         !isOnline ? 'bg-slate-300 dark:bg-slate-700 cursor-not-allowed text-slate-500' :
                         isListening ? 'bg-amber-500 hover:bg-amber-600' : // Si graba, botón amarillo de pausa
