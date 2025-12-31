@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Save, User, Stethoscope, Hash, Phone, MapPin, BookOpen, Upload, Image as ImageIcon, PenTool, Globe, Download, FileSpreadsheet, ShieldCheck } from 'lucide-react';
+import { Save, User, Stethoscope, Hash, Phone, MapPin, BookOpen, Upload, Image as ImageIcon, PenTool, Globe, Download, FileSpreadsheet, ShieldCheck, Database, RefreshCw } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { MedicalDataService } from '../services/MedicalDataService';
 import { toast } from 'sonner';
+import PatientImporter from './PatientImporter';
 // IMPORTACIÓN CRÍTICA: Traemos el componente de planes corregido
-import { SubscriptionPlans } from '../components/SubscriptionPlans'; // CORRECCIÓN: Ruta relativa ajustada
+import { SubscriptionPlans } from './SubscriptionPlans';
 
 // LISTA MAESTRA DE ESPECIALIDADES (NORMALIZACIÓN)
 const SPECIALTIES = [
@@ -21,6 +22,7 @@ const SettingsView: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [downloading, setDownloading] = useState(false); 
+  const [showImporter, setShowImporter] = useState(false);
   
   // Campos del formulario
   const [fullName, setFullName] = useState('');
@@ -156,21 +158,42 @@ const SettingsView: React.FC = () => {
   if (loading) return <div className="p-10 text-center text-slate-400">Cargando perfil...</div>;
 
   return (
-    <div className="p-6 max-w-5xl mx-auto pb-24">
+    <div className="p-6 max-w-5xl mx-auto pb-24 relative">
+      
+      {/* --- INTEGRACIÓN DEL IMPORTADOR --- */}
+      {showImporter && (
+          <PatientImporter 
+            onComplete={() => {
+                // Callback opcional tras completar la importación
+            }} 
+            onClose={() => setShowImporter(false)}
+          />
+      )}
+
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
           <div>
               <h2 className="text-2xl font-bold text-slate-800 dark:text-white">Configuración</h2>
               <p className="text-slate-500 dark:text-slate-400 text-sm">Datos del consultorio y cuenta.</p>
           </div>
           
-          <button 
-            onClick={handleBackup}
-            disabled={downloading}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-lg border border-blue-200 dark:border-blue-800 hover:bg-blue-100 transition-colors text-sm font-bold disabled:opacity-50"
-          >
-            {downloading ? <Download className="animate-bounce" size={16}/> : <FileSpreadsheet size={16}/>}
-            {downloading ? "Exportando..." : "Descargar Mis Datos"}
-          </button>
+          <div className="flex gap-2">
+              <button 
+                  onClick={() => setShowImporter(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-400 rounded-lg border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 transition-colors text-sm font-bold"
+              >
+                  <Database size={16}/>
+                  Importar Pacientes
+              </button>
+              
+              <button 
+                onClick={handleBackup}
+                disabled={downloading}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-lg border border-blue-200 dark:border-blue-800 hover:bg-blue-100 transition-colors text-sm font-bold disabled:opacity-50"
+              >
+                {downloading ? <Download className="animate-bounce" size={16}/> : <FileSpreadsheet size={16}/>}
+                {downloading ? "Exportando..." : "Descargar Mis Datos"}
+              </button>
+          </div>
       </div>
       
       <form onSubmit={updateProfile} className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-10">
