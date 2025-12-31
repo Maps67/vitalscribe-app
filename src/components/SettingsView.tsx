@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Save, User, Stethoscope, Hash, Phone, MapPin, BookOpen, Upload, Image as ImageIcon, PenTool, Globe, Download, FileSpreadsheet, ShieldCheck, Database, RefreshCw } from 'lucide-react';
+import { Save, User, Stethoscope, Hash, Phone, MapPin, BookOpen, Upload, Image as ImageIcon, PenTool, Globe, Download, FileSpreadsheet, ShieldCheck, Database } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { MedicalDataService } from '../services/MedicalDataService';
 import { toast } from 'sonner';
 import PatientImporter from './PatientImporter';
 // IMPORTACIÓN CRÍTICA: Traemos el componente de planes corregido
-import { SubscriptionPlans } from './SubscriptionPlans';
+import { SubscriptionPlans } from '../components/SubscriptionPlans'; // CORRECCIÓN: Ruta relativa ajustada
 
 // LISTA MAESTRA DE ESPECIALIDADES (NORMALIZACIÓN)
 const SPECIALTIES = [
@@ -159,7 +159,7 @@ const SettingsView: React.FC = () => {
 
   return (
     <div className="p-6 max-w-5xl mx-auto pb-24 relative">
-      
+
       {/* --- INTEGRACIÓN DEL IMPORTADOR --- */}
       {showImporter && (
           <PatientImporter 
@@ -177,22 +177,22 @@ const SettingsView: React.FC = () => {
           </div>
           
           <div className="flex gap-2">
-              <button 
-                  onClick={() => setShowImporter(true)}
-                  className="flex items-center gap-2 px-4 py-2 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-400 rounded-lg border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 transition-colors text-sm font-bold"
-              >
-                  <Database size={16}/>
-                  Importar Pacientes
-              </button>
-              
-              <button 
+            <button 
+                onClick={() => setShowImporter(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-400 rounded-lg border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 transition-colors text-sm font-bold"
+            >
+                <Database size={16}/>
+                Importar Pacientes
+            </button>
+
+            <button 
                 onClick={handleBackup}
                 disabled={downloading}
                 className="flex items-center gap-2 px-4 py-2 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-lg border border-blue-200 dark:border-blue-800 hover:bg-blue-100 transition-colors text-sm font-bold disabled:opacity-50"
-              >
+            >
                 {downloading ? <Download className="animate-bounce" size={16}/> : <FileSpreadsheet size={16}/>}
                 {downloading ? "Exportando..." : "Descargar Mis Datos"}
-              </button>
+            </button>
           </div>
       </div>
       
