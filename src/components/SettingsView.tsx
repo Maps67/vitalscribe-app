@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase';
 import { MedicalDataService } from '../services/MedicalDataService';
 import { toast } from 'sonner';
 // IMPORTACIÓN CRÍTICA: Traemos el componente de planes corregido
-import { SubscriptionPlans } from './SubscriptionPlans';
+import { SubscriptionPlans } from '../components/SubscriptionPlans'; // CORRECCIÓN: Ruta relativa ajustada
 
 // LISTA MAESTRA DE ESPECIALIDADES (NORMALIZACIÓN)
 const SPECIALTIES = [
