@@ -1,11 +1,9 @@
 import React, { useState } from 'react';
-import Papa from 'papaparse'; // ✅ USO DE LIBRERÍA ROBUSTA (Mitiga Riesgo 1)
-import { supabase } from '../lib/supabase'; // ✅ CONEXIÓN REAL (Mitiga Riesgo 3)
+import Papa from 'papaparse'; 
+import { supabase } from '../lib/supabase';
 import { z } from 'zod';
-import { Upload, Database, X, ShieldCheck, Loader2, CheckCircle, AlertTriangle, FileType } from 'lucide-react';
+import { Upload, Database, X, ShieldCheck, Loader2, AlertTriangle, CheckCircle } from 'lucide-react';
 import { toast } from 'sonner';
-import { Button } from './ui/button'; // Ajusta la ruta si usas shadcn/ui o usa botones HTML normales
-import { Alert, AlertDescription, AlertTitle } from './ui/alert'; // Ajusta ruta si es necesario
 
 // --- TIPOS Y ESQUEMAS ---
 
@@ -19,7 +17,6 @@ interface Patient {
   created_at?: string;
 }
 
-// Validación laxa para la entrada (permite números que luego transformamos)
 const RawCsvRowSchema = z.object({
   Nombre: z.string().min(1, "El nombre es obligatorio"),
   Edad: z.union([z.string(), z.number()]).optional(),
@@ -42,25 +39,21 @@ export default function PatientImporter({ onComplete, onClose }: { onComplete?: 
   const [stats, setStats] = useState<{ processed: number; success: number; merged: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // --- LÓGICA DE NEGOCIO (TRANSFORMACIONES) ---
+  // --- LÓGICA DE NEGOCIO ---
 
   const calculateBirthDate = (ageInput: string | number | undefined): string | undefined => {
     if (!ageInput) return undefined;
     const s = String(ageInput).trim();
     if (["n/a", "na", "", "null"].includes(s.toLowerCase())) return undefined;
 
-    // Caso A: Es una edad numérica (ej: 33)
-    // Eliminamos caracteres no numéricos para evitar errores
     const ageNum = parseInt(s.replace(/\D/g, ''), 10);
     
-    // Si es un número válido y parece una edad (0-120), calculamos año
     if (!isNaN(ageNum) && ageNum > 0 && ageNum < 120) {
       const currentYear = new Date().getFullYear();
       const birthYear = currentYear - ageNum;
       return `${birthYear}-01-01`; 
     }
     
-    // Caso B: Ya es una fecha o formato inválido, intentamos parsear
     const d = Date.parse(s);
     return !isNaN(d) ? new Date(d).toISOString().split('T')[0] : undefined;
   };
@@ -86,11 +79,9 @@ export default function PatientImporter({ onComplete, onClose }: { onComplete?: 
     setStats(null);
 
     try {
-      // 1. VERIFICACIÓN DE SESIÓN REAL
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Sesión expirada. Por favor recarga la página.");
 
-      // 2. PARSEO ROBUSTO CON PAPAPARSE
       Papa.parse(file, {
         header: true,
         skipEmptyLines: true,
@@ -104,10 +95,7 @@ export default function PatientImporter({ onComplete, onClose }: { onComplete?: 
 
             console.log(`[ETL Prod] Procesando ${rawRows.length} filas...`);
 
-            // 3. AGREGACIÓN EN MEMORIA (DEDUPLICACIÓN + FUSIÓN)
             for (const row of rawRows) {
-              // Normalización de claves para que coincidan con el Schema (Mapeo Automático Básico)
-              // Intentamos buscar las columnas clave independientemente de mayúsculas/minúsculas
               const normalizedRow: any = {};
               Object.keys(row).forEach(key => {
                 const lower = key.toLowerCase();
@@ -119,41 +107,31 @@ export default function PatientImporter({ onComplete, onClose }: { onComplete?: 
                 else if (lower.includes('fecha') || lower.includes('date')) normalizedRow.Fecha = row[key];
               });
 
-              // Validación Zod silenciosa (si falla, ignoramos la fila o tomamos parciales)
               const parseResult = RawCsvRowSchema.safeParse(normalizedRow);
               if (!parseResult.success || !parseResult.data.Nombre) continue;
 
               const data = parseResult.data;
               const normalizedName = data.Nombre.trim();
               
-              if (normalizedName.length < 2) continue; // Ignorar nombres basura
+              if (normalizedName.length < 2) continue; 
 
               processedRows++;
 
               const birthDate = calculateBirthDate(data.Edad);
               const note = sanitizeHistoryText(data.Transcripcion);
-              // Fecha del evento para el historial
               const eventDate = data.Fecha ? String(data.Fecha).split('T')[0] : new Date().toISOString().split('T')[0];
 
               if (patientMap.has(normalizedName)) {
-                // FUSIÓN: El paciente ya existe, agregamos datos nuevos
                 const existing = patientMap.get(normalizedName)!;
-                
-                // Unimos historial cronológicamente
                 if (note) {
-                   // Evitar duplicar la misma nota exacta
                    if (!existing.historyEvents.some(h => h.includes(note))) {
                        existing.historyEvents.push(`[${eventDate}]: ${note}`);
                    }
                 }
-                
-                // Rellenamos datos faltantes (Estrategia: Mejor dato gana)
                 if (!existing.email && data.Email) existing.email = data.Email;
                 if (!existing.phone && data.Telefono) existing.phone = String(data.Telefono);
                 if (!existing.birth_date && birthDate) existing.birth_date = birthDate;
-
               } else {
-                // NUEVO: Creamos la entrada inicial
                 patientMap.set(normalizedName, {
                   name: normalizedName,
                   email: data.Email || "",
@@ -164,9 +142,7 @@ export default function PatientImporter({ onComplete, onClose }: { onComplete?: 
               }
             }
 
-            // 4. PREPARACIÓN DE PAYLOAD FINAL
             const patientsToUpsert: Patient[] = Array.from(patientMap.values()).map(p => {
-              // Construcción del JSON estricto requerido por GeminiMedicalService
               const historyJson = JSON.stringify({
                 origen: "Importación Masiva ETL (v5.3)",
                 resumen_clinico: p.historyEvents.length > 0 
@@ -181,14 +157,12 @@ export default function PatientImporter({ onComplete, onClose }: { onComplete?: 
                 birth_date: p.birth_date || undefined,
                 history: historyJson,
                 doctor_id: user.id,
-                created_at: new Date().toISOString() // Upsert lo manejará
+                created_at: new Date().toISOString()
               };
             });
 
             if (patientsToUpsert.length === 0) throw new Error("No se generaron pacientes válidos. Revisa las columnas del CSV.");
 
-            // 5. INSERCIÓN ATÓMICA (UPSERT REAL)
-            // Usamos onConflict para respetar la unicidad por nombre y doctor
             const { error: upsertError } = await supabase
               .from('patients')
               .upsert(patientsToUpsert, { 
@@ -227,6 +201,7 @@ export default function PatientImporter({ onComplete, onClose }: { onComplete?: 
     }
   };
 
+  // --- UI SIN DEPENDENCIAS EXTERNAS ---
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in">
       <div className="bg-white dark:bg-slate-900 w-full max-w-2xl rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col max-h-[90vh]">
@@ -243,15 +218,18 @@ export default function PatientImporter({ onComplete, onClose }: { onComplete?: 
 
         <div className="p-8 overflow-y-auto space-y-6">
           
-          <Alert className="bg-blue-50 text-blue-900 border-blue-200">
-            <ShieldCheck className="h-4 w-4 text-blue-600" />
-            <AlertTitle>Modo Seguro Activado</AlertTitle>
-            <AlertDescription className="text-xs mt-1">
-              Este sistema detectará duplicados en el archivo y <strong>fusionará sus historiales</strong> en un solo expediente cronológico.
-              <br/>
-              Las edades (ej: "33") se convertirán automáticamente a fechas de nacimiento (ej: "1991-01-01").
-            </AlertDescription>
-          </Alert>
+          {/* ALERTA TIPO "STANDALONE" */}
+          <div className="bg-blue-50 text-blue-900 border border-blue-200 p-4 rounded-lg flex gap-3">
+            <ShieldCheck className="h-5 w-5 text-blue-600 shrink-0" />
+            <div>
+              <h4 className="font-bold text-sm">Modo Seguro Activado</h4>
+              <p className="text-xs mt-1">
+                Este sistema detectará duplicados en el archivo y <strong>fusionará sus historiales</strong> en un solo expediente cronológico.
+                <br/>
+                Las edades (ej: "33") se convertirán automáticamente a fechas de nacimiento (ej: "1991-01-01").
+              </p>
+            </div>
+          </div>
 
           {!stats ? (
             <div className="border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-xl p-10 text-center hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors relative group">
@@ -301,11 +279,13 @@ export default function PatientImporter({ onComplete, onClose }: { onComplete?: 
           )}
 
           {error && (
-            <Alert variant="destructive">
-              <AlertTriangle className="h-4 w-4" />
-              <AlertTitle>Error</AlertTitle>
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
+            <div className="bg-red-50 border border-red-200 p-4 rounded-lg flex gap-3 text-red-800">
+              <AlertTriangle className="h-5 w-5 text-red-600 shrink-0" />
+              <div>
+                <h4 className="font-bold text-sm">Error</h4>
+                <p className="text-xs">{error}</p>
+              </div>
+            </div>
           )}
 
         </div>
