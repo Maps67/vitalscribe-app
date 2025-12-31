@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import Papa from 'papaparse';
 import { supabase } from '../lib/supabase';
-import { Upload, ArrowRight, AlertTriangle, FileSpreadsheet, Database, CheckCircle, RefreshCw, X } from 'lucide-react';
+import { Upload, ArrowRight, AlertTriangle, FileSpreadsheet, Database, RefreshCw, X } from 'lucide-react';
 import { toast } from 'sonner';
 
 // Definición de los campos que VitalScribe necesita
@@ -9,10 +9,11 @@ const REQUIRED_FIELDS = [
   { key: 'name', label: 'Nombre Completo (Obligatorio)', required: true },
   { key: 'phone', label: 'Teléfono', required: false },
   { key: 'email', label: 'Correo Electrónico', required: false },
-  // CAMBIO APLICADO: Normalización a estándar SQL (birth_date)
   { key: 'birth_date', label: 'Fecha de Nacimiento (YYYY-MM-DD)', required: false },
   { key: 'allergies', label: 'Alergias', required: false },
-  { key: 'history', label: 'Antecedentes / Historial', required: false },
+  // SEPARACIÓN CRÍTICA: Distinguir entre antecedentes fijos y notas de evolución
+  { key: 'history', label: 'Antecedentes (Enfermedades/Cirugías)', required: false },
+  { key: 'clinical_note', label: 'Notas de Última Consulta / Contexto', required: false },
 ];
 
 interface PatientImporterProps {
@@ -65,6 +66,9 @@ const PatientImporter: React.FC<PatientImporterProps> = ({ onComplete, onClose }
       const formattedPatients = rawFile.map(row => {
         const patient: any = { doctor_id: user.id, created_at: new Date() };
         
+        // Variables temporales para fusión de contexto
+        let tempHistory = "";
+        let tempNotes = "";
         let hasName = false;
 
         // Mapear campos
@@ -73,7 +77,14 @@ const PatientImporter: React.FC<PatientImporterProps> = ({ onComplete, onClose }
           if (userCol && row[userCol]) {
             const val = row[userCol].toString().trim();
             if (val) {
-                patient[vkKey] = val;
+                if (vkKey === 'history') {
+                    tempHistory = val;
+                } else if (vkKey === 'clinical_note') {
+                    tempNotes = val;
+                } else {
+                    patient[vkKey] = val; // Campos directos (name, phone, birth_date, etc.)
+                }
+
                 if (vkKey === 'name') hasName = true;
             }
           }
@@ -82,15 +93,20 @@ const PatientImporter: React.FC<PatientImporterProps> = ({ onComplete, onClose }
         // Validaciones básicas por fila
         if (!hasName) return null; // Saltar si no hay nombre
         
-        // Normalizar datos (ej. poner N/A si falta info)
-        if (!patient.history) patient.history = "Importado sin historial previo";
-        
-        // Marca de auditoría interna
-        patient.history = JSON.stringify({ 
-            legacy_data: patient.history,
-            imported_at: new Date().toISOString(),
-            source: 'bulk_import_tool'
-        });
+        // --- FUSIÓN DE CONTEXTO INTELIGENTE ---
+        // En lugar de anidar en 'legacy_data', creamos una estructura JSON plana
+        // que la IA (Gemini) pueda leer fácilmente como contexto clínico.
+        const contextObject = {
+            antecedentes: tempHistory || "No especificados",
+            evolucion_previa: tempNotes || "Sin notas de consultas anteriores",
+            importacion: {
+                fecha: new Date().toISOString().split('T')[0],
+                origen: 'Migración Masiva'
+            }
+        };
+
+        // Guardamos como string JSON en la columna 'history' (Fuente de Verdad del Contexto)
+        patient.history = JSON.stringify(contextObject);
 
         return patient;
       }).filter(p => p !== null); // Eliminar nulos
@@ -102,7 +118,7 @@ const PatientImporter: React.FC<PatientImporterProps> = ({ onComplete, onClose }
 
       if (error) throw error;
 
-      toast.success(`${formattedPatients.length} pacientes importados exitosamente.`);
+      toast.success(`${formattedPatients.length} pacientes importados con contexto médico.`);
       onComplete();
       setRawFile([]);
       setMapping({});
@@ -138,7 +154,7 @@ const PatientImporter: React.FC<PatientImporterProps> = ({ onComplete, onClose }
                         </div>
                     </div>
                     <p className="text-lg font-bold text-slate-700 dark:text-slate-200">Sube tu archivo de Pacientes</p>
-                    <p className="text-sm text-slate-500 mt-2 mb-6">Compatible con CSV exportado de Excel, Google Contacts o tu sistema anterior.</p>
+                    <p className="text-sm text-slate-500 mt-2 mb-6">Asegúrate de incluir columnas para Historial y Notas Clínicas si deseas contexto para la IA.</p>
                     
                     <div className="inline-block px-4 py-2 bg-indigo-600 text-white rounded-lg font-bold shadow-md group-hover:bg-indigo-700 pointer-events-none">
                         Seleccionar Archivo CSV
@@ -153,8 +169,8 @@ const PatientImporter: React.FC<PatientImporterProps> = ({ onComplete, onClose }
                     <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl text-sm text-blue-800 dark:text-blue-200 flex items-start gap-3 border border-blue-100 dark:border-blue-800">
                         <AlertTriangle size={18} className="mt-0.5 shrink-0 text-blue-600"/>
                         <div>
-                            <p className="font-bold">Conecta tus columnas</p>
-                            <p className="opacity-90">Indica qué columna de tu archivo corresponde a cada dato en VitalScribe. El sistema ignorará las columnas que no selecciones.</p>
+                            <p className="font-bold">Mapeo de Contexto Clínico</p>
+                            <p className="opacity-90">Para que la IA conozca el pasado del paciente, asegúrate de conectar las columnas de <b>"Antecedentes"</b> y <b>"Notas de Consulta"</b>.</p>
                         </div>
                     </div>
 
