@@ -170,10 +170,10 @@ const PatientImporter: React.FC<PatientImporterProps> = ({ onComplete, onClose }
       // --- FASE DE TRANSFORMACIÓN ---
       const cleanPatients = rawFile.map((row, index) => {
         try {
+          // CORRECCIÓN APLICADA: Se eliminó isTemporary: false
           const patient: any = { 
             doctor_id: user.id, 
-            created_at: new Date().toISOString(),
-            isTemporary: false 
+            created_at: new Date().toISOString()
           };
 
           // 1. Extraer campos simples
@@ -225,6 +225,8 @@ const PatientImporter: React.FC<PatientImporterProps> = ({ onComplete, onClose }
           // Si hay texto combinado, lo ponemos como 'antecedentes' para que la IA lo lea
           if (combinedText) {
             contextData.summary = combinedText;
+            // Garantizar compatibilidad
+            if (!contextData.antecedentes) contextData.antecedentes = combinedText;
           }
 
           // Asignar al campo 'history' de la BD (que es JSONB o String)
@@ -294,7 +296,6 @@ const PatientImporter: React.FC<PatientImporterProps> = ({ onComplete, onClose }
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               {fileHeaders.map(header => {
                 const isSelected = mapping[field.key]?.includes(header);
-                // Si no es contexto, deshabilitar si ya está seleccionado en OTRO campo (opcional, aquí permitido para flexibilidad)
                 
                 return (
                   <button
