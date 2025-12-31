@@ -21,19 +21,12 @@ const sanitizePhone = (value: any): string => {
   return String(value).replace(/[^0-9+]/g, '').trim().substring(0, 20);
 };
 
-// Campos permitidos en BD
-const ALLOWED_COLUMNS = [
-  'id', 'doctor_id', 'name', 'phone', 'email', 'birth_date', 
-  'history', 'created_at', 'isTemporary', 'allergies'
-];
-
 const PatientImporter: React.FC<{ onComplete: () => void; onClose: () => void }> = ({ onComplete, onClose }) => {
   const [step, setStep] = useState<1 | 2>(1);
   const [rawFile, setRawFile] = useState<any[]>([]);
   const [headers, setHeaders] = useState<string[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   
-  // Mapeo automático inteligente para tu archivo de respaldo
   const [columnMap, setColumnMap] = useState<Record<string, string>>({
     name: '', phone: '', email: '', birth_date: '', history: '', allergies: ''
   });
@@ -50,7 +43,7 @@ const PatientImporter: React.FC<{ onComplete: () => void; onClose: () => void }>
         setHeaders(fileHeaders);
         setRawFile(results.data);
         
-        // AUTO-DETECCIÓN INTELIGENTE DE COLUMNAS (Para facilitar tu respaldo)
+        // AUTO-DETECCIÓN INTELIGENTE
         const newMap: any = {};
         fileHeaders.forEach(h => {
           const lower = h.toLowerCase();
@@ -59,8 +52,7 @@ const PatientImporter: React.FC<{ onComplete: () => void; onClose: () => void }>
           else if (lower.includes('mail') || lower.includes('correo')) newMap.email = h;
           else if (lower.includes('naci') || lower.includes('birth')) newMap.birth_date = h;
           else if (lower.includes('alerg') || lower.includes('allergy')) newMap.allergies = h;
-          // Aquí detectamos si viene la columna 'history' o 'historial'
-          else if (lower.includes('hist') || lower.includes('note') || lower.includes('context')) newMap.history = h;
+          else if (lower.includes('hist') || lower.includes('note') || lower.includes('context') || lower.includes('transcri')) newMap.history = h;
         });
         setColumnMap(prev => ({ ...prev, ...newMap }));
         setStep(2);
@@ -77,55 +69,58 @@ const PatientImporter: React.FC<{ onComplete: () => void; onClose: () => void }>
       const patientsToRestore = rawFile.map(row => {
         const p: any = {
           doctor_id: user.id,
-          name: row[columnMap.name],
+          name: row[columnMap.name]?.trim(), // Trim es vital para evitar "Mariana " vs "Mariana"
           isTemporary: false,
           created_at: new Date().toISOString()
         };
 
         if (!p.name) return null;
 
-        // Recuperación de datos
         if (columnMap.phone) p.phone = sanitizePhone(row[columnMap.phone]);
         if (columnMap.email) p.email = row[columnMap.email];
         if (columnMap.birth_date) p.birth_date = sanitizeDate(row[columnMap.birth_date]);
         if (columnMap.allergies) p.allergies = row[columnMap.allergies];
 
-        // --- LÓGICA CRÍTICA DE RECUPERACIÓN DE HISTORIAL ---
+        // LOGICA DE HISTORIAL
         if (columnMap.history) {
           const rawHistory = row[columnMap.history];
-          
-          // Caso A: El respaldo ya trae el JSON completo (ideal)
           try {
             if (rawHistory && (rawHistory.startsWith('{') || rawHistory.startsWith('['))) {
-               // Validamos que sea JSON real
                JSON.parse(rawHistory); 
                p.history = rawHistory; 
             } else if (rawHistory) {
-               // Caso B: Es texto plano, lo convertimos a JSON válido para VitalScribe
                p.history = JSON.stringify({
                  origen: "Restauración Backup",
                  resumen_clinico: rawHistory
                });
             }
           } catch (e) {
-            // Si falla el parseo, guardamos como texto encapsulado
             p.history = JSON.stringify({ nota_recuperada: rawHistory });
           }
         }
-
         return p;
       }).filter(Boolean);
 
       if (patientsToRestore.length === 0) throw new Error("No se detectaron pacientes válidos.");
 
-      const { error } = await supabase.from('patients').insert(patientsToRestore);
+      // --- CAMBIO CRÍTICO AQUÍ ---
+      // Usamos upsert en lugar de insert.
+      // onConflict: Ignora el ID, usa el índice único que creamos (doctor_id, name)
+      const { error } = await supabase
+        .from('patients')
+        .upsert(patientsToRestore, { 
+          onConflict: 'doctor_id, name', // Esto coincide con tu índice SQL
+          ignoreDuplicates: false // False = Sobrescribe con la info nueva (fusión)
+        });
+      
       if (error) throw error;
 
-      toast.success(`¡Restauración exitosa! ${patientsToRestore.length} pacientes recuperados.`);
+      toast.success(`¡Restauración exitosa! Pacientes procesados y unificados.`);
       onComplete();
       onClose();
 
     } catch (e: any) {
+      console.error(e);
       toast.error("Error al restaurar: " + e.message);
     } finally {
       setIsProcessing(false);
@@ -137,23 +132,24 @@ const PatientImporter: React.FC<{ onComplete: () => void; onClose: () => void }>
       <div className="bg-white dark:bg-slate-900 w-full max-w-2xl rounded-2xl p-6 shadow-2xl border border-slate-700">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
-            <RefreshCw className="text-emerald-500"/> Restaurador de Respaldo
+            <RefreshCw className="text-emerald-500"/> Restaurador Inteligente
           </h2>
           <button onClick={onClose}><X className="text-slate-400"/></button>
         </div>
 
         {step === 1 ? (
           <div className="text-center py-12 border-2 border-dashed border-slate-700 rounded-xl bg-slate-800/50">
-            <p className="text-slate-300 mb-4">Sube el archivo Excel/CSV de respaldo que descargaste</p>
+            <p className="text-slate-300 mb-4">Sube el archivo Excel/CSV de respaldo</p>
             <label className="px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg cursor-pointer font-bold transition-colors">
               Seleccionar Respaldo
               <input type="file" accept=".csv" className="hidden" onChange={handleFileUpload} />
             </label>
+            <p className="text-xs text-slate-500 mt-4">El sistema fusionará automáticamente los duplicados.</p>
           </div>
         ) : (
           <div className="space-y-4">
-            <div className="bg-blue-900/20 p-4 rounded-lg border border-blue-800 text-blue-200 text-sm">
-              <p>Confirma que las columnas del archivo coinciden con los datos:</p>
+            <div className="bg-emerald-900/20 p-4 rounded-lg border border-emerald-800 text-emerald-200 text-sm">
+              <p>Mapeo de Columnas Detectado. Verifica especialmente el campo "History".</p>
             </div>
             
             <div className="grid grid-cols-2 gap-4">
@@ -178,7 +174,7 @@ const PatientImporter: React.FC<{ onComplete: () => void; onClose: () => void }>
               className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl mt-4 flex justify-center items-center gap-2"
             >
               {isProcessing ? <Loader2 className="animate-spin"/> : <History/>}
-              {isProcessing ? "Restaurando..." : "Restaurar Pacientes e Historial"}
+              {isProcessing ? "Procesando..." : "Fusionar y Restaurar"}
             </button>
           </div>
         )}
