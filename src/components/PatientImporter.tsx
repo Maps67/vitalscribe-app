@@ -111,29 +111,33 @@ export default function PatientImporter({ onComplete, onClose }: { onComplete?: 
               if (!parseResult.success || !parseResult.data.Nombre) continue;
 
               const data = parseResult.data;
-              const normalizedName = data.Nombre.trim();
+              const originalName = data.Nombre.trim();
               
-              if (normalizedName.length < 2) continue; 
+              if (originalName.length < 2) continue; 
 
               processedRows++;
+
+              // APLICACIÓN DE FIX: Normalización de llave para deduplicación estricta
+              const normalizedKey = originalName.toLowerCase();
 
               const birthDate = calculateBirthDate(data.Edad);
               const note = sanitizeHistoryText(data.Transcripcion);
               const eventDate = data.Fecha ? String(data.Fecha).split('T')[0] : new Date().toISOString().split('T')[0];
 
-              if (patientMap.has(normalizedName)) {
-                const existing = patientMap.get(normalizedName)!;
+              if (patientMap.has(normalizedKey)) {
+                const existing = patientMap.get(normalizedKey)!;
                 if (note) {
                    if (!existing.historyEvents.some(h => h.includes(note))) {
                        existing.historyEvents.push(`[${eventDate}]: ${note}`);
                    }
                 }
+                // Merge strategies: Keep existing if present, otherwise overwrite with new found data
                 if (!existing.email && data.Email) existing.email = data.Email;
                 if (!existing.phone && data.Telefono) existing.phone = String(data.Telefono);
                 if (!existing.birth_date && birthDate) existing.birth_date = birthDate;
               } else {
-                patientMap.set(normalizedName, {
-                  name: normalizedName,
+                patientMap.set(normalizedKey, {
+                  name: originalName, // Guardamos el nombre original (Capitalizado)
                   email: data.Email || "",
                   phone: data.Telefono ? String(data.Telefono) : "",
                   birth_date: birthDate || "",
