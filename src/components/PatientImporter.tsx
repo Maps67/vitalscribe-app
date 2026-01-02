@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import Papa from 'papaparse'; 
 import { supabase } from '../lib/supabase';
 import { z } from 'zod';
-import { Upload, Database, X, ShieldCheck, Loader2, AlertTriangle, CheckCircle, FileText } from 'lucide-react';
+import { Upload, Database, X, ShieldCheck, Loader2, AlertTriangle, CheckCircle } from 'lucide-react';
 import { toast } from 'sonner';
 
 // --- TIPOS Y ESQUEMAS ---
@@ -14,12 +14,15 @@ interface Patient {
   phone?: string;
   email?: string;
   birth_date?: string;
+  gender?: string; // NUEVO: Soporte para género
   created_at?: string;
 }
 
 const RawCsvRowSchema = z.object({
   Nombre: z.string().min(1, "El nombre es obligatorio"),
-  Edad: z.union([z.string(), z.number()]).optional(),
+  // FIX: Aceptamos number o string y lo forzamos a string para evitar errores de tipo
+  Edad: z.any().transform(val => String(val)), 
+  Genero: z.string().optional(), // NUEVO
   Telefono: z.union([z.string(), z.number()]).optional(),
   Email: z.string().email().optional().or(z.literal("")),
   Transcripcion: z.string().optional(),
@@ -31,12 +34,13 @@ interface AggregatedPatient {
   phone: string;
   email: string;
   birth_date: string;
+  gender: string;
   historyEvents: string[];
 }
 
 export default function PatientImporter({ onComplete, onClose }: { onComplete?: () => void, onClose: () => void }) {
   const [isLoading, setIsLoading] = useState(false);
-  const [stats, setStats] = useState<{ processed: number; success: number; merged: number; notesFound: number } | null>(null);
+  const [stats, setStats] = useState<{ processed: number; success: number; merged: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // --- LÓGICA DE NEGOCIO ---
@@ -61,9 +65,7 @@ export default function PatientImporter({ onComplete, onClose }: { onComplete?: 
   const sanitizeHistoryText = (text: string | undefined): string | null => {
     if (!text) return null;
     const clean = String(text).trim();
-    // Filtros más agresivos para evitar basura en el historial
-    if (clean === "" || ["N/A", "NA", "NULL", "UNDEFINED", "ERROR", "ERROR AL GENERAR"].includes(clean.toUpperCase())) return null;
-    if (clean.length < 5) return null; // Ignorar textos muy cortos
+    if (clean === "" || ["N/A", "NA", "NULL", "undefined"].includes(clean.toUpperCase())) return null;
     return clean;
   };
 
@@ -87,7 +89,6 @@ export default function PatientImporter({ onComplete, onClose }: { onComplete?: 
       Papa.parse(file, {
         header: true,
         skipEmptyLines: true,
-        encoding: "UTF-8", // Forzar UTF-8 para caracteres latinos
         complete: async (results) => {
           try {
             const rawRows: any[] = results.data;
@@ -95,78 +96,83 @@ export default function PatientImporter({ onComplete, onClose }: { onComplete?: 
 
             const patientMap = new Map<string, AggregatedPatient>();
             let processedRows = 0;
-            let totalNotesFound = 0;
 
-            console.log(`[ETL Prod] Procesando ${rawRows.length} filas...`);
+            console.log(`[ETL Prod v6.0] Procesando ${rawRows.length} filas...`);
 
             for (const row of rawRows) {
               const normalizedRow: any = {};
-              
-              // Mapeo Inteligente de Columnas (Case Insensitive + Trimming)
+              // MAPEO INTELIGENTE DE COLUMNAS (Normalización)
               Object.keys(row).forEach(key => {
-                const cleanKey = key.toLowerCase().trim();
-                const value = row[key];
-
-                if (cleanKey.includes('nombre') || cleanKey.includes('name') || cleanKey === 'paciente') normalizedRow.Nombre = value;
-                else if (cleanKey.includes('edad') || cleanKey.includes('age') || cleanKey.includes('birth')) normalizedRow.Edad = value;
-                else if (cleanKey.includes('tel') || cleanKey.includes('phone') || cleanKey.includes('cel')) normalizedRow.Telefono = value;
-                else if (cleanKey.includes('mail') || cleanKey.includes('correo')) normalizedRow.Email = value;
-                else if (cleanKey.includes('transcrip') || cleanKey.includes('nota') || cleanKey.includes('hist') || cleanKey.includes('resumen') || cleanKey.includes('consulta')) normalizedRow.Transcripcion = value;
-                else if (cleanKey.includes('fecha') || cleanKey.includes('date')) normalizedRow.Fecha = value;
+                const lower = key.toLowerCase();
+                if (lower.includes('nombre') || lower.includes('name')) normalizedRow.Nombre = row[key];
+                else if (lower.includes('edad') || lower.includes('age') || lower.includes('birth')) normalizedRow.Edad = row[key];
+                else if (lower.includes('genero') || lower.includes('sex') || lower.includes('gender')) normalizedRow.Genero = row[key]; // NUEVO
+                else if (lower.includes('tel') || lower.includes('phone')) normalizedRow.Telefono = row[key];
+                else if (lower.includes('mail') || lower.includes('email')) normalizedRow.Email = row[key];
+                // Prioridad a Transcripcion o Resumen
+                else if (lower.includes('transcrip') || lower.includes('resumen') || lower.includes('nota')) normalizedRow.Transcripcion = row[key];
+                else if (lower.includes('fecha') || lower.includes('date')) normalizedRow.Fecha = row[key];
               });
 
               const parseResult = RawCsvRowSchema.safeParse(normalizedRow);
               if (!parseResult.success || !parseResult.data.Nombre) continue;
 
               const data = parseResult.data;
-              const originalName = data.Nombre.trim();
+              const normalizedName = data.Nombre.trim();
               
-              if (originalName.length < 2) continue; 
+              if (normalizedName.length < 2) continue; 
 
               processedRows++;
-
-              // FIX: Normalización de llave para deduplicación estricta
-              const normalizedKey = originalName.toLowerCase();
 
               const birthDate = calculateBirthDate(data.Edad);
               const note = sanitizeHistoryText(data.Transcripcion);
               const eventDate = data.Fecha ? String(data.Fecha).split('T')[0] : new Date().toISOString().split('T')[0];
+              
+              // Normalización de Género
+              let genderVal = "Otro";
+              if (data.Genero) {
+                  const g = data.Genero.toLowerCase();
+                  if (g.includes('masc') || g === 'm') genderVal = "Masculino";
+                  else if (g.includes('fem') || g === 'f') genderVal = "Femenino";
+              }
 
-              if (note) totalNotesFound++;
-
-              if (patientMap.has(normalizedKey)) {
-                const existing = patientMap.get(normalizedKey)!;
+              if (patientMap.has(normalizedName)) {
+                const existing = patientMap.get(normalizedName)!;
                 if (note) {
-                   // Evitar duplicar exactamente la misma nota
                    if (!existing.historyEvents.some(h => h.includes(note))) {
-                       existing.historyEvents.push(`📅 CITA IMPORTADA (${eventDate}):\n${note}`);
+                       existing.historyEvents.push(`[${eventDate}]: ${note}`);
                    }
                 }
+                // Estrategia de enriquecimiento: Si el registro existente no tiene datos, usa el nuevo
                 if (!existing.email && data.Email) existing.email = data.Email;
                 if (!existing.phone && data.Telefono) existing.phone = String(data.Telefono);
                 if (!existing.birth_date && birthDate) existing.birth_date = birthDate;
+                if (existing.gender === "Otro" && genderVal !== "Otro") existing.gender = genderVal; // Mejorar género
+
               } else {
-                patientMap.set(normalizedKey, {
-                  name: originalName,
+                patientMap.set(normalizedName, {
+                  name: normalizedName,
                   email: data.Email || "",
                   phone: data.Telefono ? String(data.Telefono) : "",
                   birth_date: birthDate || "",
-                  historyEvents: note ? [`📅 CITA IMPORTADA (${eventDate}):\n${note}`] : []
+                  gender: genderVal,
+                  historyEvents: note ? [`[${eventDate}]: ${note}`] : []
                 });
               }
             }
 
             const patientsToUpsert: Patient[] = Array.from(patientMap.values()).map(p => {
-              // FIX: Estructura compatible con "SOAP" para forzar visualización
-              // Usamos el campo 'subjective' que es estándar en la mayoría de vistas
-              const fullHistoryText = p.historyEvents.length > 0 
+              
+              // FIX CRÍTICO: Estructura JSON compatible con el Visor del Frontend
+              // Usamos 'clinicalNote' porque es lo que busca la interfaz para mostrar texto.
+              const combinedNotes = p.historyEvents.length > 0 
                   ? p.historyEvents.join("\n\n----------------------------------------\n\n") 
-                  : "Sin historial previo detallado en el archivo.";
+                  : "Historial importado sin notas detalladas.";
 
               const historyJson = JSON.stringify({
-                origen: "Importación Masiva ETL (v5.4)",
-                subjective: fullHistoryText, // Clave compatible con SOAP UI
-                resumen_clinico: fullHistoryText // Respaldo
+                clinicalNote: combinedNotes, // <--- ESTO ARREGLA LA VISIBILIDAD
+                origen: "Importación Masiva Excel",
+                resumen_clinico: combinedNotes // Mantenemos backup
               });
 
               return {
@@ -174,13 +180,14 @@ export default function PatientImporter({ onComplete, onClose }: { onComplete?: 
                 email: p.email || undefined,
                 phone: p.phone || undefined,
                 birth_date: p.birth_date || undefined,
+                gender: p.gender, // Ahora sí guardamos el género
                 history: historyJson,
                 doctor_id: user.id,
                 created_at: new Date().toISOString()
               };
             });
 
-            if (patientsToUpsert.length === 0) throw new Error("No se generaron pacientes válidos. Revisa las columnas del CSV.");
+            if (patientsToUpsert.length === 0) throw new Error("No se generaron pacientes válidos.");
 
             const { error: upsertError } = await supabase
               .from('patients')
@@ -194,11 +201,10 @@ export default function PatientImporter({ onComplete, onClose }: { onComplete?: 
             setStats({
               processed: processedRows,
               merged: processedRows - patientsToUpsert.length,
-              success: patientsToUpsert.length,
-              notesFound: totalNotesFound
+              success: patientsToUpsert.length
             });
             
-            toast.success("Importación completada. Historiales fusionados.");
+            toast.success("Importación completada. Historial y Género restaurados.");
             if (onComplete) onComplete();
 
           } catch (err: any) {
@@ -229,9 +235,9 @@ export default function PatientImporter({ onComplete, onClose }: { onComplete?: 
         <div className="p-5 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-800/50 rounded-t-2xl">
           <div>
             <h2 className="text-xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
-              <Database className="text-emerald-600"/> Importador ETL v5.4
+              <Database className="text-emerald-600"/> Importador V6.0 (Fix Género/Historial)
             </h2>
-            <p className="text-xs text-slate-500 mt-1">Deduplicación + Mapeo Universal SOAP</p>
+            <p className="text-xs text-slate-500 mt-1">Recuperación total de datos</p>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full transition-colors"><X size={20}/></button>
         </div>
@@ -241,11 +247,12 @@ export default function PatientImporter({ onComplete, onClose }: { onComplete?: 
           <div className="bg-blue-50 text-blue-900 border border-blue-200 p-4 rounded-lg flex gap-3">
             <ShieldCheck className="h-5 w-5 text-blue-600 shrink-0" />
             <div>
-              <h4 className="font-bold text-sm">Garantía de Integridad</h4>
+              <h4 className="font-bold text-sm">Listo para importar</h4>
               <p className="text-xs mt-1">
-                El sistema fusionará múltiples filas del mismo paciente en un solo expediente cronológico.
-                <br/>
-                El historial se guardará en formato <strong>SOAP (Subjetivo)</strong> para asegurar su visibilidad.
+                Sube tu archivo Excel (.csv). El sistema recuperará automáticamente:
+                <br/>• Edades (convirtiendo a fecha)
+                <br/>• Género (Masculino/Femenino)
+                <br/>• Historial Completo (Unificando duplicados)
               </p>
             </div>
           </div>
@@ -265,26 +272,16 @@ export default function PatientImporter({ onComplete, onClose }: { onComplete?: 
                 </div>
                 <div>
                   <h3 className="text-lg font-bold text-slate-700 dark:text-slate-200">Sube tu archivo CSV</h3>
-                  <p className="text-sm text-slate-500 mt-1">Detecta automáticamente: Nombre, Transcripción/Resumen/Nota</p>
+                  <p className="text-sm text-slate-500 mt-1">Arrastra el archivo aquí</p>
                 </div>
               </div>
             </div>
           ) : (
              <div className="space-y-6">
-               <div className="grid grid-cols-4 gap-4">
+               <div className="grid grid-cols-3 gap-4">
                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 text-center">
                     <div className="text-2xl font-bold text-slate-700">{stats.processed}</div>
                     <div className="text-xs text-slate-500 uppercase font-bold tracking-wider">Filas</div>
-                 </div>
-                 <div className="bg-amber-50 p-4 rounded-xl border border-amber-200 text-center">
-                    <div className="text-2xl font-bold text-amber-700">{stats.merged}</div>
-                    <div className="text-xs text-amber-600 uppercase font-bold tracking-wider">Fusionados</div>
-                 </div>
-                 <div className="bg-blue-50 p-4 rounded-xl border border-blue-200 text-center">
-                    <div className="text-2xl font-bold text-blue-700">{stats.notesFound}</div>
-                    <div className="text-xs text-blue-600 uppercase font-bold tracking-wider flex justify-center items-center gap-1">
-                        <FileText size={12}/> Notas
-                    </div>
                  </div>
                  <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-200 text-center">
                     <div className="text-2xl font-bold text-emerald-700">{stats.success}</div>
@@ -297,7 +294,7 @@ export default function PatientImporter({ onComplete, onClose }: { onComplete?: 
                     onClick={onClose}
                     className="px-6 py-2 bg-slate-900 text-white rounded-lg font-bold hover:bg-slate-800 transition-colors"
                   >
-                    Finalizar Importación
+                    Finalizar
                   </button>
                </div>
              </div>
@@ -307,7 +304,7 @@ export default function PatientImporter({ onComplete, onClose }: { onComplete?: 
             <div className="bg-red-50 border border-red-200 p-4 rounded-lg flex gap-3 text-red-800">
               <AlertTriangle className="h-5 w-5 text-red-600 shrink-0" />
               <div>
-                <h4 className="font-bold text-sm">Error</h4>
+                <h4 className="font-bold text-sm">Error en la importación</h4>
                 <p className="text-xs">{error}</p>
               </div>
             </div>
