@@ -111,7 +111,6 @@ const ConsultationView: React.FC = () => {
   const [editablePrescriptions, setEditablePrescriptions] = useState<MedicationItem[]>([]);
   const [isEditingInstructions, setIsEditingInstructions] = useState(false);
   
-  // --- NUEVO ESTADO: DATOS DE SEGUROS ---
   const [insuranceData, setInsuranceData] = useState<{provider: string, policyNumber: string, accidentDate: string} | null>(null);
 
   const [isAppointmentModalOpen, setIsAppointmentModalOpen] = useState(false);
@@ -134,11 +133,9 @@ const ConsultationView: React.FC = () => {
   
   const [editingSection, setEditingSection] = useState<string | null>(null);
 
-  // --- ESTADOS DE CHAT ---
   const [segments, setSegments] = useState<TranscriptSegment[]>([]);
   const [activeSpeaker, setActiveSpeaker] = useState<'doctor' | 'patient'>('doctor');
 
-  // --- ESTADO UI MÓVIL ---
   const [isMobileContextExpanded, setIsMobileContextExpanded] = useState(false);
 
   const startTimeRef = useRef<number>(Date.now());
@@ -178,10 +175,8 @@ const ConsultationView: React.FC = () => {
         if (mounted) {
             setCurrentUserId(user.id); 
 
-            // 1. Cargar Pacientes Registrados
             const { data: patientsData } = await supabase.from('patients').select('*').order('created_at', { ascending: false });
             
-            // 2. Cargar Citas "Fantasmas"
             const today = new Date();
             today.setHours(0,0,0,0);
             
@@ -220,7 +215,6 @@ const ConsultationView: React.FC = () => {
                 }
             }
 
-            // --- LÓGICA DE PUENTE (DASHBOARD -> CONSULTA) ---
             if (location.state?.patientData) {
                 const incoming = location.state.patientData;
                 
@@ -244,7 +238,6 @@ const ConsultationView: React.FC = () => {
 
                 if (location.state.linkedAppointmentId) {
                     setLinkedAppointmentId(location.state.linkedAppointmentId);
-                    console.log("🔗 Cita vinculada para cierre automático:", location.state.linkedAppointmentId);
                 }
                 
                 window.history.replaceState({}, document.title);
@@ -280,47 +273,48 @@ const ConsultationView: React.FC = () => {
     return () => { mounted = false; };
   }, [location.state, setTranscript]); 
 
-  // --- FUNCIÓN DE LIMPIEZA DE JSON ---
-  const cleanHistoryString = (input: string | null | undefined): string => {
+  // --- FIX CRÍTICO: MANEJO POLIMÓRFICO DE JSON/STRING ---
+  const cleanHistoryString = (input: any): string => {
       if (!input) return "";
-      const trimmed = input.trim();
-      if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
-          try {
-              const parsed = JSON.parse(trimmed);
-              // --- FIX: LEER 'clinicalNote' (la llave del Importador v6.0) ---
-              if (parsed.clinicalNote && typeof parsed.clinicalNote === 'string' && parsed.clinicalNote.trim() !== "") {
-                   return parsed.clinicalNote;
-              }
-              // Fallback a legacyNote si clinicalNote no existe
-              if (parsed.legacyNote && typeof parsed.legacyNote === 'string' && parsed.legacyNote.trim() !== "") {
-                  return parsed.legacyNote;
-              }
-               // Fallback a resumen_clinico (Importador v5.2)
-              if (parsed.resumen_clinico && typeof parsed.resumen_clinico === 'string' && parsed.resumen_clinico.trim() !== "") {
-                  return parsed.resumen_clinico;
-              }
-              return ""; 
-          } catch (e) {
-              return input;
-          }
+      
+      // Caso 1: Si Supabase ya nos dio un Objeto (JSONB), lo leemos directo
+      if (typeof input === 'object') {
+          if (input.clinicalNote && typeof input.clinicalNote === 'string') return input.clinicalNote;
+          if (input.legacyNote) return input.legacyNote;
+          if (input.resumen_clinico) return input.resumen_clinico;
+          return JSON.stringify(input); // Fallback de seguridad
       }
-      return input; 
+
+      // Caso 2: Si es texto, intentamos parsear
+      if (typeof input === 'string') {
+          const trimmed = input.trim();
+          if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+              try {
+                  const parsed = JSON.parse(trimmed);
+                  if (parsed.clinicalNote) return parsed.clinicalNote;
+                  if (parsed.legacyNote) return parsed.legacyNote;
+                  if (parsed.resumen_clinico) return parsed.resumen_clinico;
+              } catch (e) {
+                  return input; // Si falla el parseo, devolvemos el texto original
+              }
+          }
+          return input;
+      }
+      
+      return String(input);
   };
 
-  // --- EFECTO: Carga de Contexto Médico (Perfil + Última Consulta) ---
   useEffect(() => {
     const fetchMedicalContext = async () => {
         setActiveMedicalContext(null);
         if (selectedPatient && !(selectedPatient as any).isTemporary) {
             try {
-                // 1. OBTENER DATOS FIJOS (PERFIL)
                 const { data: patientData, error: patientError } = await supabase
                     .from('patients')
                     .select('pathological_history, allergies, history') 
                     .eq('id', selectedPatient.id)
                     .single();
 
-                // 2. OBTENER ÚLTIMA CONSULTA (DINÁMICO)
                 const { data: lastCons, error: consError } = await supabase
                     .from('consultations')
                     .select('summary, created_at, ai_analysis_data')
@@ -329,15 +323,16 @@ const ConsultationView: React.FC = () => {
                     .limit(1)
                     .single();
 
-                // PROCESAR DATOS
                 let cleanHistory = "";
                 let cleanAllergies = "";
                 let lastConsultationData = undefined;
                 let lastInsuranceData = undefined;
 
                 if (!patientError && patientData) {
-                    const rawHistory = patientData.pathological_history || patientData.history;
+                    // FIX: Damos prioridad a 'history' si existe, ya que ahí guardamos el Excel
+                    const rawHistory = patientData.history || patientData.pathological_history;
                     cleanHistory = cleanHistoryString(rawHistory);
+                    
                     const rawAllergies = patientData.allergies;
                     cleanAllergies = cleanHistoryString(rawAllergies);
                 }
@@ -349,7 +344,6 @@ const ConsultationView: React.FC = () => {
                             summary: lastCons.summary
                         };
                     }
-                    
                     if (lastCons.ai_analysis_data) {
                         const analysis = typeof lastCons.ai_analysis_data === 'string' 
                             ? JSON.parse(lastCons.ai_analysis_data) 
@@ -361,7 +355,6 @@ const ConsultationView: React.FC = () => {
                     }
                 }
 
-                // LÓGICA DE VISIBILIDAD: Mostrar si hay perfil O si hay consulta previa
                 const hasStaticData = (cleanHistory && cleanHistory.length > 2) || (cleanAllergies && cleanAllergies.length > 2);
                 const hasDynamicData = !!lastConsultationData;
                 const hasInsurance = !!lastInsuranceData;
@@ -390,7 +383,7 @@ const ConsultationView: React.FC = () => {
 
         if (!isTemp && transcript && confirm("¿Desea limpiar el dictado anterior para el nuevo paciente?")) {
             resetTranscript();
-            setSegments([]); // Limpiar segmentos también
+            setSegments([]);
             if (currentUserId) localStorage.removeItem(`draft_${currentUserId}`);
             setGeneratedNote(null);
             setIsRiskExpanded(false);
@@ -402,7 +395,6 @@ const ConsultationView: React.FC = () => {
     }
   }, [selectedPatient]); 
 
-  // Auto-scroll del textarea cuando hay dictado
   useEffect(() => { 
     if (isListening && textareaRef.current) {
         textareaRef.current.scrollTop = textareaRef.current.scrollHeight;
@@ -422,7 +414,6 @@ const ConsultationView: React.FC = () => {
     return patients.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()));
   }, [patients, searchTerm]);
 
-  // --- LÓGICA DE SEGMENTACIÓN ---
   const commitCurrentTranscript = () => {
       if (transcript.trim()) {
           setSegments(prev => [...prev, {
@@ -436,11 +427,10 @@ const ConsultationView: React.FC = () => {
 
   const handleSpeakerSwitch = (newRole: 'doctor' | 'patient') => {
       if (activeSpeaker === newRole) return;
-      commitCurrentTranscript(); // Guarda lo que haya antes de cambiar
+      commitCurrentTranscript(); 
       setActiveSpeaker(newRole);
   };
 
-  // --- HIDRATACIÓN REACTIVA ---
   const handleSelectPatient = async (patient: any) => {
       if (patient.isGhost) {
           const tempPatient = {
@@ -491,40 +481,31 @@ const ConsultationView: React.FC = () => {
       toast.info(`Nuevo paciente temporal: ${name}`);
   };
 
-  // --- MANEJO DE GRABACIÓN (MEJORADO CON PAUSA) ---
   const handleToggleRecording = () => {
-    // CORRECCIÓN: El check de 'isOnline' se mantiene aquí, porque es la lógica
-    // que se ejecuta cuando el botón YA fue presionado.
     if (!isOnline) {
         toast.info("Sin internet: Use el teclado o el dictado de su dispositivo.");
         return;
     }
     
-    // Si NO soportamos API, error
     if (!isAPISupported) { toast.error("Navegador no compatible."); return; }
     
-    // Si falta consentimiento, error
     if (!consentGiven) { toast.warning("Falta consentimiento."); return; }
 
-    // LÓGICA DE ESTADOS
     if (isListening) {
-        pauseListening(); // Si estaba grabando, pausamos
-        // No commiteamos automáticamente al pausar para permitir continuar la frase
+        pauseListening(); 
     } else if (isPaused) {
-        startListening(); // Si estaba en pausa, reanudamos
+        startListening(); 
     } else {
-        startListening(); // Si estaba detenido, iniciamos de cero
+        startListening(); 
     }
   };
 
-  // Función explícita para el botón "Terminar"
   const handleFinishRecording = () => {
-      commitCurrentTranscript(); // Guardar lo último dicho
+      commitCurrentTranscript(); 
       stopListening();
       toast.success("Dictado finalizado. Listo para generar.");
   };
 
-  // Función manual para enviar texto desde la caja
   const handleManualSend = () => {
       commitCurrentTranscript();
   };
@@ -588,11 +569,8 @@ const ConsultationView: React.FC = () => {
   };
 
   const handleGenerate = async () => {
-    // Commit final para asegurar que todo el texto está procesado
-    commitCurrentTranscript(); // Guardar lo que esté en la caja
+    commitCurrentTranscript(); 
     
-    // Reconstruimos el texto completo desde los segmentos para enviarlo a la IA
-    // Combinamos segmentos + el transcript actual (si quedó algo sin commitear por alguna razón)
     const currentText = transcript.trim() ? `\n[${activeSpeaker.toUpperCase()}]: ${transcript}` : '';
     const fullTranscript = segments.map(s => `[${s.role === 'doctor' ? 'DOCTOR' : 'PACIENTE'}]: ${s.text}`).join('\n') + currentText;
 
@@ -604,7 +582,6 @@ const ConsultationView: React.FC = () => {
         return; 
     }
 
-    // Aseguramos detener grabación antes de enviar
     if (isListening || isPaused) {
         stopListening();
     }
@@ -657,7 +634,6 @@ const ConsultationView: React.FC = () => {
           fullMedicalContext = activeContextString;
       }
 
-      // Usamos el texto completo estructurado
       const response = await GeminiMedicalService.generateClinicalNote(
           fullTranscript, 
           selectedSpecialty, 
@@ -670,7 +646,6 @@ const ConsultationView: React.FC = () => {
 
       setGeneratedNote(response);
       
-      // *** AQUÍ ESTÁ LA MAGIA DE V5.6: SEPARACIÓN DE DATOS ***
       setEditableInstructions(response.patientInstructions || '');
       setEditablePrescriptions(response.prescriptions || []);
       
@@ -705,7 +680,6 @@ const ConsultationView: React.FC = () => {
     }
   };
 
-  // --- MANEJO DE MEDICAMENTOS (CRUD LOCAL) ---
   const handleRemoveMedication = (index: number) => {
       const newMeds = [...editablePrescriptions];
       newMeds.splice(index, 1);
@@ -722,7 +696,6 @@ const ConsultationView: React.FC = () => {
       setEditablePrescriptions(newMeds);
   };
 
-  // --- FUNCIÓN AUXILIAR DE EDAD ---
   const calculateAge = (birthdate?: string): string => {
       if (!birthdate) return "No registrada";
       try {
@@ -735,17 +708,13 @@ const ConsultationView: React.FC = () => {
       }
   };
 
-  // --- GENERACIÓN DE PDF BLINDADO Y FORMATEADO ---
   const generatePDFBlob = async () => {
       if (!selectedPatient || !doctorProfile) return null;
 
-      // 1. Corrección NOM-004: Cálculo de Edad
       const patientAny = selectedPatient as any;
       const dob = patientAny.birthdate || patientAny.dob || patientAny.fecha_nacimiento;
       const ageDisplay = calculateAge(dob);
 
-      // 2. PREPARACIÓN DE DATOS PARA PDF (MODO ESTRUCTURADO)
-      // Definimos el contenido de respaldo (Legacy) por si no hay tabla
       const legacyContent = generatedNote?.clinicalNote || "";
 
       try {
@@ -762,16 +731,9 @@ const ConsultationView: React.FC = () => {
                 patientName={selectedPatient.name}
                 patientAge={ageDisplay} 
                 date={new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' })}
-                
-                // --- NUEVOS PROPS ESTRUCTURADOS ---
                 prescriptions={editablePrescriptions} 
                 instructions={editableInstructions}
                 riskAnalysis={generatedNote?.risk_analysis}
-                // ----------------------------------
-                
-                // FIX V5.6: Lógica condicional estricta.
-                // Si hay recetas estructuradas, pasamos undefined a 'content' para activar la Tabla.
-                // Si NO hay recetas, pasamos el texto legacy para evitar hoja en blanco.
                 content={editablePrescriptions.length > 0 ? undefined : legacyContent}
             />
         ).toBlob();
@@ -810,7 +772,6 @@ const ConsultationView: React.FC = () => {
     
     setIsSaving(true);
     try {
-        // Aseguramos que lo último dicho también se guarde en la BD
         commitCurrentTranscript();
         const currentText = transcript.trim() ? `\n[${activeSpeaker.toUpperCase()}]: ${transcript}` : '';
         const fullTranscriptToSave = segments.map(s => `[${s.role === 'doctor' ? 'DOCTOR' : 'PACIENTE'}]: ${s.text}`).join('\n') + currentText;
@@ -832,7 +793,6 @@ const ConsultationView: React.FC = () => {
             toast.success("Paciente registrado automáticamente.");
         }
 
-        // Construimos un resumen de texto plano para la base de datos que incluya los medicamentos
         const medsSummary = editablePrescriptions.length > 0 
             ? "\n\nMEDICAMENTOS:\n" + editablePrescriptions.map(m => `- ${m.drug} ${m.dose} (${m.frequency})`).join('\n')
             : "";
@@ -854,15 +814,11 @@ const ConsultationView: React.FC = () => {
 
         const durationSeconds = Math.round((Date.now() - startTimeRef.current) / 1000);
 
-        // --- PREPARACIÓN DEL PAYLOAD CON DATOS DE SEGUROS (CORREGIDO) ---
-        // Combinamos la respuesta de la IA con los datos capturados manualmente en el panel de seguros
-        // SOLO si hay una póliza real escrita (Evita "GNP/No Registrada" basura)
-        
         const hasValidInsurance = insuranceData && insuranceData.policyNumber && insuranceData.policyNumber.trim().length > 0;
 
         const finalAiData = {
             ...generatedNote,
-            insurance_data: hasValidInsurance ? insuranceData : null // Filtro de seguridad
+            insurance_data: hasValidInsurance ? insuranceData : null 
         };
 
         const payload = {
@@ -871,7 +827,7 @@ const ConsultationView: React.FC = () => {
             transcript: fullTranscriptToSave || 'N/A', 
             summary: summaryToSave,
             status: 'completed',
-            ai_analysis_data: finalAiData, // Guardamos el objeto enriquecido
+            ai_analysis_data: finalAiData, 
             legal_status: 'validated',
             real_duration_seconds: durationSeconds 
         };
@@ -888,7 +844,7 @@ const ConsultationView: React.FC = () => {
         setGeneratedNote(null); 
         setEditableInstructions(''); 
         setEditablePrescriptions([]); 
-        setInsuranceData(null); // Limpiar datos de seguros
+        setInsuranceData(null); 
         setSelectedPatient(null); 
         setConsentGiven(false); 
         setIsRiskExpanded(false);
@@ -904,27 +860,17 @@ const ConsultationView: React.FC = () => {
     }
   };
 
-  /**
-   * --- FUNCIÓN DE LIMPIEZA AGRESIVA ---
-   * Si la IA responde con JSON (ej: {"response": "..."}), lo extraemos.
-   * Si responde con Markdown de código, lo quitamos.
-   */
   const cleanChatResponse = (text: string): string => {
       if (!text) return "";
       
       let cleaned = text.trim();
-
-      // 1. Quitar bloques de código Markdown (```json ... ```)
       cleaned = cleaned.replace(/^```[a-z]*\n?/i, '').replace(/```$/, '').trim();
 
-      // 2. Intentar parsear como JSON si parece uno
       if (cleaned.startsWith('{') && cleaned.endsWith('}')) {
           try {
               const json = JSON.parse(cleaned);
-              // Buscamos cualquier campo que parezca el mensaje
               return json.response || json.message || json.mensaje || json.text || json.doctor_consultant_response || Object.values(json)[0] || cleaned;
           } catch (e) {
-              // Si falla el parseo, devolvemos el texto tal cual (quizás no era JSON válido)
               return cleaned;
           }
       }
@@ -943,7 +889,6 @@ const ConsultationView: React.FC = () => {
       setIsChatting(true);
       
       try {
-          // --- CONTEXTO CLÍNICO LIMPIO ---
           let contextData = "";
           if (generatedNote.soapData) {
              contextData = `
@@ -957,7 +902,6 @@ const ConsultationView: React.FC = () => {
              contextData = generatedNote.clinicalNote || "Sin datos";
           }
 
-          // --- INSTRUCCIONES DE FORMATO ESTRICTAS ---
           const ctx = `
           ACTÚA COMO: Un consultor médico experto senior.
           CONTEXTO CLÍNICO: ${contextData}
@@ -980,8 +924,6 @@ const ConsultationView: React.FC = () => {
           `;
           
           const reply = await GeminiMedicalService.chatWithContext(ctx, msg);
-          
-          // --- LIMPIEZA FINAL DE SEGURIDAD ---
           const finalCleanText = cleanChatResponse(reply);
 
           setChatMessages(p => [...p, { role: 'model', text: finalCleanText }]);
@@ -1005,15 +947,12 @@ const ConsultationView: React.FC = () => {
       } catch { toast.error("Error agendando"); }
   };
 
-  // --- LÓGICA DE VISUAL CUE PARA "GENERAR" ---
-  // CORRECCIÓN: La animación se detiene inmediatamente si generatedNote existe.
   const isReadyToGenerate = isOnline && !isListening && !isPaused && !isProcessing && (transcript || segments.length > 0) && !generatedNote;
 
   return (
     <div className="flex flex-col md:flex-row h-[calc(100vh-64px)] bg-slate-100 dark:bg-slate-950 relative">
       
       <div className={`w-full md:w-1/4 p-4 flex flex-col gap-2 border-r dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden ${generatedNote ? 'hidden md:flex' : 'flex'}`}>
-        {/* Header de la columna */}
         <div className="flex justify-between items-center">
             <h2 className="text-xl font-bold dark:text-white flex items-center gap-2">
                 Consulta IA
@@ -1025,7 +964,6 @@ const ConsultationView: React.FC = () => {
             </div>
         </div>
 
-        {/* Buscador y Especialidad */}
         <div className="bg-indigo-50 dark:bg-indigo-900/20 p-3 rounded-lg border border-indigo-100 dark:border-indigo-800">
             <div className="flex justify-between items-center mb-1">
                 <label className="text-xs font-bold text-indigo-600 dark:text-indigo-300 uppercase flex gap-1"><Stethoscope size={14}/> Especialidad</label>
@@ -1058,13 +996,11 @@ const ConsultationView: React.FC = () => {
             )}
         </div>
         
-        {/* Contexto Médico - TARJETA INTELIGENTE (TAP MÓVIL / HOVER DESKTOP) */}
         {activeMedicalContext && !generatedNote && (
             <div 
                 className="relative z-30 group"
-                onClick={() => setIsMobileContextExpanded(!isMobileContextExpanded)} // INTERACCIÓN MÓVIL
+                onClick={() => setIsMobileContextExpanded(!isMobileContextExpanded)} 
             >
-                {/* 1. ESTADO BASE (Compacto) */}
                 <div className={`bg-amber-50 dark:bg-amber-900/20 p-3 rounded-lg border border-amber-200 dark:border-amber-800 text-xs shadow-sm cursor-help transition-opacity duration-200 ${isMobileContextExpanded ? 'opacity-0' : 'opacity-100 md:group-hover:opacity-0'}`}>
                     <div className="flex items-center gap-2 mb-2 text-amber-700 dark:text-amber-400 font-bold border-b border-amber-200 dark:border-amber-800 pb-1">
                         <AlertCircle size={14} />
@@ -1092,7 +1028,6 @@ const ConsultationView: React.FC = () => {
                             </div>
                         )}
                         
-                        {/* VISUALIZACIÓN DE SEGURO PREVIO (EN ESTADO COMPACTO) */}
                         {activeMedicalContext.insurance && (
                             <div className="mt-2 pt-2 border-t border-amber-200 dark:border-amber-800/50">
                                  <span className="font-bold block text-[10px] uppercase text-emerald-600 mb-1 flex items-center gap-1">
@@ -1106,7 +1041,6 @@ const ConsultationView: React.FC = () => {
                     </div>
                 </div>
 
-                {/* 2. ESTADO EXPANDIDO (Overlay) - Tap Móvil o Hover Desktop */}
                 <div className={`absolute top-0 left-0 w-full transition-all duration-200 ease-out z-50 pointer-events-none group-hover:pointer-events-auto ${isMobileContextExpanded ? 'opacity-100 visible' : 'opacity-0 invisible md:group-hover:opacity-100 md:group-hover:visible'}`}>
                     <div className="bg-amber-50 dark:bg-slate-800 p-4 rounded-xl border-2 border-amber-300 dark:border-amber-600 text-xs shadow-2xl scale-100 origin-top">
                          <div className="flex items-center gap-2 mb-2 text-amber-700 dark:text-amber-400 font-bold border-b border-amber-200 dark:border-amber-800 pb-1">
@@ -1137,7 +1071,6 @@ const ConsultationView: React.FC = () => {
                                 </div>
                             )}
 
-                            {/* VISUALIZACIÓN DE SEGURO PREVIO (EN ESTADO EXPANDIDO) */}
                             {activeMedicalContext.insurance && (
                                 <div className="mt-2 pt-2 border-t border-amber-200 dark:border-amber-800/50">
                                      <span className="font-bold block text-[10px] uppercase text-emerald-600 mb-1 flex items-center gap-1">
@@ -1169,7 +1102,6 @@ const ConsultationView: React.FC = () => {
 
         <div onClick={()=>setConsentGiven(!consentGiven)} className="flex items-center gap-2 p-3 rounded-lg border cursor-pointer select-none dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"><div className={`w-5 h-5 rounded border flex items-center justify-center ${consentGiven?'bg-green-500 border-green-500 text-white':'bg-white dark:bg-slate-700'}`}>{consentGiven&&<Check size={14}/>}</div><label className="text-xs dark:text-white cursor-pointer">Consentimiento otorgado.</label></div>
         
-        {/* === ÁREA DE CHAT (HISTORIAL) === */}
         <div className={`flex-1 flex flex-col p-2 overflow-hidden border rounded-xl bg-slate-50 dark:bg-slate-900/50 dark:border-slate-800 min-h-0`}>
             {segments.length === 0 ? (
                 <div className="flex-1 flex flex-col items-center justify-center text-slate-400 opacity-50 text-xs">
@@ -1193,11 +1125,8 @@ const ConsultationView: React.FC = () => {
             )}
         </div>
 
-        {/* === ZONA DE ENTRADA HÍBRIDA (TEXTO / VOZ) === */}
-        {/* CORRECCIÓN: Altura fija segura en móvil (260px), 50% en desktop (md:) */}
         <div className="flex flex-col gap-2 mt-2 h-[260px] md:h-[50%] shrink-0 border-t dark:border-slate-800 pt-2 pb-2">
             
-            {/* SWITCH DE HABLANTE */}
             <div className="flex justify-between items-center px-1">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Entrada Activa:</span>
                 <div className="flex bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700">
@@ -1216,7 +1145,6 @@ const ConsultationView: React.FC = () => {
                 </div>
             </div>
 
-            {/* CAJA DE TEXTO EDITABLE (BUFFER) */}
             <div className={`relative border-2 rounded-xl transition-colors bg-white dark:bg-slate-900 overflow-hidden flex-1 ${isListening ? 'border-red-400 shadow-red-100 dark:shadow-none' : 'border-slate-200 dark:border-slate-700'}`}>
                 {isListening && (
                     <div className="absolute top-2 right-2 flex gap-1">
@@ -1231,7 +1159,6 @@ const ConsultationView: React.FC = () => {
                     placeholder={isListening ? "Escuchando..." : "Escribe o dicta aquí..."}
                     className="w-full h-full p-3 bg-transparent resize-none outline-none text-sm dark:text-white"
                 />
-                {/* Botón manual para enviar texto si no se usa voz */}
                 {transcript && !isListening && (
                     <button 
                         onClick={handleManualSend} 
@@ -1243,17 +1170,15 @@ const ConsultationView: React.FC = () => {
                 )}
             </div>
 
-            {/* BOTONES DE CONTROL */}
             <div className="flex w-full gap-2 shrink-0">
                 <button 
                     onClick={handleToggleRecording} 
-                    // CORRECCIÓN CRÍTICA: Quitamos !isOnline del disabled para permitir que el clic dispare la alerta.
                     disabled={!consentGiven || (!isAPISupported && !isListening)} 
                     className={`flex-1 py-3 rounded-xl font-bold flex justify-center gap-2 text-white shadow-lg text-sm transition-all ${
                         !isOnline ? 'bg-slate-300 dark:bg-slate-700 cursor-not-allowed text-slate-500' :
-                        isListening ? 'bg-amber-500 hover:bg-amber-600' : // Si graba, botón amarillo de pausa
-                        isPaused ? 'bg-red-600 hover:bg-red-700' : // Si pausa, botón rojo de reanudar
-                        'bg-slate-900 hover:bg-slate-800' // Si está detenido, botón negro de grabar
+                        isListening ? 'bg-amber-500 hover:bg-amber-600' : 
+                        isPaused ? 'bg-red-600 hover:bg-red-700' : 
+                        'bg-slate-900 hover:bg-slate-800' 
                     }`}
                 >
                     {isListening ? (
@@ -1287,7 +1212,6 @@ const ConsultationView: React.FC = () => {
             </div>
         </div>
         
-        {/* Balance 360 */}
         {selectedPatient && !(selectedPatient as any).isTemporary && (
             <button 
                 onClick={handleLoadInsights} 
@@ -1301,7 +1225,6 @@ const ConsultationView: React.FC = () => {
         
       </div>
       
-      {/* --- COLUMNA DERECHA (RESULTADOS) --- */}
       <div className={`w-full md:w-3/4 bg-slate-100 dark:bg-slate-950 flex flex-col border-l dark:border-slate-800 ${!generatedNote?'hidden md:flex':'flex h-full'}`}>
           <div className="flex border-b dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0 items-center px-2">
              <button onClick={()=>setGeneratedNote(null)} className="md:hidden p-4 text-slate-500"><ArrowLeft/></button>
@@ -1316,7 +1239,6 @@ const ConsultationView: React.FC = () => {
                  </div>
              ) : (
                  <div className="min-h-full flex flex-col max-w-4xl mx-auto w-full gap-4 relative pb-8">
-                      {/* === PESTAÑA 1: EXPEDIENTE CLÍNICO (SOAP) === */}
                       {activeTab==='record' && generatedNote.soapData && (
                         <div className="bg-white dark:bg-slate-900 rounded-sm shadow-lg border border-slate-200 dark:border-slate-800 p-8 md:p-12 min-h-full h-fit pb-32 animate-fade-in-up relative">
                             <div className="sticky top-0 z-20 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm border-b border-slate-100 dark:border-slate-800 pb-4 mb-8 -mx-2 px-2 flex flex-col gap-2">
@@ -1326,9 +1248,7 @@ const ConsultationView: React.FC = () => {
                                         <p className="text-sm text-slate-500 dark:text-slate-400 uppercase tracking-wide">{selectedSpecialty}</p>
                                     </div>
                                     
-                                    {/* --- SECCIÓN BOTÓN + DISCLAIMER --- */}
                                     <div className="flex flex-col items-end gap-3">
-                                      {/* Botón Principal (Estilizado y funcional) */}
                                       <button 
                                         onClick={handleSaveConsultation} 
                                         disabled={isSaving} 
@@ -1338,7 +1258,6 @@ const ConsultationView: React.FC = () => {
                                         Validar y Guardar
                                       </button>
 
-                                      {/* Disclaimer Legal Estético */}
                                       <div className="flex items-start justify-end gap-1.5 max-w-xs text-right opacity-60 hover:opacity-100 transition-opacity duration-300 group cursor-help">
                                         <ShieldCheck className="w-3 h-3 text-slate-400 mt-[2px] flex-shrink-0 group-hover:text-brand-teal" />
                                         <p className="text-[10px] leading-3 text-slate-400 group-hover:text-slate-600 transition-colors">
@@ -1349,7 +1268,6 @@ const ConsultationView: React.FC = () => {
 
                                 </div>
 
-                                {/* === INYECCIÓN SEGURA: SEMÁFORO DE RIESGO === */}
                                 {generatedNote.risk_analysis && (
                                   <div className="mt-2">
                                     <RiskBadge 
@@ -1472,7 +1390,6 @@ const ConsultationView: React.FC = () => {
                           </div>
                       )}
 
-                      {/* === PESTAÑA 2: PLAN PACIENTE (DIVIDIDO) === */}
                       {activeTab==='patient' && (
                           <div className="flex flex-col h-full gap-4 animate-fade-in-up">
                               <div className="flex justify-between items-center mb-2">
@@ -1554,7 +1471,6 @@ const ConsultationView: React.FC = () => {
                           </div>
                       )}
 
-                      {/* === PESTAÑA 4: SEGUROS (NUEVO) === */}
                       {activeTab==='insurance' && generatedNote && (
                           <div className="h-full animate-fade-in-up">
                               <InsurancePanel 
@@ -1562,8 +1478,6 @@ const ConsultationView: React.FC = () => {
                                   diagnosis={generatedNote.soapData?.analysis || generatedNote.clinicalNote || "Diagnóstico pendiente"}
                                   clinicalSummary={`S: ${generatedNote.soapData?.subjective || ''}\nO: ${generatedNote.soapData?.objective || ''}`}
                                   icd10={generatedNote.soapData?.analysis?.match(/\(([A-Z][0-9][0-9](\.[0-9])?)\)/)?.[1] || ''}
-                                  
-                                  // CONEXIÓN CLAVE: El padre recibe los datos del hijo
                                   onInsuranceDataChange={setInsuranceData}
                               />
                           </div>
