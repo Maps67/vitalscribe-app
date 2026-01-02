@@ -1,5 +1,5 @@
 import React, { useMemo, useEffect, useState } from 'react';
-import { X, AlertTriangle, Activity, Calendar, FileText, User, ShieldAlert, Clock, Loader2 } from 'lucide-react';
+import { X, AlertTriangle, Activity, Calendar, FileText, User, ShieldAlert, Clock, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 // --- TIPOS ---
@@ -27,20 +27,22 @@ interface PatientDashboardProps {
 export default function PatientDashboard({ patient, onClose }: PatientDashboardProps) {
   const [historyTimeline, setHistoryTimeline] = useState<Consultation[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  
+  // Estado para manejar qué tarjetas están expandidas (Set de IDs)
+  const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
 
-  // --- 1. CARGA DE DATOS (Arquitectura V7.0) ---
+  // --- 1. CARGA DE DATOS ---
   useEffect(() => {
     let mounted = true;
 
     const fetchHistory = async () => {
       setIsLoading(true);
       try {
-        // Buscamos en la tabla de CONSULTAS, no en el perfil
         const { data, error } = await supabase
           .from('consultations')
           .select('id, created_at, summary, transcript')
           .eq('patient_id', patient.id)
-          .order('created_at', { ascending: false }); // Las más recientes primero
+          .order('created_at', { ascending: false });
 
         if (error) throw error;
         if (mounted && data) {
@@ -57,13 +59,11 @@ export default function PatientDashboard({ patient, onClose }: PatientDashboardP
     return () => { mounted = false; };
   }, [patient.id]);
 
-  // --- 2. INTELIGENCIA CLÍNICA (Detector de Riesgos) ---
+  // --- 2. INTELIGENCIA CLÍNICA ---
   const riskAnalysis = useMemo(() => {
     const risks: string[] = [];
-    // Concatenamos todo el historial para buscar patrones
     const fullText = historyTimeline.map(c => (c.summary + " " + (c.transcript || ""))).join(" ").toLowerCase();
     
-    // A. Alergias (Alta Prioridad)
     if (fullText.includes("alerg") || fullText.includes("reacción") || fullText.includes("anafilax")) {
        risks.push("⚠️ POSIBLE ALERGIA EN HISTORIAL");
     }
@@ -71,21 +71,29 @@ export default function PatientDashboard({ patient, onClose }: PatientDashboardP
        risks.push("⚠️ ALERTA MEDICAMENTO: Revisar sensibilidad a antibióticos");
     }
 
-    // B. Crónicos
     if (fullText.includes("diabet") || fullText.includes("dm2") || fullText.includes("metformina")) risks.push("🩸 Antecedente: Diabetes");
     if (fullText.includes("hiperten") || fullText.includes("has") || fullText.includes("losartan")) risks.push("❤️ Antecedente: Hipertensión");
     if (fullText.includes("renal") || fullText.includes("insuficiencia")) risks.push("💧 Alerta Renal");
 
-    return [...new Set(risks)]; // Eliminar duplicados
+    return [...new Set(risks)];
   }, [historyTimeline]);
+
+  // --- HELPERS VISUALES ---
+  const toggleCard = (id: string) => {
+    const newSet = new Set(expandedCards);
+    if (newSet.has(id)) {
+      newSet.delete(id);
+    } else {
+      newSet.add(id);
+    }
+    setExpandedCards(newSet);
+  };
 
   // --- RENDERIZADO ---
   return (
     <div className="fixed inset-0 z-50 flex justify-end animate-in slide-in-from-right duration-300">
-      {/* Overlay oscuro */}
       <div className="absolute inset-0 bg-black/20 backdrop-blur-sm" onClick={onClose} />
       
-      {/* Panel Lateral */}
       <div className="relative w-full max-w-2xl bg-white dark:bg-slate-900 h-full shadow-2xl border-l border-slate-200 dark:border-slate-800 flex flex-col">
         
         {/* CABECERA */}
@@ -157,31 +165,53 @@ export default function PatientDashboard({ patient, onClose }: PatientDashboardP
             </div>
           ) : (
             <div className="space-y-8 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-slate-300 before:to-transparent dark:before:via-slate-700">
-              {historyTimeline.map((consulta, index) => (
-                <div key={consulta.id} className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
-                  
-                  {/* Icono Central */}
-                  <div className="flex items-center justify-center w-10 h-10 rounded-full border border-white dark:border-slate-900 bg-emerald-500 text-slate-50 shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 z-10">
-                    <FileText size={18}/>
-                  </div>
-                  
-                  {/* Tarjeta de Contenido */}
-                  <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] bg-white dark:bg-slate-900 p-5 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 hover:shadow-md transition-shadow">
-                    <div className="flex items-center justify-between mb-2">
-                      <time className="font-bold text-sm text-slate-800 dark:text-white">
-                        {new Date(consulta.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}
-                      </time>
-                      <span className="text-xs text-slate-400 font-mono">
-                        {new Date(consulta.created_at).toLocaleTimeString(undefined, { hour: '2-digit', minute:'2-digit' })}
-                      </span>
-                    </div>
-                    <div className="prose dark:prose-invert max-w-none text-sm text-slate-600 dark:text-slate-300 whitespace-pre-line leading-relaxed">
-                      {consulta.summary}
-                    </div>
-                  </div>
+              {historyTimeline.map((consulta) => {
+                const isExpanded = expandedCards.has(consulta.id);
+                const isLongText = (consulta.summary || "").length > 250;
 
-                </div>
-              ))}
+                return (
+                  <div key={consulta.id} className="relative flex items-start gap-4 group">
+                    
+                    {/* Icono Central (Línea de tiempo) */}
+                    <div className="flex items-center justify-center w-10 h-10 rounded-full border border-white dark:border-slate-900 bg-emerald-500 text-slate-50 shadow shrink-0 z-10 mt-1">
+                      <FileText size={18}/>
+                    </div>
+                    
+                    {/* Tarjeta de Contenido */}
+                    <div className="flex-1 bg-white dark:bg-slate-900 p-5 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 hover:shadow-md transition-all">
+                      <div className="flex items-center justify-between mb-3 border-b border-slate-100 dark:border-slate-800 pb-2">
+                        <time className="font-bold text-sm text-slate-800 dark:text-white flex flex-col">
+                          <span>{new Date(consulta.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+                          <span className="text-[10px] text-slate-400 font-normal uppercase mt-0.5">Consulta General</span>
+                        </time>
+                        <span className="text-xs text-slate-400 font-mono bg-slate-50 dark:bg-slate-800 px-2 py-1 rounded">
+                          {new Date(consulta.created_at).toLocaleTimeString(undefined, { hour: '2-digit', minute:'2-digit' })}
+                        </span>
+                      </div>
+                      
+                      {/* --- CONTENIDO INTELIGENTE (TRUNCADO) --- */}
+                      <div className={`prose dark:prose-invert max-w-none text-sm text-slate-600 dark:text-slate-300 whitespace-pre-line leading-relaxed transition-all duration-300 ${!isExpanded ? 'line-clamp-4 mask-bottom' : ''}`}>
+                        {consulta.summary}
+                      </div>
+
+                      {/* Botón Ver Más */}
+                      {isLongText && (
+                        <button 
+                          onClick={() => toggleCard(consulta.id)}
+                          className="mt-3 text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1 hover:underline focus:outline-none"
+                        >
+                          {isExpanded ? (
+                            <>Ver menos <ChevronUp size={12}/></>
+                          ) : (
+                            <>Leer nota completa <ChevronDown size={12}/></>
+                          )}
+                        </button>
+                      )}
+                    </div>
+
+                  </div>
+                );
+              })}
             </div>
           )}
 
