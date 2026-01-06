@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { useLocation } from 'react-router-dom'; 
+import { useLocation } from 'react-router-dom';
 import { 
   Mic, Square, RefreshCw, FileText, Search, X, 
   MessageSquare, User, Send, Edit2, Check, ArrowLeft, 
@@ -1001,46 +1001,55 @@ const ConsultationView: React.FC = () => {
                 className="relative z-30 group"
                 onClick={() => setIsMobileContextExpanded(!isMobileContextExpanded)} 
             >
+                {/* --- NUEVA TARJETA AMARILLA (RESUMIDA Y LIMPIA) --- */}
                 <div className={`bg-amber-50 dark:bg-amber-900/20 p-3 rounded-lg border border-amber-200 dark:border-amber-800 text-xs shadow-sm cursor-help transition-opacity duration-200 ${isMobileContextExpanded ? 'opacity-0' : 'opacity-100 md:group-hover:opacity-0'}`}>
                     <div className="flex items-center gap-2 mb-2 text-amber-700 dark:text-amber-400 font-bold border-b border-amber-200 dark:border-amber-800 pb-1">
                         <AlertCircle size={14} />
                         <span>Antecedentes Activos</span>
                     </div>
                     <div className="space-y-2 text-slate-700 dark:text-slate-300">
-                        <div>
-                            <span className="font-semibold block text-[10px] uppercase text-amber-600">Patológicos / Historial:</span>
-                            <p className="line-clamp-1">{activeMedicalContext.history}</p>
-                        </div>
+                        {/* 1. Alergias (Prioridad Alta) */}
                         {activeMedicalContext.allergies && activeMedicalContext.allergies !== "No registradas" && (
-                            <div>
-                                 <span className="font-semibold block text-[10px] uppercase text-amber-600">Alergias:</span>
-                                 <p className="font-bold text-red-600 dark:text-red-400 truncate">{activeMedicalContext.allergies}</p>
+                            <div className="flex items-start gap-1">
+                                 <span className="font-bold text-red-600 dark:text-red-400 whitespace-nowrap">⚠️ Alergias:</span>
+                                 <p className="font-medium text-red-700 dark:text-red-300 line-clamp-1">{activeMedicalContext.allergies}</p>
                             </div>
                         )}
+
+                        {/* 2. Historial Patológico */}
+                        {activeMedicalContext.history && activeMedicalContext.history !== "No registrados" && (
+                            <div>
+                                <span className="font-semibold block text-[10px] uppercase text-amber-600">Patológicos:</span>
+                                <p className="line-clamp-1">{activeMedicalContext.history}</p>
+                            </div>
+                        )}
+                        
+                        {/* 3. Última Consulta (RESUMIDA) */}
                         {activeMedicalContext.lastConsultation && (
                             <div className="mt-2 pt-2 border-t border-amber-200 dark:border-amber-800/50">
                                  <span className="font-semibold block text-[10px] uppercase text-amber-600 mb-1">
                                     Última Visita ({new Date(activeMedicalContext.lastConsultation.date).toLocaleDateString()}):
                                  </span>
-                                 <p className="line-clamp-2 italic opacity-90 pl-1 border-l-2 border-amber-300 dark:border-amber-700">
+                                 {/* TRUNCAMOS EL TEXTO A 2 LÍNEAS PARA EVITAR EL MURO DE TEXTO */}
+                                 <p className="italic opacity-90 pl-1 border-l-2 border-amber-300 dark:border-amber-700 line-clamp-2 text-[10px]">
                                     {activeMedicalContext.lastConsultation.summary}
                                  </p>
                             </div>
                         )}
                         
+                        {/* 4. Seguros */}
                         {activeMedicalContext.insurance && (
                             <div className="mt-2 pt-2 border-t border-amber-200 dark:border-amber-800/50">
-                                 <span className="font-bold block text-[10px] uppercase text-emerald-600 mb-1 flex items-center gap-1">
-                                    <ShieldCheck size={10} /> Cobertura ({activeMedicalContext.insurance.provider})
-                                 </span>
-                                 <div className="text-[10px] text-slate-600 dark:text-slate-400 pl-1 border-l-2 border-emerald-300">
-                                    <p className="truncate">Póliza: {activeMedicalContext.insurance.policyNumber}</p>
+                                 <div className="flex items-center gap-1 text-[10px] text-emerald-600 font-bold">
+                                    <ShieldCheck size={10} /> 
+                                    <span>{activeMedicalContext.insurance.provider}</span>
                                  </div>
                             </div>
                         )}
                     </div>
                 </div>
 
+                {/* --- DETALLE FLOTANTE (HOVER) SE MANTIENE COMPLETO --- */}
                 <div className={`absolute top-0 left-0 w-full transition-all duration-200 ease-out z-50 pointer-events-none group-hover:pointer-events-auto ${isMobileContextExpanded ? 'opacity-100 visible' : 'opacity-0 invisible md:group-hover:opacity-100 md:group-hover:visible'}`}>
                     <div className="bg-amber-50 dark:bg-slate-800 p-4 rounded-xl border-2 border-amber-300 dark:border-amber-600 text-xs shadow-2xl scale-100 origin-top">
                          <div className="flex items-center gap-2 mb-2 text-amber-700 dark:text-amber-400 font-bold border-b border-amber-200 dark:border-amber-800 pb-1">
@@ -1462,7 +1471,7 @@ const ConsultationView: React.FC = () => {
                                   {/* AQUÍ ESTÁ EL CAMBIO: Usamos FormattedText en lugar de texto plano */}
                                   {chatMessages.map((m,i)=>(
                                       <div key={i} className={`p-3 mb-3 rounded-2xl max-w-[85%] text-sm shadow-sm ${m.role==='user'?'bg-brand-teal text-white self-end ml-auto rounded-tr-none':'bg-slate-100 dark:bg-slate-800 dark:text-slate-200 self-start mr-auto rounded-tl-none'}`}>
-                                          <FormattedText content={m.text} />
+                                              <FormattedText content={m.text} />
                                       </div>
                                   ))}
                                   <div ref={chatEndRef}/>
@@ -1529,11 +1538,11 @@ const ConsultationView: React.FC = () => {
       
       {selectedPatient && (
         <InsightsPanel 
-            isOpen={isInsightsOpen}
-            onClose={() => setIsInsightsOpen(false)}
-            insights={patientInsights}
-            isLoading={isLoadingInsights}
-            patientName={selectedPatient.name}
+            isOpen={isInsightsOpen} 
+            onClose={() => setIsInsightsOpen(false)} 
+            insights={patientInsights} 
+            isLoading={isLoadingInsights} 
+            patientName={selectedPatient.name} 
         />
       )}
     </div>
