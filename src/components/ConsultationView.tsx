@@ -1199,7 +1199,8 @@ const ConsultationView: React.FC = () => {
             )}
         </div>
 
-        <div className="flex flex-col gap-2 mt-2 h-[260px] md:h-[50%] shrink-0 border-t dark:border-slate-800 pt-2 pb-2">
+        {/* --- CORRECCIÓN CRÍTICA DE ALTURA: Se redujo de 50% a 35% para evitar que se corte en laptops --- */}
+        <div className="flex flex-col gap-2 mt-2 h-[260px] md:h-[35%] shrink-0 border-t dark:border-slate-800 pt-2 pb-2">
             
             <div className="flex justify-between items-center px-1">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Entrada Activa:</span>
