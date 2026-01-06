@@ -1,7 +1,6 @@
 import React from 'react';
-import { AlertTriangle, CheckSquare, Activity, ClipboardList } from 'lucide-react'; // Asumiendo lucide-react o similar
-// Importamos la interfaz definida en tus tipos
-import { PatientInsight } from '../types/tipos_sistema'; // 
+import { AlertTriangle, CheckSquare, Activity, ClipboardList } from 'lucide-react';
+import { PatientInsight } from '../types';
 
 interface VitalSnapshotProps {
   insight: PatientInsight | null;
@@ -73,7 +72,7 @@ export const VitalSnapshotCard: React.FC<VitalSnapshotProps> = ({ insight, isLoa
         {/* COLUMNA 2: ACCIONES PENDIENTES (CHECKLIST) */}
         <div>
           <h4 className="text-xs font-bold text-gray-500 flex items-center gap-1 mb-2">
-            <ClipboardList className="w-3 h-3" /> DEUDA TÉCNICA / PENDIENTES
+            <ClipboardList className="w-3 h-3" /> PLAN DE ACCIÓN / PENDIENTES
           </h4>
           {insight.pending_actions.length > 0 ? (
             <ul className="space-y-2">
