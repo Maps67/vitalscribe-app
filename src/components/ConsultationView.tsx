@@ -24,6 +24,7 @@ import { UploadMedico } from './UploadMedico';
 import { InsightsPanel } from './InsightsPanel';
 import { RiskBadge } from './RiskBadge';
 import InsurancePanel from './Insurance/InsurancePanel';
+import { VitalSnapshotCard } from '../components/VitalSnapshotCard';
 
 type TabType = 'record' | 'patient' | 'chat' | 'insurance';
 
@@ -95,6 +96,10 @@ const ConsultationView: React.FC = () => {
       lastConsultation?: { date: string; summary: string; };
       insurance?: { provider: string; policyNumber: string; accidentDate: string };
   } | null>(null);
+
+  // --- ESTADOS VITAL SNAPSHOT ---
+  const [vitalSnapshot, setVitalSnapshot] = useState<PatientInsight | null>(null);
+  const [loadingSnapshot, setLoadingSnapshot] = useState(false);
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -375,6 +380,27 @@ const ConsultationView: React.FC = () => {
     };
     fetchMedicalContext();
   }, [selectedPatient]);
+
+  // --- EFECTO PARA VITAL SNAPSHOT ---
+  useEffect(() => {
+    if (selectedPatient && !(selectedPatient as any).isTemporary) {
+        setLoadingSnapshot(true);
+        // Construimos un contexto ligero para el snapshot
+        const rawHistory = selectedPatient.history || '';
+        const historyStr = typeof rawHistory === 'string' ? rawHistory : JSON.stringify(rawHistory);
+        
+        // Llamamos al servicio (Asumiendo que se implementó la función generateVitalSnapshot en GeminiMedicalService)
+        GeminiMedicalService.generateVitalSnapshot(historyStr)
+            .then(data => setVitalSnapshot(data))
+            .catch(err => {
+                console.error("Error generando Vital Snapshot:", err);
+                setVitalSnapshot(null);
+            })
+            .finally(() => setLoadingSnapshot(false));
+    } else {
+        setVitalSnapshot(null);
+    }
+  }, [selectedPatient?.id]);
 
   useEffect(() => {
     if (selectedPatient) {
@@ -996,12 +1022,18 @@ const ConsultationView: React.FC = () => {
             )}
         </div>
         
+        {/* --- VITAL SNAPSHOT CARD (INYECCIÓN NUEVA) --- */}
+        <VitalSnapshotCard 
+            insight={vitalSnapshot} 
+            isLoading={loadingSnapshot} 
+        />
+
         {activeMedicalContext && !generatedNote && (
             <div 
                 className="relative z-30 group"
                 onClick={() => setIsMobileContextExpanded(!isMobileContextExpanded)} 
             >
-                {/* --- NUEVA TARJETA AMARILLA (RESUMIDA Y LIMPIA) --- */}
+                {/* --- TARJETA AMARILLA CLÁSICA (RESUMIDA Y LIMPIA) --- */}
                 <div className={`bg-amber-50 dark:bg-amber-900/20 p-3 rounded-lg border border-amber-200 dark:border-amber-800 text-xs shadow-sm cursor-help transition-opacity duration-200 ${isMobileContextExpanded ? 'opacity-0' : 'opacity-100 md:group-hover:opacity-0'}`}>
                     <div className="flex items-center gap-2 mb-2 text-amber-700 dark:text-amber-400 font-bold border-b border-amber-200 dark:border-amber-800 pb-1">
                         <AlertCircle size={14} />
@@ -1247,14 +1279,14 @@ const ConsultationView: React.FC = () => {
           </div>
           
           <div className="flex-1 overflow-y-auto p-4 md:p-8 bg-slate-100 dark:bg-slate-950">
-             {!generatedNote ? (
-                 <div className="h-full flex flex-col items-center justify-center text-slate-400 gap-4 opacity-50">
-                     <FileText size={64} strokeWidth={1}/>
-                     <p className="text-lg text-center px-4">Área de Documentación</p>
-                 </div>
-             ) : (
-                 <div className="min-h-full flex flex-col max-w-4xl mx-auto w-full gap-4 relative pb-8">
-                      {activeTab==='record' && generatedNote.soapData && (
+              {!generatedNote ? (
+                  <div className="h-full flex flex-col items-center justify-center text-slate-400 gap-4 opacity-50">
+                      <FileText size={64} strokeWidth={1}/>
+                      <p className="text-lg text-center px-4">Área de Documentación</p>
+                  </div>
+              ) : (
+                  <div className="min-h-full flex flex-col max-w-4xl mx-auto w-full gap-4 relative pb-8">
+                       {activeTab==='record' && generatedNote.soapData && (
                         <div className="bg-white dark:bg-slate-900 rounded-sm shadow-lg border border-slate-200 dark:border-slate-800 p-8 md:p-12 min-h-full h-fit pb-32 animate-fade-in-up relative">
                             <div className="sticky top-0 z-20 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm border-b border-slate-100 dark:border-slate-800 pb-4 mb-8 -mx-2 px-2 flex flex-col gap-2">
                                 <div className="flex justify-between items-start">
@@ -1477,7 +1509,7 @@ const ConsultationView: React.FC = () => {
                                   {/* AQUÍ ESTÁ EL CAMBIO: Usamos FormattedText en lugar de texto plano */}
                                   {chatMessages.map((m,i)=>(
                                       <div key={i} className={`p-3 mb-3 rounded-2xl max-w-[85%] text-sm shadow-sm ${m.role==='user'?'bg-brand-teal text-white self-end ml-auto rounded-tr-none':'bg-slate-100 dark:bg-slate-800 dark:text-slate-200 self-start mr-auto rounded-tl-none'}`}>
-                                              <FormattedText content={m.text} />
+                                                  <FormattedText content={m.text} />
                                       </div>
                                   ))}
                                   <div ref={chatEndRef}/>

@@ -129,6 +129,44 @@ const getSpecialtyPromptConfig = (specialty: string) => {
 // ==========================================
 export const GeminiMedicalService = {
 
+  // --- NUEVA FUNCIÓN: VITAL SNAPSHOT (TARJETA AMARILLA) ---
+  async generateVitalSnapshot(historyJSON: string): Promise<PatientInsight | null> {
+    try {
+        console.log("⚡ Generando Vital Snapshot...");
+        
+        const prompt = `
+            ACTÚA COMO: Asistente Clínico de Triaje Avanzado.
+            TU OBJETIVO: Leer el historial del paciente y extraer 3 puntos clave para que el médico los vea EN MENOS DE 5 SEGUNDOS.
+            
+            INPUT (HISTORIAL):
+            "${historyJSON}"
+
+            TAREA DE EXTRACCIÓN (NO RESUMIR, EXTRAER):
+            1. EL GANCHO (evolution): ¿Por qué volvió hoy? (Ej: "Revisión de dosis de Losartán tras 2 semanas", "Seguimiento de fractura"). Si es nuevo, pon "Primera Vez".
+            2. RIESGOS ACTIVOS (risk_flags): Alergias graves, contraindicaciones o alertas de la última nota. (Ej: "Alergia a Penicilina", "Creatinina elevada").
+            3. PENDIENTES (pending_actions): ¿Quedó algo pendiente la última vez? (Ej: "Traer placa de tórax", "Ver reporte de cardio").
+
+            FORMATO DE SALIDA (JSON STRICTO - PatientInsight):
+            {
+                "evolution": "Texto corto del motivo/gancho (Máx 15 palabras)",
+                "medication_audit": "Auditoría rápida de fármacos (Ej: 'Suspendió AINES por gastritis')",
+                "risk_flags": ["Riesgo 1", "Riesgo 2"],
+                "pending_actions": ["Pendiente 1", "Pendiente 2"]
+            }
+
+            NOTA: Si el historial está vacío o es ilegible, devuelve arrays vacíos y "Sin datos previos" en evolución.
+        `;
+
+        const rawText = await generateWithFailover(prompt, true);
+        const parsed = JSON.parse(cleanJSON(rawText));
+        return parsed as PatientInsight;
+
+    } catch (e) {
+        console.error("❌ Error generando Vital Snapshot:", e);
+        return null;
+    }
+  },
+
   // --- A. NOTA CLÍNICA (ANTI-CRASH + SAFETY AUDIT + LEGAL SAFE + DETERMINISTIC RX + CIE-10) ---
   async generateClinicalNote(transcript: string, specialty: string = "Medicina General", patientHistory: string = ""): Promise<GeminiResponse> {
     try {
