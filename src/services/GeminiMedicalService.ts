@@ -1,7 +1,7 @@
 import { supabase } from '../lib/supabase';
 import { GeminiResponse, PatientInsight, MedicationItem, FollowUpMessage } from '../types';
 
-console.log("🚀 V-STABLE DEPLOY: Safety Override Protocol (v6.9) [Universal Clinical Sentinel]");
+console.log("🚀 V-STABLE DEPLOY: Safety Override Protocol (v7.0) [Omni-Sentinel Active]");
 
 // ==========================================
 // 1. UTILIDADES DE LIMPIEZA & CONEXIÓN
@@ -87,13 +87,13 @@ const getSpecialtyPromptConfig = (specialty: string) => {
     },
     "Pediatría": {
       role: "Pediatra",
-      focus: "Desarrollo, crecimiento, hitos, alimentación y vacunación.",
-      bias: "Evalúa todo en contexto de la edad. Usa tono adecuado para padres."
+      focus: "Desarrollo, crecimiento, hitos, alimentación y vacunación. DOSIS POR KILO DE PESO.",
+      bias: "Evalúa todo en contexto de la edad. ALERTA MÁXIMA a fármacos prohibidos en niños."
     },
     "Ginecología y Obstetricia": {
       role: "Ginecólogo Obstetra",
-      focus: "Salud reproductiva, ciclo menstrual, embarazo, vitalidad fetal.",
-      bias: "Enfoque en bienestar materno-fetal."
+      focus: "Salud reproductiva, ciclo menstrual, embarazo, vitalidad fetal. CLASIFICACIÓN FDA.",
+      bias: "Enfoque en bienestar materno-fetal. ALERTA MÁXIMA a teratógenos."
     },
     "Medicina General": {
       role: "Médico de Familia",
@@ -175,7 +175,7 @@ export const GeminiMedicalService = {
   // --- A. NOTA CLÍNICA (ANTI-CRASH + SAFETY AUDIT + LEGAL SAFE + DETERMINISTIC RX + CIE-10) ---
   async generateClinicalNote(transcript: string, specialty: string = "Medicina General", patientHistory: string = ""): Promise<GeminiResponse> {
     try {
-      console.log("⚡ Generando Nota Clínica Consistente (v6.9 - Universal Sentinel)...");
+      console.log("⚡ Generando Nota Clínica Consistente (v7.0 - Omni-Sentinel)...");
 
       const specialtyConfig = getSpecialtyPromptConfig(specialty);
       
@@ -200,16 +200,16 @@ export const GeminiMedicalService = {
         1. INTERPRETACIÓN, NO TRANSCRIPCIÓN:
            - Tu trabajo NO es repetir lo que dijo el paciente. Tu trabajo es interpretar QUÉ QUISO DECIR médicamente.
            - Ejemplo: "siento que el corazón se me sale" -> "Palpitaciones".
-           - Ejemplo: "burbujas en la orina" -> "Proteinuria / Orina espumosa".
+           - Ejemplo: "burbujas en la orina" -> "Proteinuria".
            - Ejemplo: "me desmayé y me puse pálido" -> "Síncope".
 
         2. CONEXIÓN DE PUNTOS (DOT-CONNECTING):
            - Usa el HISTORIAL para dar contexto.
-           - Ejemplo: Joven + Lupus + Bloqueo AV = Miocarditis Lúpica (Etiología Reversible).
-           - Ejemplo: Cirrosis + Confusión + Temblor = Encefalopatía Hepática.
+           - Ejemplo: Joven + Lupus + Bloqueo AV = Miocarditis Lúpica.
+           - Ejemplo: Cirrosis + Confusión = Encefalopatía Hepática.
 
         3. DETECCIÓN DE SILENCIOS:
-           - Lo que NO se dice también importa. Si el paciente niega dolor en un contexto traumático, regístralo.
+           - Lo que NO se dice también importa. Si el paciente niega síntomas clave, regístralo.
 
         ===================================================
         🇲🇽 REGLAS DE SINTAXIS Y TERMINOLOGÍA MEXICANA (NOM-004)
@@ -243,24 +243,29 @@ export const GeminiMedicalService = {
         - Proporciona el código CIE-10 (ICD-10) entre paréntesis para cada impresión diagnóstica.
 
         ===================================================
-        🚨 PROTOCOLO DE AUDITORÍA DE SEGURIDAD (UNIVERSAL SENTINEL)
+        🚨 PROTOCOLO DE AUDITORÍA DE SEGURIDAD (OMNI-SENTINEL)
         ===================================================
-        Debes aplicar las siguientes "Leyes Universales de Seguridad". Si alguna se viola, ACTIVA EL BLOQUEO ROJO.
+        Debes aplicar las siguientes "5 Leyes Universales de Seguridad". Si alguna se viola, ACTIVA EL BLOQUEO ROJO.
 
         LEY 1: SEGURIDAD HEMODINÁMICA (CARDIOLOGÍA)
-        - SI hay Bloqueo AV de 2do o 3er Grado: PROHIBIDO recetar cronotrópicos orales/inhalados (Teofilina, Salbutamol, Efedrina). Requieren Marcapasos.
-        - SI hay Hipotensión o Falla Cardíaca Descompensada: PROHIBIDO recetar Inotrópicos Negativos (Diltiazem, Verapamilo) o Retenedores de Sodio (AINES).
+        - SI hay Bloqueo AV de 2do/3er Grado: BLOQUEO ABSOLUTO a cronotrópicos orales/inhalados (Teofilina, Salbutamol).
+        - SI hay Hipotensión o Falla Cardíaca Descompensada (FEVI < 40%): BLOQUEO ABSOLUTO a Inotrópicos Negativos (Diltiazem, Verapamilo) y AINES.
 
         LEY 2: SEGURIDAD DE FILTRADO (NEFROLOGÍA)
         - SI la TFG < 30 ml/min (ERC Estadio 4-5) o Falla Renal Aguda:
-          * BLOQUEO ABSOLUTO: Metformina (Riesgo Acidosis Láctica).
-          * BLOQUEO ABSOLUTO: AINES (Naproxeno, Diclofenaco, Ketorolaco).
-          * BLOQUEO ABSOLUTO: Espironolactona (Riesgo Hiperpotasemia).
+          * BLOQUEO ABSOLUTO: Metformina, AINES (Naproxeno, Diclofenaco), Espironolactona.
 
         LEY 3: SEGURIDAD METABÓLICA (HEPATOLOGÍA)
         - SI hay Cirrosis Descompensada (Child-Pugh B/C) o Encefalopatía:
-          * BLOQUEO ABSOLUTO: Benzodiacepinas (Diazepam, Alprazolam) y Sedantes. Riesgo de Coma.
-          * BLOQUEO ABSOLUTO: AINES (Riesgo Hepatorrenal/Sangrado).
+          * BLOQUEO ABSOLUTO: Benzodiacepinas (Diazepam) y AINES.
+
+        LEY 4: SEGURIDAD DE POBLACIONES VULNERABLES (OBSTETRICIA/PEDIATRÍA)
+        - SI la paciente está EMBARAZADA: BLOQUEO ABSOLUTO a Categoría X/D FDA (Isotretinoína, Warfarina, IECA/ARA-II, Quinolonas).
+        - SI el paciente es PEDIÁTRICO (< 12 años): 
+          * BLOQUEO ABSOLUTO: Aspirina (Riesgo Reye), Tetraciclinas (Dientes), Quinolonas (Cartílago).
+
+        LEY 5: SEGURIDAD INMUNOLÓGICA (ALERGIAS)
+        - REVISA el campo "Historial" o "Alergias". SI hay alergia documentada (ej. Penicilina) y se receta un fármaco de esa familia (ej. Amoxicilina): BLOQUEO ABSOLUTO.
 
         ===================================================
         💊 REGLAS DE RECETA ESTRUCTURADA (SAFETY OVERRIDE)
@@ -317,7 +322,7 @@ export const GeminiMedicalService = {
       const rawText = await generateWithFailover(prompt, true);
       const parsedData = JSON.parse(cleanJSON(rawText));
 
-      console.log("✅ Nota estructurada generada con éxito (vía Secure Cloud + CIE-10 + Universal Sentinel v6.9).");
+      console.log("✅ Nota estructurada generada con éxito (vía Secure Cloud + CIE-10 + Omni-Sentinel v7.0).");
       return parsedData as GeminiResponse;
 
     } catch (error: any) {
