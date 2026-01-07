@@ -1,7 +1,7 @@
 import { supabase } from '../lib/supabase';
 import { GeminiResponse, PatientInsight, MedicationItem, FollowUpMessage } from '../types';
 
-console.log("🚀 V-STABLE DEPLOY: Deterministic Rx Action Protocol (v6.3) [Strict Audit Mode]");
+console.log("🚀 V-STABLE DEPLOY: Safety Override Protocol (v6.4) [Active Blockade System]");
 
 // ==========================================
 // 1. UTILIDADES DE LIMPIEZA & CONEXIÓN
@@ -175,7 +175,7 @@ export const GeminiMedicalService = {
   // --- A. NOTA CLÍNICA (ANTI-CRASH + SAFETY AUDIT + LEGAL SAFE + DETERMINISTIC RX + CIE-10) ---
   async generateClinicalNote(transcript: string, specialty: string = "Medicina General", patientHistory: string = ""): Promise<GeminiResponse> {
     try {
-      console.log("⚡ Generando Nota Clínica Consistente (v6.3 - Audit Mode)...");
+      console.log("⚡ Generando Nota Clínica Consistente (v6.4 - Safety Override)...");
 
       const specialtyConfig = getSpecialtyPromptConfig(specialty);
       
@@ -212,47 +212,40 @@ export const GeminiMedicalService = {
         ===================================================
         - Para cada diagnóstico principal identificado en la sección de ANÁLISIS, DEBES proporcionar el código CIE-10 (ICD-10) correspondiente entre paréntesis.
         - Ejemplo: "Faringoamigdalitis estreptocócica (J02.0)" o "Diabetes Mellitus tipo 2 sin complicaciones (E11.9)".
-        - Esto es obligatorio para la validez legal y administrativa de la nota.
 
         ===================================================
         🚨 PROTOCOLO DE AUDITORÍA DE SEGURIDAD (CRÍTICO)
         ===================================================
-        Debes actuar como un "Ángel Guardián Clínico".
-        1. MARCAR "risk_analysis.level" COMO "Alto" si hay peligro de muerte, error grave o negligencia.
+        Debes actuar como un "Escudo Activo de Seguridad".
+        1. Si hay peligro de muerte, error grave o negligencia, MARCAR "risk_analysis.level" COMO "Alto".
         2. EXPLICAR LA ADVERTENCIA en "risk_analysis.reason" con mayúsculas iniciales.
-        3. EN LAS INSTRUCCIONES AL PACIENTE, incluir una nota de cautela diplomática pero firme si la vida corre peligro.
 
         ===================================================
-        ⚖️ REGLA DE PROTECCIÓN LEGAL (LENGUAJE)
+        💊 REGLAS DE RECETA ESTRUCTURADA (SAFETY OVERRIDE)
         ===================================================
-        - USA LENGUAJE PROBABILÍSTICO EN DIAGNÓSTICOS.
-        - INCORRECTO: "El paciente tiene Cetoacidosis." (Afirmación absoluta).
-        - CORRECTO: "Cuadro clínico compatible con...", "Hallazgos sugestivos de...", "Impresión diagnóstica orientada a...".
-        - NUNCA emitas un diagnóstico definitivo como autoridad final.
+        ESTA ES LA REGLA MÁS IMPORTANTE DEL SISTEMA:
 
-        ===================================================
-        💊 REGLAS DE RECETA ESTRUCTURADA (FIDELIDAD TOTAL)
-        ===================================================
-        IMPORTANTE: TU TAREA ES TRANSCRIBIR LA VOLUNTAD DEL MÉDICO, NO CORREGIRLA SILENCIOSAMENTE.
+        1. PRINCIPIO DE FIDELIDAD (REGLA GENERAL):
+           - En "prescriptions", incluye SOLAMENTE los medicamentos que el médico haya dictado verbalmente.
+           - NO INVENTES medicamentos no mencionados (Prohibido alucinar tratamientos).
 
-        1. PRINCIPIO DE EVIDENCIA:
-           - En el array "prescriptions", incluye SOLAMENTE los medicamentos que el médico haya dictado verbalmente de forma explícita.
-           - PROHIBIDO agregar medicamentos que "tú crees que faltan" (ej: NO agregues antibióticos si el médico solo recetó analgésicos, aunque el diagnóstico sea infección).
-
-        2. AUDITORÍA FARMACOLÓGICA Y SUGERENCIAS:
-           - Si el médico receta algo PELIGROSO (Ej: Claritromicina en paciente con QT Largo):
-             A) Mantén la transcripción fiel en "prescriptions" (Lo que dijo el médico).
-             B) Activa el campo "risk_analysis" con nivel "Alto".
-             C) En "actionItems", agrega explícitamente una sugerencia de sustitución: "SUGERENCIA DE SEGURIDAD: Sustituir [Fármaco A] por [Fármaco B] debido a [Razón]".
-           - NUNCA reemplaces el medicamento en la lista final sin que el médico lo haya verbalizado.
+        2. EXCEPCIÓN DE SEGURIDAD (SAFETY OVERRIDE):
+           - SI EL MÉDICO DICTA UN MEDICAMENTO LETAL O GRAVEMENTE CONTRAINDICADO (Ej: Claritromicina en QT Largo, AINES en Hemorragia Activa):
+             A) DEBES incluirlo en la lista "prescriptions" (Porque el médico lo dijo).
+             B) PERO DEBES FORZAR SU ESTADO:
+                - Cambia "action" a "SUSPENDER" (Esto lo bloqueará visualmente en rojo).
+                - Cambia "dose" a "BLOQUEO DE SEGURIDAD".
+                - En "notes" escribe en MAYÚSCULAS: "CONTRAINDICADO: RIESGO DE [EFECTO ADVERSO]. SUGERENCIA: [ALTERNATIVA]".
+           
+           - ESTO ES OBLIGATORIO: No permitas que un medicamento letal salga con estado "NUEVO" o "CONTINUAR" solo porque el médico lo dijo. Tu deber es proteger.
 
         INSTRUCCIONES JSON:
         
         1. conversation_log: Transcripción limpia y completa.
         2. clinicalNote: Nota SOAP formal corregida.
-        3. prescriptions: Array de objetos (LO QUE SE DIJO).
+        3. prescriptions: Array de objetos.
            - Campo "action" es OBLIGATORIO: "NUEVO" | "CONTINUAR" | "AJUSTAR" | "SUSPENDER".
-           - Si action es "SUSPENDER", pon en "dose" la palabra "SUSPENDER" y en duration "INMEDIATO".
+           - Si action es "SUSPENDER", el sistema lo tacha. ÚSALO PARA BLOQUEAR ERRORES.
         4. patientInstructions: Instrucciones narrativas.
 
         SALIDA ESPERADA (JSON Schema Strict):
@@ -267,10 +260,10 @@ export const GeminiMedicalService = {
           "prescriptions": [
              { 
                "drug": "Nombre Genérico (Comercial)", 
-               "dose": "Dosis o 'SUSPENDER'", 
+               "dose": "Dosis, 'SUSPENDER' o 'BLOQUEO DE SEGURIDAD'", 
                "frequency": "Frecuencia", 
                "duration": "Duración", 
-               "notes": "Instrucciones",
+               "notes": "Instrucciones o ALERTA DE BLOQUEO",
                "action": "NUEVO" | "CONTINUAR" | "AJUSTAR" | "SUSPENDER"
              }
           ],
@@ -283,7 +276,7 @@ export const GeminiMedicalService = {
              "next_appointment": "YYYY-MM-DD o null", 
              "urgent_referral": boolean, 
              "lab_tests_required": ["..."],
-             "suggested_action": "Texto opcional para sugerir sustituciones farmacológicas (Ej: 'Sustituir X por Y')."
+             "suggested_action": "Texto opcional para sugerir sustituciones farmacológicas."
           },
           "conversation_log": [ 
              { "speaker": "Médico", "text": "..." }, 
