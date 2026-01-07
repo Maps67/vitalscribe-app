@@ -1,7 +1,7 @@
 import { supabase } from '../lib/supabase';
 import { GeminiResponse, PatientInsight, MedicationItem, FollowUpMessage } from '../types';
 
-console.log("🚀 V-STABLE DEPLOY: Safety Override Protocol (v6.6) [Liability Shield Active]");
+console.log("🚀 V-STABLE DEPLOY: Safety Override Protocol (v6.7) [Intuitive Core Active]");
 
 // ==========================================
 // 1. UTILIDADES DE LIMPIEZA & CONEXIÓN
@@ -175,7 +175,7 @@ export const GeminiMedicalService = {
   // --- A. NOTA CLÍNICA (ANTI-CRASH + SAFETY AUDIT + LEGAL SAFE + DETERMINISTIC RX + CIE-10) ---
   async generateClinicalNote(transcript: string, specialty: string = "Medicina General", patientHistory: string = ""): Promise<GeminiResponse> {
     try {
-      console.log("⚡ Generando Nota Clínica Consistente (v6.6 - Liability Shield)...");
+      console.log("⚡ Generando Nota Clínica Consistente (v6.7 - Intuitive Core)...");
 
       const specialtyConfig = getSpecialtyPromptConfig(specialty);
       
@@ -191,6 +191,23 @@ export const GeminiMedicalService = {
 
         HISTORIA CLÍNICA PREVIA (CONTEXTO):
         "${patientHistory || 'No disponible'}"
+
+        ===================================================
+        🧠 MOTOR DE INTUICIÓN CLÍNICA (RAZONAMIENTO EXPERTO)
+        ===================================================
+        Para este caso, aplica estos 3 principios de "Intuición Médica" para lograr la definición más natural posible:
+
+        1. INTERPRETACIÓN, NO TRANSCRIPCIÓN:
+           - Tu trabajo NO es repetir lo que dijo el paciente. Tu trabajo es interpretar QUÉ QUISO DECIR médicamente.
+           - Ejemplo: Si el paciente dice "siento que el corazón se me sale por la boca", NO escribas eso. Escribe: "Palpitaciones intensas con sensación de angustia".
+           - Ejemplo: Si dice "me duele la boca del estómago", escribe: "Epigastralgia".
+
+        2. CONEXIÓN DE PUNTOS (DOT-CONNECTING):
+           - Usa el HISTORIAL para dar contexto. Una "tos" en un paciente sano es "infección respiratoria", pero una "tos" en un paciente con Insuficiencia Cardíaca previa (según historial) puede ser "Edema Agudo Pulmonar".
+           - Si detectas esa conexión, PRIORÍZALA en el Análisis.
+
+        3. DETECCIÓN DE SILENCIOS:
+           - Lo que NO se dice también importa. Si el paciente niega síntomas clave para la especialidad (ej. Cardiología: niega dolor torácico), regístralo explícitamente como dato negativo pertinente ("Niega angor").
 
         ===================================================
         🇲🇽 REGLAS DE SINTAXIS Y TERMINOLOGÍA MEXICANA (NOM-004)
@@ -307,7 +324,7 @@ export const GeminiMedicalService = {
       const rawText = await generateWithFailover(prompt, true);
       const parsedData = JSON.parse(cleanJSON(rawText));
 
-      console.log("✅ Nota estructurada generada con éxito (vía Secure Cloud + CIE-10 + Liability Shield).");
+      console.log("✅ Nota estructurada generada con éxito (vía Secure Cloud + CIE-10 + Liability Shield + Intuitive Core).");
       return parsedData as GeminiResponse;
 
     } catch (error: any) {
