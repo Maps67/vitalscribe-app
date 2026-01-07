@@ -1072,7 +1072,7 @@ const ConsultationView: React.FC = () => {
                </div>
             )}
 
-            <div className={`${!isMobileSnapshotVisible ? 'hidden' : 'block'} md:block`}>
+            <div className={`${!isMobileSnapshotVisible ? 'hidden' : 'block'} md:block md:max-h-none max-h-[55vh] overflow-y-auto custom-scrollbar`}>
                 <VitalSnapshotCard 
                     insight={vitalSnapshot ? {
                         ...vitalSnapshot,
