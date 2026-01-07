@@ -1561,10 +1561,28 @@ const ConsultationView: React.FC = () => {
                                                           <input className={`w-full font-bold bg-transparent outline-none border-b border-transparent focus:border-indigo-300 transition-colors ${isBlocked ? 'text-red-800 dark:text-red-200' : 'text-slate-800 dark:text-white'}`} value={med.drug} onChange={e=>handleUpdateMedication(idx,'drug',e.target.value)} placeholder="Nombre del medicamento" />
                                                           {isBlocked && <div className="absolute right-0 top-1/2 -translate-y-1/2 text-red-500 animate-pulse"><AlertTriangle size={16}/></div>}
                                                       </div>
-                                                      <input className={`text-sm bg-transparent outline-none border-b border-transparent focus:border-indigo-300 transition-colors ${isBlocked ? 'text-red-600 font-bold uppercase tracking-wider' : 'text-slate-600 dark:text-slate-300'}`} value={med.dose} onChange={e=>handleUpdateMedication(idx,'dose',e.target.value)} placeholder="Dosis" />
+                                                      <input 
+                                                          className={`text-sm bg-transparent outline-none border-b border-transparent focus:border-indigo-300 transition-colors ${isBlocked ? 'text-red-600 font-bold uppercase tracking-wider cursor-not-allowed' : 'text-slate-600 dark:text-slate-300'}`} 
+                                                          value={med.dose} 
+                                                          readOnly={isBlocked}
+                                                          onChange={e=>!isBlocked && handleUpdateMedication(idx,'dose',e.target.value)} 
+                                                          placeholder="Dosis" 
+                                                      />
                                                       <div className="col-span-2 flex gap-2 text-xs">
-                                                          <input className={`flex-1 bg-transparent outline-none border-b border-transparent focus:border-indigo-300 transition-colors ${isBlocked ? 'text-red-400' : 'text-slate-500'}`} value={med.frequency} onChange={e=>handleUpdateMedication(idx,'frequency',e.target.value)} placeholder="Frecuencia" />
-                                                          <input className={`flex-1 bg-transparent outline-none border-b border-transparent focus:border-indigo-300 transition-colors ${isBlocked ? 'text-red-400' : 'text-slate-500'}`} value={med.duration} onChange={e=>handleUpdateMedication(idx,'duration',e.target.value)} placeholder="Duración" />
+                                                          <input 
+                                                              className={`flex-1 bg-transparent outline-none border-b border-transparent focus:border-indigo-300 transition-colors ${isBlocked ? 'text-red-400 text-center font-mono opacity-50 cursor-not-allowed' : 'text-slate-500'}`} 
+                                                              value={isBlocked ? '---' : med.frequency} 
+                                                              readOnly={isBlocked}
+                                                              onChange={e=>!isBlocked && handleUpdateMedication(idx,'frequency',e.target.value)} 
+                                                              placeholder="Frecuencia" 
+                                                          />
+                                                          <input 
+                                                              className={`flex-1 bg-transparent outline-none border-b border-transparent focus:border-indigo-300 transition-colors ${isBlocked ? 'text-red-400 text-center font-mono opacity-50 cursor-not-allowed' : 'text-slate-500'}`} 
+                                                              value={isBlocked ? '---' : med.duration} 
+                                                              readOnly={isBlocked}
+                                                              onChange={e=>!isBlocked && handleUpdateMedication(idx,'duration',e.target.value)} 
+                                                              placeholder="Duración" 
+                                                          />
                                                       </div>
                                                   </div>
                                                   <button onClick={()=>handleRemoveMedication(idx)} className={`opacity-0 group-hover:opacity-100 transition-opacity ${isBlocked ? 'text-red-400 hover:text-red-700' : 'text-slate-300 hover:text-red-500'}`}><X size={16}/></button>
