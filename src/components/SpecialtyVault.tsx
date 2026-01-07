@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   Upload, FileText, Video, Box, Activity, 
   Trash2, Eye, Download, AlertTriangle, 
-  Database, ShieldCheck, File
+  Database, ShieldCheck, File, Brain // <--- CORRECCIÓN: SE AGREGÓ 'Brain' AQUÍ
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
@@ -40,7 +40,7 @@ const SPECIALTY_CONFIG: Record<string, {
   'Neurología': {
     allowedTypes: ['application/pdf', 'video/mp4', 'application/octet-stream'], // .EDF suele ser octet-stream
     labels: ['Electroencefalograma (EEG)', 'Video Monitoreo', 'Tomografía (Reporte)', 'Resonancia'],
-    icon: Brain,
+    icon: Brain, // <--- Aquí se usaba sin importar
     color: 'text-violet-600 bg-violet-50 border-violet-200'
   },
   'Traumatología y Ortopedia': {
