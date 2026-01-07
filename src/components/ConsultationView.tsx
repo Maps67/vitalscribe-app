@@ -25,6 +25,7 @@ import { InsightsPanel } from './InsightsPanel';
 import { RiskBadge } from './RiskBadge';
 import InsurancePanel from './Insurance/InsurancePanel';
 import { VitalSnapshotCard } from './VitalSnapshotCard';
+import { SpecialtyVault } from './SpecialtyVault'; // <--- IMPORTACIÓN NUEVA
 
 type TabType = 'record' | 'patient' | 'chat' | 'insurance';
 
@@ -1049,156 +1050,160 @@ const ConsultationView: React.FC = () => {
             )}
         </div>
         
-        {/* --- INICIO ZONA SCROLLABLE UNIFICADA (FIX MÓVIL) --- */}
-        <div className="flex-1 overflow-y-auto min-h-0 flex flex-col gap-2 custom-scrollbar">
-            
-            {/* 1. Vital Snapshot (Dentro del scroll) - FIX TERMINOLOGÍA AQUÍ */}
-            <VitalSnapshotCard 
-                insight={vitalSnapshot ? {
-                    ...vitalSnapshot,
-                    // Interceptamos la data para cambiar el título visualmente sin tocar el backend
-                    pending_actions: vitalSnapshot.pending_actions 
-                } : null} 
-                isLoading={loadingSnapshot} 
-            />
+        {/* --- VITAL SNAPSHOT CARD (INYECCIÓN NUEVA) --- */}
+        <VitalSnapshotCard 
+            insight={vitalSnapshot ? {
+                ...vitalSnapshot,
+                pending_actions: vitalSnapshot.pending_actions 
+            } : null} 
+            isLoading={loadingSnapshot} 
+        />
 
-            {/* 2. Contexto Médico (Dentro del scroll) */}
-            {activeMedicalContext && !generatedNote && (
-                <div 
-                    className="relative z-30 group"
-                    onClick={() => setIsMobileContextExpanded(!isMobileContextExpanded)} 
-                >
-                    {/* Tarjeta Amarilla Resumida */}
-                    <div className={`bg-amber-50 dark:bg-amber-900/20 p-3 rounded-lg border border-amber-200 dark:border-amber-800 text-xs shadow-sm cursor-help transition-opacity duration-200 ${isMobileContextExpanded ? 'opacity-0' : 'opacity-100 md:group-hover:opacity-0'}`}>
-                        <div className="flex items-center gap-2 mb-2 text-amber-700 dark:text-amber-400 font-bold border-b border-amber-200 dark:border-amber-800 pb-1">
+        {activeMedicalContext && !generatedNote && (
+            <div 
+                className="relative z-30 group"
+                onClick={() => setIsMobileContextExpanded(!isMobileContextExpanded)} 
+            >
+                {/* --- TARJETA AMARILLA CLÁSICA (RESUMIDA Y LIMPIA) --- */}
+                <div className={`bg-amber-50 dark:bg-amber-900/20 p-3 rounded-lg border border-amber-200 dark:border-amber-800 text-xs shadow-sm cursor-help transition-opacity duration-200 ${isMobileContextExpanded ? 'opacity-0' : 'opacity-100 md:group-hover:opacity-0'}`}>
+                    <div className="flex items-center gap-2 mb-2 text-amber-700 dark:text-amber-400 font-bold border-b border-amber-200 dark:border-amber-800 pb-1">
+                        <AlertCircle size={14} />
+                        <span>Antecedentes Activos</span>
+                    </div>
+                    <div className="space-y-2 text-slate-700 dark:text-slate-300">
+                        {/* 1. Alergias (Prioridad Alta) */}
+                        {activeMedicalContext.allergies && activeMedicalContext.allergies !== "No registradas" && (
+                            <div className="flex items-start gap-1">
+                                 <span className="font-bold text-red-600 dark:text-red-400 whitespace-nowrap">⚠️ Alergias:</span>
+                                 <p className="font-medium text-red-700 dark:text-red-300 line-clamp-1">{activeMedicalContext.allergies}</p>
+                            </div>
+                        )}
+
+                        {/* 2. Historial Patológico */}
+                        {activeMedicalContext.history && activeMedicalContext.history !== "No registrados" && (
+                            <div>
+                                <span className="font-semibold block text-[10px] uppercase text-amber-600">Patológicos:</span>
+                                <p className="line-clamp-1">{activeMedicalContext.history}</p>
+                            </div>
+                        )}
+                        
+                        {/* 3. Última Consulta (RESUMIDA) */}
+                        {activeMedicalContext.lastConsultation && (
+                            <div className="mt-2 pt-2 border-t border-amber-200 dark:border-amber-800/50">
+                                 <span className="font-semibold block text-[10px] uppercase text-amber-600 mb-1">
+                                    Última Visita ({new Date(activeMedicalContext.lastConsultation.date).toLocaleDateString()}):
+                                 </span>
+                                 {/* TRUNCAMOS EL TEXTO A 2 LÍNEAS PARA EVITAR EL MURO DE TEXTO */}
+                                 <p className="italic opacity-80 pl-1 border-l-2 border-amber-300 dark:border-amber-700 line-clamp-2 text-[10px]">
+                                    {activeMedicalContext.lastConsultation.summary}
+                                 </p>
+                            </div>
+                        )}
+                        
+                        {/* 4. Seguros */}
+                        {activeMedicalContext.insurance && (
+                            <div className="mt-2 pt-2 border-t border-amber-200 dark:border-amber-800/50">
+                                 <div className="flex items-center gap-1 text-[10px] text-emerald-600 font-bold">
+                                    <ShieldCheck size={10} /> 
+                                    <span>{activeMedicalContext.insurance.provider}</span>
+                                 </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* --- DETALLE FLOTANTE (HOVER) SE MANTIENE COMPLETO --- */}
+                <div className={`absolute top-0 left-0 w-full transition-all duration-200 ease-out z-50 pointer-events-none group-hover:pointer-events-auto ${isMobileContextExpanded ? 'opacity-100 visible' : 'opacity-0 invisible md:group-hover:opacity-100 md:group-hover:visible'}`}>
+                    <div className="bg-amber-50 dark:bg-slate-800 p-4 rounded-xl border-2 border-amber-300 dark:border-amber-600 text-xs shadow-2xl scale-100 origin-top">
+                         <div className="flex items-center gap-2 mb-2 text-amber-700 dark:text-amber-400 font-bold border-b border-amber-200 dark:border-amber-800 pb-1">
                             <AlertCircle size={14} />
-                            <span>Antecedentes Activos</span>
+                            <span>Antecedentes Activos (Detalle)</span>
                         </div>
-                        <div className="space-y-2 text-slate-700 dark:text-slate-300">
-                            {activeMedicalContext.allergies && activeMedicalContext.allergies !== "No registradas" && (
-                                <div className="flex items-start gap-1">
-                                    <span className="font-bold text-red-600 dark:text-red-400 whitespace-nowrap">⚠️ Alergias:</span>
-                                    <p className="font-medium text-red-700 dark:text-red-300 line-clamp-1">{activeMedicalContext.allergies}</p>
-                                </div>
-                            )}
-                            {activeMedicalContext.history && activeMedicalContext.history !== "No registrados" && (
-                                <div>
-                                    <span className="font-semibold block text-[10px] uppercase text-amber-600">Patológicos:</span>
-                                    <p className="line-clamp-1">{activeMedicalContext.history}</p>
+                        <div className="space-y-3 text-slate-800 dark:text-slate-200 max-h-[300px] overflow-y-auto custom-scrollbar">
+                             <div>
+                                <span className="font-bold block text-[10px] uppercase text-amber-600">Historial (Resumen):</span>
+                                <p className="whitespace-pre-wrap leading-relaxed line-clamp-4 text-xs">{activeMedicalContext.history}</p>
+                            </div>
+                             {activeMedicalContext.allergies && activeMedicalContext.allergies !== "No registradas" && (
+                                <div className="bg-red-50 dark:bg-red-900/20 p-2 rounded border border-red-100 dark:border-red-800">
+                                     <span className="font-bold block text-[10px] uppercase text-red-600">⚠ Alergias Críticas:</span>
+                                     <p className="font-black text-red-700 dark:text-red-300 text-sm">{activeMedicalContext.allergies}</p>
                                 </div>
                             )}
                             {activeMedicalContext.lastConsultation && (
                                 <div className="mt-2 pt-2 border-t border-amber-200 dark:border-amber-800/50">
-                                    <span className="font-semibold block text-[10px] uppercase text-amber-600 mb-1">
-                                        Última Visita ({new Date(activeMedicalContext.lastConsultation.date).toLocaleDateString()}):
-                                    </span>
-                                    <p className="italic opacity-80 pl-1 border-l-2 border-amber-300 dark:border-amber-700 line-clamp-2 text-[10px]">
-                                        {activeMedicalContext.lastConsultation.summary}
-                                    </p>
+                                     <span className="font-bold block text-[10px] uppercase text-amber-600 mb-1">
+                                          Resumen Última Visita ({new Date(activeMedicalContext.lastConsultation.date).toLocaleDateString()}):
+                                     </span>
+                                     <div className="p-2 bg-white dark:bg-slate-900 rounded border border-amber-100 dark:border-amber-900/50">
+                                          {/* FIX VISUAL: Aquí limitamos el texto expandido para que no inunde la pantalla si es un transcript */}
+                                          <p className="italic opacity-80 text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed line-clamp-6 font-light">
+                                              {activeMedicalContext.lastConsultation.summary}
+                                          </p>
+                                          {activeMedicalContext.lastConsultation.summary.length > 300 && (
+                                              <span className="text-[9px] text-indigo-500 mt-1 block font-bold text-right cursor-pointer">
+                                                  Ver detalle completo en Historial...
+                                              </span>
+                                          )}
+                                     </div>
                                 </div>
                             )}
+
                             {activeMedicalContext.insurance && (
                                 <div className="mt-2 pt-2 border-t border-amber-200 dark:border-amber-800/50">
-                                    <div className="flex items-center gap-1 text-[10px] text-emerald-600 font-bold">
-                                        <ShieldCheck size={10} /> 
-                                        <span>{activeMedicalContext.insurance.provider}</span>
-                                    </div>
+                                     <span className="font-bold block text-[10px] uppercase text-emerald-600 mb-1 flex items-center gap-1">
+                                        <ShieldCheck size={12} /> Último Trámite de Seguro Registrado
+                                     </span>
+                                     <div className="p-2 bg-emerald-50 dark:bg-emerald-900/10 rounded border border-emerald-200 dark:border-emerald-800">
+                                          <div className="grid grid-cols-2 gap-2 text-slate-700 dark:text-slate-300">
+                                              <div>
+                                                  <span className="block font-bold text-emerald-700 dark:text-emerald-400">Aseguradora</span>
+                                                  {activeMedicalContext.insurance.provider}
+                                              </div>
+                                              <div>
+                                                  <span className="block font-bold text-emerald-700 dark:text-emerald-400">Póliza</span>
+                                                  {activeMedicalContext.insurance.policyNumber || "No registrada"}
+                                              </div>
+                                              <div className="col-span-2">
+                                                  <span className="block font-bold text-emerald-700 dark:text-emerald-400">Fecha Siniestro</span>
+                                                  {activeMedicalContext.insurance.accidentDate}
+                                              </div>
+                                          </div>
+                                     </div>
                                 </div>
                             )}
-                        </div>
-                    </div>
-
-                    {/* Detalle Expandido (In-Flow en Móvil, Absoluto en Desktop) */}
-                    <div className={`${isMobileContextExpanded ? 'relative opacity-100 visible' : 'absolute top-0 left-0 w-full opacity-0 invisible md:group-hover:opacity-100 md:group-hover:visible'} transition-all duration-200 ease-out z-50 pointer-events-none group-hover:pointer-events-auto`}>
-                        <div className="bg-amber-50 dark:bg-slate-800 p-4 rounded-xl border-2 border-amber-300 dark:border-amber-600 text-xs shadow-2xl scale-100 origin-top">
-                            <div className="flex items-center gap-2 mb-2 text-amber-700 dark:text-amber-400 font-bold border-b border-amber-200 dark:border-amber-800 pb-1">
-                                <AlertCircle size={14} />
-                                <span>Antecedentes Activos (Detalle)</span>
-                            </div>
-                            <div className="space-y-3 text-slate-800 dark:text-slate-200 max-h-[300px] overflow-y-auto custom-scrollbar">
-                                <div>
-                                    <span className="font-bold block text-[10px] uppercase text-amber-600">Historial (Resumen):</span>
-                                    <p className="whitespace-pre-wrap leading-relaxed line-clamp-4 text-xs">{activeMedicalContext.history}</p>
-                                </div>
-                                {activeMedicalContext.allergies && activeMedicalContext.allergies !== "No registradas" && (
-                                    <div className="bg-red-50 dark:bg-red-900/20 p-2 rounded border border-red-100 dark:border-red-800">
-                                        <span className="font-bold block text-[10px] uppercase text-red-600">⚠ Alergias Críticas:</span>
-                                        <p className="font-black text-red-700 dark:text-red-300 text-sm">{activeMedicalContext.allergies}</p>
-                                    </div>
-                                )}
-                                {activeMedicalContext.lastConsultation && (
-                                    <div className="mt-2 pt-2 border-t border-amber-200 dark:border-amber-800/50">
-                                        <span className="font-bold block text-[10px] uppercase text-amber-600 mb-1">
-                                            Resumen Última Visita ({new Date(activeMedicalContext.lastConsultation.date).toLocaleDateString()}):
-                                        </span>
-                                        <div className="p-2 bg-white dark:bg-slate-900 rounded border border-amber-100 dark:border-amber-900/50">
-                                            {/* FIX VISUAL: Opacidad y cursiva para diferenciar del dato duro */}
-                                            <p className="italic opacity-80 text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed line-clamp-6 font-light">
-                                                {activeMedicalContext.lastConsultation.summary}
-                                            </p>
-                                        </div>
-                                    </div>
-                                )}
-                                {activeMedicalContext.insurance && (
-                                    <div className="mt-2 pt-2 border-t border-amber-200 dark:border-amber-800/50">
-                                        <span className="font-bold block text-[10px] uppercase text-emerald-600 mb-1 flex items-center gap-1">
-                                            <ShieldCheck size={12} /> Último Trámite de Seguro Registrado
-                                        </span>
-                                        <div className="p-2 bg-emerald-50 dark:bg-emerald-900/10 rounded border border-emerald-200 dark:border-emerald-800">
-                                            <div className="grid grid-cols-2 gap-2 text-slate-700 dark:text-slate-300">
-                                                <div>
-                                                    <span className="block font-bold text-emerald-700 dark:text-emerald-400">Aseguradora</span>
-                                                    {activeMedicalContext.insurance.provider}
-                                                </div>
-                                                <div>
-                                                    <span className="block font-bold text-emerald-700 dark:text-emerald-400">Póliza</span>
-                                                    {activeMedicalContext.insurance.policyNumber || "No registrada"}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
                         </div>
                     </div>
                 </div>
-            )}
-
-            {/* 3. Consentimiento (Dentro del scroll) */}
-            <div onClick={()=>setConsentGiven(!consentGiven)} className="flex items-center gap-2 p-3 rounded-lg border cursor-pointer select-none dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 shrink-0">
-                <div className={`w-5 h-5 rounded border flex items-center justify-center ${consentGiven?'bg-green-500 border-green-500 text-white':'bg-white dark:bg-slate-700'}`}>{consentGiven&&<Check size={14}/>}</div>
-                <label className="text-xs dark:text-white cursor-pointer">Consentimiento otorgado.</label>
             </div>
-            
-            {/* 4. Transcripción (Se expande si hay espacio, o scrollea con el resto) */}
-            <div className={`flex flex-col p-2 border rounded-xl bg-slate-50 dark:bg-slate-900/50 dark:border-slate-800 min-h-[200px]`}>
-                {segments.length === 0 ? (
-                    <div className="flex-1 flex flex-col items-center justify-center text-slate-400 opacity-50 text-xs py-8">
-                        <MessageSquare size={24} className="mb-2"/>
-                        <p>El historial aparecerá aquí</p>
-                    </div>
-                ) : (
-                    <div className="space-y-2" ref={transcriptEndRef}>
-                        {segments.map((seg, idx) => (
-                            <div key={idx} className={`flex w-full ${seg.role === 'doctor' ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-1`}>
-                                <div className={`max-w-[90%] p-2 rounded-xl text-xs border ${
-                                    seg.role === 'doctor' 
-                                    ? 'bg-indigo-100 text-indigo-900 border-indigo-200 rounded-tr-none dark:bg-indigo-900/50 dark:text-indigo-100 dark:border-indigo-800' 
-                                    : 'bg-white text-slate-700 border-slate-200 rounded-tl-none dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'
-                                }`}>
-                                    <p className="whitespace-pre-wrap">{seg.text}</p>
-                                </div>
+        )}
+
+        <div onClick={()=>setConsentGiven(!consentGiven)} className="flex items-center gap-2 p-3 rounded-lg border cursor-pointer select-none dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"><div className={`w-5 h-5 rounded border flex items-center justify-center ${consentGiven?'bg-green-500 border-green-500 text-white':'bg-white dark:bg-slate-700'}`}>{consentGiven&&<Check size={14}/>}</div><label className="text-xs dark:text-white cursor-pointer">Consentimiento otorgado.</label></div>
+        
+        <div className={`flex-1 flex flex-col p-2 overflow-hidden border rounded-xl bg-slate-50 dark:bg-slate-900/50 dark:border-slate-800 min-h-0`}>
+            {segments.length === 0 ? (
+                <div className="flex-1 flex flex-col items-center justify-center text-slate-400 opacity-50 text-xs">
+                    <MessageSquare size={24} className="mb-2"/>
+                    <p>El historial aparecerá aquí</p>
+                </div>
+            ) : (
+                <div className="flex-1 overflow-y-auto custom-scrollbar space-y-2" ref={transcriptEndRef}>
+                    {segments.map((seg, idx) => (
+                        <div key={idx} className={`flex w-full ${seg.role === 'doctor' ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-1`}>
+                            <div className={`max-w-[90%] p-2 rounded-xl text-xs border ${
+                                seg.role === 'doctor' 
+                                ? 'bg-indigo-100 text-indigo-900 border-indigo-200 rounded-tr-none dark:bg-indigo-900/50 dark:text-indigo-100 dark:border-indigo-800' 
+                                : 'bg-white text-slate-700 border-slate-200 rounded-tl-none dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'
+                            }`}>
+                                <p className="whitespace-pre-wrap">{seg.text}</p>
                             </div>
-                        ))}
-                    </div>
-                )}
-            </div>
-
+                        </div>
+                    ))}
+                </div>
+            )}
         </div>
-        {/* --- FIN ZONA SCROLLABLE --- */}
 
-        {/* --- CORRECCIÓN DE ALTURA FOOTER (260px -> 220px) --- */}
-        <div className="flex flex-col gap-2 mt-2 h-[220px] md:h-[35%] shrink-0 border-t dark:border-slate-800 pt-2 pb-2">
+        <div className="flex flex-col gap-2 mt-2 h-[260px] md:h-[35%] shrink-0 border-t dark:border-slate-800 pt-2 pb-2">
             
             <div className="flex justify-between items-center px-1">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Entrada Activa:</span>
@@ -1571,6 +1576,14 @@ const ConsultationView: React.FC = () => {
                 </div>
                 <div className="flex-1 overflow-y-auto flex flex-col gap-4">
                     <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-lg"><p className="text-xs font-bold text-slate-500 mb-2 uppercase">Agregar archivo:</p><UploadMedico preSelectedPatient={selectedPatient} onUploadComplete={() => { toast.success("Archivo agregado."); }} /></div>
+                    
+                    {/* INYECCIÓN DEL MÓDULO ESPECIALIZADO (SIDE-BY-SIDE) */}
+                    {doctorProfile && (
+                        <div className="mt-4">
+                             <SpecialtyVault patientId={selectedPatient.id} specialty={doctorProfile.specialty} />
+                        </div>
+                    )}
+
                     <div className="flex-1"><p className="text-xs font-bold text-slate-500 mb-2 uppercase">Historial:</p><DoctorFileGallery patientId={selectedPatient.id} /></div>
                 </div>
             </div>
