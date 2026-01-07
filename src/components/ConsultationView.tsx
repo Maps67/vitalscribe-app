@@ -70,6 +70,37 @@ const SPECIALTIES = [
   "Urgencias Médicas"
 ];
 
+// --- FIX CRÍTICO: Función extraída fuera del componente para evitar re-renderizados infinitos ---
+const cleanHistoryString = (input: any): string => {
+      if (!input) return "";
+      
+      // Caso 1: Si Supabase ya nos dio un Objeto (JSONB), lo leemos directo
+      if (typeof input === 'object') {
+          if (input.clinicalNote && typeof input.clinicalNote === 'string') return input.clinicalNote;
+          if (input.legacyNote) return input.legacyNote;
+          if (input.resumen_clinico) return input.resumen_clinico;
+          return JSON.stringify(input); // Fallback de seguridad
+      }
+
+      // Caso 2: Si es texto, intentamos parsear
+      if (typeof input === 'string') {
+          const trimmed = input.trim();
+          if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+              try {
+                  const parsed = JSON.parse(trimmed);
+                  if (parsed.clinicalNote) return parsed.clinicalNote;
+                  if (parsed.legacyNote) return parsed.legacyNote;
+                  if (parsed.resumen_clinico) return parsed.resumen_clinico;
+              } catch (e) {
+                  return input; // Si falla el parseo, devolvemos el texto original
+              }
+          }
+          return input;
+      }
+      
+      return String(input);
+};
+
 const ConsultationView: React.FC = () => {
   const { 
       isListening, 
@@ -101,6 +132,7 @@ const ConsultationView: React.FC = () => {
   // --- ESTADOS VITAL SNAPSHOT ---
   const [vitalSnapshot, setVitalSnapshot] = useState<PatientInsight | null>(null);
   const [loadingSnapshot, setLoadingSnapshot] = useState(false);
+  const [isMobileSnapshotVisible, setIsMobileSnapshotVisible] = useState(true); // Estado para UX Móvil
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -279,36 +311,7 @@ const ConsultationView: React.FC = () => {
     return () => { mounted = false; };
   }, [location.state, setTranscript]); 
 
-  // --- FIX CRÍTICO: MANEJO POLIMÓRFICO DE JSON/STRING ---
-  const cleanHistoryString = (input: any): string => {
-      if (!input) return "";
-      
-      // Caso 1: Si Supabase ya nos dio un Objeto (JSONB), lo leemos directo
-      if (typeof input === 'object') {
-          if (input.clinicalNote && typeof input.clinicalNote === 'string') return input.clinicalNote;
-          if (input.legacyNote) return input.legacyNote;
-          if (input.resumen_clinico) return input.resumen_clinico;
-          return JSON.stringify(input); // Fallback de seguridad
-      }
-
-      // Caso 2: Si es texto, intentamos parsear
-      if (typeof input === 'string') {
-          const trimmed = input.trim();
-          if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
-              try {
-                  const parsed = JSON.parse(trimmed);
-                  if (parsed.clinicalNote) return parsed.clinicalNote;
-                  if (parsed.legacyNote) return parsed.legacyNote;
-                  if (parsed.resumen_clinico) return parsed.resumen_clinico;
-              } catch (e) {
-                  return input; // Si falla el parseo, devolvemos el texto original
-              }
-          }
-          return input;
-      }
-      
-      return String(input);
-  };
+  // --- cleanHistoryString ELIMINADA DE AQUÍ Y MOVIDA AL SCOPE GLOBAL ---
 
   useEffect(() => {
     const fetchMedicalContext = async () => {
@@ -387,6 +390,7 @@ const ConsultationView: React.FC = () => {
     // Solo disparamos si tenemos paciente y el contexto médico ya cargó (para tener la última consulta)
     if (selectedPatient && !(selectedPatient as any).isTemporary && activeMedicalContext) {
         setLoadingSnapshot(true);
+        setIsMobileSnapshotVisible(true); // Auto-expandir al cargar nuevos datos
         
         // 1. Obtener Historial Estático
         const rawHistory = selectedPatient.history || '';
@@ -500,6 +504,7 @@ const ConsultationView: React.FC = () => {
       else {
           setSelectedPatient(patient);
           setSearchTerm(''); 
+          setIsMobileSnapshotVisible(true); // Forzar visibilidad al seleccionar
 
           try {
               const loadingHistory = toast.loading("Sincronizando historial...");
@@ -1050,14 +1055,47 @@ const ConsultationView: React.FC = () => {
             )}
         </div>
         
-        {/* --- VITAL SNAPSHOT CARD (INYECCIÓN NUEVA) --- */}
-        <VitalSnapshotCard 
-            insight={vitalSnapshot ? {
-                ...vitalSnapshot,
-                pending_actions: vitalSnapshot.pending_actions 
-            } : null} 
-            isLoading={loadingSnapshot} 
-        />
+        {/* --- VITAL SNAPSHOT CARD (MODIFICADO PARA UX MÓVIL) --- */}
+        {/* Wrapper con lógica de colapso para móviles para no bloquear la pantalla */}
+        <div className="w-full transition-all duration-300 ease-in-out">
+            {vitalSnapshot && (
+               <div className="md:hidden flex justify-between items-center mb-2 px-1">
+                   <span className="text-xs font-bold text-slate-500 flex items-center gap-1">
+                       <Activity size={12}/> Contexto Vital
+                   </span>
+                   <button
+                       onClick={() => setIsMobileSnapshotVisible(!isMobileSnapshotVisible)}
+                       className="p-1 bg-slate-200 rounded text-slate-600 dark:bg-slate-700 dark:text-slate-300"
+                   >
+                       {isMobileSnapshotVisible ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}
+                   </button>
+               </div>
+            )}
+
+            <div className={`${!isMobileSnapshotVisible ? 'hidden' : 'block'} md:block`}>
+                <VitalSnapshotCard 
+                    insight={vitalSnapshot ? {
+                        ...vitalSnapshot,
+                        pending_actions: vitalSnapshot.pending_actions 
+                    } : null} 
+                    isLoading={loadingSnapshot} 
+                />
+                
+                {/* Botón exclusivo móvil para colapsar y empezar a dictar rápidamente */}
+                {vitalSnapshot && (
+                    <button onClick={()=>setIsMobileSnapshotVisible(false)} className="md:hidden w-full mt-2 py-2 bg-slate-100 dark:bg-slate-800 text-slate-500 text-xs font-bold rounded-lg border border-slate-200 dark:border-slate-700 flex items-center justify-center gap-2">
+                        <ChevronUp size={12}/> Ocultar y Ver Micrófono
+                    </button>
+                )}
+            </div>
+            
+            {/* Botón recordatorio si está oculto en móvil */}
+            {!isMobileSnapshotVisible && vitalSnapshot && (
+                <button onClick={()=>setIsMobileSnapshotVisible(true)} className="md:hidden w-full mb-2 py-2 bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-300 rounded-lg text-xs font-bold border border-indigo-100 dark:border-indigo-800 flex items-center justify-center gap-2 animate-in fade-in">
+                    <Activity size={12}/> Ver Análisis 360° (Oculto)
+                </button>
+            )}
+        </div>
 
         {activeMedicalContext && !generatedNote && (
             <div 
