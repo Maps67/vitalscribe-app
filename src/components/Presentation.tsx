@@ -1,10 +1,10 @@
 import React from 'react';
 import { 
   WifiOff, Shield, Mic, Brain, FileCheck, 
-  Pill, ShieldAlert, TrendingUp, Bot, Scale, Network, Lock,
+  Pill, ShieldAlert, Activity, Eye, Scale, Network, Lock,
   Check, FileText, Server, Cloud, Database, Clock, 
-  AlertTriangle, HeartPulse, DollarSign, Sparkles,
-  Building2, Calculator, Download, ShieldCheck
+  AlertTriangle, HeartPulse, Sparkles, Smartphone,
+  Building2, Calculator, Download, ShieldCheck, Zap
 } from 'lucide-react';
 
 // --- SUB-COMPONENTES REUTILIZABLES ---
@@ -15,15 +15,13 @@ const Slide = ({ children, className = "", id }: { children: React.ReactNode; cl
     <div className="absolute top-0 right-0 w-[150px] md:w-[300px] h-[150px] md:h-[300px] bg-sky-500/10 rounded-bl-full -z-0 pointer-events-none blur-3xl" />
     <div className="absolute bottom-0 left-0 w-[150px] md:w-[250px] h-[150px] md:h-[250px] bg-teal-500/10 rounded-tr-full -z-0 pointer-events-none blur-3xl" />
     
-    {/* Header Constante con LOGO REAL (UBICADO A LA DERECHA) - AJUSTADO PARA MÓVIL */}
+    {/* Header Constante con LOGO REAL (UBICADO A LA DERECHA) */}
     <div className="absolute top-4 right-4 md:top-10 md:right-16 flex items-center gap-3 z-10">
-      {/* Busca el archivo logo.png en tu carpeta public/img/ */}
       <img 
         src="/img/logo.png" 
         alt="VitalScribe Logo" 
         className="h-10 md:h-20 w-auto object-contain"
         onError={(e) => {
-          // Fallback por si no has subido el logo aún: oculta la imagen y muestra texto
           e.currentTarget.style.display = 'none';
           e.currentTarget.nextElementSibling?.classList.remove('hidden');
         }}
@@ -38,7 +36,7 @@ const Slide = ({ children, className = "", id }: { children: React.ReactNode; cl
 
     {/* Footer Constante */}
     <div className="absolute bottom-4 md:bottom-6 left-0 w-full text-center text-[8px] md:text-[10px] text-slate-400 z-10 px-4 md:px-10">
-      VitalScribe AI | Asistente Médico. © 2025 VitalScribe AI™. Todos los derechos reservados.
+      VitalScribe AI v5.2 | Arquitectura Blindada. © 2026 VitalScribe AI™. Todos los derechos reservados.
     </div>
   </div>
 );
@@ -70,39 +68,38 @@ const Presentation = () => {
         <div className="max-w-4xl mx-auto pt-8 md:pt-0">
           <h1 className="text-3xl sm:text-5xl md:text-7xl font-black text-slate-900 dark:text-white mb-6 tracking-tight leading-tight">
             Protocolo de Investigación: <br/>
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-sky-500 to-indigo-600">Disrupción de IA Clínica</span>
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-sky-500 to-indigo-600">IA Clínica Contextual</span>
           </h1>
           <p className="text-base sm:text-xl md:text-2xl text-slate-500 dark:text-slate-400 font-light mb-12 max-w-3xl mx-auto leading-relaxed">
-            Informe Integral de Posicionamiento Competitivo, Arquitectura de Infraestructura y Viabilidad Regulatoria en el <span className="font-semibold text-sky-500">Mercado Mexicano</span>
+            Informe sobre la Arquitectura de <span className="font-semibold text-sky-500">Inteligencia Adaptativa</span> y Blindaje Legal para el Mercado Mexicano (v5.2).
           </p>
         </div>
       </Slide>
 
       {/* Slide 2: El Problema */}
       <Slide id="slide2">
-        <SlideTitle>La Crisis de Eficiencia y Burnout</SlideTitle>
+        <SlideTitle>La Crisis de "Inercia Clínica"</SlideTitle>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12 items-center">
           <div className="rounded-3xl overflow-hidden shadow-lg h-[250px] md:h-[400px] bg-slate-200">
-            {/* REFERENCIA A IMAGEN LOCAL .PNG */}
             <img 
               src="/img/doctor-stress.png" 
-              alt="Doctor bajo estrés" 
+              alt="Sobrecarga cognitiva" 
               className="w-full h-full object-cover"
             />
           </div>
           <div>
-            <h3 className="text-xl md:text-2xl font-bold text-slate-800 dark:text-white mb-4">Epidemiología del Agotamiento</h3>
+            <h3 className="text-xl md:text-2xl font-bold text-slate-800 dark:text-white mb-4">Fatiga de Decisión y Contexto</h3>
             <p className="text-base md:text-lg text-slate-600 dark:text-slate-300 mb-6 leading-relaxed">
-              El sistema de salud enfrenta una tensión estructural entre la modernización regulatoria y la realidad operativa. La digitalización ha convertido al médico en un capturista de datos.
+              Los ECE actuales son pasivos. Obligan al médico a recordar todo el historial o navegar por pestañas infinitas, generando errores por omisión y "arranque en frío" en cada consulta.
             </p>
             <ul className="space-y-4 text-sm md:text-base">
               {[
-                { bold: '49.3%', text: 'de prevalencia de Burnout en cirujanos generales.' },
-                { bold: 'Carga Administrativa:', text: 'Correlación directa (r=0.921) con el agotamiento.' },
-                { bold: 'NOM-004-SSA3-2012:', text: 'Exige exhaustividad difícil de mantener manualmente.' }
+                { bold: 'Arranque en Frío:', text: 'El médico tarda 3-5 min en "reconstruir" mentalmente al paciente.' },
+                { bold: 'Ceguera de Especialidad:', text: 'Los sistemas genéricos no filtran datos irrelevantes (ruido clínico).' },
+                { bold: 'Riesgo Legal:', text: 'La prisa lleva a notas escuetas que incumplen la NOM-004.' }
               ].map((item, idx) => (
                 <li key={idx} className="flex items-start gap-3 text-slate-700 dark:text-slate-300">
-                  <Check className="w-5 h-5 md:w-6 md:h-6 text-emerald-500 shrink-0 mt-0.5" strokeWidth={3} />
+                  <Check className="w-5 h-5 md:w-6 md:h-6 text-red-500 shrink-0 mt-0.5" strokeWidth={3} />
                   <span><strong>{item.bold}</strong> {item.text}</span>
                 </li>
               ))}
@@ -114,18 +111,18 @@ const Presentation = () => {
       {/* Slide 3: La Solución */}
       <Slide id="slide3" className="!p-0 !overflow-hidden grid grid-cols-1 md:grid-cols-2 items-center gap-0">
          <div className="p-8 md:p-20 flex flex-col justify-center h-full order-2 md:order-1">
-            <SlideTitle>Inteligencia Clínica Operativa</SlideTitle>
+            <SlideTitle>Inteligencia Operativa v5.2</SlideTitle>
             <p className="text-base md:text-lg text-slate-600 dark:text-slate-300 mb-8">
-              A diferencia de los "wrappers" de IA o ECEs tradicionales, VitalScribe AI es una infraestructura crítica diseñada para la realidad de Latinoamérica.
+              No es un chatbot. Es una infraestructura clínica viva que se adapta a tu especialidad y protege tu práctica en tiempo real, incluso desde el celular.
             </p>
             <div className="space-y-6">
               <div className="flex gap-4 items-start">
                 <div className="p-3 bg-sky-50 dark:bg-sky-900/30 rounded-xl text-sky-600 dark:text-sky-400">
-                  <WifiOff size={24} className="md:w-7 md:h-7" />
+                  <Smartphone size={24} className="md:w-7 md:h-7" />
                 </div>
                 <div>
-                  <h4 className="text-lg font-bold text-slate-800 dark:text-white">Offline-First Real</h4>
-                  <p className="text-sm text-slate-500 dark:text-slate-400">Operatividad total sin internet.</p>
+                  <h4 className="text-lg font-bold text-slate-800 dark:text-white">UX Móvil Blindada</h4>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">Estrategia de contención visual. Opera con una mano sin perder contexto.</p>
                 </div>
               </div>
               <div className="flex gap-4 items-start">
@@ -133,17 +130,16 @@ const Presentation = () => {
                   <Shield size={24} className="md:w-7 md:h-7" />
                 </div>
                 <div>
-                  <h4 className="text-lg font-bold text-slate-800 dark:text-white">Zero Data Retention</h4>
-                  <p className="text-sm text-slate-500 dark:text-slate-400">Privacidad de grado empresarial.</p>
+                  <h4 className="text-lg font-bold text-slate-800 dark:text-white">Protocolo Fail-Safe</h4>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">Si la IA falla, la interfaz no colapsa. Continuidad operativa garantizada.</p>
                 </div>
               </div>
             </div>
          </div>
          <div className="h-full w-full relative order-1 md:order-2 min-h-[300px] md:min-h-[400px] bg-slate-800">
-            {/* REFERENCIA A IMAGEN LOCAL .PNG */}
             <img 
               src="/img/interface.png" 
-              alt="Interfaz IA" 
+              alt="Interfaz Móvil" 
               className="absolute inset-0 w-full h-full object-cover"
             />
          </div>
@@ -151,28 +147,28 @@ const Presentation = () => {
 
       {/* Slide 4: Proceso */}
       <Slide id="slide4">
-        <SlideTitle>De la Conversación a la Nota Clínica</SlideTitle>
+        <SlideTitle>Motor Híbrido: Velocidad + Razonamiento</SlideTitle>
         <p className="text-center max-w-3xl mx-auto text-base md:text-xl text-slate-600 dark:text-slate-300 mb-12">
-          El sistema escucha, entiende y estructura la nota conforme a la normativa sin exigir que el médico actúe como secretario.
+          Arquitectura de doble capa utilizando <strong>Gemini Flash 2.0</strong> para inmediatez y modelos Pro para profundidad clínica.
         </p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8">
-          <Tile icon={Mic} title="1. Escucha" text="Captura el diálogo médico-paciente en tiempo real, filtrando ruido ambiental y separando interlocutores." />
-          <Tile icon={Brain} title="2. Analiza" text="Google Vertex AI procesa el contexto clínico, detecta síntomas, diagnósticos y plan de tratamiento." />
-          <Tile icon={FileText} title="3. Estructura" text="Genera automáticamente una nota SOAP perfecta y recetas listas para firma electrónica." />
+          <Tile icon={Mic} title="1. Escucha Activa" text="Captura de voz de alta fidelidad con reconexión automática y Wake Lock para sesiones largas." />
+          <Tile icon={Brain} title="2. Inferencia Contextual" text="Procesa audio + historial previo simultáneamente. No alucina datos, los correlaciona." />
+          <Tile icon={FileText} title="3. Estructura Legal" text="Entrega JSON estricto: Notas SOAP, Recetas separadas y Auditoría de Riesgos en < 3 seg." />
         </div>
       </Slide>
 
-      {/* Slide 5: Features */}
+      {/* Slide 5: Features (ACTUALIZADO CON VITAL SNAPSHOT Y LENTE) */}
       <Slide id="slide5">
-        <SlideTitle>Capacidades de Grado Empresarial</SlideTitle>
+        <SlideTitle>Capacidades de la Versión 5.2</SlideTitle>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
           {[
-            { icon: Pill, title: "Recetas Estructuradas", text: "Separa medicamentos de instrucciones. Calcula dosis pediátricas y frecuencias automáticamente." },
-            { icon: ShieldAlert, title: "Auditoría de Seguridad", text: "Detección de interacciones medicamentosas y alergias mediante Inteligencia Farmacológica (LLM)." },
-            { icon: TrendingUp, title: "Análisis de Tendencias", text: "Visualiza la evolución de signos vitales (ej. presión arterial) y adherencia al tratamiento." },
-            { icon: Bot, title: "Asistente Experto (RAG)", text: "Responde dudas clínicas complejas citando Guías de Práctica Clínica y normas oficiales." }
+            { icon: Activity, title: "Vital Snapshot", text: "Elimina el 'arranque en frío'. Una tarjeta amarilla te resume alertas, evolución y pendientes en 5 segundos antes de saludar." },
+            { icon: Eye, title: "Lente de Especialidad", text: "Inteligencia Adaptativa. Si eres Cardiólogo, la IA filtra datos psiquiátricos y resalta riesgos cardíacos. No más resúmenes genéricos." },
+            { icon: Pill, title: "Recetas Deterministas", text: "Seguridad farmacológica total. Clasifica acciones obligatorias: NUEVO, CONTINUAR, SUSPENDER y AJUSTAR." },
+            { icon: ShieldAlert, title: "Auditoría en Tiempo Real", text: "Detecta omisiones graves o riesgos legales (NOM-004) mientras dictas, actuando como un 'Ángel Guardián'." }
           ].map((feature, idx) => (
-            <div key={idx} className="bg-slate-50 dark:bg-slate-800/50 p-6 md:p-8 rounded-2xl flex flex-col md:flex-row gap-4 md:gap-6 items-start border border-slate-100 dark:border-slate-700">
+            <div key={idx} className="bg-slate-50 dark:bg-slate-800/50 p-6 md:p-8 rounded-2xl flex flex-col md:flex-row gap-4 md:gap-6 items-start border border-slate-100 dark:border-slate-700 hover:border-sky-200 transition-colors">
               <feature.icon className="w-8 h-8 md:w-10 md:h-10 text-sky-500 shrink-0" />
               <div>
                 <h3 className="text-lg md:text-xl font-bold text-slate-800 dark:text-white mb-2">{feature.title}</h3>
@@ -185,13 +181,13 @@ const Presentation = () => {
 
       {/* Slide 6: Matriz de Impacto Clínico */}
       <Slide id="slide6">
-        <SlideTitle>Matriz de Impacto en la Práctica Médica</SlideTitle>
+        <SlideTitle>Matriz de Impacto Operativo</SlideTitle>
         <p className="text-center max-w-3xl mx-auto text-base md:text-lg text-slate-600 dark:text-slate-300 mb-10">
-          Transformamos la carga administrativa en tiempo clínico de calidad. No es solo software, es calidad de vida.
+          Transformamos la fricción administrativa en fluidez clínica.
         </p>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-10">
-          {/* Columna 1: Práctica Convencional (El Dolor) */}
+          {/* Columna 1: Práctica Convencional */}
           <div className="bg-slate-50 dark:bg-slate-800/50 p-6 md:p-8 rounded-3xl border border-slate-200 dark:border-slate-700 relative overflow-hidden">
              <div className="absolute top-0 left-0 w-full h-2 bg-slate-300"></div>
              <h3 className="text-xl md:text-2xl font-bold text-slate-500 mb-6 flex items-center gap-3">
@@ -201,84 +197,44 @@ const Presentation = () => {
                <li className="flex gap-4">
                  <Clock className="w-6 h-6 text-slate-400 shrink-0"/>
                  <div>
-                   <strong className="block text-slate-700 dark:text-slate-300">15-20 min / paciente</strong>
-                   <span className="text-sm text-slate-500">en documentación y llenado de ECE.</span>
+                   <strong className="block text-slate-700 dark:text-slate-300">Registro Lento</strong>
+                   <span className="text-sm text-slate-500">Alta de paciente obligatoria antes de atender (Fricción alta).</span>
                  </div>
                </li>
                <li className="flex gap-4">
                  <FileText className="w-6 h-6 text-slate-400 shrink-0"/>
                  <div>
-                   <strong className="block text-slate-700 dark:text-slate-300">Riesgo Legal Latente</strong>
-                   <span className="text-sm text-slate-500">Notas incompletas por fatiga (NOM-004).</span>
-                 </div>
-               </li>
-               <li className="flex gap-4">
-                 <HeartPulse className="w-6 h-6 text-slate-400 shrink-0"/>
-                 <div>
-                   <strong className="block text-slate-700 dark:text-slate-300">Atención Fragmentada</strong>
-                   <span className="text-sm text-slate-500">Mirada fija en la pantalla, no en el paciente.</span>
+                   <strong className="block text-slate-700 dark:text-slate-300">Notas "Copy-Paste"</strong>
+                   <span className="text-sm text-slate-500">Riesgo legal por clonar notas anteriores sin actualizar contexto.</span>
                  </div>
                </li>
              </ul>
           </div>
 
-          {/* Columna 2: Práctica Aumentada (La Solución) */}
+          {/* Columna 2: Práctica Aumentada */}
           <div className="bg-white dark:bg-slate-800 p-6 md:p-8 rounded-3xl border-2 border-sky-500 shadow-xl relative overflow-hidden">
              <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-sky-500 to-indigo-600"></div>
              <h3 className="text-xl md:text-2xl font-bold text-slate-800 dark:text-white mb-6 flex items-center gap-3">
-               <Sparkles className="text-sky-500 fill-sky-500"/> Con VitalScribe AI
+               <Zap className="text-sky-500 fill-sky-500"/> Con VitalScribe v5.2
              </h3>
              <ul className="space-y-6">
                <li className="flex gap-4">
                  <div className="p-1 bg-green-100 dark:bg-green-900/30 rounded-full h-fit"><Check className="w-4 h-4 text-green-600 dark:text-green-400" strokeWidth={3}/></div>
                  <div>
-                   <strong className="block text-slate-900 dark:text-white text-base md:text-lg">2-3 min / paciente</strong>
-                   <span className="text-slate-600 dark:text-slate-300 text-sm md:text-base">Solo revisión y validación final.</span>
+                   <strong className="block text-slate-900 dark:text-white text-base md:text-lg">Lazy Registration</strong>
+                   <span className="text-slate-600 dark:text-slate-300 text-sm md:text-base">Atiende primero, registra después. Crea pacientes temporales al instante.</span>
                  </div>
                </li>
                <li className="flex gap-4">
                  <div className="p-1 bg-green-100 dark:bg-green-900/30 rounded-full h-fit"><Check className="w-4 h-4 text-green-600 dark:text-green-400" strokeWidth={3}/></div>
                  <div>
-                   <strong className="block text-slate-900 dark:text-white text-base md:text-lg">Blindaje Jurídico Total</strong>
-                   <span className="text-slate-600 dark:text-slate-300 text-sm md:text-base">Estructura SOAP perfecta y exhaustiva siempre.</span>
-                 </div>
-               </li>
-               <li className="flex gap-4">
-                 <div className="p-1 bg-green-100 dark:bg-green-900/30 rounded-full h-fit"><Check className="w-4 h-4 text-green-600 dark:text-green-400" strokeWidth={3}/></div>
-                 <div>
-                   <strong className="block text-slate-900 dark:text-white text-base md:text-lg">Retorno de Inversión</strong>
-                   <span className="text-slate-600 dark:text-slate-300 text-sm md:text-base">Capacidad de ver +2 pacientes extra por día.</span>
+                   <strong className="block text-slate-900 dark:text-white text-base md:text-lg">Notas Dinámicas</strong>
+                   <span className="text-slate-600 dark:text-slate-300 text-sm md:text-base">Cada nota es única, generada desde cero escuchando la consulta real.</span>
                  </div>
                </li>
              </ul>
           </div>
         </div>
-
-        {/* Indicador de Ahorro de Tiempo */}
-        <div className="bg-slate-100 dark:bg-slate-800 rounded-xl p-6 flex flex-col md:flex-row items-center justify-between gap-6 border border-slate-200 dark:border-slate-700">
-           <div className="flex items-center gap-4">
-             <div className="p-3 bg-sky-100 text-sky-600 rounded-full"><Clock size={24}/></div>
-             <div>
-               <h4 className="font-bold text-slate-700 dark:text-white text-lg">Tiempo Administrativo Recuperado</h4>
-               <p className="text-sm text-slate-500">Promedio diario estimado</p>
-             </div>
-           </div>
-           <div className="flex-1 w-full max-w-lg">
-             <div className="flex justify-between text-xs font-bold text-slate-400 mb-1 uppercase tracking-widest">
-               <span>Antes</span>
-               <span>Ahora (85% Ahorro)</span>
-             </div>
-             <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden relative">
-                 <div className="absolute top-0 left-0 h-full bg-slate-400 w-full opacity-30"></div> {/* Barra base */}
-                 <div className="absolute top-0 left-0 h-full bg-gradient-to-r from-sky-500 to-indigo-500 w-[15%] rounded-full shadow-[0_0_10px_rgba(59,130,246,0.5)]"></div> {/* Barra nueva */}
-             </div>
-             <div className="flex justify-between mt-2">
-                 <span className="text-slate-400 font-medium">~2 Horas/día perdidas</span>
-                 <span className="text-sky-600 dark:text-sky-400 font-bold">~20 Min/día totales</span>
-             </div>
-           </div>
-        </div>
-
       </Slide>
 
       {/* Slide 7: Arquitectura */}
@@ -286,12 +242,12 @@ const Presentation = () => {
         <SlideTitle>Soberanía Tecnológica y Seguridad</SlideTitle>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
           <div>
-            <h3 className="text-xl md:text-2xl font-bold text-slate-800 dark:text-white mb-6">Arquitectura Híbrida Segura</h3>
+            <h3 className="text-xl md:text-2xl font-bold text-slate-800 dark:text-white mb-6">Arquitectura "Client-Side Blindada"</h3>
             <ul className="space-y-6">
               {[
-                { icon: Cloud, title: "Edge Computing (Supabase)", text: "Funciones distribuidas globalmente para mínima latencia." },
-                { icon: Server, title: "Google Vertex AI", text: "Motor de razonamiento clínico (Gemini 1.5 Pro) con BAA empresarial." },
-                { icon: Database, title: "Local-First", text: "Bases de datos locales (WatermelonDB) con sincronización Delta." }
+                { icon: Cloud, title: "Supabase Edge Functions", text: "Procesamiento seguro en la nube. Tus llaves de API nunca tocan el dispositivo." },
+                { icon: Server, title: "Row Level Security (RLS)", text: "Aislamiento de datos a nivel de base de datos. Un médico jamás puede ver pacientes de otro." },
+                { icon: Database, title: "Offline-First Real", text: "La App sigue funcionando en zonas rurales o sótanos de hospital sin señal." }
               ].map((item, idx) => (
                 <li key={idx} className="flex gap-4">
                   <div className="p-3 bg-white shadow-md rounded-xl text-sky-600 h-fit border border-slate-100"><item.icon size={24}/></div>
@@ -304,7 +260,6 @@ const Presentation = () => {
             </ul>
           </div>
           <div className="rounded-3xl overflow-hidden shadow-xl border-4 border-white dark:border-slate-700 bg-slate-200">
-            {/* REFERENCIA A IMAGEN LOCAL .PNG */}
             <img 
               src="/img/security.png" 
               alt="Ciberseguridad" 
@@ -318,47 +273,39 @@ const Presentation = () => {
       <Slide id="slide8">
         <SlideTitle>Blindaje Regulatorio Mexicano</SlideTitle>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8">
-          <Tile icon={Scale} title="NOM-004-SSA3" text="Cumplimiento estricto de la estructura del Expediente Clínico: trazabilidad, fecha, hora y firma electrónica." />
-          <Tile icon={Network} title="NOM-024-SSA3" text="Interoperabilidad garantizada mediante estándares HL7 y codificación CIE-10 automática (IA), lista para certificación DGIS." />
-          <Tile icon={Lock} title="LFPDPPP" text="Protección de datos sensibles con consentimiento expreso digital y aviso de privacidad sobre nube soberana." />
+          <Tile icon={Scale} title="NOM-004-SSA3" text="Cumplimiento estricto. La IA estructura la nota SOAP obligatoria y valida campos críticos antes de guardar." />
+          <Tile icon={Network} title="CIE-10 Automático" text="Codificación diagnóstica internacional automática para interoperabilidad y reportes estadísticos." />
+          <Tile icon={Lock} title="Consentimiento Digital" text="Módulo de 'Consentimiento Informado' integrado en el flujo de la consulta para protección legal." />
         </div>
       </Slide>
 
-      {/* Slide 9: NUEVO - Gestión de Aseguradoras */}
+      {/* Slide 9: Gestión de Aseguradoras */}
       <Slide id="slide9">
-        <SlideTitle>El Fin del Caos Administrativo</SlideTitle>
+        <SlideTitle>Central de Trámites Médicos</SlideTitle>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
           <div>
-            <h3 className="text-2xl md:text-3xl font-bold text-slate-800 dark:text-white mb-4">Central de Trámites Médicos</h3>
+            <h3 className="text-2xl md:text-3xl font-bold text-slate-800 dark:text-white mb-4">Adiós a la Burocracia</h3>
             <p className="text-base md:text-lg text-slate-600 dark:text-slate-300 mb-8 leading-relaxed">
-              VitalScribe no solo diagnostica, gestiona. Hemos integrado un módulo completo para eliminar la fricción burocrática con las aseguradoras.
+              VitalScribe entiende que la medicina privada depende de los seguros. Integramos los formatos oficiales en el flujo.
             </p>
             <ul className="space-y-6">
               <li className="flex gap-4">
                 <div className="p-2 bg-indigo-50 dark:bg-indigo-900/30 rounded-lg text-indigo-600"><Building2 size={24}/></div>
                 <div>
-                  <strong className="block text-slate-900 dark:text-white text-base md:text-lg">Formatos Oficiales Centralizados</strong>
-                  <span className="text-slate-600 dark:text-slate-400 text-sm">GNP, AXA, MetLife siempre actualizados y listos para descargar.</span>
+                  <strong className="block text-slate-900 dark:text-white text-base md:text-lg">Formatos GNP, AXA, MetLife</strong>
+                  <span className="text-slate-600 dark:text-slate-400 text-sm">Pre-llenados con la información extraída de la consulta.</span>
                 </div>
               </li>
               <li className="flex gap-4">
                 <div className="p-2 bg-teal-50 dark:bg-teal-900/30 rounded-lg text-teal-600"><Brain size={24}/></div>
                 <div>
-                  <strong className="block text-slate-900 dark:text-white text-base md:text-lg">Memoria Inteligente</strong>
-                  <span className="text-slate-600 dark:text-slate-400 text-sm">El sistema "recuerda" la póliza y el siniestro del paciente en sus visitas subsecuentes.</span>
-                </div>
-              </li>
-              <li className="flex gap-4">
-                <div className="p-2 bg-sky-50 dark:bg-sky-900/30 rounded-lg text-sky-600"><Download size={24}/></div>
-                <div>
-                  <strong className="block text-slate-900 dark:text-white text-base md:text-lg">Descarga Instantánea</strong>
-                  <span className="text-slate-600 dark:text-slate-400 text-sm">Entrega formatos editables al paciente en segundos, sin buscar en archivos.</span>
+                  <strong className="block text-slate-900 dark:text-white text-base md:text-lg">Memoria de Siniestros</strong>
+                  <span className="text-slate-600 dark:text-slate-400 text-sm">Rastrea números de póliza y siniestro automáticamente entre citas.</span>
                 </div>
               </li>
             </ul>
           </div>
           <div className="rounded-3xl overflow-hidden shadow-2xl border-4 border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 flex items-center justify-center min-h-[300px] md:min-h-[400px]">
-             {/* Aquí iría una captura del panel, por ahora un placeholder visual */}
              <div className="text-center p-8">
                <Building2 size={60} className="mx-auto text-slate-300 mb-4 md:w-20 md:h-20" />
                <p className="text-slate-400 font-medium">Panel de Gestión de Seguros</p>
@@ -372,11 +319,11 @@ const Presentation = () => {
         </div>
       </Slide>
 
-      {/* Slide 10: NUEVO - Financiero y Legal */}
+      {/* Slide 10: Financiero y Legal */}
       <Slide id="slide10">
-        <SlideTitle>Rentabilidad y Protección Legal</SlideTitle>
+        <SlideTitle>Rentabilidad y Protección</SlideTitle>
         <p className="text-center max-w-3xl mx-auto text-base md:text-lg text-slate-600 dark:text-slate-300 mb-12">
-          Herramientas diseñadas para proteger los ingresos y la integridad jurídica del profesional de la salud.
+          Herramientas de negocio para la práctica privada moderna.
         </p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl p-6 md:p-10 hover:shadow-xl transition-all duration-300 group">
@@ -385,27 +332,18 @@ const Presentation = () => {
              </div>
              <h3 className="text-xl md:text-2xl font-bold text-slate-800 dark:text-white mb-4">Calculadora de Honorarios</h3>
              <p className="text-slate-600 dark:text-slate-300 leading-relaxed mb-6 text-sm md:text-base">
-               Desglose automático y transparente para el equipo quirúrgico. Evita errores de cálculo entre Tabulador vs. Honorario Privado.
+               Desglose automático para equipos quirúrgicos. Claridad total en cobros de Tabulador vs. Privado.
              </p>
-             <ul className="text-xs md:text-sm text-slate-500 space-y-2">
-               <li className="flex items-center gap-2"><Check size={14} className="text-emerald-500"/> Cálculo automático Cirujano / Anestesiólogo</li>
-               <li className="flex items-center gap-2"><Check size={14} className="text-emerald-500"/> Detección de diferenciales a cobrar al paciente</li>
-             </ul>
           </div>
 
           <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl p-6 md:p-10 hover:shadow-xl transition-all duration-300 group">
              <div className="w-12 h-12 md:w-14 md:h-14 bg-amber-100 dark:bg-amber-900/30 rounded-2xl flex items-center justify-center text-amber-600 dark:text-amber-400 mb-6 group-hover:scale-110 transition-transform">
                 <ShieldCheck size={28} className="md:w-8 md:h-8" />
              </div>
-             <h3 className="text-xl md:text-2xl font-bold text-slate-800 dark:text-white mb-4">Respaldo Legal Automático</h3>
+             <h3 className="text-xl md:text-2xl font-bold text-slate-800 dark:text-white mb-4">Evidencia Histórica</h3>
              <p className="text-slate-600 dark:text-slate-300 leading-relaxed mb-6 text-sm md:text-base">
-               Registro inmutable de la "Fecha de Inicio de Síntomas" en la base de datos.
+               Registro inmutable de la evolución del paciente. Su mejor defensa ante disputas de aseguradoras por "preexistencias".
              </p>
-             <div className="bg-amber-50 dark:bg-amber-900/10 p-4 rounded-xl border border-amber-100 dark:border-amber-800">
-               <p className="text-xs text-amber-800 dark:text-amber-200 font-medium italic">
-                 "Si la aseguradora alega preexistencia meses después, usted tiene la evidencia histórica guardada y validada en el momento de la consulta."
-               </p>
-             </div>
           </div>
         </div>
       </Slide>
@@ -413,7 +351,6 @@ const Presentation = () => {
       {/* Slide 11: Conclusión */}
       <Slide id="slide11" className="relative !p-0">
         <div className="absolute inset-0 bg-slate-900">
-          {/* REFERENCIA A IMAGEN LOCAL .PNG */}
           <img 
             src="/img/background.png" 
             alt="Fondo Final" 
@@ -425,10 +362,10 @@ const Presentation = () => {
           <div className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-md p-8 md:p-12 rounded-3xl max-w-4xl shadow-2xl border border-white/20">
             <h2 className="text-3xl sm:text-4xl md:text-5xl font-black text-slate-900 dark:text-white mb-6 md:mb-8">La Evolución Necesaria</h2>
             <p className="text-lg md:text-2xl text-slate-700 dark:text-slate-300 mb-6 leading-relaxed">
-              VitalScribe AI no es un competidor más; es la respuesta tecnológica a una crisis humanitaria en la medicina.
+              VitalScribe AI devuelve al médico su propósito principal: <strong className="text-sky-600 dark:text-sky-400">Curar sin distracciones.</strong>
             </p>
             <p className="text-base md:text-xl text-slate-600 dark:text-slate-400">
-              Combinamos infraestructura robusta, cumplimiento normativo estricto y diseño centrado en el humano para devolverle al médico su propósito principal: <strong className="text-sky-600 dark:text-sky-400">Curar.</strong>
+              Bienvenido al futuro de la práctica médica eficiente.
             </p>
           </div>
         </div>
