@@ -176,7 +176,10 @@ export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
            </div>
         )}
 
-        <div className={`${!isMobileSnapshotVisible ? 'hidden' : 'block'} md:block md:max-h-none max-h-[55vh] overflow-y-auto custom-scrollbar`}>
+        {/* --- CORRECCIÓN DE DESBORDAMIENTO (OVERFLOW FIX) --- */}
+        {/* Antes: md:max-h-none (Crecía infinito y empujaba los botones fuera) */}
+        {/* Ahora: md:max-h-[42vh] (Tiene límite en PC para dejar espacio a los botones) */}
+        <div className={`${!isMobileSnapshotVisible ? 'hidden' : 'block'} md:block md:max-h-[42vh] max-h-[55vh] overflow-y-auto custom-scrollbar`}>
           <VitalSnapshotCard 
             insight={vitalSnapshot ? {
               ...vitalSnapshot,
@@ -199,7 +202,6 @@ export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
         )}
       </div>
 
-      {/* --- CÓDIGO CRÍTICO RESTAURADO: TARJETA AMARILLA Y CONTEXTO --- */}
       {activeMedicalContext && !generatedNote && (
         <div 
           className="relative z-30 group"
@@ -307,7 +309,6 @@ export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
         </div>
       )}
 
-      {/* --- CHECKBOX CONSENTIMIENTO (RECUPERADO) --- */}
       <div onClick={() => setConsentGiven(!consentGiven)} className="flex items-center gap-2 p-3 rounded-lg border cursor-pointer select-none dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800">
         <div className={`w-5 h-5 rounded border flex items-center justify-center ${consentGiven ? 'bg-green-500 border-green-500 text-white' : 'bg-white dark:bg-slate-700'}`}>
           {consentGiven && <Check size={14}/>}
@@ -338,7 +339,7 @@ export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
         )}
       </div>
 
-      {/* ZONA DE CONTROL (Footer) - CORREGIDA */}
+      {/* ZONA DE CONTROL (Footer) - ASEGURADO PARA PC */}
       <div className={`
           flex flex-col gap-2 mt-2 h-[260px] md:h-[35%] shrink-0 border-t dark:border-slate-800 pt-2 pb-2
           ${(vitalSnapshot && isMobileSnapshotVisible) ? 'hidden md:flex' : 'flex'}
@@ -428,7 +429,6 @@ export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
         </div>
       </div>
 
-      {/* --- BOTÓN ANÁLISIS 360 (RECUPERADO Y CORREGIDO) --- */}
       {selectedPatient && !(selectedPatient as any).isTemporary && (
         <button 
           onClick={handleLoadInsights} 
@@ -441,7 +441,6 @@ export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
         </button>
       )}
 
-      {/* --- MODAL DE ADJUNTOS (RECUPERADO) --- */}
       {isAttachmentsOpen && selectedPatient && (
         <div className="fixed inset-0 z-50 flex justify-end">
             <div className="absolute inset-0 bg-black/30 backdrop-blur-sm transition-opacity" onClick={() => setIsAttachmentsOpen(false)} />
