@@ -505,9 +505,10 @@ export const GeminiMedicalService = {
   },
 
   // --- G. NUEVO: INSIGHTS CLÍNICOS CONTEXTUALES (SIDEBAR V5.10) ---
+  // --- ACTUALIZACIÓN FIX 404: GOOGLE SEARCH FALLBACK ---
   async generateClinicalInsights(noteContent: string, specialty: string = "Medicina General"): Promise<ClinicalInsight[]> {
     try {
-        console.log("🔎 Generando Insights Clínicos Pasivos...");
+        console.log("🔎 Generando Insights Clínicos Pasivos (Modo Búsqueda Segura)...");
         const prompt = `
             ACTÚA COMO: Asistente de Investigación Clínica y Soporte a la Decisión (CDSS).
             OBJETIVO: Leer la nota clínica actual y sugerir 2-3 recursos informativos RELEVANTES para el médico.
@@ -519,6 +520,11 @@ export const GeminiMedicalService = {
             1. NO diagnostiques. NO sugieras tratamientos definitivos. Solo sugiere LITERATURA o GUÍAS.
             2. La información debe ser "Nice to know" (Informativa), no crítica.
             3. Si no hay nada relevante que agregar, devuelve un array vacío.
+            
+            REGLA ANTI-ALUCINACIÓN DE URLs (CRÍTICO):
+            - NO inventes URLs directas a PDFs o páginas específicas porque suelen cambiar y romperse.
+            - EN LUGAR DE ESO, genera una URL de Búsqueda de Google con los términos clave exactos.
+            - Formato URL: 'https://www.google.com/search?q=' + [Nombre de la Guía + Año].
 
             FORMATO JSON ARRAY (ClinicalInsight):
             [
@@ -527,13 +533,13 @@ export const GeminiMedicalService = {
                     "type": "guide" | "alert" | "treatment" | "info",
                     "title": "Título corto (ej: Guía GPC-2024)",
                     "content": "Resumen de por qué es relevante (máx 20 palabras)",
-                    "reference": "Cita bibliográfica exacta (Autor, Año, Journal/Guía)",
-                    "url": "Link opcional si existe (o dejar vacío)"
+                    "reference": "Nombre de la Fuente (Autor, Año)",
+                    "url": "https://www.google.com/search?q=..."
                 }
             ]
         `;
 
-        const rawText = await generateWithFailover(prompt, true, true); // useTools=true para buscar guías reales
+        const rawText = await generateWithFailover(prompt, true, true); // useTools=true
         const res = JSON.parse(cleanJSON(rawText));
         return Array.isArray(res) ? res : [];
 
