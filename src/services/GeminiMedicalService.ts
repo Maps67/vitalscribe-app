@@ -5,7 +5,7 @@ import {
   PatientInsight, 
   SOAPData, 
   ChatMessage 
-} from '../types'; // 
+} from '../types';
 
 // Definición extendida para manejo de recetas internas sin romper la interfaz base
 export interface MedicationItem {
@@ -160,7 +160,7 @@ const getSpecialtyPromptConfig = (specialty: string) => {
 export const GeminiMedicalService = {
 
   // --- NUEVA FUNCIÓN: VITAL SNAPSHOT (TARJETA AMARILLA) ---
-  [cite_start]// Ideal para Lazy Registration [cite: 3]
+  // Ideal para Lazy Registration
   async generateVitalSnapshot(historyJSON: string, specialty: string = "Medicina General"): Promise<PatientInsight | null> {
     try {
         console.log(`⚡ Generando Vital Snapshot (Enfoque: ${specialty})...`);
@@ -194,7 +194,7 @@ export const GeminiMedicalService = {
 
         const rawText = await generateWithFailover(prompt, true);
         const parsed = JSON.parse(cleanJSON(rawText));
-        return parsed as PatientInsight; [cite_start]// [cite: 10]
+        return parsed as PatientInsight;
 
     } catch (e) {
         console.error("❌ Error generando Vital Snapshot:", e);
@@ -203,7 +203,6 @@ export const GeminiMedicalService = {
   },
 
   // --- A. NOTA CLÍNICA (ANTI-CRASH + SAFETY AUDIT + LEGAL SAFE + CIE-10) ---
-  // MODIFICACIÓN: Se agrega manualContext al final
   async generateClinicalNote(transcript: string, specialty: string = "Medicina General", patientHistory: string = "", manualContext: string = ""): Promise<GeminiResponse & { prescriptions?: MedicationItem[] }> {
     try {
       console.log("⚡ Generando Nota Clínica Consistente (v7.1 - Surgical Lock)...");
@@ -234,8 +233,6 @@ export const GeminiMedicalService = {
         1. INTERPRETACIÓN, NO TRANSCRIPCIÓN:
            - Interpreta QUÉ QUISO DECIR médicamente.
            - Ejemplo: "siento que el corazón se me sale" -> "Palpitaciones".
-           
-           IMPORTANTE: Si el "CONTEXTO MÉDICO INICIAL" contiene datos clave (ej: "Paciente alérgico a X", "Sospecha de Y"), ÚSALO como verdad absoluta para orientar el diagnóstico, aunque no se mencione explícitamente en el audio.
 
         2. CONEXIÓN DE PUNTOS (DOT-CONNECTING):
            - Usa el HISTORIAL para dar contexto.
@@ -325,7 +322,7 @@ export const GeminiMedicalService = {
       const parsedData = JSON.parse(cleanJSON(rawText));
 
       console.log("✅ Nota estructurada generada con éxito (vía Secure Cloud + CIE-10 + Omni-Sentinel v7.1).");
-      return parsedData as GeminiResponse & { prescriptions: MedicationItem[] }; [cite_start]// Casting extendido [cite: 7]
+      return parsedData as GeminiResponse & { prescriptions: MedicationItem[] };
 
     } catch (error: any) {
       console.error("❌ Error/Bloqueo IA generando Nota Clínica:", error);
