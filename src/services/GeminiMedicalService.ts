@@ -505,13 +505,13 @@ export const GeminiMedicalService = {
   },
 
   // --- G. NUEVO: INSIGHTS CLÍNICOS CONTEXTUALES (SIDEBAR V5.10) ---
-  // --- ACTUALIZACIÓN FIX 404: GOOGLE SEARCH FALLBACK ---
+  // --- ACTUALIZACIÓN PRO: SMART CITATION HIERARCHY ---
   async generateClinicalInsights(noteContent: string, specialty: string = "Medicina General"): Promise<ClinicalInsight[]> {
     try {
-        console.log("🔎 Generando Insights Clínicos Pasivos (Modo Búsqueda Segura)...");
+        console.log("🔎 Generando Insights Clínicos Pasivos (Modo Smart Citation)...");
         const prompt = `
             ACTÚA COMO: Asistente de Investigación Clínica y Soporte a la Decisión (CDSS).
-            OBJETIVO: Leer la nota clínica actual y sugerir 2-3 recursos informativos RELEVANTES para el médico.
+            OBJETIVO: Leer la nota clínica actual y sugerir 2-3 recursos informativos RELEVANTES y DE ALTA CALIDAD.
             
             ESPECIALIDAD: ${specialty}
             NOTA ACTUAL: "${noteContent}"
@@ -521,10 +521,18 @@ export const GeminiMedicalService = {
             2. La información debe ser "Nice to know" (Informativa), no crítica.
             3. Si no hay nada relevante que agregar, devuelve un array vacío.
             
-            REGLA ANTI-ALUCINACIÓN DE URLs (CRÍTICO):
-            - NO inventes URLs directas a PDFs o páginas específicas porque suelen cambiar y romperse.
-            - EN LUGAR DE ESO, genera una URL de Búsqueda de Google con los términos clave exactos.
-            - Formato URL: 'https://www.google.com/search?q=' + [Nombre de la Guía + Año].
+            REGLAS DE CITAS Y ENLACES (JERARQUÍA INTELIGENTE):
+            INTENTA en este orden de prioridad para el campo "url":
+            
+            PRIORIDAD 1 (GOLD STANDARD): Si conoces el DOI (Digital Object Identifier) o el link de PubMed, ÚSALO.
+               - Ejemplo: "https://doi.org/10.1056/NEJMoa2022483"
+               - Ejemplo: "https://pubmed.ncbi.nlm.nih.gov/324123/"
+            
+            PRIORIDAD 2 (SITIOS OFICIALES): Links estables de organizaciones (WHO, CDC, CENETEC, AHA).
+               - Ejemplo: "https://www.cenetec-difusion.com/CMGPC/GPC-IMSS-000-12/ER.pdf"
+            
+            PRIORIDAD 3 (FALLBACK SEGURO): SOLO si no tienes un link directo confiable, genera una búsqueda de Google.
+               - Formato: "https://www.google.com/search?q=" + [Nombre Exacto de la Guía + Año]
 
             FORMATO JSON ARRAY (ClinicalInsight):
             [
@@ -534,7 +542,7 @@ export const GeminiMedicalService = {
                     "title": "Título corto (ej: Guía GPC-2024)",
                     "content": "Resumen de por qué es relevante (máx 20 palabras)",
                     "reference": "Nombre de la Fuente (Autor, Año)",
-                    "url": "https://www.google.com/search?q=..."
+                    "url": "URL según la jerarquía anterior"
                 }
             ]
         `;
