@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase';
-import { GeminiResponse, PatientInsight, MedicationItem, FollowUpMessage } from '../types';
+import { GeminiResponse, PatientInsight, MedicationItem, FollowUpMessage, ClinicalInsight } from '../types';
 
 console.log("🚀 V-STABLE DEPLOY: Safety Override Protocol (v7.1) [Surgical Lock Active]");
 
@@ -476,17 +476,17 @@ export const GeminiMedicalService = {
         console.log("🧠 Iniciando razonamiento clínico complejo...");
         
         const prompt = `
-           ERES UN ASISTENTE MÉDICO EXPERTO CON ACCESO A INTERNET Y RAZONAMIENTO PROFUNDO.
-           CONTEXTO CLÍNICO ACTUAL: ${context}
-           
-           SOLICITUD DEL MÉDICO: "${userMessage}"
-           
-           INSTRUCCIONES DE RESPUESTA:
-           1. Responde siempre en español profesional.
-           2. Usa **negritas** para términos médicos y fármacos.
-           3. Si la respuesta es larga, usa listas con viñetas.
-           4. Si citas guías clínicas o dosis, menciona la fuente.
-           5. Responde con TEXTO NATURAL (Markdown), NO envíes objetos JSON.
+            ERES UN ASISTENTE MÉDICO EXPERTO CON ACCESO A INTERNET Y RAZONAMIENTO PROFUNDO.
+            CONTEXTO CLÍNICO ACTUAL: ${context}
+            
+            SOLICITUD DEL MÉDICO: "${userMessage}"
+            
+            INSTRUCCIONES DE RESPUESTA:
+            1. Responde siempre en español profesional.
+            2. Usa **negritas** para términos médicos y fármacos.
+            3. Si la respuesta es larga, usa listas con viñetas.
+            4. Si citas guías clínicas o dosis, menciona la fuente.
+            5. Responde con TEXTO NATURAL (Markdown), NO envíes objetos JSON.
         `;
         
         const response = await generateWithFailover(prompt, false, true); // useTools = true
@@ -501,6 +501,45 @@ export const GeminiMedicalService = {
     } catch (e) { 
       console.error("Error en chatWithContext:", e);
       return "Lo siento, tuve un problema al procesar esta consulta compleja. Por favor, intenta simplificar la pregunta o revisa la conexión."; 
+    }
+  },
+
+  // --- G. NUEVO: INSIGHTS CLÍNICOS CONTEXTUALES (SIDEBAR V5.10) ---
+  async generateClinicalInsights(noteContent: string, specialty: string = "Medicina General"): Promise<ClinicalInsight[]> {
+    try {
+        console.log("🔎 Generando Insights Clínicos Pasivos...");
+        const prompt = `
+            ACTÚA COMO: Asistente de Investigación Clínica y Soporte a la Decisión (CDSS).
+            OBJETIVO: Leer la nota clínica actual y sugerir 2-3 recursos informativos RELEVANTES para el médico.
+            
+            ESPECIALIDAD: ${specialty}
+            NOTA ACTUAL: "${noteContent}"
+
+            REGLAS DE SEGURIDAD (STRICT):
+            1. NO diagnostiques. NO sugieras tratamientos definitivos. Solo sugiere LITERATURA o GUÍAS.
+            2. La información debe ser "Nice to know" (Informativa), no crítica.
+            3. Si no hay nada relevante que agregar, devuelve un array vacío.
+
+            FORMATO JSON ARRAY (ClinicalInsight):
+            [
+                {
+                    "id": "unique_id",
+                    "type": "guide" | "alert" | "treatment" | "info",
+                    "title": "Título corto (ej: Guía GPC-2024)",
+                    "content": "Resumen de por qué es relevante (máx 20 palabras)",
+                    "reference": "Cita bibliográfica exacta (Autor, Año, Journal/Guía)",
+                    "url": "Link opcional si existe (o dejar vacío)"
+                }
+            ]
+        `;
+
+        const rawText = await generateWithFailover(prompt, true, true); // useTools=true para buscar guías reales
+        const res = JSON.parse(cleanJSON(rawText));
+        return Array.isArray(res) ? res : [];
+
+    } catch (e) {
+        console.warn("⚠️ Error generando insights clínicos (No crítico):", e);
+        return []; // Fallo silencioso, no rompe la UI
     }
   },
 

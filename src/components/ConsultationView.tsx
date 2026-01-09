@@ -11,7 +11,7 @@ import {
 
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition'; 
 import { GeminiMedicalService } from '../services/GeminiMedicalService';
-import { ChatMessage, GeminiResponse, Patient, DoctorProfile, PatientInsight, MedicationItem } from '../types';
+import { ChatMessage, GeminiResponse, Patient, DoctorProfile, PatientInsight, MedicationItem, ClinicalInsight } from '../types';
 import { supabase } from '../lib/supabase';
 import FormattedText from './FormattedText';
 import { toast } from 'sonner';
@@ -27,6 +27,7 @@ import InsurancePanel from './Insurance/InsurancePanel';
 import { VitalSnapshotCard } from './VitalSnapshotCard';
 import { SpecialtyVault } from './SpecialtyVault';
 import { ConsultationSidebar } from './ConsultationSidebar';
+import { ContextualInsights } from './ContextualInsights'; // <--- NUEVO: Componente de Insights
 
 type TabType = 'record' | 'patient' | 'chat' | 'insurance';
 
@@ -168,6 +169,10 @@ const ConsultationView: React.FC = () => {
   const [segments, setSegments] = useState<TranscriptSegment[]>([]);
   const [activeSpeaker, setActiveSpeaker] = useState<'doctor' | 'patient'>('doctor');
 
+  // --- NUEVO ESTADO: INSIGHTS CONTEXTUALES ---
+  const [clinicalInsights, setClinicalInsights] = useState<ClinicalInsight[]>([]);
+  const [loadingClinicalInsights, setLoadingClinicalInsights] = useState(false);
+
   const startTimeRef = useRef<number>(Date.now());
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -194,6 +199,32 @@ const ConsultationView: React.FC = () => {
         window.removeEventListener('offline', handleOffline); 
     };
   }, []);
+
+  // --- NUEVO EFECTO: CARGA DE INSIGHTS CUANDO SE GENERA LA NOTA ---
+  useEffect(() => {
+    if (generatedNote && (generatedNote.soapData || generatedNote.clinicalNote)) {
+        // Extraemos el texto más relevante para el contexto
+        const noteContent = generatedNote.soapData 
+            ? `Diagnóstico: ${generatedNote.soapData.analysis}\nPlan: ${generatedNote.soapData.plan}`
+            : generatedNote.clinicalNote;
+
+        setLoadingClinicalInsights(true);
+        
+        // Llamada silenciosa al "Sidecar"
+        GeminiMedicalService.generateClinicalInsights(noteContent, selectedSpecialty)
+            .then(insights => {
+                setClinicalInsights(insights);
+            })
+            .catch(err => {
+                console.warn("Fallo silencioso en Insights:", err);
+            })
+            .finally(() => {
+                setLoadingClinicalInsights(false);
+            });
+    } else {
+        setClinicalInsights([]);
+    }
+  }, [generatedNote]); // Se dispara solo cuando la nota cambia/se genera
 
   useEffect(() => {
     let mounted = true;
@@ -1358,6 +1389,16 @@ const ConsultationView: React.FC = () => {
                  <div className="p-4 border-b dark:border-slate-800 font-bold flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900/50">
                      <MessageSquare size={16} className="text-brand-teal"/> Asistente Médico IA
                  </div>
+                 
+                 {/* --- NUEVA SECCIÓN: INSIGHTS CONTEXTUALES (PULL DE INFORMACIÓN) --- */}
+                 {/* Se muestra antes del chat, solo si hay insights */}
+                 <div className="flex-shrink-0">
+                    <ContextualInsights 
+                       insights={clinicalInsights} 
+                       isLoading={loadingClinicalInsights} 
+                    />
+                 </div>
+
                  <div className="flex-1 p-2 overflow-hidden">
                      {renderChatContent()}
                  </div>

@@ -131,3 +131,14 @@ export interface Appointment {
   notes?: string;
   created_at?: string;
 }
+
+// --- CONTEXTUAL INSIGHTS (SOPORTE CLÍNICO - COLUMNA 3) ---
+// Definición para las tarjetas informativas pasivas
+export interface ClinicalInsight {
+  id: string;
+  type: 'guide' | 'alert' | 'treatment' | 'info'; // Determina el color/icono de la tarjeta
+  title: string;      // Título corto (ej: "Guía GPC-2024")
+  content: string;    // Resumen de la sugerencia
+  reference: string;  // Cita bibliográfica obligatoria
+  url?: string;       // Link opcional a la fuente
+}
