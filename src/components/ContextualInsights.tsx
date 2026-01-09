@@ -5,7 +5,8 @@ import {
   Stethoscope, 
   Info, 
   ExternalLink, 
-  Sparkles 
+  Sparkles,
+  ShieldAlert
 } from 'lucide-react';
 import { ClinicalInsight } from '../types';
 
@@ -73,25 +74,36 @@ export const ContextualInsights: React.FC<ContextualInsightsProps> = ({ insights
   }
 
   return (
-    <div className="flex flex-col gap-3 p-4 bg-slate-50/50 dark:bg-slate-900/50 border-b dark:border-slate-800">
+    <div className="flex flex-col gap-2 p-4 bg-slate-50/50 dark:bg-slate-900/50 border-b dark:border-slate-800">
+      
+      {/* Header de Sección */}
       <div className="flex items-center justify-between">
         <h3 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-2">
           <Sparkles size={12} className="text-indigo-400" /> 
           Sugerencias Contextuales
         </h3>
-        <span className="text-[10px] text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full">
+        <span className="text-[10px] text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full border dark:border-slate-700">
           Informativo
         </span>
       </div>
 
-      <div className="space-y-3">
+      {/* --- NUEVO: DISCLAIMER DE SEGURIDAD --- */}
+      <div className="flex gap-2 items-start p-2 rounded bg-slate-100 dark:bg-slate-800/50 text-[10px] text-slate-500 dark:text-slate-400 mb-1 border border-slate-200 dark:border-slate-700/50">
+         <ShieldAlert size={12} className="shrink-0 mt-0.5 opacity-50"/>
+         <p className="leading-tight opacity-80">
+            Sugerencias generadas por IA. Los enlaces externos pueden cambiar. Verifique siempre la fuente original para la toma de decisiones.
+         </p>
+      </div>
+
+      {/* Lista de Tarjetas */}
+      <div className="space-y-3 mt-1">
         {insights.map((insight) => {
           const style = getInsightStyle(insight.type);
           
           return (
             <div 
               key={insight.id} 
-              className={`${style.bg} border ${style.border} rounded-lg p-3 transition-all hover:shadow-sm`}
+              className={`${style.bg} border ${style.border} rounded-lg p-3 transition-all hover:shadow-sm group`}
             >
               {/* Header de la Tarjeta */}
               <div className="flex items-center gap-2 mb-2">
