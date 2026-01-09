@@ -338,7 +338,11 @@ export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
         )}
       </div>
 
-      <div className="flex flex-col gap-2 mt-2 h-[260px] md:h-[35%] shrink-0 border-t dark:border-slate-800 pt-2 pb-2">
+      {/* ZONA DE CONTROL (Footer) - CORREGIDA */}
+      <div className={`
+          flex flex-col gap-2 mt-2 h-[260px] md:h-[35%] shrink-0 border-t dark:border-slate-800 pt-2 pb-2
+          ${(vitalSnapshot && isMobileSnapshotVisible) ? 'hidden md:flex' : 'flex'}
+      `}>
         <div className="flex justify-between items-center px-1">
           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Entrada Activa:</span>
           <div className="flex bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700">
@@ -424,12 +428,13 @@ export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
         </div>
       </div>
 
-      {/* --- BOTÓN ANÁLISIS 360 (RECUPERADO) --- */}
+      {/* --- BOTÓN ANÁLISIS 360 (RECUPERADO Y CORREGIDO) --- */}
       {selectedPatient && !(selectedPatient as any).isTemporary && (
         <button 
           onClick={handleLoadInsights} 
           disabled={isLoadingInsights}
-          className="w-full mt-2 py-3 bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-bold rounded-xl shadow-lg shadow-indigo-200 dark:shadow-none hover:shadow-xl hover:scale-[1.02] transition-all flex items-center justify-center gap-2 group z-20 shrink-0"
+          className={`w-full mt-2 py-3 bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-bold rounded-xl shadow-lg shadow-indigo-200 dark:shadow-none hover:shadow-xl hover:scale-[1.02] transition-all items-center justify-center gap-2 group z-20 shrink-0
+          ${(vitalSnapshot && isMobileSnapshotVisible) ? 'hidden md:flex' : 'flex'}`}
         >
           {isLoadingInsights ? <RefreshCw className="animate-spin" size={18}/> : <Sparkles className="text-yellow-300 group-hover:rotate-12 transition-transform" size={18} />}
           <span>Análisis Clínico 360°</span>
