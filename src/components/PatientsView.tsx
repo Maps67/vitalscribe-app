@@ -11,6 +11,7 @@ import QuickRxModal from './QuickRxModal';
 import FormattedText from './FormattedText'; 
 import { pdf } from '@react-pdf/renderer';
 import PrescriptionPDF from './PrescriptionPDF';
+import MedicalRecordPDF from './MedicalRecordPDF'; // <-- NUEVA IMPORTACIÓN OBLIGATORIA
 import ClinicalHistoryPDF from './ClinicalHistoryPDF'; 
 import { DoctorFileGallery } from './DoctorFileGallery';
 import { PatientWizard } from './PatientWizard';
@@ -146,6 +147,51 @@ const PatientsView: React.FC = () => {
         console.error(error);
         toast.error('Error al eliminar pacientes', { id: toastId });
     }
+  };
+
+  // --- LÓGICA DE DESCARGA DE EXPEDIENTE (INTEGRADA EN LISTA) ---
+  const handleDownloadRecord = async (patient: PatientData) => {
+      if (!doctorProfile) return toast.error("Perfil médico no cargado. Recargue la página.");
+      
+      const toastId = toast.loading(`Generando expediente de ${patient.name}...`);
+
+      try {
+          // 1. Obtener historial completo
+          const { data: history, error } = await supabase
+              .from('consultations')
+              .select('*')
+              .eq('patient_id', patient.id)
+              .order('created_at', { ascending: false });
+
+          if (error) throw error;
+
+          // 2. Generar PDF (Usando el componente legal NOM-004)
+          // Nota: Hacemos cast a 'any' para patient porque PatientData es compatible visualmente pero TS es estricto
+          const blob = await pdf(
+              <MedicalRecordPDF 
+                  doctor={doctorProfile} 
+                  patient={patient as any} 
+                  history={history || []} 
+                  generatedAt={new Date().toLocaleString()} 
+              />
+          ).toBlob();
+
+          // 3. Descargar
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = `EXPEDIENTE_${patient.name.toUpperCase().replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(url);
+
+          toast.success("Expediente descargado", { id: toastId });
+
+      } catch (e: any) {
+          console.error("Error descarga:", e);
+          toast.error("Error al generar PDF", { id: toastId });
+      }
   };
 
   const handleLoadInsights = async (patient: PatientData) => {
@@ -355,7 +401,11 @@ const PatientsView: React.FC = () => {
                   <td className="p-4 relative text-center">
                     <div className="flex justify-center gap-2">
                           <button onClick={() => handleLoadInsights(patient)} className="p-2 text-indigo-500 hover:bg-indigo-50 rounded-lg transition-colors" title="Balance 360°"><Sparkles size={18}/></button>
-                          <button onClick={() => handleViewHistory(patient)} className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors" title="Expediente"><Eye size={18}/></button>
+                          
+                          {/* BOTÓN DESCARGA (ESCRITORIO) */}
+                          <button onClick={() => handleDownloadRecord(patient)} className="p-2 text-slate-600 hover:bg-slate-100 hover:text-brand-teal rounded-lg transition-colors" title="Descargar Expediente PDF (NOM-004)"><Download size={18}/></button>
+                          
+                          <button onClick={() => handleViewHistory(patient)} className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors" title="Ver Expediente en Pantalla"><Eye size={18}/></button>
                           <button onClick={() => setSelectedPatientForRx(patient)} className="p-2 text-teal-600 hover:bg-teal-50 rounded-lg transition-colors" title="Receta"><Pill size={18}/></button>
                           <button onClick={() => openEditModal(patient)} className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors" title="Editar"><Edit2 size={18}/></button>
                           <button onClick={() => handleDelete(patient.id)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors" title="Eliminar"><Trash2 size={18}/></button>
@@ -413,18 +463,25 @@ const PatientsView: React.FC = () => {
                                 <Sparkles size={16} /> Ver Balance Clínico 360°
                             </button>
 
-                            <div className="grid grid-cols-4 gap-2 mb-3">
+                            {/* GRID DE ACCIONES MÓVIL (Ajustado a 5 columnas para incluir descarga) */}
+                            <div className="grid grid-cols-5 gap-2 mb-3">
                                 <button onClick={(e) => { e.stopPropagation(); handleCall(patient.phone); }} disabled={!patient.phone} className={`flex flex-col items-center justify-center py-2 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl shadow-sm active:scale-95 transition-all ${!patient.phone && 'opacity-50 grayscale'}`}>
-                                    <Phone size={18} className="text-slate-600 dark:text-slate-300 mb-1" /><span className="text-[9px] font-bold text-slate-500 dark:text-slate-400">Llamar</span>
+                                    <Phone size={18} className="text-slate-600 dark:text-slate-300 mb-1" /><span className="text-[8px] font-bold text-slate-500 dark:text-slate-400">Llamar</span>
                                 </button>
                                 <button onClick={(e) => { e.stopPropagation(); handleWhatsAppDirect(patient.phone); }} disabled={!patient.phone} className={`flex flex-col items-center justify-center py-2 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl shadow-sm active:scale-95 transition-all ${!patient.phone && 'opacity-50 grayscale'}`}>
-                                    <MessageCircle size={18} className="text-green-500 mb-1" /><span className="text-[9px] font-bold text-slate-500 dark:text-slate-400">WhatsApp</span>
+                                    <MessageCircle size={18} className="text-green-500 mb-1" /><span className="text-[8px] font-bold text-slate-500 dark:text-slate-400">WA</span>
                                 </button>
+                                
+                                {/* BOTÓN DESCARGA (MÓVIL) */}
+                                <button onClick={(e) => { e.stopPropagation(); handleDownloadRecord(patient); }} className="flex flex-col items-center justify-center py-2 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl shadow-sm active:scale-95 transition-all">
+                                    <Download size={18} className="text-slate-600 dark:text-slate-300 mb-1" /><span className="text-[8px] font-bold text-slate-500 dark:text-slate-400">PDF</span>
+                                </button>
+
                                 <button onClick={(e) => { e.stopPropagation(); handleViewHistory(patient); }} className="flex flex-col items-center justify-center py-2 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl shadow-sm active:scale-95 transition-all">
-                                    <Eye size={18} className="text-purple-500 mb-1" /><span className="text-[9px] font-bold text-slate-500 dark:text-slate-400">Expediente</span>
+                                    <Eye size={18} className="text-purple-500 mb-1" /><span className="text-[8px] font-bold text-slate-500 dark:text-slate-400">Ver</span>
                                 </button>
                                 <button onClick={(e) => { e.stopPropagation(); setSelectedPatientForRx(patient); }} className="flex flex-col items-center justify-center py-2 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl shadow-sm active:scale-95 transition-all">
-                                    <Pill size={18} className="text-teal-500 mb-1" /><span className="text-[9px] font-bold text-slate-500 dark:text-slate-400">Receta</span>
+                                    <Pill size={18} className="text-teal-500 mb-1" /><span className="text-[8px] font-bold text-slate-500 dark:text-slate-400">Rx</span>
                                 </button>
                             </div>
                             <div className="flex gap-2">

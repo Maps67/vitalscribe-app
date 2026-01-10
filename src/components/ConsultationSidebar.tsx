@@ -3,7 +3,7 @@ import {
   Mic, Pause, Play, RefreshCw, Save, WifiOff, Trash2, 
   Stethoscope, Search, X, Calendar, UserPlus, ChevronUp, 
   ChevronDown, Activity, AlertCircle, ShieldCheck, Check, 
-  Sparkles, Paperclip, User, CornerDownLeft 
+  Sparkles, Paperclip, User, CornerDownLeft, Download 
 } from 'lucide-react';
 import { VitalSnapshotCard } from './VitalSnapshotCard';
 import { UploadMedico } from './UploadMedico';
@@ -58,6 +58,7 @@ interface ConsultationSidebarProps {
   isAttachmentsOpen: boolean;
   setIsAttachmentsOpen: (isOpen: boolean) => void;
   doctorProfile: DoctorProfile | null;
+  onDownloadRecord: () => void; // NUEVA PROP OBLIGATORIA
 }
 
 export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
@@ -101,7 +102,8 @@ export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
   transcriptEndRef,
   isAttachmentsOpen,
   setIsAttachmentsOpen,
-  doctorProfile
+  doctorProfile,
+  onDownloadRecord
 }) => {
   const [isMobileContextExpanded, setIsMobileContextExpanded] = useState(false);
 
@@ -134,14 +136,34 @@ export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
 
           <div className="relative z-10">
             <div className="flex items-center border rounded-lg px-3 py-2 bg-slate-50 dark:bg-slate-800 dark:border-slate-700">
-              <Search className="text-slate-400 mr-2" size={18}/>
+              <Search className="text-slate-400 mr-2 shrink-0" size={18}/>
+              {/* MODIFICACIÓN UI: flex-1 para permitir que los botones de la derecha tengan espacio */}
               <input 
                 placeholder="Buscar paciente..." 
-                className="w-full bg-transparent outline-none dark:text-white text-sm" 
+                className="flex-1 bg-transparent outline-none dark:text-white text-sm min-w-0" 
                 value={selectedPatient ? selectedPatient.name : searchTerm} 
                 onChange={(e) => { setSearchTerm(e.target.value); setSelectedPatient(null); }}
               />
-              {selectedPatient && <button onClick={() => { setSelectedPatient(null); setSearchTerm(''); }}><X size={16}/></button>}
+              
+              {/* ZONA DE ACCIONES DE PACIENTE (Descargar | Cerrar) */}
+              {selectedPatient && (
+                <div className="flex items-center gap-1 ml-1 pl-1 border-l border-slate-300 dark:border-slate-600 shrink-0">
+                    <button 
+                        onClick={(e) => { e.stopPropagation(); onDownloadRecord(); }} 
+                        className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-md text-slate-500 hover:text-brand-teal transition-colors"
+                        title="Descargar Expediente Completo (NOM-004)"
+                    >
+                        <Download size={16}/>
+                    </button>
+                    <button 
+                        onClick={() => { setSelectedPatient(null); setSearchTerm(''); }}
+                        className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-md text-slate-400 hover:text-red-500 transition-colors"
+                        title="Quitar paciente"
+                    >
+                        <X size={16}/>
+                    </button>
+                </div>
+              )}
             </div>
             {searchTerm && !selectedPatient && (
               <div className="absolute top-full left-0 w-full bg-white dark:bg-slate-800 border rounded-b-lg shadow-lg z-40 max-h-48 overflow-y-auto">
@@ -165,8 +187,7 @@ export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
           </div>
       </div>
 
-      {/* --- AREA CENTRAL (SCROLLABLE) - Solución Definitiva --- */}
-      {/* Usamos flex-1, min-h-0 y overflow-y-auto para que SOLO esta parte haga scroll */}
+      {/* --- AREA CENTRAL (SCROLLABLE) --- */}
       <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar flex flex-col gap-2 pr-1">
           
           {/* Vital Snapshot */}

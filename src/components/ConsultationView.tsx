@@ -17,6 +17,7 @@ import FormattedText from './FormattedText';
 import { toast } from 'sonner';
 import { pdf } from '@react-pdf/renderer';
 import PrescriptionPDF from './PrescriptionPDF';
+import MedicalRecordPDF from './MedicalRecordPDF'; 
 import { AppointmentService } from '../services/AppointmentService';
 import QuickRxModal from './QuickRxModal';
 import { DoctorFileGallery } from './DoctorFileGallery';
@@ -889,6 +890,58 @@ const ConsultationView: React.FC = () => {
           window.open(URL.createObjectURL(blob), '_blank');
       }
   };
+
+  // --- NUEVA FUNCIÓN: Descarga de Expediente Completo (NOM-004) ---
+  const handleDownloadFullRecord = async () => {
+    // 1. Blindaje contra error de perfil nulo
+    if (!selectedPatient || !doctorProfile) {
+      if (!doctorProfile) toast.error("Error crítico: Perfil médico no cargado. Recargue la página.");
+      else toast.error("Seleccione un paciente primero.");
+      return;
+    }
+
+    const loadingToast = toast.loading("Recopilando historial completo (NOM-004)...");
+
+    try {
+      // 2. Fetch de TODAS las consultas (Acumulación histórica)
+      const { data: fullHistory, error } = await supabase
+        .from('consultations')
+        .select('*')
+        .eq('patient_id', selectedPatient.id)
+        .order('created_at', { ascending: false }); // Del más reciente al más antiguo para orden de lectura
+
+      if (error) throw error;
+
+      // 3. Generación del Blob PDF usando el nuevo componente legal
+      const blob = await pdf(
+        <MedicalRecordPDF 
+          doctor={doctorProfile}
+          patient={selectedPatient}
+          history={fullHistory || []}
+          generatedAt={new Date().toLocaleString()}
+        />
+      ).toBlob();
+
+      // 4. Descarga segura (Evita bloqueo de pop-ups)
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      // Formato de nombre de archivo estandarizado
+      link.download = `EXPEDIENTE_${selectedPatient.name.toUpperCase().replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url); // Limpieza de memoria
+
+      toast.success("Expediente descargado correctamente.");
+
+    } catch (e: any) {
+      console.error("Error exportando expediente:", e);
+      toast.error("Error al generar expediente: " + e.message);
+    } finally {
+      toast.dismiss(loadingToast);
+    }
+  };
   
   const handleShareWhatsApp = async () => { 
     if (!editableInstructions || !selectedPatient) return toast.error("No hay instrucciones.");
@@ -1093,7 +1146,7 @@ const ConsultationView: React.FC = () => {
             <div className="flex-1 overflow-y-auto mb-4 pr-2 custom-scrollbar">
                 {chatMessages.map((m,i)=>(
                     <div key={i} className={`p-3 mb-3 rounded-2xl max-w-[85%] text-sm shadow-sm ${m.role==='user'?'bg-brand-teal text-white self-end ml-auto rounded-tr-none':'bg-slate-100 dark:bg-slate-800 dark:text-slate-200 self-start mr-auto rounded-tl-none'}`}>
-                                    <FormattedText content={m.text} />
+                                            <FormattedText content={m.text} />
                     </div>
                 ))}
                 <div ref={chatEndRef}/>
@@ -1147,6 +1200,7 @@ const ConsultationView: React.FC = () => {
         isAttachmentsOpen={isAttachmentsOpen}
         setIsAttachmentsOpen={setIsAttachmentsOpen}
         doctorProfile={doctorProfile}
+        onDownloadRecord={handleDownloadFullRecord} // <-- SE PASA LA FUNCIÓN AL HIJO
       />
       
       {/* Contenedor Flex para la derecha (Contenido Central + Chat) */}
@@ -1196,6 +1250,9 @@ const ConsultationView: React.FC = () => {
                                             </div>
                                             
                                             <div className="flex flex-col items-end gap-3">
+                                            
+                                            {/* --- BOTÓN DE DESCARGA REDUNDANTE ELIMINADO --- */}
+
                                             <button 
                                                 onClick={handleSaveConsultation} 
                                                 disabled={isSaving} 
@@ -1362,7 +1419,8 @@ const ConsultationView: React.FC = () => {
                                                 ) : (
                                                     <div className="space-y-3">
                                                         {editablePrescriptions.map((med, idx) => {
-                                                            const isBlocked = med.action === 'SUSPENDER' || (med.dose && med.dose.includes('BLOQUEO'));
+                                                            // CORRECCIÓN DE TIPADO CRÍTICO (Hotfix TS)
+                                                            const isBlocked = (med as any).action === 'SUSPENDER' || (med.dose && med.dose.includes('BLOQUEO'));
                                                             return (
                                                             <div key={idx} className={`flex gap-2 items-start p-3 rounded-lg border group transition-all ${isBlocked ? 'bg-red-50 border-red-200 dark:bg-red-900/10 dark:border-red-800' : 'bg-slate-50 border-slate-100 dark:bg-slate-800/50 dark:border-slate-700'}`}>
                                                                 <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-2">
