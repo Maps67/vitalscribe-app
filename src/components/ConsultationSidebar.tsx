@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Mic, Pause, Play, RefreshCw, Save, WifiOff, Trash2, 
   Stethoscope, Search, X, Calendar, UserPlus, ChevronUp, 
@@ -10,6 +10,7 @@ import { UploadMedico } from './UploadMedico';
 import { SpecialtyVault } from './SpecialtyVault';
 import { DoctorFileGallery } from './DoctorFileGallery';
 import { Patient, PatientInsight, DoctorProfile } from '../types';
+import { supabase } from '../lib/supabase'; // Importación necesaria para la autocorrección
 
 interface ConsultationSidebarProps {
   isOnline: boolean;
@@ -58,7 +59,7 @@ interface ConsultationSidebarProps {
   isAttachmentsOpen: boolean;
   setIsAttachmentsOpen: (isOpen: boolean) => void;
   doctorProfile: DoctorProfile | null;
-  onDownloadRecord: () => void; // NUEVA PROP OBLIGATORIA
+  onDownloadRecord: () => void;
 }
 
 export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
@@ -106,6 +107,62 @@ export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
   onDownloadRecord
 }) => {
   const [isMobileContextExpanded, setIsMobileContextExpanded] = useState(false);
+  // Estado para guardar el resumen corregido (real) si el original es genérico
+  const [smartSummary, setSmartSummary] = useState<string | null>(null);
+
+  // --- EFECTO DE AUTOCORRECCIÓN DE DATOS ---
+  useEffect(() => {
+    const fetchSmartSummary = async () => {
+      // Reiniciar si no hay paciente o contexto
+      if (!selectedPatient || (selectedPatient as any).isTemporary || !activeMedicalContext?.lastConsultation) {
+          setSmartSummary(null);
+          return;
+      }
+
+      const currentSummary = activeMedicalContext.lastConsultation.summary || "";
+      // Detectar si es un título "basura" de importación
+      const isGeneric = currentSummary.includes("Importación de Datos") || currentSummary.includes("Excel");
+
+      if (isGeneric) {
+          try {
+              // Consultamos la BD directamente para buscar el contenido real
+              const { data } = await supabase
+                  .from('consultations')
+                  .select('summary, transcript, ai_analysis_data')
+                  .eq('patient_id', selectedPatient.id)
+                  .order('created_at', { ascending: false })
+                  .limit(1)
+                  .single();
+
+              if (data) {
+                  let realText = data.summary; // Default
+                  
+                  // Minería de datos en JSON (Legacy/Migraciones)
+                  const aiData = data.ai_analysis_data && typeof data.ai_analysis_data === 'string' 
+                      ? JSON.parse(data.ai_analysis_data) 
+                      : data.ai_analysis_data;
+
+                  if (aiData?.clinicalNote) realText = aiData.clinicalNote;
+                  else if (aiData?.legacyNote) realText = aiData.legacyNote;
+                  else if (aiData?.resumen_clinico) realText = aiData.resumen_clinico;
+                  // Si no hay JSON, probamos con el transcript crudo
+                  else if (data.transcript && data.transcript.length > 50 && data.transcript !== 'N/A') {
+                      realText = data.transcript;
+                  }
+
+                  setSmartSummary(realText);
+              }
+          } catch (e) {
+              console.error("Error recuperando resumen real:", e);
+          }
+      } else {
+          // Si el dato ya era bueno, lo usamos tal cual
+          setSmartSummary(currentSummary);
+      }
+    };
+
+    fetchSmartSummary();
+  }, [selectedPatient?.id, activeMedicalContext]);
 
   return (
     <div className={`w-full md:w-1/4 p-4 flex flex-col gap-2 border-r dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden h-full ${generatedNote ? 'hidden md:flex' : 'flex'}`}>
@@ -137,7 +194,6 @@ export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
           <div className="relative z-10">
             <div className="flex items-center border rounded-lg px-3 py-2 bg-slate-50 dark:bg-slate-800 dark:border-slate-700">
               <Search className="text-slate-400 mr-2 shrink-0" size={18}/>
-              {/* MODIFICACIÓN UI: flex-1 para permitir que los botones de la derecha tengan espacio */}
               <input 
                 placeholder="Buscar paciente..." 
                 className="flex-1 bg-transparent outline-none dark:text-white text-sm min-w-0" 
@@ -145,7 +201,7 @@ export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
                 onChange={(e) => { setSearchTerm(e.target.value); setSelectedPatient(null); }}
               />
               
-              {/* ZONA DE ACCIONES DE PACIENTE (Descargar | Cerrar) */}
+              {/* ZONA DE ACCIONES DE PACIENTE */}
               {selectedPatient && (
                 <div className="flex items-center gap-1 ml-1 pl-1 border-l border-slate-300 dark:border-slate-600 shrink-0">
                     <button 
@@ -259,7 +315,8 @@ export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
                           Última Visita ({new Date(activeMedicalContext.lastConsultation.date).toLocaleDateString()}):
                       </span>
                       <p className="italic opacity-80 pl-1 border-l-2 border-amber-300 dark:border-amber-700 line-clamp-2 text-[10px]">
-                          {activeMedicalContext.lastConsultation.summary}
+                          {/* USO DEL RESUMEN INTELIGENTE SI EXISTE, SINO EL ORIGINAL */}
+                          {smartSummary || activeMedicalContext.lastConsultation.summary}
                       </p>
                     </div>
                   )}
@@ -298,9 +355,10 @@ export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
                               </span>
                               <div className="p-2 bg-white dark:bg-slate-900 rounded border border-amber-100 dark:border-amber-900/50">
                                     <p className="italic opacity-80 text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed line-clamp-6 font-light">
-                                        {activeMedicalContext.lastConsultation.summary}
+                                        {/* USO DEL RESUMEN INTELIGENTE TAMBIÉN AQUÍ */}
+                                        {smartSummary || activeMedicalContext.lastConsultation.summary}
                                     </p>
-                                    {activeMedicalContext.lastConsultation.summary.length > 300 && (
+                                    {(smartSummary || activeMedicalContext.lastConsultation.summary).length > 300 && (
                                         <span className="text-[9px] text-indigo-500 mt-1 block font-bold text-right cursor-pointer">
                                             Ver detalle completo en Historial...
                                         </span>
@@ -315,18 +373,18 @@ export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
                               </span>
                               <div className="p-2 bg-emerald-50 dark:bg-emerald-900/10 rounded border border-emerald-200 dark:border-emerald-800">
                                     <div className="grid grid-cols-2 gap-2 text-slate-700 dark:text-slate-300">
-                                        <div>
-                                            <span className="block font-bold text-emerald-700 dark:text-emerald-400">Aseguradora</span>
-                                            {activeMedicalContext.insurance.provider}
-                                        </div>
-                                        <div>
-                                            <span className="block font-bold text-emerald-700 dark:text-emerald-400">Póliza</span>
-                                            {activeMedicalContext.insurance.policyNumber || "No registrada"}
-                                        </div>
-                                        <div className="col-span-2">
-                                            <span className="block font-bold text-emerald-700 dark:text-emerald-400">Fecha Siniestro</span>
-                                            {activeMedicalContext.insurance.accidentDate}
-                                        </div>
+                                            <div>
+                                                <span className="block font-bold text-emerald-700 dark:text-emerald-400">Aseguradora</span>
+                                                {activeMedicalContext.insurance.provider}
+                                            </div>
+                                            <div>
+                                                <span className="block font-bold text-emerald-700 dark:text-emerald-400">Póliza</span>
+                                                {activeMedicalContext.insurance.policyNumber || "No registrada"}
+                                            </div>
+                                            <div className="col-span-2">
+                                                <span className="block font-bold text-emerald-700 dark:text-emerald-400">Fecha Siniestro</span>
+                                                {activeMedicalContext.insurance.accidentDate}
+                                            </div>
                                     </div>
                               </div>
                           </div>
@@ -345,7 +403,7 @@ export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
             <label className="text-xs dark:text-white cursor-pointer">Consentimiento otorgado.</label>
           </div>
 
-          {/* Área de Transcripción (Chat) - Ahora es flexible dentro del scroll central si hay espacio */}
+          {/* Área de Transcripción (Chat) */}
           <div className={`flex-1 min-h-[150px] flex flex-col p-2 overflow-hidden border rounded-xl bg-slate-50 dark:bg-slate-900/50 dark:border-slate-800`}>
             {segments.length === 0 ? (
               <div className="flex-1 flex flex-col items-center justify-center text-slate-400 opacity-50 text-xs">
@@ -370,7 +428,7 @@ export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
           </div>
       </div>
 
-      {/* --- FOOTER (FIJO) - Siempre visible y siempre abajo --- */}
+      {/* --- FOOTER (FIJO) --- */}
       <div className={`
           flex-none flex flex-col gap-2 border-t dark:border-slate-800 pt-3 pb-1 mt-auto bg-white dark:bg-slate-900 z-20
           ${(vitalSnapshot && isMobileSnapshotVisible) ? 'hidden md:flex' : 'flex'}
