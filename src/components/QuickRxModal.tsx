@@ -22,20 +22,18 @@ const QuickRxModal: React.FC<QuickRxModalProps> = ({ isOpen, onClose, initialTra
   // Este es el texto que el médico puede editar manualmente
   const [rawText, setRawText] = useState('');
   
-  // Estado para el formulario manual inferior
-  const [newMed, setNewMed] = useState({ name: '', details: '', frequency: '', duration: '', notes: '' });
+  // CORRECCIÓN DE TIPO: Usamos 'drug' en lugar de 'name' para coincidir con MedicationItem
+  const [newMed, setNewMed] = useState({ drug: '', details: '', frequency: '', duration: '', notes: '' });
 
   // Hook de voz
   const { isListening, transcript, startListening, stopListening, resetTranscript } = useSpeechRecognition();
 
-  // 1. SINCRONIZACIÓN EN TIEMPO REAL: Lo que escuchas se escribe en el editor
   useEffect(() => {
     if (isListening) {
       setRawText(transcript);
     }
   }, [transcript, isListening]);
 
-  // 2. Carga inicial si viene de otra pantalla
   useEffect(() => {
     if (isOpen && initialTranscript && !rawText) {
       setRawText(initialTranscript);
@@ -50,14 +48,11 @@ const QuickRxModal: React.FC<QuickRxModalProps> = ({ isOpen, onClose, initialTra
     
     setIsProcessingAI(true);
     try {
-      // Enviamos el texto (ya corregido por el doctor si fue necesario)
       const extractedMeds = await GeminiMedicalService.extractMedications(rawText);
       
       if (extractedMeds && extractedMeds.length > 0) {
         setMedications(prev => [...prev, ...extractedMeds]);
         toast.success(`${extractedMeds.length} medicamentos procesados`);
-        // Opcional: Limpiar el texto si fue exitoso para dictar el siguiente bloque
-        // setRawText(''); 
       } else {
         toast.warning("No se detectaron medicamentos. Verifique la redacción.");
       }
@@ -72,25 +67,25 @@ const QuickRxModal: React.FC<QuickRxModalProps> = ({ isOpen, onClose, initialTra
   const handleMicToggle = () => {
     if (isListening) {
       stopListening();
-      // Al parar, NO procesamos automáticamente. Dejamos que el médico revise el texto.
     } else {
-      setRawText(''); // Limpiamos para nueva grabación
+      setRawText('');
       resetTranscript();
       startListening();
     }
   };
 
   const addManualMed = () => {
-    if (!newMed.name || !newMed.frequency) {
-      toast.error('Nombre y frecuencia son obligatorios');
+    // CORRECCIÓN: Validación usando 'drug'
+    if (!newMed.drug || !newMed.frequency) {
+      toast.error('Nombre del medicamento y frecuencia son obligatorios');
       return;
     }
-    const item: MedicationItem = {
-      drug: newMed.name,
-      ...newMed
-    };
+    
+    // CORRECCIÓN: El objeto ya cumple con la interfaz MedicationItem
+    const item: MedicationItem = { ...newMed };
+    
     setMedications([...medications, item]);
-    setNewMed({ name: '', details: '', frequency: '', duration: '', notes: '' });
+    setNewMed({ drug: '', details: '', frequency: '', duration: '', notes: '' });
   };
 
   const removeMed = (index: number) => {
@@ -110,22 +105,27 @@ const QuickRxModal: React.FC<QuickRxModalProps> = ({ isOpen, onClose, initialTra
           address={doctorProfile.address}
           logoUrl={doctorProfile.logo_url}
           signatureUrl={doctorProfile.signature_url}
-          qrCodeUrl={doctorProfile.qr_code_url} // <--- ¡AQUÍ ESTÁ LA CORRECCIÓN!
+          qrCodeUrl={doctorProfile.qr_code_url}
           patientName={patientName}
           date={new Date().toLocaleDateString()}
-          medications={medications}
+          
+          // CORRECCIÓN CRÍTICA: Cambiamos la prop de 'medications' a 'prescriptions'
+          // para que coincida con la interfaz de PrescriptionPDF.tsx
+          prescriptions={medications} 
+          
           documentTitle="RECETA MÉDICA"
         />
       ).toBlob();
       window.open(URL.createObjectURL(blob), '_blank');
     } catch (e) {
-      console.error(e); // Added console error for debugging
+      console.error(e);
       toast.error("Error generando PDF");
     }
   };
 
   const handleWhatsApp = () => {
     if (medications.length === 0) return;
+    // CORRECCIÓN: Usamos 'm.drug'
     const text = `*Receta Médica - Dr. ${doctorProfile.full_name}*\nPaciente: ${patientName}\n\n${medications.map((m, i) => `${i+1}. ${m.drug} ${m.details || ''}\n   Indicación: ${m.frequency} durante ${m.duration} ${m.notes ? `(${m.notes})` : ''}`).join('\n\n')}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
   };
@@ -154,7 +154,6 @@ const QuickRxModal: React.FC<QuickRxModalProps> = ({ isOpen, onClose, initialTra
           {/* --- ZONA PRINCIPAL: DICTADO Y EDICIÓN --- */}
           <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border-2 border-slate-200 dark:border-slate-800 shadow-sm mb-6 relative transition-all focus-within:border-teal-500 ring-offset-2">
               
-             {/* Barra de Herramientas del Editor */}
              <div className="flex items-center justify-between mb-3 border-b border-slate-100 dark:border-slate-800 pb-2">
                 <label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2">
                    <Edit3 size={14} className="text-teal-600"/> 
@@ -170,7 +169,6 @@ const QuickRxModal: React.FC<QuickRxModalProps> = ({ isOpen, onClose, initialTra
                 </div>
              </div>
 
-             {/* ÁREA DE TEXTO ENORME PARA EDITAR */}
              <div className="relative">
                 <textarea
                    value={rawText}
@@ -180,7 +178,6 @@ const QuickRxModal: React.FC<QuickRxModalProps> = ({ isOpen, onClose, initialTra
                    autoFocus
                 />
                 
-                {/* Botón Flotante de Micrófono (Dentro del área) */}
                 <button 
                    onClick={handleMicToggle}
                    className={`absolute bottom-0 right-0 p-3 rounded-full shadow-lg transition-all transform hover:scale-110 ${isListening ? 'bg-red-500 text-white animate-pulse ring-4 ring-red-200' : 'bg-teal-600 text-white hover:bg-teal-700'}`}
@@ -190,7 +187,6 @@ const QuickRxModal: React.FC<QuickRxModalProps> = ({ isOpen, onClose, initialTra
                 </button>
              </div>
 
-             {/* Botón de Acción Principal */}
              <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800">
                 <button 
                    onClick={handleExtractFromText}
@@ -217,7 +213,8 @@ const QuickRxModal: React.FC<QuickRxModalProps> = ({ isOpen, onClose, initialTra
                     <div>
                         <h4 className="font-bold text-slate-800 dark:text-white flex items-center gap-2">
                         <span className="w-6 h-6 rounded-full bg-teal-100 text-teal-700 flex items-center justify-center text-xs font-bold">{idx + 1}</span>
-                        {med.drug || med.name} <span className="text-xs font-normal text-slate-500 bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded">{med.details}</span>
+                        {/* CORRECCIÓN: Eliminada la referencia a .name, solo usamos .drug */}
+                        {med.drug} <span className="text-xs font-normal text-slate-500 bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded">{med.details}</span>
                         </h4>
                         <p className="text-sm text-slate-600 dark:text-slate-300 mt-2 pl-8 font-medium">
                         {med.frequency} • {med.duration}
@@ -238,7 +235,9 @@ const QuickRxModal: React.FC<QuickRxModalProps> = ({ isOpen, onClose, initialTra
                 <Plus size={16} className="text-slate-400 group-open:rotate-45 transition-transform"/>
             </summary>
             <div className="p-4 pt-0 grid grid-cols-2 gap-3 bg-slate-50/50 dark:bg-slate-900">
-              <input placeholder="Medicamento" value={newMed.name} onChange={e => setNewMed({...newMed, name: e.target.value})} className="input-std col-span-2" />
+              {/* CORRECCIÓN: Input value y onChange ahora apuntan a 'drug' */}
+              <input placeholder="Medicamento" value={newMed.drug} onChange={e => setNewMed({...newMed, drug: e.target.value})} className="input-std col-span-2" />
+              
               <input placeholder="Detalles (500mg)" value={newMed.details} onChange={e => setNewMed({...newMed, details: e.target.value})} className="input-std" />
               <input placeholder="Frecuencia (Cada 8h)" value={newMed.frequency} onChange={e => setNewMed({...newMed, frequency: e.target.value})} className="input-std" />
               <input placeholder="Duración (3 días)" value={newMed.duration} onChange={e => setNewMed({...newMed, duration: e.target.value})} className="input-std" />
