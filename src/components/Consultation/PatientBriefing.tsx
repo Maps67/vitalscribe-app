@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Activity, AlertTriangle, CheckCircle, Clock, Edit3, FileText, Shield, X, Calendar, ChevronDown, ChevronUp } from 'lucide-react';
 import { Patient, PatientInsight } from '../../types';
-import { supabase } from '../../lib/supabase'; // Asegúrate que esta ruta sea correcta según tu proyecto
+import { supabase } from '../../lib/supabase'; // Asegúrate que esta ruta sea correcta
 
 interface Props {
   patient: Patient;
@@ -76,10 +76,10 @@ export const PatientBriefing: React.FC<Props> = ({ patient, lastInsight, onCompl
                   ? JSON.parse(consultation.ai_analysis_data) 
                   : consultation.ai_analysis_data;
                   
-              // Prioridad a notas clínicas explícitas
+              // DIFERENCIA CLAVE: Ahora buscamos las llaves "viejas" explícitamente
               if (aiData.clinicalNote) return aiData.clinicalNote;
-              if (aiData.legacyNote) return aiData.legacyNote; // Soporte Legacy explícito
-              if (aiData.resumen_clinico) return aiData.resumen_clinico; // Soporte Excel
+              if (aiData.legacyNote) return aiData.legacyNote; // Soporte Legacy
+              if (aiData.resumen_clinico) return aiData.resumen_clinico; // Soporte Excel directo
               
               // Si es estructura SOAP, la reconstruimos
               if (aiData.soapData) {
@@ -87,7 +87,8 @@ export const PatientBriefing: React.FC<Props> = ({ patient, lastInsight, onCompl
               }
           }
           
-          // ESTRATEGIA 2: Buscar si el transcript tiene la nota cruda (común en migraciones rápidas)
+          // ESTRATEGIA 2 (PLAN C): Buscar si el transcript tiene la nota cruda 
+          // (Común cuando la migración vuelca el texto en 'transcript' y pone título genérico en 'summary')
           if (consultation.transcript && consultation.transcript.length > 50 && consultation.transcript !== 'N/A') {
               return consultation.transcript;
           }
@@ -142,7 +143,7 @@ export const PatientBriefing: React.FC<Props> = ({ patient, lastInsight, onCompl
                  </div>
                )}
 
-               {/* 2. LÍNEA DE TIEMPO DE CONSULTAS (Restaurada y Corregida) */}
+               {/* 2. LÍNEA DE TIEMPO DE CONSULTAS */}
                <div>
                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2 px-1">
                    <Clock size={14}/> Historial Reciente
@@ -190,7 +191,7 @@ export const PatientBriefing: React.FC<Props> = ({ patient, lastInsight, onCompl
                                          </div>
                                      )}
                                      
-                                     {/* Preview cuando está colapsado (Opcional, primera línea) */}
+                                     {/* Preview cuando está colapsado */}
                                      {!isExpanded && (
                                          <div className="px-4 pb-3 text-xs text-slate-500 dark:text-slate-400 truncate opacity-70 pl-[3.25rem]">
                                              {content.substring(0, 80)}...
@@ -215,7 +216,7 @@ export const PatientBriefing: React.FC<Props> = ({ patient, lastInsight, onCompl
             </div>
           )}
 
-          {/* MODO ESCRITURA (Pacientes Nuevos o Actualización) */}
+          {/* MODO ESCRITURA */}
           {step === 'writing' && (
             <div className="p-6 h-full flex flex-col animate-in slide-in-from-right duration-300 bg-white dark:bg-slate-900">
               <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
