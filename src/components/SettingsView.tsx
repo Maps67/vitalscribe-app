@@ -3,8 +3,8 @@ import { Save, User, Stethoscope, Hash, Phone, MapPin, BookOpen, Download, FileS
 import { supabase } from '../lib/supabase';
 import { MedicalDataService } from '../services/MedicalDataService';
 import { toast } from 'sonner';
-import PatientImporter from './PatientImporter'; // Asegúrate de que esta ruta sea correcta según tu estructura
-import { ImageUploader } from '../components/ui/ImageUploader'; // IMPORTACIÓN DEL NUEVO COMPONENTE
+import PatientImporter from './PatientImporter'; // Verifica que la ruta sea correcta
+import { ImageUploader } from '../components/ui/ImageUploader';
 
 // LISTA MAESTRA DE ESPECIALIDADES (NORMALIZACIÓN)
 const SPECIALTIES = [
@@ -34,7 +34,7 @@ const SettingsView: React.FC = () => {
   // Campos de Activos Visuales (Imágenes)
   const [logoUrl, setLogoUrl] = useState('');
   const [signatureUrl, setSignatureUrl] = useState('');
-  const [qrCodeUrl, setQrCodeUrl] = useState(''); // <--- NUEVO ESTADO PARA QR
+  const [qrCodeUrl, setQrCodeUrl] = useState('');
 
   useEffect(() => {
     getProfile();
@@ -63,7 +63,7 @@ const SettingsView: React.FC = () => {
         // Carga de imágenes
         setLogoUrl(data.logo_url || '');
         setSignatureUrl(data.signature_url || '');
-        setQrCodeUrl(data.qr_code_url || ''); // <--- CARGA DEL QR DESDE DB
+        setQrCodeUrl(data.qr_code_url || '');
       }
     } catch (error) {
       console.error('Error cargando perfil:', error);
@@ -73,17 +73,17 @@ const SettingsView: React.FC = () => {
     }
   };
 
-  // --- LÓGICA DE SUBIDA MODULAR (Adapta tu lógica original al nuevo componente) ---
+  // --- LÓGICA DE SUBIDA MODULAR ---
   const handleSmartUpload = async (file: File, type: 'logo' | 'signature' | 'qr') => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("No hay sesión de usuario");
 
-      // 1. Definir ruta y nombre de archivo único para evitar caché
+      // 1. Definir ruta y nombre de archivo único
       const fileExt = file.name.split('.').pop();
       const fileName = `${user.id}/${type}-${Date.now()}.${fileExt}`;
 
-      // 2. Subir a Supabase Storage (Bucket: 'clinic-assets')
+      // 2. Subir a Supabase Storage
       const { error: uploadError } = await supabase.storage
         .from('clinic-assets')
         .upload(fileName, file, { upsert: true });
@@ -100,10 +100,6 @@ const SettingsView: React.FC = () => {
       else if (type === 'signature') setSignatureUrl(publicUrl);
       else if (type === 'qr') setQrCodeUrl(publicUrl);
 
-      // 5. (OPCIONAL) Guardar URL en BD inmediatamente para persistencia rápida
-      // Esto asegura que si recargan la página sin dar "Guardar Cambios", la imagen no se pierda visualmente,
-      // aunque lo ideal es dar "Guardar Cambios" para confirmar todo.
-      
       toast.success("Imagen cargada. Recuerde 'Guardar Cambios' para confirmar.");
 
     } catch (error) {
@@ -130,7 +126,7 @@ const SettingsView: React.FC = () => {
         website_url: websiteUrl,
         logo_url: logoUrl,
         signature_url: signatureUrl,
-        qr_code_url: qrCodeUrl, // <--- GUARDADO DEL QR EN DB
+        qr_code_url: qrCodeUrl,
         updated_at: new Date(),
       };
 
@@ -168,7 +164,7 @@ const SettingsView: React.FC = () => {
   if (loading) return <div className="p-10 text-center text-slate-400">Cargando perfil...</div>;
 
   return (
-    <div className="p-6 max-w-6xl mx-auto pb-24 relative">
+    <div className="p-6 max-w-7xl mx-auto pb-32 relative">
 
       {/* --- INTEGRACIÓN DEL IMPORTADOR --- */}
       {showImporter && (
@@ -204,13 +200,13 @@ const SettingsView: React.FC = () => {
           </div>
       </div>
       
-      <form onSubmit={updateProfile} className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-10">
+      <form onSubmit={updateProfile} className="space-y-8">
         
-        {/* COLUMNA IZQUIERDA: FORMULARIOS DE TEXTO (span-2) */}
-        <div className="lg:col-span-2 space-y-6">
+        {/* --- SECCIÓN 1: DATOS DE TEXTO (GRID HORIZONTAL) --- */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             
-            {/* 1. Identidad Profesional */}
-            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+            {/* Tarjeta: Identidad */}
+            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden h-full">
                 <div className="p-4 bg-slate-50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-700 font-bold text-slate-700 dark:text-slate-200 flex items-center gap-2">
                     <User size={18} className="text-brand-teal"/> Identidad Profesional
                 </div>
@@ -253,8 +249,8 @@ const SettingsView: React.FC = () => {
                 </div>
             </div>
 
-            {/* 2. Contacto */}
-            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+            {/* Tarjeta: Contacto */}
+            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden h-full">
                 <div className="p-4 bg-slate-50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-700 font-bold text-slate-700 dark:text-slate-200 flex items-center gap-2">
                     <MapPin size={18} className="text-brand-teal"/> Contacto y Ubicación
                 </div>
@@ -269,7 +265,7 @@ const SettingsView: React.FC = () => {
                         </div>
                         
                         <div>
-                            <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Sitio Web (Opcional)</label>
+                            <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Sitio Web</label>
                             <div className="flex items-center border border-slate-200 dark:border-slate-700 rounded-lg px-3 bg-white dark:bg-slate-900 focus-within:ring-2 focus-within:ring-brand-teal">
                                 <BookOpen size={16} className="text-slate-400 mr-2"/>
                                 <input type="url" value={websiteUrl} onChange={e => setWebsiteUrl(e.target.value)} className="w-full py-3 outline-none bg-transparent dark:text-white" placeholder="https://misitio.com" />
@@ -282,56 +278,67 @@ const SettingsView: React.FC = () => {
                     </div>
                 </div>
             </div>
+        </div>
 
-            {/* Privacidad */}
-            <div className="p-4 bg-amber-50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-800/50 rounded-xl flex gap-3 items-start">
-                <ShieldCheck className="text-amber-600 shrink-0" size={20} />
-                <div>
-                    <p className="text-sm font-bold text-amber-800 dark:text-amber-200">Privacidad y Seguridad de Datos</p>
-                    <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">
-                        Sus datos están protegidos. Puede descargar una copia de seguridad completa (CSV) usando el botón "Descargar Mis Datos".
-                    </p>
-                </div>
+        {/* --- SECCIÓN 2: ACTIVOS DIGITALES (GRID HORIZONTAL 3 COLUMNAS) --- */}
+        <div>
+            <h3 className="text-lg font-bold text-slate-700 dark:text-slate-200 mb-4 flex items-center gap-2">
+                <ImageIcon size={20} className="text-brand-teal" /> Activos Digitales para Recetas y Documentos
+            </h3>
+            
+            {/* GRID RESPONSIVE: 1 col en móvil -> 3 cols en escritorio */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                
+                {/* 1. LOGO */}
+                <ImageUploader 
+                    label="Logo Clínica"
+                    imageSrc={logoUrl}
+                    onUpload={(file) => handleSmartUpload(file, 'logo')}
+                    helperText="Recomendado: PNG Transparente"
+                    icon={<ImageIcon size={18} className="text-brand-teal"/>}
+                />
+
+                {/* 2. FIRMA */}
+                <ImageUploader 
+                    label="Firma Digital"
+                    imageSrc={signatureUrl}
+                    onUpload={(file) => handleSmartUpload(file, 'signature')}
+                    helperText="Firma en tinta negra sobre papel blanco."
+                    aspectRatio="wide"
+                    icon={<PenTool size={18} className="text-brand-teal"/>}
+                />
+
+                {/* 3. CÓDIGO QR */}
+                <ImageUploader 
+                    label="Código QR Receta"
+                    imageSrc={qrCodeUrl}
+                    onUpload={(file) => handleSmartUpload(file, 'qr')}
+                    helperText="Suba su QR de Cédula o SAT."
+                    aspectRatio="square"
+                    icon={<QrCode size={18} className="text-brand-teal"/>}
+                />
             </div>
         </div>
 
-        {/* COLUMNA DERECHA: ACTIVOS VISUALES (Uploaders Modulares) */}
-        <div className="space-y-6">
-            <h3 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Activos Digitales</h3>
-            
-            {/* 1. LOGO */}
-            <ImageUploader 
-                label="Logo Clínica"
-                imageSrc={logoUrl}
-                onUpload={(file) => handleSmartUpload(file, 'logo')}
-                helperText="Recomendado: PNG Transparente"
-                icon={<ImageIcon size={18} className="text-brand-teal"/>}
-            />
+        {/* Aviso de Privacidad (Ancho completo) */}
+        <div className="p-4 bg-amber-50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-800/50 rounded-xl flex gap-3 items-start">
+            <ShieldCheck className="text-amber-600 shrink-0" size={20} />
+            <div>
+                <p className="text-sm font-bold text-amber-800 dark:text-amber-200">Privacidad y Seguridad de Datos</p>
+                <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">
+                    Sus datos están protegidos. Puede descargar una copia de seguridad completa (CSV) usando el botón "Descargar Mis Datos".
+                </p>
+            </div>
+        </div>
 
-            {/* 2. FIRMA (Formato Ancho) */}
-            <ImageUploader 
-                label="Firma Digital"
-                imageSrc={signatureUrl}
-                onUpload={(file) => handleSmartUpload(file, 'signature')}
-                helperText="Firma en tinta negra sobre papel blanco."
-                aspectRatio="wide"
-                icon={<PenTool size={18} className="text-brand-teal"/>}
-            />
+      </form>
 
-            {/* 3. CÓDIGO QR (NUEVO) */}
-            <ImageUploader 
-                label="Código QR Receta"
-                imageSrc={qrCodeUrl}
-                onUpload={(file) => handleSmartUpload(file, 'qr')}
-                helperText="Suba su QR de Cédula o SAT para la receta."
-                aspectRatio="square"
-                icon={<QrCode size={18} className="text-brand-teal"/>}
-            />
-
-            <button 
-                type="submit" 
+      {/* BOTÓN FLOTANTE DE GUARDADO (Sticky Bottom) */}
+      <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 z-50 flex justify-center md:justify-end md:px-10">
+         <button 
+                onClick={(e) => updateProfile(e)}
                 disabled={saving}
-                className="w-full mt-4 bg-slate-900 hover:bg-slate-800 text-white py-4 rounded-xl font-bold shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full md:w-auto px-8 bg-slate-900 hover:bg-slate-800 text-white py-4 rounded-xl font-bold shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
                 {saving ? (
                     <>
@@ -344,9 +351,7 @@ const SettingsView: React.FC = () => {
                     </>
                 )}
             </button>
-        </div>
-
-      </form>
+      </div>
     </div>
   );
 };
