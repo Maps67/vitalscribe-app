@@ -5,9 +5,36 @@ import { MedicationItem } from '../types';
 // Estilos corporativos unificados
 const styles = StyleSheet.create({
   page: { padding: 40, fontFamily: 'Helvetica', fontSize: 10, color: '#333' },
-  header: { flexDirection: 'row', marginBottom: 20, borderBottomWidth: 2, borderBottomColor: '#0d9488', paddingBottom: 10 },
-  logoSection: { width: '20%', marginRight: 10, justifyContent: 'center' },
-  logo: { width: 60, height: 60, objectFit: 'contain' },
+  
+  // --- ENCABEZADO ---
+  header: { 
+    flexDirection: 'row', 
+    marginBottom: 20, 
+    borderBottomWidth: 2, 
+    borderBottomColor: '#0d9488', 
+    paddingBottom: 10,
+    alignItems: 'flex-start' // Alineación superior para que logo y texto empiecen igual
+  },
+  logoSection: { 
+    width: '20%', 
+    marginRight: 10, 
+    flexDirection: 'column', // Apilar Logo y QR verticalmente
+    alignItems: 'center',    // Centrar imágenes en su columna
+    justifyContent: 'flex-start' 
+  },
+  logo: { 
+    width: 60, 
+    height: 60, 
+    objectFit: 'contain',
+    marginBottom: 5 
+  },
+  // Estilo específico para QR en el header
+  qrCodeHeader: {
+    width: 50,
+    height: 50,
+    objectFit: 'contain'
+  },
+  
   doctorInfo: { width: '80%', justifyContent: 'center' },
   doctorName: { fontSize: 14, fontFamily: 'Helvetica-Bold', color: '#0d9488', marginBottom: 2, textTransform: 'uppercase' },
   specialty: { fontSize: 10, fontFamily: 'Helvetica-Bold', color: '#555', marginBottom: 2, textTransform: 'uppercase' },
@@ -48,10 +75,9 @@ const styles = StyleSheet.create({
   signatureImage: { width: 100, height: 40, objectFit: 'contain', marginBottom: 5 },
   signatureLine: { width: '100%', borderTopWidth: 1, borderTopColor: '#333', marginTop: 5 },
   
-  // Legal + QR (Izquierda)
-  legalTextContainer: { width: '55%', flexDirection: 'column', justifyContent: 'flex-end' }, // Flex column para apilar QR y texto
+  // Legal (Izquierda) - YA NO CONTIENE EL QR
+  legalTextContainer: { width: '55%', flexDirection: 'column', justifyContent: 'flex-end' }, 
   legalText: { fontSize: 6, color: '#888', marginTop: 2, textAlign: 'left', lineHeight: 1.3 },
-  qrCode: { width: 45, height: 45, marginBottom: 5, alignSelf: 'flex-start' }, // Nuevo estilo para QR a la izquierda
 });
 
 interface PrescriptionPDFProps {
@@ -63,7 +89,7 @@ interface PrescriptionPDFProps {
   address: string;
   logoUrl?: string;
   signatureUrl?: string;
-  qrCodeUrl?: string; // Agregamos prop opcional para el QR si lo tienes disponible en el futuro
+  qrCodeUrl?: string; 
   patientName: string;
   patientAge?: string; 
   date: string;
@@ -84,21 +110,16 @@ const PrescriptionPDF: React.FC<PrescriptionPDFProps> = ({
 }) => {
 
   // --- 1. LÓGICA DE FILTRADO DE SEGURIDAD ---
-  // Filtramos medicamentos "bloqueados" para que NO aparezcan en el PDF impreso.
-  // El médico sí los ve en su pantalla, pero el paciente recibe una hoja limpia y segura.
   const safePrescriptions = prescriptions?.filter(med => {
-    // Concatenamos todo el texto relevante del medicamento para buscar palabras clave
     const fullText = (med.drug + " " + (med.notes || "")).toUpperCase();
-    
     const isBlocked = 
       fullText.includes("BLOQUEO DE SEGURIDAD") ||
       fullText.includes("(INACTIVO") ||
       fullText.includes("SUSPENDER") ||
       fullText.includes("CONTRAINDICADO");
 
-    return !isBlocked; // Solo pasan los NO bloqueados
+    return !isBlocked; 
   });
-
 
   const formatContent = (text: string) => {
     if (!text) return null;
@@ -128,7 +149,6 @@ const PrescriptionPDF: React.FC<PrescriptionPDFProps> = ({
   const finalDoctorName = formatDoctorName(doctorName);
   const isValidUrl = (url?: string) => url && (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:image'));
 
-  // Determinamos si hay contenido estructurado usando la lista FILTRADA
   const hasStructuredData = (safePrescriptions && safePrescriptions.length > 0) || (instructions && instructions.trim().length > 0);
 
   return (
@@ -138,8 +158,15 @@ const PrescriptionPDF: React.FC<PrescriptionPDFProps> = ({
         {/* ENCABEZADO */}
         <View style={styles.header}>
           <View style={styles.logoSection}>
+             {/* 1. Logo del Médico */}
              {isValidUrl(logoUrl) && <Image src={logoUrl!} style={styles.logo} />}
+             
+             {/* 2. QR Code (Ahora aquí arriba, debajo del logo si existe) */}
+             {isValidUrl(qrCodeUrl) && (
+                 <Image src={qrCodeUrl!} style={styles.qrCodeHeader} />
+             )}
           </View>
+
           <View style={styles.doctorInfo}>
             <Text style={styles.doctorName}>{finalDoctorName}</Text>
             <Text style={styles.specialty}>{specialty}</Text>
@@ -180,18 +207,16 @@ const PrescriptionPDF: React.FC<PrescriptionPDFProps> = ({
               </View>
           )}
 
-          {/* === LOGICA DE RENDERIZADO HÍBRIDA === */}
           {hasStructuredData ? (
              <View style={{ width: '100%' }}> 
                  
-                 {/* A. MEDICAMENTOS (Usando la lista SEGURA) */}
+                 {/* A. MEDICAMENTOS */}
                  {safePrescriptions && safePrescriptions.length > 0 && (
                     <View style={{ marginBottom: 10 }}>
                         <Text style={styles.rxHeader}>MEDICAMENTOS</Text>
                         {safePrescriptions.map((med, i) => (
                             <View key={i} style={styles.medicationContainer}>
                                 <Text style={styles.medName}>
-                                    {/* i + 1 renumera automáticamente, sin saltos */}
                                     {i + 1}. {med.drug} <Text style={{fontSize: 10, fontFamily: 'Helvetica', color: '#333'}}>— {med.dose}</Text>
                                 </Text>
                                 <Text style={styles.medInstructions}>
@@ -216,7 +241,6 @@ const PrescriptionPDF: React.FC<PrescriptionPDFProps> = ({
                  )}
              </View>
           ) : (
-             // C. FALLBACK
              <View>
                  {formatContent(content || '')}
              </View>
@@ -224,16 +248,11 @@ const PrescriptionPDF: React.FC<PrescriptionPDFProps> = ({
 
         </View>
 
-        {/* PIE DE PÁGINA REESTRUCTURADO */}
+        {/* PIE DE PÁGINA */}
         <View style={styles.footer}>
           
-          {/* IZQUIERDA: QR + AVISO LEGAL */}
+          {/* IZQUIERDA: AVISO LEGAL (Ya sin QR) */}
           <View style={styles.legalTextContainer}>
-             {/* Renderizado condicional del QR si existe la URL */}
-             {isValidUrl(qrCodeUrl) && (
-                 <Image src={qrCodeUrl!} style={styles.qrCode} />
-             )}
-
              <Text style={{fontSize: 7, fontFamily: 'Helvetica-Bold', marginBottom: 2}}>AVISO LEGAL:</Text>
              <Text style={styles.legalText}>
                 Este documento es un comprobante médico privado válido (NOM-004-SSA3-2012).
@@ -243,7 +262,7 @@ const PrescriptionPDF: React.FC<PrescriptionPDFProps> = ({
              </Text>
           </View>
           
-          {/* DERECHA: SOLO FIRMA */}
+          {/* DERECHA: FIRMA */}
           <View style={styles.signatureSection}>
              {isValidUrl(signatureUrl) ? (
                  <Image src={signatureUrl!} style={styles.signatureImage} />
