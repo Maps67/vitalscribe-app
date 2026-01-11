@@ -19,6 +19,7 @@ import { InsightsPanel } from './InsightsPanel';
 import PatientDashboard from './PatientDashboard'; 
 import { GeminiMedicalService } from '../services/GeminiMedicalService'; 
 import { MedicalDataService } from '../services/MedicalDataService';
+import DataExportModal from './DataExportModal'; // ✅ INTEGRACIÓN 1: Importar Modal
 
 interface PatientData extends Omit<Partial<Patient>, 'age'> {
   id: string;
@@ -60,6 +61,9 @@ const PatientsView: React.FC = () => {
   const [analyzingPatientName, setAnalyzingPatientName] = useState('');
 
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+
+  // ✅ INTEGRACIÓN 2: Estado para controlar el Modal de Exportación
+  const [showExportModal, setShowExportModal] = useState(false);
 
   useEffect(() => {
     fetchPatients();
@@ -313,7 +317,22 @@ const PatientsView: React.FC = () => {
       
       <div className="flex justify-between items-center mb-6">
         <div><h1 className="text-2xl font-bold text-slate-800 dark:text-white">Pacientes</h1><p className="text-slate-500 dark:text-slate-400 text-sm">Directorio clínico</p></div>
-        <button onClick={() => { setEditingPatient(null); setIsModalOpen(true); }} className="bg-brand-teal hover:bg-teal-600 text-white px-4 py-2 rounded-xl font-bold flex items-center gap-2 transition-all shadow-lg shadow-teal-500/20 active:scale-95"><UserPlus size={20} /> <span className="hidden sm:inline">Nuevo</span></button>
+        
+        {/* ✅ INTEGRACIÓN 3: Botonera con Exportar */}
+        <div className="flex items-center gap-2">
+            <button
+                onClick={() => setShowExportModal(true)}
+                className="bg-white hover:bg-slate-50 text-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 px-4 py-2 rounded-xl font-bold flex items-center gap-2 transition-all shadow-sm active:scale-95"
+                title="Exportar base de datos a Excel"
+            >
+                <Download size={20} className="text-blue-600" />
+                <span className="hidden sm:inline">Exportar</span>
+            </button>
+
+            <button onClick={() => { setEditingPatient(null); setIsModalOpen(true); }} className="bg-brand-teal hover:bg-teal-600 text-white px-4 py-2 rounded-xl font-bold flex items-center gap-2 transition-all shadow-lg shadow-teal-500/20 active:scale-95">
+                <UserPlus size={20} /> <span className="hidden sm:inline">Nuevo</span>
+            </button>
+        </div>
       </div>
 
       {selectedIds.length > 0 && (
@@ -589,6 +608,11 @@ const PatientsView: React.FC = () => {
       />
       
       {selectedPatientForRx && doctorProfile && <QuickRxModal isOpen={!!selectedPatientForRx} onClose={() => setSelectedPatientForRx(null)} initialTranscript="" patientName={selectedPatientForRx.name} doctorProfile={doctorProfile} />}
+    
+      {/* ✅ INTEGRACIÓN 4: Renderizado del Modal de Exportación */}
+      {showExportModal && (
+        <DataExportModal onClose={() => setShowExportModal(false)} />
+      )}
     </div>
   );
 };

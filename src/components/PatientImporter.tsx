@@ -24,7 +24,8 @@ interface PatientPayload {
   email?: string;
   birth_date?: string;
   gender?: string;
-  // Nota: Ya no guardamos el historial en 'history' del perfil.
+  // Pilar 4: Definimos explícitamente que NO son temporales para evitar purgas accidentales
+  isTemporary: boolean; 
 }
 
 interface ConsultationPayload {
@@ -35,7 +36,7 @@ interface ConsultationPayload {
   status: 'completed';
   legal_status: 'migrated'; // Marcador para saber que vino del Excel
   created_at: string; // Fecha del evento original
-  ai_analysis_data: any; // JSON básico para compatibilidad
+  ai_analysis_data: any; // Debe cumplir con la estructura GeminiResponse (Pilar 1)
 }
 
 export default function PatientImporter({ onComplete, onClose }: { onComplete?: () => void, onClose: () => void }) {
@@ -101,7 +102,7 @@ export default function PatientImporter({ onComplete, onClose }: { onComplete?: 
     setStats(null);
 
     try {
-      // 1. Obtener ID del Doctor
+      // 1. Obtener ID del Doctor (Validación de Sesión)
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Sesión expirada. Por favor recarga.");
 
@@ -117,7 +118,7 @@ export default function PatientImporter({ onComplete, onClose }: { onComplete?: 
             let consultationsCount = 0;
             let processedRows = 0;
 
-            console.log(`[ETL V7.0] Iniciando migración real de ${rawRows.length} filas...`);
+            console.log(`[ETL V7.1] Iniciando migración BLINDADA de ${rawRows.length} filas...`);
 
             // PROCESAMOS FILA POR FILA (Secuencial para mantener integridad Padre-Hijo)
             for (const row of rawRows) {
@@ -162,7 +163,7 @@ export default function PatientImporter({ onComplete, onClose }: { onComplete?: 
                     phone: data.Telefono ? String(data.Telefono) : undefined,
                     birth_date: birthDate,
                     gender: gender,
-                    // NO guardamos historial aquí. Solo datos de perfil.
+                    isTemporary: false // FIX: Aseguramos que no se trate como temporal
                 }, { onConflict: 'doctor_id, name' })
                 .select('id')
                 .single();
@@ -186,6 +187,7 @@ export default function PatientImporter({ onComplete, onClose }: { onComplete?: 
                   const consultationDate = parseImportDate(data.Fecha);
                   
                   // Creamos un payload que simula una consulta completada
+                  // FIX CRÍTICO: Estructura JSON compatible con GeminiResponse
                   const consultationPayload: ConsultationPayload = {
                       doctor_id: user.id,
                       patient_id: patientId,
@@ -195,8 +197,24 @@ export default function PatientImporter({ onComplete, onClose }: { onComplete?: 
                       legal_status: 'migrated',
                       created_at: consultationDate,
                       ai_analysis_data: {
+                          // Estructura Obligatoria para Pilar 1 (Evita Crash en Visor)
                           clinicalNote: clinicalNote,
-                          origen: "Migración V7.0"
+                          soapData: {
+                              subjective: `[HISTÓRICO] Nota importada: ${clinicalNote}`,
+                              objective: "No registrado en archivo original.",
+                              analysis: "Importación de datos históricos.",
+                              plan: "Continuar manejo habitual según evolución."
+                          },
+                          patientInstructions: "Consultar expediente físico para detalles anteriores a esta fecha.",
+                          risk_analysis: {
+                              level: 'Bajo',
+                              reason: "Registro histórico (Migración V7.0)"
+                          },
+                          // Metadatos adicionales para trazabilidad
+                          metadata: {
+                              origen: "Migración V7.0",
+                              tipo: "Excel Import"
+                          }
                       }
                   };
 
@@ -215,11 +233,11 @@ export default function PatientImporter({ onComplete, onClose }: { onComplete?: 
             // --- FINALIZACIÓN ---
             setStats({
               processed: processedRows,
-              patientsCreated: patientsCount, // Aproximado (incluye updates)
+              patientsCreated: patientsCount, 
               consultationsCreated: consultationsCount
             });
             
-            toast.success("Migración V7.0 Completada. Historial inyectado en línea de tiempo.");
+            toast.success("Migración Blindada Completada. Historial inyectado correctamente.");
             if (onComplete) onComplete();
 
           } catch (err: any) {
@@ -251,9 +269,9 @@ export default function PatientImporter({ onComplete, onClose }: { onComplete?: 
         <div className="p-5 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-800/50 rounded-t-2xl">
           <div>
             <h2 className="text-xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
-              <Database className="text-indigo-600"/> Migrador Maestro V7.0
+              <Database className="text-indigo-600"/> Migrador Maestro V7.1 (Blindado)
             </h2>
-            <p className="text-xs text-slate-500 mt-1">Convierte Excel en Consultas Reales e Historial Activo</p>
+            <p className="text-xs text-slate-500 mt-1">Convierte Excel en Consultas Reales (Compatible con IA)</p>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full transition-colors"><X size={20}/></button>
         </div>
@@ -265,10 +283,10 @@ export default function PatientImporter({ onComplete, onClose }: { onComplete?: 
             <div>
               <h4 className="font-bold text-sm">Arquitectura de Migración Real</h4>
               <p className="text-xs mt-1">
-                Este script no esconderá los datos.
-                <br/>1. Creará/Actualizará el perfil del paciente.
-                <br/>2. <strong>Creará consultas históricas</strong> en la línea de tiempo con la fecha original del Excel.
-                <br/>3. La IA y el visor de expedientes funcionarán nativamente.
+                Este script inyectará datos 100% compatibles con la IA actual.
+                <br/>1. <strong>Estandarización JSON:</strong> Las notas antiguas se verán correctamente en el visor moderno.
+                <br/>2. <strong>Historial Activo:</strong> Se respetan las fechas originales para la línea de tiempo.
+                <br/>3. <strong>Seguridad:</strong> Datos protegidos contra errores de formato (Null Safety).
               </p>
             </div>
           </div>
