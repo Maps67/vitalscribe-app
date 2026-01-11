@@ -1,43 +1,102 @@
 import React, { useState, useEffect } from 'react';
-import { Activity, AlertTriangle, CheckCircle, Clock, Edit3, FileText, Shield, X } from 'lucide-react';
-import { Patient, PatientInsight, GeminiResponse } from '../../types';
+import { Activity, AlertTriangle, CheckCircle, Clock, Edit3, FileText, Shield, X, Calendar, ChevronDown, ChevronUp } from 'lucide-react';
+import { Patient, PatientInsight } from '../../types';
+import { supabase } from '../../lib/supabase'; // Aseguramos la importación del cliente
 
 interface Props {
   patient: Patient;
-  // Datos opcionales que pueden venir del dashboard
   lastInsight?: PatientInsight | null;
-  // Callback para devolver el control al padre
   onComplete: (manualContext: string) => void;
   onCancel: () => void;
 }
 
 export const PatientBriefing: React.FC<Props> = ({ patient, lastInsight, onComplete, onCancel }) => {
   // Detectamos si es paciente "nuevo" (sin historial sustancial)
-  const hasHistory = patient.history && patient.history.length > 50; 
-  const isNewPatient = !hasHistory && !(patient as any).last_consultation;
+  const isNewPatient = !patient.history || patient.history.length < 50; 
 
   const [manualContext, setManualContext] = useState("");
   const [step, setStep] = useState<'briefing' | 'writing'>('briefing');
+  
+  // Estado para el historial completo
+  const [consultationHistory, setConsultationHistory] = useState<any[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
 
-  // Si es nuevo, pasamos directo a escritura
+  // Si es nuevo, pasamos directo a escritura. Si no, cargamos historial.
   useEffect(() => {
-    if (isNewPatient) setStep('writing');
-  }, [isNewPatient]);
+    if (isNewPatient) {
+        setStep('writing');
+    } else {
+        fetchHistory();
+    }
+  }, [isNewPatient, patient.id]);
+
+  const fetchHistory = async () => {
+      setLoadingHistory(true);
+      try {
+          const { data, error } = await supabase
+              .from('consultations')
+              .select('*')
+              .eq('patient_id', patient.id)
+              .order('created_at', { ascending: false })
+              .limit(10); // Traemos las últimas 10 para contexto inmediato
+
+          if (!error && data) {
+              setConsultationHistory(data);
+          }
+      } catch (e) {
+          console.error("Error cargando historial:", e);
+      } finally {
+          setLoadingHistory(false);
+      }
+  };
+
+  const toggleExpand = (id: string) => {
+      const newSet = new Set(expandedItems);
+      if (newSet.has(id)) newSet.delete(id);
+      else newSet.add(id);
+      setExpandedItems(newSet);
+  };
 
   const handleConfirm = () => {
     onComplete(manualContext);
   };
 
+  // --- FUNCIÓN DE CURACIÓN DE CONTENIDO (FIX "IMPORTACIÓN") ---
+  const getDisplayContent = (consultation: any) => {
+      const summary = consultation.summary || "";
+      const isGenericTitle = summary.includes("Importación de Datos") || summary.includes("Excel");
+      
+      // Si el título es genérico, intentamos buscar "oro" en otros campos
+      if (isGenericTitle) {
+          // 1. Intentar sacar nota clínica del JSON de IA (Migración Legacy)
+          if (consultation.ai_analysis_data) {
+              const aiData = typeof consultation.ai_analysis_data === 'string' 
+                  ? JSON.parse(consultation.ai_analysis_data) 
+                  : consultation.ai_analysis_data;
+                  
+              if (aiData.clinicalNote) return aiData.clinicalNote;
+              if (aiData.soapData) {
+                  return `S: ${aiData.soapData.subjective}\nO: ${aiData.soapData.objective}\nA: ${aiData.soapData.analysis}\nP: ${aiData.soapData.plan}`;
+              }
+          }
+          // 2. Si no hay JSON, retornamos el summary original pero avisando
+          return summary; 
+      }
+      
+      return summary;
+  };
+
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800 flex flex-col max-h-[90vh]">
+      <div className="bg-white dark:bg-slate-900 w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800 flex flex-col max-h-[90vh]">
         
         {/* HEADER */}
         <div className="bg-slate-50 dark:bg-slate-800 p-4 border-b dark:border-slate-700 flex justify-between items-start">
           <div>
             <h2 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
               {isNewPatient ? <Edit3 size={20} className="text-indigo-500"/> : <Activity size={20} className="text-teal-500"/>}
-              {isNewPatient ? "Contexto Inicial" : "Pase de Visita"}
+              {isNewPatient ? "Contexto Inicial" : "Resumen del Paciente"}
             </h2>
             <p className="text-xs text-slate-500 dark:text-slate-400">
               {patient.name} • {calculateAge((patient as any).birthdate)}
@@ -49,16 +108,16 @@ export const PatientBriefing: React.FC<Props> = ({ patient, lastInsight, onCompl
         </div>
 
         {/* BODY */}
-        <div className="p-6 overflow-y-auto custom-scrollbar">
+        <div className="p-0 overflow-y-auto custom-scrollbar flex-1 bg-slate-100 dark:bg-slate-950">
           
           {/* MODO LECTURA (Pacientes Recurrentes) */}
           {!isNewPatient && step === 'briefing' && (
-            <div className="space-y-6">
-               {/* 1. Alertas / Banderas Rojas */}
-               {lastInsight?.risk_flags && lastInsight.risk_flags.length > 0 ? (
+            <div className="p-6 space-y-6">
+               {/* 1. Alertas / Banderas Rojas (Prioridad Alta) */}
+               {lastInsight?.risk_flags && lastInsight.risk_flags.length > 0 && (
                  <div className="bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800 rounded-xl p-4">
                    <h4 className="text-xs font-bold text-red-700 dark:text-red-400 uppercase tracking-wider mb-2 flex items-center gap-2">
-                     <AlertTriangle size={14}/> Alertas Críticas
+                     <AlertTriangle size={14}/> Alertas Críticas Detectadas
                    </h4>
                    <ul className="space-y-1">
                      {lastInsight.risk_flags.map((flag, i) => (
@@ -68,49 +127,95 @@ export const PatientBriefing: React.FC<Props> = ({ patient, lastInsight, onCompl
                      ))}
                    </ul>
                  </div>
-               ) : (
-                 <div className="bg-green-50 dark:bg-green-900/20 border border-green-100 dark:border-green-800 rounded-xl p-3 flex items-center gap-3">
-                    <Shield size={18} className="text-green-600 dark:text-green-400"/>
-                    <span className="text-sm text-green-800 dark:text-green-200 font-medium">Sin alertas de riesgo detectadas.</span>
-                 </div>
                )}
 
-               {/* 2. Evolución (The Headline) */}
+               {/* 2. LÍNEA DE TIEMPO DE CONSULTAS (Restaurada y Corregida) */}
                <div>
-                 <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-2">
-                   <Clock size={14}/> Última Evolución
+                 <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2 px-1">
+                   <Clock size={14}/> Historial Reciente
                  </h4>
-                 <div className="bg-slate-50 dark:bg-slate-800 p-4 rounded-xl border border-slate-100 dark:border-slate-700">
-                   <p className="text-slate-700 dark:text-slate-300 text-sm leading-relaxed">
-                     {lastInsight?.evolution || (patient.history ? cleanHistoryPreview(patient.history) : "Sin resumen de evolución disponible.")}
-                   </p>
-                 </div>
+                 
+                 {loadingHistory ? (
+                     <div className="text-center py-8 text-slate-400 text-sm">Cargando línea de tiempo...</div>
+                 ) : consultationHistory.length === 0 ? (
+                     <div className="text-center py-8 text-slate-400 text-sm bg-white dark:bg-slate-900 rounded-xl border border-dashed border-slate-300">
+                         No hay consultas previas registradas.
+                     </div>
+                 ) : (
+                     <div className="space-y-3">
+                         {consultationHistory.map((consultation) => {
+                             const content = getDisplayContent(consultation);
+                             const isExpanded = expandedItems.has(consultation.id);
+                             const dateStr = new Date(consultation.created_at).toLocaleDateString('es-MX', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+                             
+                             return (
+                                 <div key={consultation.id} className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden transition-all">
+                                     <div 
+                                        onClick={() => toggleExpand(consultation.id)}
+                                        className="p-3 flex justify-between items-center cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50"
+                                     >
+                                         <div className="flex items-center gap-3">
+                                             <div className="w-8 h-8 rounded-full bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center text-teal-600 dark:text-teal-400 shrink-0">
+                                                 <FileText size={14} />
+                                             </div>
+                                             <div>
+                                                 <p className="text-xs font-bold text-slate-700 dark:text-slate-200 capitalize">{dateStr}</p>
+                                                 <p className="text-[10px] text-slate-400 uppercase tracking-wide">Consulta General</p>
+                                             </div>
+                                         </div>
+                                         <div className="text-slate-400">
+                                             {isExpanded ? <ChevronUp size={16}/> : <ChevronDown size={16}/>}
+                                         </div>
+                                     </div>
+                                     
+                                     {/* Contenido Expandible */}
+                                     {isExpanded && (
+                                         <div className="px-4 pb-4 pt-0">
+                                             <div className="pt-3 border-t border-slate-100 dark:border-slate-800 text-sm text-slate-600 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">
+                                                 {content}
+                                             </div>
+                                         </div>
+                                     )}
+                                     
+                                     {/* Preview cuando está colapsado (Opcional, primera línea) */}
+                                     {!isExpanded && (
+                                         <div className="px-4 pb-3 text-xs text-slate-500 dark:text-slate-400 truncate opacity-70 pl-[3.25rem]">
+                                             {content.substring(0, 80)}...
+                                         </div>
+                                     )}
+                                 </div>
+                             );
+                         })}
+                     </div>
+                 )}
                </div>
 
-               {/* 3. Botón para agregar contexto manual si algo cambió */}
-               <button 
-                 onClick={() => setStep('writing')}
-                 className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 mt-2"
-               >
-                 <Edit3 size={12}/> Quiero agregar un contexto nuevo para hoy
-               </button>
+               {/* 3. Botón para agregar contexto manual */}
+               <div className="flex justify-center pt-2">
+                   <button 
+                     onClick={() => setStep('writing')}
+                     className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 bg-white dark:bg-slate-900 px-4 py-2 rounded-full shadow-sm border border-indigo-100 dark:border-indigo-900"
+                   >
+                     <Edit3 size={12}/> Agregar nota de contexto para hoy
+                   </button>
+               </div>
             </div>
           )}
 
           {/* MODO ESCRITURA (Pacientes Nuevos o Actualización) */}
           {step === 'writing' && (
-            <div className="animate-in slide-in-from-right duration-300">
+            <div className="p-6 h-full flex flex-col animate-in slide-in-from-right duration-300 bg-white dark:bg-slate-900">
               <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
                 ¿Cuál es el motivo principal de la consulta hoy?
               </label>
               <textarea
                 autoFocus
-                className="w-full h-32 p-4 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none resize-none shadow-sm text-base"
+                className="w-full flex-1 p-4 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none resize-none shadow-inner text-base"
                 placeholder="Ej: Paciente masculino 45 años, refiere dolor precordial intenso desde hace 2 horas. Antecedentes de tabaquismo..."
                 value={manualContext}
                 onChange={(e) => setManualContext(e.target.value)}
               />
-              <p className="text-xs text-slate-400 mt-2 flex items-center gap-1">
+              <p className="text-xs text-slate-400 mt-3 flex items-center gap-1">
                 <FileText size={12}/> Este texto servirá como "guía" para que la IA inicie la nota con precisión.
               </p>
             </div>
@@ -119,22 +224,22 @@ export const PatientBriefing: React.FC<Props> = ({ patient, lastInsight, onCompl
         </div>
 
         {/* FOOTER */}
-        <div className="p-4 bg-slate-50 dark:bg-slate-800 border-t dark:border-slate-700 flex gap-3">
+        <div className="p-4 bg-white dark:bg-slate-900 border-t dark:border-slate-700 flex gap-3 z-10">
           {step === 'writing' && !isNewPatient && (
             <button 
               onClick={() => setStep('briefing')}
-              className="px-4 py-2 text-slate-500 font-medium text-sm hover:text-slate-700"
+              className="px-4 py-2 text-slate-500 font-medium text-sm hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
             >
-              Volver
+              Volver al Historial
             </button>
           )}
           
           <button 
             onClick={handleConfirm}
-            className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl transition-all shadow-md active:scale-[0.98] flex justify-center items-center gap-2"
+            className="flex-1 bg-brand-teal hover:bg-teal-700 text-white font-bold py-3 rounded-xl transition-all shadow-md active:scale-[0.98] flex justify-center items-center gap-2"
           >
             {step === 'briefing' ? (
-               <>Entendido, Iniciar <CheckCircle size={18}/></>
+               <>Entendido, Iniciar Consulta <CheckCircle size={18}/></>
             ) : (
                <>Guardar Contexto e Iniciar <CheckCircle size={18}/></>
             )}
@@ -154,9 +259,4 @@ function calculateAge(dob: string) {
         const age = Math.abs(new Date(diff).getUTCFullYear() - 1970);
         return `${age} años`;
     } catch { return ""; }
-}
-
-function cleanHistoryPreview(history: any) {
-    if (typeof history === 'string') return history.substring(0, 150) + "...";
-    return "Historial estructurado disponible.";
 }
