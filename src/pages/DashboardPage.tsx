@@ -4,10 +4,10 @@ import {
   Calendar, MapPin, ChevronRight, Sun, Moon, Cloud, 
   Upload, X, Bot, Mic, Square, Loader2, CheckCircle2,
   Stethoscope, UserCircle, AlertTriangle, FileText,
-  Clock, UserPlus, Activity, Search,
+  Clock, UserPlus, Activity, Search, ArrowRight,
   CalendarX, Repeat, Ban, PlayCircle, PenLine, Calculator, Sparkles,
   BarChart3, FileSignature, Microscope, StickyNote, FileCheck, Printer,
-  Sunrise, Sunset, MoonStar
+  Sunrise, Sunset, MoonStar, Send
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { format, isToday, isTomorrow, parseISO, startOfDay, endOfDay, addDays, isPast } from 'date-fns';
@@ -86,8 +86,8 @@ const AtomicClock = ({ location }: { location: string }) => {
     );
 };
 
-// --- Assistant Modal REFORZADO (Limpieza Extrema + Anti-Doble Click) ---
-const AssistantModal = ({ isOpen, onClose, onActionComplete }: { isOpen: boolean; onClose: () => void; onActionComplete: () => void }) => {
+// --- Assistant Modal REFORZADO (Limpieza Extrema + Anti-Doble Click + Soporte Texto) ---
+const AssistantModal = ({ isOpen, onClose, onActionComplete, initialQuery }: { isOpen: boolean; onClose: () => void; onActionComplete: () => void; initialQuery?: string | null }) => {
   const { isListening, transcript, startListening, stopListening, resetTranscript } = useSpeechRecognition();
   
   const [status, setStatus] = useState<'idle' | 'listening' | 'processing' | 'answering'>('idle');
@@ -107,22 +107,28 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete }: { isOpen: boolean
       }
   };
 
-  useEffect(() => { 
-      if (isOpen) {
-          resetTranscript(); 
-          setStatus('listening'); 
-          startListening();
-          setAiResponse(null);
-          setMedicalAnswer(null);
-          setIsExecuting(false);
-      } else {
-          stopListening();
-          window.speechSynthesis.cancel();
-      }
-  }, [isOpen]);
+  // Efecto para manejar consulta inicial (escrita desde el Dashboard)
+  useEffect(() => {
+    if (isOpen && initialQuery) {
+        setStatus('processing');
+        processIntent(initialQuery);
+    } else if (isOpen) {
+        resetTranscript(); 
+        setStatus('listening'); 
+        startListening();
+        setAiResponse(null);
+        setMedicalAnswer(null);
+        setIsExecuting(false);
+    } else {
+        stopListening();
+        window.speechSynthesis.cancel();
+    }
+  }, [isOpen, initialQuery]);
 
-  const processIntent = async () => {
-      if (!transcript) {
+  const processIntent = async (manualText?: string) => {
+      const textToProcess = manualText || transcript;
+
+      if (!textToProcess) {
           toast.info("No escuché ninguna instrucción.");
           return;
       }
@@ -136,13 +142,14 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete }: { isOpen: boolean
 
       try {
           const executeLogic = async () => {
-              const lowerText = transcript.toLowerCase();
-              const isMedical = lowerText.includes('dosis') || lowerText.includes('tratamiento') || lowerText.includes('qué es') || lowerText.includes('protocolo') || lowerText.includes('interacción') || lowerText.includes('signos');
+              const lowerText = textToProcess.toLowerCase();
+              // Lógica mejorada de detección de intención médica
+              const isMedical = lowerText.includes('dosis') || lowerText.includes('tratamiento') || lowerText.includes('qué es') || lowerText.includes('protocolo') || lowerText.includes('interacción') || lowerText.includes('signos') || lowerText.includes('síntomas') || lowerText.includes('diagnóstico');
 
               if (isMedical) {
                  const rawAnswer = await GeminiMedicalService.chatWithContext(
                      "Contexto: El médico está en el Dashboard principal. Pregunta general rápida.", 
-                     transcript
+                     textToProcess
                  );
                  
                  // 🧹 LIMPIEZA DE FORMATO AGRESIVA
@@ -153,27 +160,28 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete }: { isOpen: boolean
                      intent: 'MEDICAL_QUERY', 
                      data: {}, 
                      message: 'Consulta Clínica',
-                     originalText: transcript, 
+                     originalText: textToProcess, 
                      confidence: 1.0 
                  });
                  setStatus('answering');
-                 speakResponse(cleanAnswer); 
+                 // Solo hablar si NO es una consulta escrita (opcional, aquí lo dejamos activo)
+                 if(!manualText) speakResponse(cleanAnswer); 
 
               } else if (lowerText.includes('cita') || lowerText.includes('agendar')) {
                  setAiResponse({ 
                      intent: 'CREATE_APPOINTMENT', 
                      data: { patientName: "Paciente Nuevo (Voz)", start_time: new Date().toISOString() }, 
                      message: 'Agendar Cita',
-                     originalText: transcript,
+                     originalText: textToProcess,
                      confidence: 1.0
                  });
                  setStatus('answering');
               } else {
                  setAiResponse({ 
                      intent: 'NAVIGATION', 
-                     data: { destination: transcript }, 
-                     message: `Navegar a ${transcript}`,
-                     originalText: transcript,
+                     data: { destination: textToProcess }, 
+                     message: `Navegar a ${textToProcess}`,
+                     originalText: textToProcess,
                      confidence: 1.0
                  });
                  setStatus('answering');
@@ -260,8 +268,8 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete }: { isOpen: boolean
         <div className="p-8">
           {(status === 'idle' || status === 'listening' || status === 'processing') && (
             <div className="flex flex-col items-center gap-8">
-               <div className={`text-center text-xl font-medium leading-relaxed min-h-[3rem] ${transcript ? 'text-slate-800 dark:text-white' : 'text-slate-400'}`}>
-                 "{transcript || '¿Dosis, Tratamientos o Citas?'}"
+               <div className={`text-center text-xl font-medium leading-relaxed min-h-[3rem] ${transcript || initialQuery ? 'text-slate-800 dark:text-white' : 'text-slate-400'}`}>
+                 "{initialQuery || transcript || '¿Dosis, Tratamientos o Citas?'}"
                </div>
                {status === 'processing' ? (
                  <div className="flex items-center gap-2 text-indigo-600 font-bold animate-pulse">
@@ -269,7 +277,7 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete }: { isOpen: boolean
                  </div>
                ) : (
                  <button 
-                   onClick={status === 'listening' ? processIntent : () => { resetTranscript(); setStatus('listening'); startListening(); }} 
+                   onClick={status === 'listening' ? () => processIntent() : () => { resetTranscript(); setStatus('listening'); startListening(); }} 
                    className={`w-24 h-24 rounded-full flex items-center justify-center shadow-2xl transition-all transform active:scale-95 ${status === 'listening' ? 'bg-red-500 text-white animate-pulse ring-8 ring-red-100 scale-110' : 'bg-slate-900 text-white hover:bg-black hover:scale-105'}`}
                  >
                    {status === 'listening' ? <Square size={32} fill="currentColor"/> : <Mic size={32} />}
@@ -424,10 +432,15 @@ const Dashboard: React.FC = () => {
 
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [isAssistantOpen, setIsAssistantOpen] = useState(false);
+  const [initialAssistantQuery, setInitialAssistantQuery] = useState<string | null>(null); // State para pasar texto al asistente
+
   const [isDocModalOpen, setIsDocModalOpen] = useState(false);
   const [docType, setDocType] = useState<'justificante' | 'certificado' | 'receta'>('justificante');
   const [toolsTab, setToolsTab] = useState<'notes' | 'calc'>('notes');
   
+  // Estado para la "Omni-Bar"
+  const [searchInput, setSearchInput] = useState('');
+
   const formattedDocName = useMemo(() => {
     if (!doctorProfile?.full_name) return '';
     const raw = doctorProfile.full_name.trim();
@@ -440,8 +453,6 @@ const Dashboard: React.FC = () => {
       try {
           setIsLoading(true);
           
-          // --- SOLUCIÓN: RETARDO ARTIFICIAL PARA VER EL SKELETON ---
-          // Forzamos que la carga dure mínimo 1.5 segundos para evitar el parpadeo
           const minLoadTime = new Promise(resolve => setTimeout(resolve, 1500));
           
           const dataFetch = (async () => {
@@ -481,14 +492,13 @@ const Dashboard: React.FC = () => {
               setPendingItems(radar);
           })();
 
-          // Esperamos a que ambas promesas (datos y tiempo mínimo) terminen
           await Promise.all([dataFetch, minLoadTime]);
 
       } catch (e) { 
           setSystemStatus(false); 
           console.error(e); 
       } finally {
-          setIsLoading(false); // Ahora sí apagamos la carga
+          setIsLoading(false); 
       }
   }, []);
 
@@ -544,6 +554,16 @@ const Dashboard: React.FC = () => {
            navigate('/consultation', { state: { linkedAppointmentId: item.id, patientData: { id: 'radar_temp', name: patientName, isGhost: true } } });
       }
   };
+  
+  // --- HANDLE SEARCH / QUESTION ---
+  const handleSearchSubmit = (e?: React.FormEvent) => {
+      if(e) e.preventDefault();
+      if(!searchInput.trim()) return;
+      
+      setInitialAssistantQuery(searchInput);
+      setIsAssistantOpen(true);
+      setSearchInput('');
+  };
 
   const appointmentsToday = appointments.filter(a => isToday(parseISO(a.start_time))).length;
   const totalDailyLoad = completedTodayCount + appointmentsToday;
@@ -562,8 +582,8 @@ const Dashboard: React.FC = () => {
             greeting={dynamicGreeting.greeting} 
             weather={weather} 
             systemStatus={systemStatus} 
-            onOpenAssistant={() => setIsAssistantOpen(true)}
-            isLoading={isLoading} // <--- SE PASA EL ESTADO DE CARGA CONTROLADO
+            onOpenAssistant={() => { setInitialAssistantQuery(null); setIsAssistantOpen(true); }}
+            isLoading={isLoading} 
             insights={{
                nextTime: nextPatient ? format(parseISO(nextPatient.start_time), 'h:mm a') : null,
                pending: pendingItems.length,
@@ -571,6 +591,39 @@ const Dashboard: React.FC = () => {
                done: completedTodayCount 
             }}
          />
+
+         {/* --- BARRA DE INTELIGENCIA CLÍNICA (OMNI-BAR) --- */}
+         {/* Se ha reinsertado esta sección que estaba ausente */}
+         <div className="mb-8 relative z-20 animate-fade-in-up" style={{ animationDelay: '100ms' }}>
+            <form onSubmit={handleSearchSubmit}>
+                <div className="bg-white dark:bg-slate-900 rounded-2xl p-2 shadow-lg shadow-indigo-100/50 dark:shadow-none border border-indigo-50 dark:border-slate-800 flex items-center gap-2 group focus-within:ring-2 focus-within:ring-indigo-500/20 transition-all">
+                    <div className="p-3 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-xl text-white shadow-md">
+                        <Sparkles size={20} />
+                    </div>
+                    <input 
+                        type="text" 
+                        value={searchInput}
+                        onChange={(e) => setSearchInput(e.target.value)}
+                        placeholder="Pregunta clínica, dosis, interacción o búsqueda rápida..." 
+                        className="flex-1 bg-transparent border-none outline-none text-slate-700 dark:text-white font-medium placeholder:text-slate-400 text-sm md:text-base h-10 px-2"
+                    />
+                    <button 
+                        type="button" 
+                        onClick={() => { setInitialAssistantQuery(null); setIsAssistantOpen(true); }} 
+                        className="p-2 text-slate-400 hover:text-indigo-600 transition-colors md:hidden"
+                    >
+                        <Mic size={20} />
+                    </button>
+                    <button 
+                        type="submit" 
+                        className="hidden md:flex items-center gap-2 px-6 py-2.5 bg-slate-900 dark:bg-slate-800 text-white rounded-xl font-bold text-xs hover:bg-black transition-colors"
+                    >
+                        CONSULTAR IA <ArrowRight size={14} />
+                    </button>
+                </div>
+            </form>
+         </div>
+         {/* ------------------------------------------------ */}
 
          <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
              
@@ -660,7 +713,8 @@ const Dashboard: React.FC = () => {
       )}
 
       <QuickDocModal isOpen={isDocModalOpen} onClose={() => setIsDocModalOpen(false)} doctorProfile={doctorProfile} defaultType={docType} />
-      <AssistantModal isOpen={isAssistantOpen} onClose={() => setIsAssistantOpen(false)} onActionComplete={fetchData} />
+      {/* Se pasa initialQuery para que si el doctor escribió, el asistente procese automáticamente */}
+      <AssistantModal isOpen={isAssistantOpen} onClose={() => setIsAssistantOpen(false)} onActionComplete={fetchData} initialQuery={initialAssistantQuery} />
     </div>
   );
 };
