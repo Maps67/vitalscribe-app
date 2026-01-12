@@ -65,6 +65,7 @@ export const QuickDocModal: React.FC<QuickDocModalProps> = ({ isOpen, onClose, d
         const doctorNameForced = /^(Dr\.|Dra\.)/i.test(rawName) ? rawName : `Dr. ${rawName}`;
 
         // 3. Generar el PDF usando el motor unificado
+        // NOTA: Inyectamos qrCodeUrl para que aparezca el QR igual que en la consulta
         const blob = await pdf(
             <PrescriptionPDF 
                 doctorName={doctorNameForced} // Pasamos el nombre blindado
@@ -75,6 +76,7 @@ export const QuickDocModal: React.FC<QuickDocModalProps> = ({ isOpen, onClose, d
                 address={doctorProfile?.address || ''}
                 logoUrl={doctorProfile?.logo_url}
                 signatureUrl={doctorProfile?.signature_url}
+                qrCodeUrl={doctorProfile?.qr_code_url} // <--- CONEXIÓN DE QR APLICADA
                 patientName={patientName}
                 patientAge={age || ''}
                 date={todayLong}
