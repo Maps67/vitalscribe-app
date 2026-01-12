@@ -86,7 +86,7 @@ const AtomicClock = ({ location }: { location: string }) => {
     );
 };
 
-// --- Assistant Modal REFORZADO (Limpieza Extrema + Anti-Doble Click + Soporte Texto) ---
+// --- Assistant Modal REFORZADO ---
 const AssistantModal = ({ isOpen, onClose, onActionComplete, initialQuery }: { isOpen: boolean; onClose: () => void; onActionComplete: () => void; initialQuery?: string | null }) => {
   const { isListening, transcript, startListening, stopListening, resetTranscript } = useSpeechRecognition();
   
@@ -107,7 +107,6 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete, initialQuery }: { i
       }
   };
 
-  // Efecto para manejar consulta inicial (escrita desde el Dashboard)
   useEffect(() => {
     if (isOpen && initialQuery) {
         setStatus('processing');
@@ -135,7 +134,6 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete, initialQuery }: { i
       stopListening();
       setStatus('processing');
 
-      // Timeout de seguridad
       const timeoutPromise = new Promise((_, reject) => 
           setTimeout(() => reject(new Error("Tiempo agotado")), 12000)
       );
@@ -143,7 +141,7 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete, initialQuery }: { i
       try {
           const executeLogic = async () => {
               const lowerText = textToProcess.toLowerCase();
-              // Lógica mejorada de detección de intención médica
+              
               const isMedical = lowerText.includes('dosis') || lowerText.includes('tratamiento') || lowerText.includes('qué es') || lowerText.includes('protocolo') || lowerText.includes('interacción') || lowerText.includes('signos') || lowerText.includes('síntomas') || lowerText.includes('diagnóstico');
 
               if (isMedical) {
@@ -152,7 +150,6 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete, initialQuery }: { i
                       textToProcess
                   );
                   
-                  // 🧹 LIMPIEZA DE FORMATO AGRESIVA
                   const cleanAnswer = cleanMarkdown(rawAnswer);
                   
                   setMedicalAnswer(cleanAnswer);
@@ -164,18 +161,31 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete, initialQuery }: { i
                       confidence: 1.0 
                   });
                   setStatus('answering');
-                  // Solo hablar si NO es una consulta escrita (opcional, aquí lo dejamos activo)
                   if(!manualText) speakResponse(cleanAnswer); 
 
               } else if (lowerText.includes('cita') || lowerText.includes('agendar')) {
+                  
+                  // --- FIX CRÍTICO: EXTRACCIÓN DE NOMBRE CON IA ---
+                  // En lugar de usar un valor hardcoded, consultamos a Gemini para extraer la entidad.
+                  const extractionPrompt = `Analiza la instrucción: "${textToProcess}". Extrae el nombre del paciente si se menciona. Si no hay nombre, responde "Paciente Nuevo". Responde SOLO con el nombre, sin puntos ni texto extra.`;
+                  
+                  let extractedName = "Paciente Nuevo";
+                  try {
+                      const nameResponse = await GeminiMedicalService.chatWithContext("Eres un asistente administrativo.", extractionPrompt);
+                      extractedName = cleanMarkdown(nameResponse).replace(/^["']|["']$/g, '').trim();
+                  } catch (e) {
+                      console.warn("Fallo extracción nombre IA, usando default");
+                  }
+
                   setAiResponse({ 
                       intent: 'CREATE_APPOINTMENT', 
-                      data: { patientName: "Paciente Nuevo (Voz)", start_time: new Date().toISOString() }, 
-                      message: 'Agendar Cita',
+                      data: { patientName: extractedName, start_time: new Date().toISOString() }, 
+                      message: `Agendar Cita para ${extractedName}`,
                       originalText: textToProcess,
                       confidence: 1.0
                   });
                   setStatus('answering');
+
               } else {
                   setAiResponse({ 
                       intent: 'NAVIGATION', 
@@ -192,11 +202,12 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete, initialQuery }: { i
 
       } catch (error) {
           console.error("Error en Asistente:", error);
-          toast.error("El asistente no respondió a tiempo. Verifique su conexión.");
+          toast.error("El asistente no respondió a tiempo.");
           setStatus('idle');
       }
   };
 
+  // --- LÓGICA DE PRE-REGISTRO ATÓMICO ---
   const handleExecuteAction = async () => {
     if (!aiResponse || isExecuting) return; 
     
@@ -216,21 +227,60 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete, initialQuery }: { i
             const nextHour = addDays(new Date(), 0); 
             nextHour.setHours(new Date().getHours() + 1, 0, 0, 0);
 
+            // Nombre detectado real (ya no es hardcoded)
+            const detectedName = aiResponse.data.patientName || "Paciente Nuevo (Voz)";
+            let finalPatientId = null;
+
+            // 1. PRE-REGISTRO: Buscar si ya existe
+            const { data: existingPatient } = await supabase
+                .from('patients')
+                .select('id')
+                .eq('doctor_id', user.id)
+                .ilike('name', detectedName)
+                .maybeSingle();
+
+            if (existingPatient) {
+                finalPatientId = existingPatient.id;
+            } else {
+                // 2. MATERIALIZACIÓN: Crear paciente real inmediatamente
+                const { data: newPatient, error: createError } = await supabase
+                    .from('patients')
+                    .insert({
+                        name: detectedName,
+                        doctor_id: user.id,
+                        history: JSON.stringify({ 
+                            origin: 'voice_assistant', 
+                            type: 'quick_entry',
+                            created_at: new Date().toISOString() 
+                        })
+                    })
+                    .select()
+                    .single();
+                
+                if (createError) throw createError;
+                finalPatientId = newPatient.id;
+            }
+
+            // 3. AGENDAMIENTO VINCULADO: Usamos ID real
             const { error } = await supabase.from('appointments').insert({
                 doctor_id: user.id,
-                title: aiResponse.data.patientName || "Cita por Voz",
+                patient_id: finalPatientId, // Integridad garantizada
+                title: detectedName,
                 start_time: nextHour.toISOString(),
                 duration_minutes: 30,
                 status: 'scheduled',
-                notes: "Creada vía Asistente de Voz"
+                notes: "Creada vía Asistente de Voz (IA)"
             });
             
             if (error) throw error;
-            toast.success("✅ Cita agendada con éxito");
+            
+            toast.success(`✅ Cita agendada para ${detectedName}`);
             onActionComplete();
             onClose();
-        } catch(e) { 
-            toast.error("Error al guardar cita"); 
+
+        } catch(e: any) { 
+            console.error("Error agendando:", e);
+            toast.error("Error al guardar cita: " + (e.message || "Error desconocido")); 
             setIsExecuting(false); 
         }
         break;
