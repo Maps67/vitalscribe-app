@@ -95,14 +95,43 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete, initialQuery }: { i
   const [medicalAnswer, setMedicalAnswer] = useState<string | null>(null);
   const [isExecuting, setIsExecuting] = useState(false); 
   
+  // --- MEJORA AUDIO: Estado para la voz seleccionada ---
+  const [preferredVoice, setPreferredVoice] = useState<SpeechSynthesisVoice | null>(null);
+
   const navigate = useNavigate(); 
   
+  // --- MEJORA AUDIO: Selector Inteligente de Voz ---
+  useEffect(() => {
+      const loadVoices = () => {
+          const voices = window.speechSynthesis.getVoices();
+          // Algoritmo de Preferencia: Voces "Mejoradas" (Google/Microsoft) > Estándar
+          const bestVoice = voices.find(v => v.lang.includes('es') && v.name.includes('Google')) ||
+                            voices.find(v => v.lang.includes('es') && v.name.includes('Microsoft')) ||
+                            voices.find(v => v.lang.includes('es'));
+          
+          if (bestVoice) setPreferredVoice(bestVoice);
+      };
+
+      loadVoices();
+      if ('speechSynthesis' in window) {
+          window.speechSynthesis.onvoiceschanged = loadVoices;
+      }
+  }, []);
+
   const speakResponse = (text: string) => {
       if ('speechSynthesis' in window) {
           window.speechSynthesis.cancel();
           const utterance = new SpeechSynthesisUtterance(text);
           utterance.lang = 'es-MX';
-          utterance.rate = 1.0;
+          
+          // --- MEJORA AUDIO: Ajuste de Prosodia ---
+          utterance.rate = 0.9; // Cadencia más pausada y humana (vs 1.0 robótico)
+          utterance.pitch = 1.0; 
+
+          if (preferredVoice) {
+              utterance.voice = preferredVoice;
+          }
+          
           window.speechSynthesis.speak(utterance);
       }
   };
@@ -166,7 +195,6 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete, initialQuery }: { i
               } else if (lowerText.includes('cita') || lowerText.includes('agendar')) {
                   
                   // --- FIX CRÍTICO: EXTRACCIÓN DE NOMBRE CON IA ---
-                  // En lugar de usar un valor hardcoded, consultamos a Gemini para extraer la entidad.
                   const extractionPrompt = `Analiza la instrucción: "${textToProcess}". Extrae el nombre del paciente si se menciona. Si no hay nombre, responde "Paciente Nuevo". Responde SOLO con el nombre, sin puntos ni texto extra.`;
                   
                   let extractedName = "Paciente Nuevo";
@@ -227,11 +255,10 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete, initialQuery }: { i
             const nextHour = addDays(new Date(), 0); 
             nextHour.setHours(new Date().getHours() + 1, 0, 0, 0);
 
-            // Nombre detectado real (ya no es hardcoded)
             const detectedName = aiResponse.data.patientName || "Paciente Nuevo (Voz)";
             let finalPatientId = null;
 
-            // 1. PRE-REGISTRO: Buscar si ya existe
+            // 1. PRE-REGISTRO
             const { data: existingPatient } = await supabase
                 .from('patients')
                 .select('id')
@@ -242,7 +269,7 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete, initialQuery }: { i
             if (existingPatient) {
                 finalPatientId = existingPatient.id;
             } else {
-                // 2. MATERIALIZACIÓN: Crear paciente real inmediatamente
+                // 2. MATERIALIZACIÓN
                 const { data: newPatient, error: createError } = await supabase
                     .from('patients')
                     .insert({
@@ -261,10 +288,10 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete, initialQuery }: { i
                 finalPatientId = newPatient.id;
             }
 
-            // 3. AGENDAMIENTO VINCULADO: Usamos ID real
+            // 3. AGENDAMIENTO VINCULADO
             const { error } = await supabase.from('appointments').insert({
                 doctor_id: user.id,
-                patient_id: finalPatientId, // Integridad garantizada
+                patient_id: finalPatientId, 
                 title: detectedName,
                 start_time: nextHour.toISOString(),
                 duration_minutes: 30,
