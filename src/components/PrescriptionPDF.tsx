@@ -7,39 +7,54 @@ const styles = StyleSheet.create({
   // FIX: flexDirection: 'column' es vital para que el resorte vertical funcione
   page: { padding: 40, fontFamily: 'Helvetica', fontSize: 10, color: '#333', flexDirection: 'column' },
   
-  // --- ENCABEZADO ---
+  // --- ENCABEZADO BALANCEADO (LOGO - INFO - QR) ---
   header: { 
     flexDirection: 'row', 
     marginBottom: 20, 
     borderBottomWidth: 2, 
     borderBottomColor: '#0d9488', 
     paddingBottom: 10,
-    alignItems: 'flex-start',
-    flexShrink: 0 // Evita que el header se colapse
+    alignItems: 'center', // Centrado vertical para armonía
+    justifyContent: 'space-between', // Distribución a los extremos
+    flexShrink: 0 
   },
+
+  // 1. SECCIÓN LOGO (IZQUIERDA)
   logoSection: { 
-    width: '25%', 
-    marginRight: 10, 
-    flexDirection: 'column', 
-    alignItems: 'center',    
-    justifyContent: 'flex-start' 
+    width: 80, // Ancho fijo para reservar espacio
+    height: 60,
+    justifyContent: 'center',
+    alignItems: 'flex-start'
   },
   logo: { 
     width: 60, 
     height: 60, 
-    objectFit: 'contain',
-    marginBottom: 8 
-  },
-  qrCodeHeader: {
-    width: 85,
-    height: 85,
     objectFit: 'contain'
   },
-  
-  doctorInfo: { width: '75%', justifyContent: 'center' }, 
-  doctorName: { fontSize: 14, fontFamily: 'Helvetica-Bold', color: '#0d9488', marginBottom: 2, textTransform: 'uppercase' },
-  specialty: { fontSize: 10, fontFamily: 'Helvetica-Bold', color: '#555', marginBottom: 2, textTransform: 'uppercase' },
-  detailsLegal: { fontSize: 8, color: '#444', marginBottom: 1 },
+
+  // 2. SECCIÓN INFO MÉDICO (CENTRO)
+  doctorInfo: { 
+    flexGrow: 1, // Ocupa el espacio central sobrante
+    paddingHorizontal: 10,
+    alignItems: 'center', // Centrar texto horizontalmente
+    justifyContent: 'center'
+  }, 
+  doctorName: { fontSize: 14, fontFamily: 'Helvetica-Bold', color: '#0d9488', marginBottom: 2, textTransform: 'uppercase', textAlign: 'center' },
+  specialty: { fontSize: 10, fontFamily: 'Helvetica-Bold', color: '#555', marginBottom: 2, textTransform: 'uppercase', textAlign: 'center' },
+  detailsLegal: { fontSize: 8, color: '#444', marginBottom: 1, textAlign: 'center' },
+
+  // 3. SECCIÓN QR (DERECHA)
+  qrSection: {
+    width: 80, // Ancho fijo simétrico al logo
+    height: 60,
+    justifyContent: 'center',
+    alignItems: 'flex-end' // Alinear el QR a la derecha absoluta
+  },
+  qrCodeHeader: {
+    width: 60, // Tamaño ajustado para balance visual con el logo
+    height: 60,
+    objectFit: 'contain'
+  },
   
   // Barra de paciente
   patientSection: { marginBottom: 20, padding: 10, backgroundColor: '#f0fdfa', borderRadius: 4, flexDirection: 'row', justifyContent: 'space-between', border: '1px solid #ccfbf1', flexShrink: 0 },
@@ -185,15 +200,15 @@ const PrescriptionPDF: React.FC<PrescriptionPDFProps> = ({
     <Document>
       <Page size="LETTER" style={styles.page}>
         
-        {/* ENCABEZADO */}
+        {/* ENCABEZADO REESTRUCTURADO */}
         <View style={styles.header}>
+          
+          {/* 1. IZQUIERDA: LOGO CLÍNICA */}
           <View style={styles.logoSection}>
              {isValidUrl(logoUrl) && <Image src={logoUrl!} style={styles.logo} />}
-             {isValidUrl(qrCodeUrl) && (
-                 <Image src={qrCodeUrl!} style={styles.qrCodeHeader} />
-             )}
           </View>
 
+          {/* 2. CENTRO: INFORMACIÓN DEL MÉDICO */}
           <View style={styles.doctorInfo}>
             <Text style={styles.doctorName}>{finalDoctorName}</Text>
             <Text style={styles.specialty}>{specialty}</Text>
@@ -201,6 +216,14 @@ const PrescriptionPDF: React.FC<PrescriptionPDFProps> = ({
             <Text style={styles.detailsLegal}>Cédula Profesional: {license || 'En trámite'}</Text>
             <Text style={styles.detailsLegal}>{address} {phone ? `| Tel: ${phone}` : ''}</Text>
           </View>
+
+          {/* 3. DERECHA: CÓDIGO QR */}
+          <View style={styles.qrSection}>
+             {isValidUrl(qrCodeUrl) && (
+                 <Image src={qrCodeUrl!} style={styles.qrCodeHeader} />
+             )}
+          </View>
+
         </View>
 
         {/* BARRA DE DATOS */}
