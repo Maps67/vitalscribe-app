@@ -16,8 +16,8 @@ import { getTimeOfDayGreeting } from '../utils/greetingUtils';
 import { toast } from 'sonner';
 
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
-import { AssistantService } from '../services/AssistantService';
 import { AgentResponse } from '../services/GeminiAgent';
+import { GeminiMedicalService } from '../services/GeminiMedicalService'; // IMPORTACIÓN DEL NÚCLEO
 import { UploadMedico } from '../components/UploadMedico';
 import { DoctorFileGallery } from '../components/DoctorFileGallery';
 
@@ -26,7 +26,7 @@ import { MedicalCalculators } from '../components/MedicalCalculators';
 import { QuickDocModal } from '../components/QuickDocModal';
 
 import { ImpactMetrics } from '../components/ImpactMetrics';
-// [NUEVO] Importación del Widget Inteligente (Pilar 3)
+// Importación del Widget Inteligente (Pilar 3)
 import SmartBriefingWidget from '../components/SmartBriefingWidget'; 
 
 // --- Interfaces ---
@@ -40,12 +40,11 @@ interface PendingItem {
    id: string; type: 'note' | 'lab' | 'appt'; title: string; subtitle: string; date: string;
 }
 
-// --- SUB-COMPONENTE: RELOJ ATÓMICO (Precisión Milimétrica) ---
+// --- SUB-COMPONENTE: RELOJ ATÓMICO ---
 const AtomicClock = ({ location }: { location: string }) => {
     const [date, setDate] = useState(new Date());
 
     useEffect(() => {
-        // Sincronización inicial para golpear el segundo exacto
         const timer = setInterval(() => setDate(new Date()), 1000);
         return () => clearInterval(timer);
     }, []);
@@ -53,7 +52,6 @@ const AtomicClock = ({ location }: { location: string }) => {
     return (
         <div>
             <div className="flex items-baseline gap-1">
-                {/* tabular-nums evita que el texto "salte" cuando cambian los números anchos */}
                 <p className="text-4xl font-black text-slate-800 dark:text-white tracking-tighter tabular-nums leading-none">
                     {format(date, 'h:mm')}
                 </p>
@@ -78,98 +76,229 @@ const AtomicClock = ({ location }: { location: string }) => {
     );
 };
 
-// --- Assistant Modal ---
+// --- Assistant Modal REFORZADO (Opción B - Conectado & Tipado Corregido) ---
 const AssistantModal = ({ isOpen, onClose, onActionComplete }: { isOpen: boolean; onClose: () => void; onActionComplete: () => void }) => {
   const { isListening, transcript, startListening, stopListening, resetTranscript } = useSpeechRecognition();
-  const [status, setStatus] = useState<'idle' | 'listening' | 'processing' | 'confirming'>('idle');
+  
+  const [status, setStatus] = useState<'idle' | 'listening' | 'processing' | 'answering'>('idle');
   const [aiResponse, setAiResponse] = useState<AgentResponse | null>(null);
+  const [medicalAnswer, setMedicalAnswer] = useState<string | null>(null);
+  
   const navigate = useNavigate(); 
   
+  // Síntesis de Voz (TTS)
+  const speakResponse = (text: string) => {
+      if ('speechSynthesis' in window) {
+          window.speechSynthesis.cancel();
+          const utterance = new SpeechSynthesisUtterance(text);
+          utterance.lang = 'es-MX';
+          utterance.rate = 1.0;
+          window.speechSynthesis.speak(utterance);
+      }
+  };
+
   useEffect(() => { 
       if (isOpen) {
           resetTranscript(); 
           setStatus('listening'); 
           startListening();
           setAiResponse(null);
+          setMedicalAnswer(null);
       } else {
           stopListening();
+          window.speechSynthesis.cancel();
       }
   }, [isOpen]);
 
-  const handleExecute = async () => {
+  // PROCESADOR INTELIGENTE (Conectado a GeminiMedicalService)
+  const processIntent = async () => {
+      if (!transcript) return;
+      stopListening();
+      setStatus('processing');
+
+      try {
+          const lowerText = transcript.toLowerCase();
+          
+          // DETECCIÓN DE CONTEXTO MÉDICO
+          const isMedical = lowerText.includes('dosis') || lowerText.includes('tratamiento') || lowerText.includes('qué es') || lowerText.includes('protocolo') || lowerText.includes('interacción') || lowerText.includes('signos');
+
+          if (isMedical) {
+             // 🛡️ CONEXIÓN SEGURA AL NÚCLEO
+             const answer = await GeminiMedicalService.chatWithContext(
+                 "Contexto: El médico está en el Dashboard principal. Pregunta general rápida.", 
+                 transcript
+             );
+             
+             setMedicalAnswer(answer);
+             // FIX: Agregamos originalText y confidence para satisfacer TypeScript
+             setAiResponse({ 
+                 intent: 'MEDICAL_QUERY', 
+                 data: {}, 
+                 message: 'Consulta Clínica',
+                 originalText: transcript, 
+                 confidence: 1.0 
+             });
+             setStatus('answering');
+             speakResponse(answer); 
+
+          } else if (lowerText.includes('cita') || lowerText.includes('agendar')) {
+             // FIX: Agregamos originalText y confidence
+             setAiResponse({ 
+                 intent: 'CREATE_APPOINTMENT', 
+                 data: { patientName: "Paciente Nuevo (Voz)", start_time: new Date().toISOString() }, 
+                 message: 'Agendar Cita',
+                 originalText: transcript,
+                 confidence: 1.0
+             });
+             setStatus('answering');
+          } else {
+             // FIX: Agregamos originalText y confidence
+             setAiResponse({ 
+                 intent: 'NAVIGATION', 
+                 data: { destination: transcript }, 
+                 message: `Navegar a ${transcript}`,
+                 originalText: transcript,
+                 confidence: 1.0
+             });
+             setStatus('answering');
+          }
+
+      } catch (error) {
+          console.error("Error en Asistente:", error);
+          toast.error("No pude conectar con el núcleo clínico.");
+          setStatus('idle');
+      }
+  };
+
+  const handleExecuteAction = async () => {
     if (!aiResponse) return;
+    
+    if (aiResponse.intent === 'MEDICAL_QUERY') {
+        onClose();
+        return;
+    }
+
     switch (aiResponse.intent) {
       case 'CREATE_APPOINTMENT':
         try {
-          const { data: { user } } = await supabase.auth.getUser();
-          if (!user) throw new Error("No autenticado");
-          const { error } = await supabase.from('appointments').insert({
-            doctor_id: user.id, title: aiResponse.data.patientName || "Cita Agendada",
-            start_time: aiResponse.data.start_time, duration_minutes: aiResponse.data.duration_minutes || 30,
-            status: 'scheduled', notes: aiResponse.data.notes || "Agendado por Voz", patient_id: null 
-          });
-          if (error) throw error;
-          toast.success("✅ Cita agendada"); onActionComplete(); onClose();
-        } catch (e: any) { toast.error("Error: " + e.message); }
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) throw new Error("No auth");
+            
+            const nextHour = addDays(new Date(), 0); 
+            nextHour.setHours(new Date().getHours() + 1, 0, 0, 0);
+
+            const { error } = await supabase.from('appointments').insert({
+                doctor_id: user.id,
+                title: aiResponse.data.patientName || "Cita por Voz",
+                start_time: nextHour.toISOString(),
+                duration_minutes: 30,
+                status: 'scheduled',
+                notes: "Creada vía Asistente de Voz"
+            });
+            
+            if (error) throw error;
+            toast.success("✅ Cita agendada con éxito");
+            onActionComplete();
+            onClose();
+        } catch(e) { toast.error("Error al guardar cita"); }
         break;
+
       case 'NAVIGATION':
-        const dest = aiResponse.data.destination?.toLowerCase();
+        const dest = aiResponse.data.destination?.toLowerCase() || '';
         onClose();
         if (dest.includes('agenda')) navigate('/agenda');
         else if (dest.includes('paciente')) navigate('/patients');
         else if (dest.includes('config')) navigate('/settings');
         else navigate('/');
-        toast.success(`Navegando a: ${dest}`);
+        toast.success(`Navegando...`);
         break;
-      case 'MEDICAL_QUERY': toast.info("Consulta médica resuelta"); break;
-      default: toast.info("No entendí la acción"); setStatus('idle'); resetTranscript();
     }
   };
   
   if (!isOpen) return null;
+
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-200">
       <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-[2rem] shadow-2xl overflow-hidden border border-white/20 ring-1 ring-black/5">
-        <div className="bg-gradient-to-br from-indigo-600 to-purple-700 p-8 text-white text-center relative overflow-hidden">
+        
+        {/* HEADER */}
+        <div className={`p-8 text-white text-center relative overflow-hidden transition-colors duration-500 ${status === 'answering' ? 'bg-emerald-600' : 'bg-gradient-to-br from-indigo-600 to-purple-700'}`}>
           <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
           <Bot size={48} className="mx-auto mb-3 relative z-10 drop-shadow-lg" />
-          <h3 className="text-2xl font-black relative z-10 tracking-tight">Copiloto Clínico</h3>
-          <p className="text-indigo-100 text-sm relative z-10 font-medium">Escuchando órdenes médicas...</p>
+          <h3 className="text-2xl font-black relative z-10 tracking-tight">
+              {status === 'answering' ? 'Respuesta Inteligente' : 'Copiloto Clínico'}
+          </h3>
+          <p className="text-indigo-100 text-sm relative z-10 font-medium">
+              {status === 'listening' ? 'Escuchando...' : status === 'processing' ? 'Consultando Núcleo Seguro...' : 'Asistente Activo'}
+          </p>
         </div>
+
+        {/* BODY */}
         <div className="p-8">
-          {status !== 'confirming' && (
+          
+          {(status === 'idle' || status === 'listening' || status === 'processing') && (
             <div className="flex flex-col items-center gap-8">
-               <div className={`text-center text-xl font-medium leading-relaxed ${transcript ? 'text-slate-800 dark:text-white' : 'text-slate-400'}`}>
-                 "{transcript || 'Diga un comando...'}"
+               <div className={`text-center text-xl font-medium leading-relaxed min-h-[3rem] ${transcript ? 'text-slate-800 dark:text-white' : 'text-slate-400'}`}>
+                 "{transcript || '¿Dosis, Tratamientos o Citas?'}"
                </div>
+               
                {status === 'processing' ? (
                  <div className="flex items-center gap-2 text-indigo-600 font-bold animate-pulse">
                    <Loader2 className="animate-spin" /> Procesando...
                  </div>
                ) : (
                  <button 
-                   onClick={status === 'listening' ? () => {stopListening(); setStatus('processing'); setTimeout(() => handleExecute(), 1500);} : () => {startListening(); setStatus('listening');}} 
-                   className={`w-20 h-20 rounded-full flex items-center justify-center shadow-2xl transition-all transform active:scale-95 ${status === 'listening' ? 'bg-red-500 text-white animate-pulse ring-8 ring-red-100' : 'bg-slate-900 text-white hover:bg-black hover:scale-105'}`}
+                   onClick={status === 'listening' ? processIntent : () => { resetTranscript(); setStatus('listening'); startListening(); }} 
+                   className={`w-24 h-24 rounded-full flex items-center justify-center shadow-2xl transition-all transform active:scale-95 ${status === 'listening' ? 'bg-red-500 text-white animate-pulse ring-8 ring-red-100 scale-110' : 'bg-slate-900 text-white hover:bg-black hover:scale-105'}`}
                  >
-                   {status === 'listening' ? <Square size={28} fill="currentColor"/> : <Mic size={28} />}
+                   {status === 'listening' ? <Square size={32} fill="currentColor"/> : <Mic size={32} />}
                  </button>
                )}
+               {status === 'listening' && <p className="text-xs text-slate-400 animate-pulse">Toca para detener y procesar</p>}
             </div>
           )}
-          {status === 'confirming' && aiResponse && (
+
+          {status === 'answering' && aiResponse && (
             <div className="animate-in slide-in-from-bottom-4 fade-in">
-              <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-2xl p-5 border border-indigo-100 dark:border-indigo-800 mb-6">
-                <h4 className="font-bold text-slate-800 dark:text-white text-lg">Acción Detectada</h4>
-                <p className="text-slate-600 dark:text-slate-300 text-sm mt-1">{aiResponse.message}</p>
-              </div>
+              
+              {aiResponse.intent === 'MEDICAL_QUERY' ? (
+                  <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-2xl p-5 border border-emerald-100 dark:border-emerald-800 mb-6 max-h-60 overflow-y-auto custom-scrollbar">
+                    <h4 className="font-bold text-emerald-800 dark:text-emerald-400 text-sm uppercase mb-2 flex items-center gap-2">
+                        <Stethoscope size={16}/> Evidencia Clínica (Gemini)
+                    </h4>
+                    <p className="text-slate-700 dark:text-slate-200 text-sm leading-relaxed font-medium whitespace-pre-wrap">
+                        {medicalAnswer}
+                    </p>
+                  </div>
+              ) : (
+                  <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-2xl p-5 border border-indigo-100 dark:border-indigo-800 mb-6">
+                    <h4 className="font-bold text-slate-800 dark:text-white text-lg">Confirmar Acción</h4>
+                    <p className="text-slate-600 dark:text-slate-300 text-sm mt-1">{aiResponse.message}</p>
+                  </div>
+              )}
+
               <div className="flex gap-3">
-                <button onClick={() => { setStatus('idle'); resetTranscript(); }} className="flex-1 py-3.5 text-slate-500 font-bold hover:bg-slate-100 rounded-xl transition-colors">Cancelar</button>
-                <button onClick={handleExecute} className="flex-1 py-3.5 bg-indigo-600 text-white font-bold rounded-xl shadow-lg hover:bg-indigo-700 active:scale-95 flex items-center justify-center gap-2">Ejecutar</button>
+                <button onClick={() => { setStatus('idle'); resetTranscript(); setAiResponse(null); }} className="flex-1 py-3.5 text-slate-500 font-bold hover:bg-slate-100 rounded-xl transition-colors">
+                    Nueva Consulta
+                </button>
+                
+                {aiResponse.intent !== 'MEDICAL_QUERY' && (
+                    <button onClick={handleExecuteAction} className="flex-1 py-3.5 bg-indigo-600 text-white font-bold rounded-xl shadow-lg hover:bg-indigo-700 active:scale-95 flex items-center justify-center gap-2">
+                        Ejecutar
+                    </button>
+                )}
+                
+                {aiResponse.intent === 'MEDICAL_QUERY' && (
+                    <button onClick={onClose} className="flex-1 py-3.5 bg-slate-800 text-white font-bold rounded-xl shadow-lg hover:bg-slate-900 active:scale-95">
+                        Cerrar
+                    </button>
+                )}
               </div>
             </div>
           )}
+
         </div>
-        <div className="bg-slate-50 p-4 text-center"><button onClick={onClose} className="text-slate-400 text-xs font-bold uppercase tracking-wider hover:text-slate-600">CERRAR</button></div>
+        <div className="bg-slate-50 p-4 text-center"><button onClick={onClose} className="text-slate-400 text-xs font-bold uppercase tracking-wider hover:text-slate-600">CANCELAR</button></div>
       </div>
     </div>
   );
@@ -177,7 +306,6 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete }: { isOpen: boolean
 
 // --- Widgets ---
 const StatusWidget = ({ weather, totalApts, pendingApts, location }: any) => {
-    // Cálculo seguro interno
     const completed = totalApts - pendingApts;
     const progress = totalApts > 0 ? (completed / totalApts) * 100 : 0;
     
@@ -185,7 +313,6 @@ const StatusWidget = ({ weather, totalApts, pendingApts, location }: any) => {
         <div className="bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl rounded-[2rem] p-6 border border-white/50 dark:border-slate-700 shadow-xl h-full flex flex-col justify-between relative overflow-hidden">
              <div className="absolute inset-0 bg-gradient-to-br from-white via-transparent to-blue-50/50 opacity-50"></div>
              
-             {/* HEADER: Reloj Atómico y Clima */}
              <div className="flex justify-between items-start z-10 relative">
                  <AtomicClock location={location} />
                  <div className="text-right bg-white/50 dark:bg-slate-800/50 p-2 rounded-2xl backdrop-blur-sm border border-white/50 dark:border-slate-600">
@@ -193,7 +320,6 @@ const StatusWidget = ({ weather, totalApts, pendingApts, location }: any) => {
                  </div>
              </div>
 
-             {/* FOOTER: Barra de Progreso */}
              <div className="mt-4 z-10 relative">
                  <div className="flex justify-between text-xs font-bold mb-2"><span className="text-slate-500">Progreso Diario</span><span className="text-indigo-600">{completed}/{totalApts} Pacientes</span></div>
                  <div className="h-3 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden border border-slate-200 dark:border-slate-700">
@@ -264,91 +390,11 @@ const ActionRadar = ({ items, onItemClick }: { items: PendingItem[], onItemClick
     );
 };
 
-const MorningBriefing = ({ greeting, message, weather, systemStatus, onOpenAssistant, insights }: any) => {
-    const hour = new Date().getHours();
-    
-    let theme = { gradient: "from-orange-400 via-amber-500 to-yellow-500", icon: Sunrise, label: "Buenos Días", text: "text-amber-50", shadow: "shadow-orange-200/50" };
-    if (hour >= 12 && hour < 18) theme = { gradient: "from-blue-500 via-cyan-500 to-teal-400", icon: Sun, label: "Buenas Tardes", text: "text-blue-50", shadow: "shadow-blue-200/50" };
-    else if (hour >= 18 && hour < 22) theme = { gradient: "from-indigo-600 via-purple-600 to-pink-500", icon: Sunset, label: "Buenas Noches", text: "text-indigo-100", shadow: "shadow-indigo-200/50" };
-    else if (hour >= 22 || hour < 5) theme = { gradient: "from-slate-900 via-slate-800 to-blue-950", icon: MoonStar, label: "Guardia Nocturna", text: "text-slate-400", shadow: "shadow-slate-800/50" };
-
-    return (
-        <div className={`relative w-full rounded-[2.5rem] bg-gradient-to-r ${theme.gradient} p-8 shadow-2xl ${theme.shadow} dark:shadow-none text-white overflow-hidden mb-8 transition-all duration-1000 ease-in-out`}>
-            <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
-            <div className="absolute -right-20 -top-20 w-96 h-96 bg-white/10 rounded-full blur-[100px] animate-pulse"></div>
-            
-            <div className="relative z-10 flex flex-col lg:flex-row justify-between items-end gap-6">
-                <div className="flex-1 w-full">
-                    <div className="flex items-center gap-2 mb-3 opacity-90">
-                        <div className="p-1.5 bg-white/20 rounded-lg backdrop-blur-sm">
-                            <theme.icon size={16} className="text-white" />
-                        </div>
-                        <span className="text-xs font-bold uppercase tracking-widest opacity-80">Resumen Operativo</span>
-                    </div>
-                    
-                    <h1 className="text-3xl md:text-4xl font-black tracking-tight mb-6 drop-shadow-sm leading-tight">
-                        {greeting}
-                    </h1>
-
-                    {insights && (
-                        <div className="flex flex-wrap gap-3">
-                            <div className="flex items-center gap-3 bg-white/15 border border-white/10 px-4 py-2 rounded-xl backdrop-blur-md">
-                                <div className="bg-white/20 p-1.5 rounded-lg"><Clock size={16}/></div>
-                                <div>
-                                    <p className="text-[10px] uppercase font-bold opacity-70">Próxima Cita</p>
-                                    <p className="text-sm font-bold">{insights.nextTime || "Libre"}</p>
-                                </div>
-                            </div>
-
-                            <div className="flex items-center gap-3 bg-white/15 border border-white/10 px-4 py-2 rounded-xl backdrop-blur-md">
-                                <div className={`${insights.pending > 0 ? 'bg-amber-400/80 text-amber-900' : 'bg-white/20'} p-1.5 rounded-lg`}>
-                                    <AlertTriangle size={16}/>
-                                </div>
-                                <div>
-                                    <p className="text-[10px] uppercase font-bold opacity-70">Atención</p>
-                                    <p className="text-sm font-bold">{insights.pending} Acciones</p>
-                                </div>
-                            </div>
-
-                            <div className="flex items-center gap-3 bg-white/15 border border-white/10 px-4 py-2 rounded-xl backdrop-blur-md hidden sm:flex">
-                                <div className="bg-white/20 p-1.5 rounded-lg"><Activity size={16}/></div>
-                                <div>
-                                    <p className="text-[10px] uppercase font-bold opacity-70">Progreso Hoy</p>
-                                    <p className="text-sm font-bold">{insights.done}/{insights.total} Pacientes</p>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-                </div>
-                
-                <div className="flex gap-4 shrink-0">
-                    <div className="flex items-center gap-6 bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/20 shadow-inner">
-                        <div className="text-right">
-                            <p className="text-3xl font-bold leading-none">{weather.temp}°</p>
-                            <p className="text-[10px] opacity-80 uppercase font-bold mt-1">Clima</p>
-                        </div>
-                        <div className="h-10 w-px bg-white/20"></div>
-                        <div>
-                            <div className="flex items-center gap-2">
-                                <div className={`w-2.5 h-2.5 rounded-full ${systemStatus ? 'bg-emerald-400 shadow-[0_0_10px_#34d399] animate-pulse' : 'bg-red-500'}`}></div>
-                                <span className="font-bold text-sm tracking-tight">{systemStatus ? 'Online' : 'Offline'}</span>
-                            </div>
-                            <p className="text-[10px] opacity-80 mt-1 font-medium">{format(new Date(), "EEEE d", { locale: es })}</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
-};
-
 // --- COMPONENTE PRINCIPAL ---
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const [doctorProfile, setDoctorProfile] = useState<any>(null); 
   const [appointments, setAppointments] = useState<DashboardAppointment[]>([]);
-  
-  // NUEVO: Estado para conteo de citas completadas hoy
   const [completedTodayCount, setCompletedTodayCount] = useState(0);
 
   const [pendingItems, setPendingItems] = useState<PendingItem[]>([]); 
@@ -381,7 +427,6 @@ const Dashboard: React.FC = () => {
           const todayStart = startOfDay(new Date()); 
           const nextWeekEnd = endOfDay(addDays(new Date(), 7));
           
-          // 1. Citas PENDIENTES (Futuras o de hoy)
           const { data: aptsData } = await supabase.from('appointments').select(`id, title, start_time, status, patient:patients (id, name, history)`).eq('doctor_id', user.id).gte('start_time', todayStart.toISOString()).lte('start_time', nextWeekEnd.toISOString()).neq('status', 'cancelled').neq('status', 'completed').order('start_time', { ascending: true }).limit(10);
           
           if (aptsData) {
@@ -391,7 +436,6 @@ const Dashboard: React.FC = () => {
               setAppointments(formattedApts);
           }
 
-          // 2. NUEVO: Conteo de citas COMPLETADAS HOY para métricas reales
           const { count: completedCount } = await supabase
               .from('appointments')
               .select('*', { count: 'exact', head: true })
@@ -423,41 +467,23 @@ const Dashboard: React.FC = () => {
 
   useEffect(() => {
     fetchData();
-    
-    // --- LÓGICA DE UBICACIÓN Y CLIMA MEJORADA ---
     const cachedLocation = localStorage.getItem('last_known_location');
-    if (cachedLocation) {
-        setLocationName(cachedLocation);
-    }
+    if (cachedLocation) { setLocationName(cachedLocation); }
 
     if ("geolocation" in navigator) {
         navigator.geolocation.getCurrentPosition(async (position) => {
             const { latitude, longitude } = position.coords;
-            
-            // 1. Obtener ubicación
             try {
                 const geoRes = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=es`);
                 const geoData = await geoRes.json();
                 const newLoc = geoData.city || geoData.locality || "México";
                 setLocationName(newLoc);
                 localStorage.setItem('last_known_location', newLoc);
-            } catch (e) { 
-                if(!cachedLocation) setLocationName("México"); 
-            }
-
-            // 2. Obtener clima inicial
+            } catch (e) { if(!cachedLocation) setLocationName("México"); }
             await updateWeather(latitude, longitude);
-
-            // 3. Configurar intervalo para actualizar clima cada 30 min
-            const weatherInterval = setInterval(() => {
-                updateWeather(latitude, longitude);
-            }, 30 * 60 * 1000); 
-
+            const weatherInterval = setInterval(() => { updateWeather(latitude, longitude); }, 30 * 60 * 1000); 
             return () => clearInterval(weatherInterval);
-
-        }, () => {
-            if(!cachedLocation) setLocationName("Ubicación n/a");
-        });
+        }, () => { if(!cachedLocation) setLocationName("Ubicación n/a"); });
     }
   }, [fetchData, updateWeather]);
 
@@ -478,16 +504,10 @@ const Dashboard: React.FC = () => {
           navigate('/consultation', { state: { consultationId: item.id, isResume: true } });
       } else if (item.type === 'appt') {
            const patientName = item.subtitle.split('•')[0].trim();
-           navigate('/consultation', { 
-               state: { 
-                   linkedAppointmentId: item.id,
-                   patientData: { id: 'radar_temp', name: patientName, isGhost: true } 
-               } 
-           });
+           navigate('/consultation', { state: { linkedAppointmentId: item.id, patientData: { id: 'radar_temp', name: patientName, isGhost: true } } });
       }
   };
 
-  // CÁLCULO REAL DE LA JORNADA
   const appointmentsToday = appointments.filter(a => isToday(parseISO(a.start_time))).length;
   const totalDailyLoad = completedTodayCount + appointmentsToday;
 
@@ -501,26 +521,7 @@ const Dashboard: React.FC = () => {
 
       <div className="px-4 md:px-8 pt-4 md:pt-8 max-w-[1600px] mx-auto w-full">
          
-         {/* --- INTERRUPTOR DE SEGURIDAD: SMART BRIEFING (PILAR 3) --- */}
-         {/* SE SUSTITUYE EL COMPONENTE LOCAL POR EL NUEVO WIDGET EXTERNO */}
-         
-         {/* BLOQUE ANTERIOR (COMENTADO POR SEGURIDAD)
-         <MorningBriefing 
-           greeting={dynamicGreeting.greeting} 
-           message={dynamicGreeting.message} 
-           weather={weather} 
-           systemStatus={systemStatus} 
-           onOpenAssistant={() => setIsAssistantOpen(true)}
-           insights={{
-               nextTime: nextPatient ? format(parseISO(nextPatient.start_time), 'h:mm a') : null,
-               pending: pendingItems.length,
-               total: totalDailyLoad, 
-               done: completedTodayCount 
-           }}
-         />
-         */}
-
-         {/* NUEVO WIDGET INTELIGENTE (v5.3) */}
+         {/* WIDGET INTELIGENTE (Pilar 3 - Integrado) */}
          <SmartBriefingWidget 
             greeting={dynamicGreeting.greeting} 
             weather={weather} 
@@ -554,8 +555,8 @@ const Dashboard: React.FC = () => {
                      </div>
                      <StatusWidget 
                        weather={weather} 
-                       totalApts={totalDailyLoad} // DATO REAL
-                       pendingApts={appointmentsToday} // DATO REAL
+                       totalApts={totalDailyLoad}
+                       pendingApts={appointmentsToday}
                        location={locationName} 
                      />
                  </div>
