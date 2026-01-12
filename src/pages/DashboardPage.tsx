@@ -26,6 +26,8 @@ import { MedicalCalculators } from '../components/MedicalCalculators';
 import { QuickDocModal } from '../components/QuickDocModal';
 
 import { ImpactMetrics } from '../components/ImpactMetrics';
+// [NUEVO] Importación del Widget Inteligente (Pilar 3)
+import SmartBriefingWidget from '../components/SmartBriefingWidget'; 
 
 // --- Interfaces ---
 interface DashboardAppointment {
@@ -499,19 +501,37 @@ const Dashboard: React.FC = () => {
 
       <div className="px-4 md:px-8 pt-4 md:pt-8 max-w-[1600px] mx-auto w-full">
          
+         {/* --- INTERRUPTOR DE SEGURIDAD: SMART BRIEFING (PILAR 3) --- */}
+         {/* SE SUSTITUYE EL COMPONENTE LOCAL POR EL NUEVO WIDGET EXTERNO */}
+         
+         {/* BLOQUE ANTERIOR (COMENTADO POR SEGURIDAD)
          <MorningBriefing 
            greeting={dynamicGreeting.greeting} 
            message={dynamicGreeting.message} 
            weather={weather} 
            systemStatus={systemStatus} 
            onOpenAssistant={() => setIsAssistantOpen(true)}
-           
            insights={{
                nextTime: nextPatient ? format(parseISO(nextPatient.start_time), 'h:mm a') : null,
                pending: pendingItems.length,
-               total: totalDailyLoad, // TOTAL REAL (Completados + Pendientes)
-               done: completedTodayCount // PROGRESO REAL
+               total: totalDailyLoad, 
+               done: completedTodayCount 
            }}
+         />
+         */}
+
+         {/* NUEVO WIDGET INTELIGENTE (v5.3) */}
+         <SmartBriefingWidget 
+            greeting={dynamicGreeting.greeting} 
+            weather={weather} 
+            systemStatus={systemStatus} 
+            onOpenAssistant={() => setIsAssistantOpen(true)}
+            insights={{
+               nextTime: nextPatient ? format(parseISO(nextPatient.start_time), 'h:mm a') : null,
+               pending: pendingItems.length,
+               total: totalDailyLoad, 
+               done: completedTodayCount 
+            }}
          />
 
          <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
