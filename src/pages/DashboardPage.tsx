@@ -147,44 +147,44 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete, initialQuery }: { i
               const isMedical = lowerText.includes('dosis') || lowerText.includes('tratamiento') || lowerText.includes('qué es') || lowerText.includes('protocolo') || lowerText.includes('interacción') || lowerText.includes('signos') || lowerText.includes('síntomas') || lowerText.includes('diagnóstico');
 
               if (isMedical) {
-                 const rawAnswer = await GeminiMedicalService.chatWithContext(
-                     "Contexto: El médico está en el Dashboard principal. Pregunta general rápida.", 
-                     textToProcess
-                 );
-                 
-                 // 🧹 LIMPIEZA DE FORMATO AGRESIVA
-                 const cleanAnswer = cleanMarkdown(rawAnswer);
-                 
-                 setMedicalAnswer(cleanAnswer);
-                 setAiResponse({ 
-                     intent: 'MEDICAL_QUERY', 
-                     data: {}, 
-                     message: 'Consulta Clínica',
-                     originalText: textToProcess, 
-                     confidence: 1.0 
-                 });
-                 setStatus('answering');
-                 // Solo hablar si NO es una consulta escrita (opcional, aquí lo dejamos activo)
-                 if(!manualText) speakResponse(cleanAnswer); 
+                  const rawAnswer = await GeminiMedicalService.chatWithContext(
+                      "Contexto: El médico está en el Dashboard principal. Pregunta general rápida.", 
+                      textToProcess
+                  );
+                  
+                  // 🧹 LIMPIEZA DE FORMATO AGRESIVA
+                  const cleanAnswer = cleanMarkdown(rawAnswer);
+                  
+                  setMedicalAnswer(cleanAnswer);
+                  setAiResponse({ 
+                      intent: 'MEDICAL_QUERY', 
+                      data: {}, 
+                      message: 'Consulta Clínica',
+                      originalText: textToProcess, 
+                      confidence: 1.0 
+                  });
+                  setStatus('answering');
+                  // Solo hablar si NO es una consulta escrita (opcional, aquí lo dejamos activo)
+                  if(!manualText) speakResponse(cleanAnswer); 
 
               } else if (lowerText.includes('cita') || lowerText.includes('agendar')) {
-                 setAiResponse({ 
-                     intent: 'CREATE_APPOINTMENT', 
-                     data: { patientName: "Paciente Nuevo (Voz)", start_time: new Date().toISOString() }, 
-                     message: 'Agendar Cita',
-                     originalText: textToProcess,
-                     confidence: 1.0
-                 });
-                 setStatus('answering');
+                  setAiResponse({ 
+                      intent: 'CREATE_APPOINTMENT', 
+                      data: { patientName: "Paciente Nuevo (Voz)", start_time: new Date().toISOString() }, 
+                      message: 'Agendar Cita',
+                      originalText: textToProcess,
+                      confidence: 1.0
+                  });
+                  setStatus('answering');
               } else {
-                 setAiResponse({ 
-                     intent: 'NAVIGATION', 
-                     data: { destination: textToProcess }, 
-                     message: `Navegar a ${textToProcess}`,
-                     originalText: textToProcess,
-                     confidence: 1.0
-                 });
-                 setStatus('answering');
+                  setAiResponse({ 
+                      intent: 'NAVIGATION', 
+                      data: { destination: textToProcess }, 
+                      message: `Navegar a ${textToProcess}`,
+                      originalText: textToProcess,
+                      confidence: 1.0
+                  });
+                  setStatus('answering');
               }
           };
 
@@ -449,11 +449,13 @@ const Dashboard: React.FC = () => {
 
   const dynamicGreeting = useMemo(() => getTimeOfDayGreeting(formattedDocName || ''), [formattedDocName]);
 
-  const fetchData = useCallback(async () => {
+  // MODIFICADO: Acepta isBackgroundRefresh para polling silencioso
+  const fetchData = useCallback(async (isBackgroundRefresh = false) => {
       try {
-          setIsLoading(true);
+          if (!isBackgroundRefresh) setIsLoading(true);
           
-          const minLoadTime = new Promise(resolve => setTimeout(resolve, 1500));
+          // Solo esperamos el tiempo artificial si es carga inicial (visible)
+          const minLoadTime = !isBackgroundRefresh ? new Promise(resolve => setTimeout(resolve, 1500)) : Promise.resolve();
           
           const dataFetch = (async () => {
               const { data: { user } } = await supabase.auth.getUser();
@@ -498,7 +500,7 @@ const Dashboard: React.FC = () => {
           setSystemStatus(false); 
           console.error(e); 
       } finally {
-          setIsLoading(false); 
+          if (!isBackgroundRefresh) setIsLoading(false); 
       }
   }, []);
 
@@ -513,9 +515,17 @@ const Dashboard: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    fetchData();
+    fetchData(); // Carga inicial visible
     const cachedLocation = localStorage.getItem('last_known_location');
     if (cachedLocation) { setLocationName(cachedLocation); }
+
+    // Implementación de Polling Inteligente (2 min)
+    const pollingInterval = setInterval(() => {
+        // Solo actualizar si la pestaña es visible para ahorrar recursos
+        if (document.visibilityState === 'visible') {
+            fetchData(true); // Actualización silenciosa
+        }
+    }, 120000);
 
     if ("geolocation" in navigator) {
         navigator.geolocation.getCurrentPosition(async (position) => {
@@ -529,9 +539,13 @@ const Dashboard: React.FC = () => {
             } catch (e) { if(!cachedLocation) setLocationName("México"); }
             await updateWeather(latitude, longitude);
             const weatherInterval = setInterval(() => { updateWeather(latitude, longitude); }, 30 * 60 * 1000); 
+            
+            // Limpieza dentro del scope de geo
             return () => clearInterval(weatherInterval);
         }, () => { if(!cachedLocation) setLocationName("Ubicación n/a"); });
     }
+
+    return () => clearInterval(pollingInterval);
   }, [fetchData, updateWeather]);
 
   const openDocModal = (type: 'justificante' | 'certificado' | 'receta') => { setDocType(type); setIsDocModalOpen(true); };
