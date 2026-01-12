@@ -4,7 +4,8 @@ import { MedicationItem } from '../types';
 
 // Estilos corporativos unificados
 const styles = StyleSheet.create({
-  page: { padding: 40, fontFamily: 'Helvetica', fontSize: 10, color: '#333' },
+  // FIX: flexDirection: 'column' es vital para que el resorte vertical funcione
+  page: { padding: 40, fontFamily: 'Helvetica', fontSize: 10, color: '#333', flexDirection: 'column' },
   
   // --- ENCABEZADO ---
   header: { 
@@ -13,7 +14,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: 2, 
     borderBottomColor: '#0d9488', 
     paddingBottom: 10,
-    alignItems: 'flex-start' 
+    alignItems: 'flex-start',
+    flexShrink: 0 // Evita que el header se colapse
   },
   logoSection: { 
     width: '25%', 
@@ -40,13 +42,13 @@ const styles = StyleSheet.create({
   detailsLegal: { fontSize: 8, color: '#444', marginBottom: 1 },
   
   // Barra de paciente
-  patientSection: { marginBottom: 20, padding: 10, backgroundColor: '#f0fdfa', borderRadius: 4, flexDirection: 'row', justifyContent: 'space-between', border: '1px solid #ccfbf1' },
+  patientSection: { marginBottom: 20, padding: 10, backgroundColor: '#f0fdfa', borderRadius: 4, flexDirection: 'row', justifyContent: 'space-between', border: '1px solid #ccfbf1', flexShrink: 0 },
   label: { fontFamily: 'Helvetica-Bold', color: '#0f766e', fontSize: 9 },
   value: { fontFamily: 'Helvetica', color: '#333', fontSize: 9 },
   
   // Cuerpo del documento
-  // CORRECCIÓN APLICADA: Eliminado 'flex: 1' para permitir flujo natural
-  rxSection: { paddingVertical: 10, minHeight: 100 }, 
+  // NOTA: flexGrow permite que el contenido ocupe espacio, pero no fuerza el layout completo
+  rxSection: { paddingVertical: 10, flexGrow: 1 }, 
   docTitle: { fontSize: 16, fontFamily: 'Helvetica-Bold', color: '#0d9488', textAlign: 'center', marginBottom: 20, textTransform: 'uppercase', letterSpacing: 1, textDecoration: 'underline' },
   
   // Contenido
@@ -68,7 +70,8 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 9, fontFamily: 'Helvetica-Bold', color: '#0f766e', marginBottom: 2, textTransform: 'uppercase' },
   
   // Pie de página
-  footer: { marginTop: 40, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#ddd', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },
+  // FIX: flexShrink: 0 asegura que el footer nunca se comprima
+  footer: { paddingTop: 10, borderTopWidth: 1, borderTopColor: '#ddd', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', flexShrink: 0 },
   
   // Firma (Derecha)
   signatureSection: { alignItems: 'center', width: '40%' },
@@ -158,10 +161,7 @@ const PrescriptionPDF: React.FC<PrescriptionPDFProps> = ({
         {/* ENCABEZADO */}
         <View style={styles.header}>
           <View style={styles.logoSection}>
-             {/* 1. Logo del Médico */}
              {isValidUrl(logoUrl) && <Image src={logoUrl!} style={styles.logo} />}
-             
-             {/* 2. QR Code (Aumentado de tamaño) */}
              {isValidUrl(qrCodeUrl) && (
                  <Image src={qrCodeUrl!} style={styles.qrCodeHeader} />
              )}
@@ -207,18 +207,14 @@ const PrescriptionPDF: React.FC<PrescriptionPDFProps> = ({
               </View>
           )}
 
-          {/* === LOGICA DE RENDERIZADO HÍBRIDA === */}
           {hasStructuredData ? (
              <View style={{ width: '100%' }}> 
-                 
-                 {/* A. MEDICAMENTOS (Usando la lista SEGURA) */}
                  {safePrescriptions && safePrescriptions.length > 0 && (
                     <View style={{ marginBottom: 10 }}>
                         <Text style={styles.rxHeader}>MEDICAMENTOS</Text>
                         {safePrescriptions.map((med, i) => (
                             <View key={i} style={styles.medicationContainer}>
                                 <Text style={styles.medName}>
-                                    {/* i + 1 renumera automáticamente, sin saltos */}
                                     {i + 1}. {med.drug} <Text style={{fontSize: 10, fontFamily: 'Helvetica', color: '#333'}}>— {med.dose}</Text>
                                 </Text>
                                 <Text style={styles.medInstructions}>
@@ -234,7 +230,6 @@ const PrescriptionPDF: React.FC<PrescriptionPDFProps> = ({
                     </View>
                  )}
 
-                 {/* B. INSTRUCCIONES */}
                  {instructions && instructions.trim().length > 0 && (
                      <View style={{ marginTop: 5 }}>
                          <Text style={styles.rxHeader}>INDICACIONES Y CUIDADOS</Text>
@@ -243,16 +238,19 @@ const PrescriptionPDF: React.FC<PrescriptionPDFProps> = ({
                  )}
              </View>
           ) : (
-             // C. FALLBACK
              <View>
                  {formatContent(content || '')}
              </View>
           )}
-
         </View>
 
-        {/* PIE DE PÁGINA */}
-        <View style={styles.footer}>
+        {/* --- EL TRUCO MAESTRO: ESPACIADOR FLEXIBLE --- */}
+        {/* Este View vacío con flex: 1 empuja todo lo que sigue hacia el fondo de la página actual */}
+        <View style={{ flex: 1 }} />
+
+        {/* PIE DE PÁGINA (Siempre al fondo) */}
+        {/* wrap={false} asegura que el footer no se rompa entre páginas si queda muy justo */}
+        <View style={styles.footer} wrap={false}>
           
           {/* IZQUIERDA: AVISO LEGAL */}
           <View style={styles.legalTextContainer}>
@@ -271,9 +269,9 @@ const PrescriptionPDF: React.FC<PrescriptionPDFProps> = ({
                  <Image src={signatureUrl!} style={styles.signatureImage} />
              ) : <View style={{height: 40}} />}
              <View style={styles.signatureLine} />
-             {/* CORRECCIÓN DE SINTAXIS AQUÍ */}
+             {/* SIN ERROR DE SINTAXIS */}
              <Text style={{ fontSize: 9, marginTop: 4, fontFamily: 'Helvetica-Bold' }}>{finalDoctorName}</Text>
-             <Text style={{fontSize: 7, marginTop: 1}}>Céd. Prof. {license}</Text>
+             <Text style={{ fontSize: 7, marginTop: 1 }}>Céd. Prof. {license}</Text>
           </View>
         </View>
       </Page>
