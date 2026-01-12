@@ -47,7 +47,6 @@ const styles = StyleSheet.create({
   value: { fontFamily: 'Helvetica', color: '#333', fontSize: 9 },
   
   // Cuerpo del documento
-  // NOTA: flexGrow permite que el contenido ocupe espacio, pero no fuerza el layout completo
   rxSection: { paddingVertical: 10, flexGrow: 1 }, 
   docTitle: { fontSize: 16, fontFamily: 'Helvetica-Bold', color: '#0d9488', textAlign: 'center', marginBottom: 20, textTransform: 'uppercase', letterSpacing: 1, textDecoration: 'underline' },
   
@@ -70,7 +69,6 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 9, fontFamily: 'Helvetica-Bold', color: '#0f766e', marginBottom: 2, textTransform: 'uppercase' },
   
   // Pie de página
-  // FIX: flexShrink: 0 asegura que el footer nunca se comprima
   footer: { paddingTop: 10, borderTopWidth: 1, borderTopColor: '#ddd', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', flexShrink: 0 },
   
   // Firma (Derecha)
@@ -112,16 +110,32 @@ const PrescriptionPDF: React.FC<PrescriptionPDFProps> = ({
   documentTitle = "RECETA MÉDICA" 
 }) => {
 
-  // --- 1. LÓGICA DE FILTRADO DE SEGURIDAD ---
+  // --- 1. LÓGICA DE SEGURIDAD (FILTRO ACTIVO) ---
+  // Detecta si un medicamento coincide con la alerta de riesgo ALTO
+  const isRiskyMedication = (medName: string) => {
+    if (!riskAnalysis || riskAnalysis.level !== 'Alto') return false;
+    
+    const reason = riskAnalysis.reason.toLowerCase();
+    const drug = medName.toLowerCase();
+    // Verifica si el nombre del fármaco (primer token) aparece en la razón del riesgo
+    return reason.includes(drug.split(' ')[0]) || reason.includes(drug);
+  };
+
+  // --- 2. FILTRADO REAL (Clean Output) ---
+  // Solo pasan los medicamentos que NO son riesgosos y NO tienen bloqueos manuales
   const safePrescriptions = prescriptions?.filter(med => {
+    // A) Filtro por IA (Riesgo Alto)
+    if (isRiskyMedication(med.drug)) return false;
+
+    // B) Filtro Manual (Bloqueo explícito en texto)
     const fullText = (med.drug + " " + (med.notes || "")).toUpperCase();
-    const isBlocked = 
+    const isManualBlocked = 
       fullText.includes("BLOQUEO DE SEGURIDAD") ||
       fullText.includes("(INACTIVO") ||
       fullText.includes("SUSPENDER") ||
       fullText.includes("CONTRAINDICADO");
 
-    return !isBlocked; 
+    return !isManualBlocked; 
   });
 
   const formatContent = (text: string) => {
@@ -200,16 +214,19 @@ const PrescriptionPDF: React.FC<PrescriptionPDFProps> = ({
         <View style={styles.rxSection}>
           <Text style={styles.docTitle}>{documentTitle}</Text>
           
+          {/* Mantenemos la alerta explicativa aunque filtremos los medicamentos */}
           {riskAnalysis && riskAnalysis.level === 'Alto' && (
               <View style={styles.warningBox}>
-                  <Text style={styles.warningTitle}>*** ADVERTENCIA DE SEGURIDAD CLÍNICA ***</Text>
-                  <Text style={styles.warningText}>MOTIVO: {riskAnalysis.reason?.toUpperCase()}</Text>
+                  <Text style={styles.warningTitle}>*** NOTA DE SEGURIDAD CLÍNICA ***</Text>
+                  <Text style={styles.warningText}>
+                    Se han omitido automáticamente medicamentos en esta receta debido a interacciones de alto riesgo detectadas: {riskAnalysis.reason?.toUpperCase()}.
+                  </Text>
               </View>
           )}
 
           {hasStructuredData ? (
              <View style={{ width: '100%' }}> 
-                 {safePrescriptions && safePrescriptions.length > 0 && (
+                 {safePrescriptions && safePrescriptions.length > 0 ? (
                     <View style={{ marginBottom: 10 }}>
                         <Text style={styles.rxHeader}>MEDICAMENTOS</Text>
                         {safePrescriptions.map((med, i) => (
@@ -228,6 +245,11 @@ const PrescriptionPDF: React.FC<PrescriptionPDFProps> = ({
                             </View>
                         ))}
                     </View>
+                 ) : (
+                    // Mensaje si TODO fue filtrado
+                    <Text style={{fontSize: 10, color: '#666', fontStyle: 'italic', marginVertical: 10, textAlign: 'center'}}>
+                        (No hay medicamentos activos para imprimir debido a restricciones de seguridad)
+                    </Text>
                  )}
 
                  {instructions && instructions.trim().length > 0 && (
@@ -245,11 +267,9 @@ const PrescriptionPDF: React.FC<PrescriptionPDFProps> = ({
         </View>
 
         {/* --- EL TRUCO MAESTRO: ESPACIADOR FLEXIBLE --- */}
-        {/* Este View vacío con flex: 1 empuja todo lo que sigue hacia el fondo de la página actual */}
         <View style={{ flex: 1 }} />
 
         {/* PIE DE PÁGINA (Siempre al fondo) */}
-        {/* wrap={false} asegura que el footer no se rompa entre páginas si queda muy justo */}
         <View style={styles.footer} wrap={false}>
           
           {/* IZQUIERDA: AVISO LEGAL */}
@@ -269,7 +289,6 @@ const PrescriptionPDF: React.FC<PrescriptionPDFProps> = ({
                  <Image src={signatureUrl!} style={styles.signatureImage} />
              ) : <View style={{height: 40}} />}
              <View style={styles.signatureLine} />
-             {/* SIN ERROR DE SINTAXIS */}
              <Text style={{ fontSize: 9, marginTop: 4, fontFamily: 'Helvetica-Bold' }}>{finalDoctorName}</Text>
              <Text style={{ fontSize: 7, marginTop: 1 }}>Céd. Prof. {license}</Text>
           </View>
