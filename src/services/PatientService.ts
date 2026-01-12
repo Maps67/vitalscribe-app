@@ -4,6 +4,7 @@ import { Patient } from '../types';
 export const PatientService = {
   /**
    * Busca pacientes por nombre (búsqueda parcial)
+   * Utilizado en el buscador global y agenda.
    */
   async searchPatients(term: string): Promise<Patient[]> {
     if (!term) return [];
@@ -24,11 +25,12 @@ export const PatientService = {
   /**
    * Crea un paciente nuevo rápidamente solo con el nombre.
    * Supabase genera el UUID automáticamente.
+   * NOTA: Este método es para registros rápidos manuales, no valida duplicados estrictos.
    */
   async createQuickPatient(name: string): Promise<Patient | null> {
     const { data, error } = await supabase
       .from('patients')
-      .insert([{ name: name }]) // Asumiendo que tu tabla permite nulls en otros campos o tiene defaults
+      .insert([{ name: name }])
       .select()
       .single();
 
@@ -48,5 +50,87 @@ export const PatientService = {
       
     if (error) return null;
     return data;
+  },
+
+  /**
+   * 🛡️ IMPORTACIÓN BLINDADA (Lógica Opción B: Identidad Digital)
+   * * Algoritmo de Unicidad:
+   * 1. Busca si ya existe un paciente con ese EMAIL en tu lista.
+   * 2. Si no, busca si existe con ese TELÉFONO.
+   * 3. Si encuentra coincidencia -> ACTUALIZA datos faltantes (Merge).
+   * 4. Si no encuentra nada -> INSERTA nuevo paciente.
+   */
+  async upsertPatientIdentity(
+    rawPatient: { name: string; email?: string; phone?: string; birth_date?: string; gender?: string },
+    doctorId: string
+  ): Promise<{ patient: Patient; action: 'created' | 'updated' }> {
+    
+    // 1. Limpieza de datos clave para búsqueda (Sanitización en entrada)
+    const cleanEmail = rawPatient.email && rawPatient.email.trim().length > 3 ? rawPatient.email.trim() : null;
+    const cleanPhone = rawPatient.phone && rawPatient.phone.trim().length > 5 ? rawPatient.phone.trim() : null;
+
+    let existingId: string | null = null;
+
+    // 2. Estrategia de Búsqueda Secuencial (Prioridad: Email > Teléfono)
+    if (cleanEmail) {
+      const { data } = await supabase
+        .from('patients')
+        .select('id')
+        .eq('doctor_id', doctorId)
+        .eq('email', cleanEmail)
+        .maybeSingle();
+      if (data) existingId = data.id;
+    }
+
+    if (!existingId && cleanPhone) {
+      const { data } = await supabase
+        .from('patients')
+        .select('id')
+        .eq('doctor_id', doctorId)
+        .eq('phone', cleanPhone)
+        .maybeSingle();
+      if (data) existingId = data.id;
+    }
+
+    // 3. Ejecución (Update o Insert)
+    if (existingId) {
+      // UPDATE: Solo actualizamos datos, respetando que no se borren datos previos si el CSV viene vacío
+      const updatePayload: any = {
+          name: rawPatient.name, // El nombre se actualiza por si hubo corrección ortográfica
+          ...(rawPatient.birth_date && { birth_date: rawPatient.birth_date }),
+          ...(rawPatient.gender && { gender: rawPatient.gender }),
+          // Solo actualizamos email/phone si vienen datos nuevos y válidos
+          ...(cleanEmail && { email: cleanEmail }),
+          ...(cleanPhone && { phone: cleanPhone })
+      };
+
+      const { data, error } = await supabase
+        .from('patients')
+        .update(updatePayload)
+        .eq('id', existingId)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return { patient: data, action: 'updated' };
+    } else {
+      // INSERT: Paciente totalmente nuevo
+      const { data, error } = await supabase
+        .from('patients')
+        .insert({
+          doctor_id: doctorId,
+          name: rawPatient.name,
+          email: cleanEmail,
+          phone: cleanPhone,
+          birth_date: rawPatient.birth_date,
+          gender: rawPatient.gender,
+          isTemporary: false
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return { patient: data, action: 'created' };
+    }
   }
 };
