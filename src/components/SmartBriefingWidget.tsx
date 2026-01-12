@@ -12,6 +12,7 @@ interface SmartBriefingProps {
   weather: { temp: string; code: number };
   systemStatus: boolean;
   onOpenAssistant: () => void;
+  isLoading?: boolean; // <--- NUEVA PROPIEDAD PARA EVITAR PARPADEO
   insights: {
     nextTime: string | null;
     pending: number;
@@ -20,23 +21,10 @@ interface SmartBriefingProps {
   };
 }
 
-// Retos Clínicos Aleatorios (Simulación de Gamificación)
 const DAILY_CHALLENGES = [
-  {
-    category: "Cardiología",
-    question: "¿Fármaco de elección en HTA con Diabetes?",
-    answer: "IECA / ARA-II (Nefroprotección)"
-  },
-  {
-    category: "Urgencias",
-    question: "Triada de Cushing (HTIC)",
-    answer: "HTA, Bradicardia, Alt. Respiratoria"
-  },
-  {
-    category: "Pediatría",
-    question: "Dosis ponderal Paracetamol",
-    answer: "10-15 mg/kg/dosis cada 6h"
-  }
+  { category: "Cardiología", question: "¿Fármaco de elección en HTA con Diabetes?", answer: "IECA / ARA-II (Nefroprotección)" },
+  { category: "Urgencias", question: "Triada de Cushing (HTIC)", answer: "HTA, Bradicardia, Alt. Respiratoria" },
+  { category: "Pediatría", question: "Dosis ponderal Paracetamol", answer: "10-15 mg/kg/dosis cada 6h" }
 ];
 
 const SmartBriefingWidget: React.FC<SmartBriefingProps> = ({ 
@@ -44,68 +32,58 @@ const SmartBriefingWidget: React.FC<SmartBriefingProps> = ({
   weather, 
   systemStatus, 
   onOpenAssistant, 
+  isLoading = false, // Por defecto falso
   insights 
 }) => {
   const [hour, setHour] = useState(new Date().getHours());
   const [challenge, setChallenge] = useState(DAILY_CHALLENGES[0]);
   const [showAnswer, setShowAnswer] = useState(false);
 
-  // Efecto para actualizar la hora y el reto aleatorio
   useEffect(() => {
     setHour(new Date().getHours());
     setChallenge(DAILY_CHALLENGES[Math.floor(Math.random() * DAILY_CHALLENGES.length)]);
   }, []);
 
-  // Lógica de Temas (Día/Noche)
   let theme = { 
     gradient: "from-orange-400 via-amber-500 to-yellow-500", 
-    icon: Sunrise, 
-    label: "Buenos Días", 
-    shadow: "shadow-orange-200/50",
-    accent: "bg-white/20"
+    icon: Sunrise, label: "Buenos Días", shadow: "shadow-orange-200/50", accent: "bg-white/20"
   };
 
   if (hour >= 12 && hour < 18) {
-    theme = { 
-      gradient: "from-blue-500 via-cyan-500 to-teal-400", 
-      icon: Sun, 
-      label: "Buenas Tardes", 
-      shadow: "shadow-blue-200/50",
-      accent: "bg-white/20"
-    };
+    theme = { gradient: "from-blue-500 via-cyan-500 to-teal-400", icon: Sun, label: "Buenas Tardes", shadow: "shadow-blue-200/50", accent: "bg-white/20" };
   } else if (hour >= 18 && hour < 22) {
-    theme = { 
-      gradient: "from-indigo-600 via-purple-600 to-pink-500", 
-      icon: Sunset, 
-      label: "Buenas Noches", 
-      shadow: "shadow-indigo-200/50",
-      accent: "bg-indigo-900/30"
-    };
+    theme = { gradient: "from-indigo-600 via-purple-600 to-pink-500", icon: Sunset, label: "Buenas Noches", shadow: "shadow-indigo-200/50", accent: "bg-indigo-900/30" };
   } else if (hour >= 22 || hour < 5) {
-    theme = { 
-      gradient: "from-slate-900 via-slate-800 to-blue-950", 
-      icon: MoonStar, 
-      label: "Guardia Nocturna", 
-      shadow: "shadow-slate-800/50",
-      accent: "bg-slate-700/50"
-    };
+    theme = { gradient: "from-slate-900 via-slate-800 to-blue-950", icon: MoonStar, label: "Guardia Nocturna", shadow: "shadow-slate-800/50", accent: "bg-slate-700/50" };
   }
 
-  // ¿El Doctor está libre hoy?
+  // --- LÓGICA ANTI-FLICKER (SKELETON LOADER) ---
+  // Si está cargando, mostramos una estructura gris pulsante en lugar del reto/datos
+  if (isLoading) {
+    return (
+      <div className="relative w-full rounded-[2.5rem] bg-slate-100 dark:bg-slate-800/50 p-8 mb-8 overflow-hidden h-[280px] border border-slate-200 dark:border-slate-800">
+          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 dark:via-white/5 to-transparent skew-x-12 animate-pulse"></div>
+          <div className="flex flex-col gap-4 h-full justify-end relative z-10">
+             <div className="h-6 w-32 bg-slate-200 dark:bg-slate-700 rounded-lg"></div>
+             <div className="h-12 w-2/3 bg-slate-200 dark:bg-slate-700 rounded-2xl"></div>
+             <div className="flex gap-3 mt-2">
+                <div className="h-16 w-32 bg-slate-200 dark:bg-slate-700 rounded-2xl"></div>
+                <div className="h-16 w-32 bg-slate-200 dark:bg-slate-700 rounded-2xl"></div>
+             </div>
+          </div>
+      </div>
+    );
+  }
+
   const isFreeDay = insights.total === 0;
 
   return (
     <div className={`relative w-full rounded-[2.5rem] bg-gradient-to-r ${theme.gradient} p-8 shadow-2xl ${theme.shadow} dark:shadow-none text-white overflow-hidden mb-8 transition-all duration-1000 ease-in-out group`}>
-      
-      {/* Fondo Animado y Decoración */}
       <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
       <div className="absolute -right-20 -top-20 w-96 h-96 bg-white/10 rounded-full blur-[100px] animate-pulse"></div>
       
       <div className="relative z-10 flex flex-col lg:flex-row justify-between items-end gap-6">
-        
-        {/* SECCIÓN IZQUIERDA: SALUDO E INSIGHTS */}
         <div className="flex-1 w-full">
-          {/* Badge de Momento del Día */}
           <div className="flex items-center gap-2 mb-3 opacity-90">
             <div className={`p-1.5 rounded-lg backdrop-blur-sm ${theme.accent}`}>
               <theme.icon size={16} className="text-white" />
@@ -121,17 +99,12 @@ const SmartBriefingWidget: React.FC<SmartBriefingProps> = ({
             )}
           </div>
           
-          {/* Saludo Principal */}
           <h1 className="text-3xl md:text-4xl font-black tracking-tight mb-6 drop-shadow-sm leading-tight">
             {greeting}
           </h1>
 
-          {/* ZONA DINÁMICA: ¿TRABAJO O TRIVIA? */}
           {!isFreeDay ? (
-            // MODO TRABAJO: Muestra métricas
             <div className="flex flex-wrap gap-3 animate-in fade-in slide-in-from-bottom-4">
-              
-              {/* Próxima Cita */}
               <div className="flex items-center gap-3 bg-white/10 border border-white/10 px-4 py-2 rounded-2xl backdrop-blur-md hover:bg-white/20 transition-colors">
                 <div className="bg-white/20 p-2 rounded-xl"><Clock size={18}/></div>
                 <div>
@@ -140,7 +113,6 @@ const SmartBriefingWidget: React.FC<SmartBriefingProps> = ({
                 </div>
               </div>
 
-              {/* Pendientes (Alerta Visual) */}
               <div className={`flex items-center gap-3 border px-4 py-2 rounded-2xl backdrop-blur-md transition-colors ${insights.pending > 0 ? 'bg-amber-500/20 border-amber-300/30' : 'bg-white/10 border-white/10'}`}>
                 <div className={`${insights.pending > 0 ? 'bg-amber-500 text-white' : 'bg-white/20'} p-2 rounded-xl`}>
                   <AlertTriangle size={18}/>
@@ -151,7 +123,6 @@ const SmartBriefingWidget: React.FC<SmartBriefingProps> = ({
                 </div>
               </div>
 
-              {/* Barra de Progreso Circular (Mini) */}
               <div className="flex items-center gap-3 bg-white/10 border border-white/10 px-4 py-2 rounded-2xl backdrop-blur-md hidden sm:flex">
                 <div className="relative flex items-center justify-center">
                    <svg className="w-9 h-9 transform -rotate-90">
@@ -167,7 +138,6 @@ const SmartBriefingWidget: React.FC<SmartBriefingProps> = ({
               </div>
             </div>
           ) : (
-            // MODO LIBRE: Muestra Reto Clínico (Gamificación)
             <div className="bg-white/10 border border-white/10 rounded-2xl p-4 backdrop-blur-md max-w-lg animate-in zoom-in-95 cursor-pointer hover:bg-white/15 transition-all" onClick={() => setShowAnswer(!showAnswer)}>
                <div className="flex items-start gap-3">
                   <div className="p-2 bg-indigo-500 rounded-xl shadow-lg shadow-indigo-500/40 mt-1">
@@ -193,19 +163,13 @@ const SmartBriefingWidget: React.FC<SmartBriefingProps> = ({
           )}
         </div>
         
-        {/* SECCIÓN DERECHA: CLIMA Y COPILOTO */}
         <div className="flex gap-4 shrink-0 items-end">
-          
-          {/* Widget Clima Compacto */}
           <div className="hidden md:block text-right">
              <p className="text-4xl font-black leading-none tracking-tighter">{weather.temp}°</p>
              <p className="text-xs font-bold opacity-80 uppercase mt-1">Jalisco</p>
              <p className="text-[10px] opacity-60">{format(new Date(), "EEEE d", { locale: es })}</p>
           </div>
-
           <div className="h-12 w-px bg-white/20 hidden md:block"></div>
-
-          {/* BOTÓN COPILOTO (Call to Action) */}
           <button 
             onClick={onOpenAssistant}
             className="group/btn relative flex items-center gap-3 bg-white text-indigo-600 pl-4 pr-5 py-3 rounded-2xl shadow-xl hover:shadow-2xl hover:scale-105 active:scale-95 transition-all duration-300"
@@ -220,7 +184,6 @@ const SmartBriefingWidget: React.FC<SmartBriefingProps> = ({
              </div>
              <ChevronRight size={16} className="text-indigo-300 group-hover/btn:translate-x-1 transition-transform"/>
           </button>
-
         </div>
       </div>
     </div>

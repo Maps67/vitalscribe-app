@@ -75,7 +75,7 @@ const AtomicClock = ({ location }: { location: string }) => {
     );
 };
 
-// --- Assistant Modal REFORZADO (Limpieza de Texto + Anti-Doble Click) ---
+// --- Assistant Modal REFORZADO (Limpieza Texto + Anti-Freeze + Timeout) ---
 const AssistantModal = ({ isOpen, onClose, onActionComplete }: { isOpen: boolean; onClose: () => void; onActionComplete: () => void }) => {
   const { isListening, transcript, startListening, stopListening, resetTranscript } = useSpeechRecognition();
   
@@ -86,7 +86,6 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete }: { isOpen: boolean
   
   const navigate = useNavigate(); 
   
-  // Síntesis de Voz (TTS)
   const speakResponse = (text: string) => {
       if ('speechSynthesis' in window) {
           window.speechSynthesis.cancel();
@@ -111,74 +110,83 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete }: { isOpen: boolean
       }
   }, [isOpen]);
 
-  // PROCESADOR INTELIGENTE
   const processIntent = async () => {
-      if (!transcript) return;
+      if (!transcript) {
+          toast.info("No escuché ninguna instrucción.");
+          return;
+      }
       stopListening();
       setStatus('processing');
 
+      // Timeout de seguridad: Si Gemini tarda más de 12s, libera la UI.
+      const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error("Tiempo agotado")), 12000)
+      );
+
       try {
-          const lowerText = transcript.toLowerCase();
-          const isMedical = lowerText.includes('dosis') || lowerText.includes('tratamiento') || lowerText.includes('qué es') || lowerText.includes('protocolo') || lowerText.includes('interacción') || lowerText.includes('signos');
+          const executeLogic = async () => {
+              const lowerText = transcript.toLowerCase();
+              const isMedical = lowerText.includes('dosis') || lowerText.includes('tratamiento') || lowerText.includes('qué es') || lowerText.includes('protocolo') || lowerText.includes('interacción') || lowerText.includes('signos');
 
-          if (isMedical) {
-             const rawAnswer = await GeminiMedicalService.chatWithContext(
-                 "Contexto: El médico está en el Dashboard principal. Pregunta general rápida.", 
-                 transcript
-             );
-             
-             // 🧹 LIMPIEZA DE FORMATO (Markdown Killer)
-             // Elimina asteriscos, guiones bajos dobles y hashtags para lectura limpia
-             const cleanAnswer = rawAnswer.replace(/\*/g, '').replace(/__/g, '').replace(/#/g, '').trim();
-             
-             setMedicalAnswer(cleanAnswer);
-             
-             setAiResponse({ 
-                 intent: 'MEDICAL_QUERY', 
-                 data: {}, 
-                 message: 'Consulta Clínica',
-                 originalText: transcript, 
-                 confidence: 1.0 
-             });
-             setStatus('answering');
-             speakResponse(cleanAnswer); 
+              if (isMedical) {
+                 const rawAnswer = await GeminiMedicalService.chatWithContext(
+                     "Contexto: El médico está en el Dashboard principal. Pregunta general rápida.", 
+                     transcript
+                 );
+                 
+                 // Limpieza de Markdown para que no lea asteriscos
+                 const cleanAnswer = rawAnswer.replace(/\*/g, '').replace(/__/g, '').replace(/#/g, '').trim();
+                 
+                 setMedicalAnswer(cleanAnswer);
+                 setAiResponse({ 
+                     intent: 'MEDICAL_QUERY', 
+                     data: {}, 
+                     message: 'Consulta Clínica',
+                     originalText: transcript, 
+                     confidence: 1.0 
+                 });
+                 setStatus('answering');
+                 speakResponse(cleanAnswer); 
 
-          } else if (lowerText.includes('cita') || lowerText.includes('agendar')) {
-             setAiResponse({ 
-                 intent: 'CREATE_APPOINTMENT', 
-                 data: { patientName: "Paciente Nuevo (Voz)", start_time: new Date().toISOString() }, 
-                 message: 'Agendar Cita',
-                 originalText: transcript,
-                 confidence: 1.0
-             });
-             setStatus('answering');
-          } else {
-             setAiResponse({ 
-                 intent: 'NAVIGATION', 
-                 data: { destination: transcript }, 
-                 message: `Navegar a ${transcript}`,
-                 originalText: transcript,
-                 confidence: 1.0
-             });
-             setStatus('answering');
-          }
+              } else if (lowerText.includes('cita') || lowerText.includes('agendar')) {
+                 setAiResponse({ 
+                     intent: 'CREATE_APPOINTMENT', 
+                     data: { patientName: "Paciente Nuevo (Voz)", start_time: new Date().toISOString() }, 
+                     message: 'Agendar Cita',
+                     originalText: transcript,
+                     confidence: 1.0
+                 });
+                 setStatus('answering');
+              } else {
+                 setAiResponse({ 
+                     intent: 'NAVIGATION', 
+                     data: { destination: transcript }, 
+                     message: `Navegar a ${transcript}`,
+                     originalText: transcript,
+                     confidence: 1.0
+                 });
+                 setStatus('answering');
+              }
+          };
+
+          await Promise.race([executeLogic(), timeoutPromise]);
 
       } catch (error) {
           console.error("Error en Asistente:", error);
-          toast.error("No pude conectar con el núcleo clínico.");
+          toast.error("El asistente no respondió a tiempo. Verifique su conexión.");
           setStatus('idle');
       }
   };
 
   const handleExecuteAction = async () => {
-    if (!aiResponse || isExecuting) return; // Bloqueo si ya está ejecutando
+    if (!aiResponse || isExecuting) return; 
     
     if (aiResponse.intent === 'MEDICAL_QUERY') {
         onClose();
         return;
     }
 
-    setIsExecuting(true); // Activar bloqueo
+    setIsExecuting(true); 
 
     switch (aiResponse.intent) {
       case 'CREATE_APPOINTMENT':
@@ -204,7 +212,7 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete }: { isOpen: boolean
             onClose();
         } catch(e) { 
             toast.error("Error al guardar cita"); 
-            setIsExecuting(false); // Liberar si falla
+            setIsExecuting(false); 
         }
         break;
 
@@ -228,8 +236,6 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete }: { isOpen: boolean
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-200">
       <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-[2rem] shadow-2xl overflow-hidden border border-white/20 ring-1 ring-black/5">
-        
-        {/* HEADER */}
         <div className={`p-8 text-white text-center relative overflow-hidden transition-colors duration-500 ${status === 'answering' ? 'bg-emerald-600' : 'bg-gradient-to-br from-indigo-600 to-purple-700'}`}>
           <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
           <Bot size={48} className="mx-auto mb-3 relative z-10 drop-shadow-lg" />
@@ -240,16 +246,12 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete }: { isOpen: boolean
               {status === 'listening' ? 'Escuchando...' : status === 'processing' ? 'Consultando Núcleo Seguro...' : 'Asistente Activo'}
           </p>
         </div>
-
-        {/* BODY */}
         <div className="p-8">
-          
           {(status === 'idle' || status === 'listening' || status === 'processing') && (
             <div className="flex flex-col items-center gap-8">
                <div className={`text-center text-xl font-medium leading-relaxed min-h-[3rem] ${transcript ? 'text-slate-800 dark:text-white' : 'text-slate-400'}`}>
                  "{transcript || '¿Dosis, Tratamientos o Citas?'}"
                </div>
-               
                {status === 'processing' ? (
                  <div className="flex items-center gap-2 text-indigo-600 font-bold animate-pulse">
                    <Loader2 className="animate-spin" /> Procesando...
@@ -265,10 +267,8 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete }: { isOpen: boolean
                {status === 'listening' && <p className="text-xs text-slate-400 animate-pulse">Toca para detener y procesar</p>}
             </div>
           )}
-
           {status === 'answering' && aiResponse && (
             <div className="animate-in slide-in-from-bottom-4 fade-in">
-              
               {aiResponse.intent === 'MEDICAL_QUERY' ? (
                   <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-2xl p-5 border border-emerald-100 dark:border-emerald-800 mb-6 max-h-60 overflow-y-auto custom-scrollbar">
                     <h4 className="font-bold text-emerald-800 dark:text-emerald-400 text-sm uppercase mb-2 flex items-center gap-2">
@@ -284,12 +284,10 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete }: { isOpen: boolean
                     <p className="text-slate-600 dark:text-slate-300 text-sm mt-1">{aiResponse.message}</p>
                   </div>
               )}
-
               <div className="flex gap-3">
                 <button onClick={() => { setStatus('idle'); resetTranscript(); setAiResponse(null); setIsExecuting(false); }} className="flex-1 py-3.5 text-slate-500 font-bold hover:bg-slate-100 rounded-xl transition-colors">
                     Nueva Consulta
                 </button>
-                
                 {aiResponse.intent !== 'MEDICAL_QUERY' && (
                     <button 
                         onClick={handleExecuteAction} 
@@ -299,7 +297,6 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete }: { isOpen: boolean
                         {isExecuting ? <Loader2 className="animate-spin" size={18}/> : 'Ejecutar'}
                     </button>
                 )}
-                
                 {aiResponse.intent === 'MEDICAL_QUERY' && (
                     <button onClick={onClose} className="flex-1 py-3.5 bg-slate-800 text-white font-bold rounded-xl shadow-lg hover:bg-slate-900 active:scale-95">
                         Cerrar
@@ -308,7 +305,6 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete }: { isOpen: boolean
               </div>
             </div>
           )}
-
         </div>
         <div className="bg-slate-50 p-4 text-center"><button onClick={onClose} className="text-slate-400 text-xs font-bold uppercase tracking-wider hover:text-slate-600">CANCELAR</button></div>
       </div>
@@ -324,14 +320,12 @@ const StatusWidget = ({ weather, totalApts, pendingApts, location }: any) => {
     return (
         <div className="bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl rounded-[2rem] p-6 border border-white/50 dark:border-slate-700 shadow-xl h-full flex flex-col justify-between relative overflow-hidden">
              <div className="absolute inset-0 bg-gradient-to-br from-white via-transparent to-blue-50/50 opacity-50"></div>
-             
              <div className="flex justify-between items-start z-10 relative">
                  <AtomicClock location={location} />
                  <div className="text-right bg-white/50 dark:bg-slate-800/50 p-2 rounded-2xl backdrop-blur-sm border border-white/50 dark:border-slate-600">
                     <span className="text-2xl font-bold text-slate-700 dark:text-slate-200">{weather.temp}°</span>
                  </div>
              </div>
-
              <div className="mt-4 z-10 relative">
                  <div className="flex justify-between text-xs font-bold mb-2"><span className="text-slate-500">Progreso Diario</span><span className="text-indigo-600">{completed}/{totalApts} Pacientes</span></div>
                  <div className="h-3 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden border border-slate-200 dark:border-slate-700">
@@ -414,6 +408,9 @@ const Dashboard: React.FC = () => {
   const [locationName, setLocationName] = useState('Localizando...');
   const [systemStatus, setSystemStatus] = useState(true); 
   
+  // --- CONTROL DE ESTADO DE CARGA (ANTI-FLICKER) ---
+  const [isLoading, setIsLoading] = useState(true); // Inicia en true
+
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [isAssistantOpen, setIsAssistantOpen] = useState(false);
   const [isDocModalOpen, setIsDocModalOpen] = useState(false);
@@ -430,6 +427,8 @@ const Dashboard: React.FC = () => {
 
   const fetchData = useCallback(async () => {
       try {
+          setIsLoading(true); // Activa skeleton al recargar
+
           const { data: { user } } = await supabase.auth.getUser();
           if (!user) { setSystemStatus(false); return; }
           setSystemStatus(true);
@@ -464,7 +463,12 @@ const Dashboard: React.FC = () => {
           const { data: lostApts } = await supabase.from('appointments').select('id, title, start_time').eq('doctor_id', user.id).eq('status', 'scheduled').lt('start_time', new Date().toISOString()).limit(3);
           if (lostApts) { lostApts.forEach(a => radar.push({ id: a.id, type: 'appt', title: 'Cita por Cerrar', subtitle: `${a.title} • ${format(parseISO(a.start_time), 'dd/MM HH:mm')}`, date: a.start_time })); }
           setPendingItems(radar);
-      } catch (e) { setSystemStatus(false); console.error(e); }
+      } catch (e) { 
+          setSystemStatus(false); 
+          console.error(e); 
+      } finally {
+          setIsLoading(false); // Apaga el skeleton cuando termina
+      }
   }, []);
 
   const updateWeather = useCallback(async (latitude: number, longitude: number) => {
@@ -538,6 +542,7 @@ const Dashboard: React.FC = () => {
             weather={weather} 
             systemStatus={systemStatus} 
             onOpenAssistant={() => setIsAssistantOpen(true)}
+            isLoading={isLoading} // <--- SE PASA EL ESTADO DE CARGA
             insights={{
                nextTime: nextPatient ? format(parseISO(nextPatient.start_time), 'h:mm a') : null,
                pending: pendingItems.length,
