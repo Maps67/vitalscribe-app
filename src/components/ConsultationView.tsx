@@ -39,9 +39,9 @@ interface EnhancedGeminiResponse extends GeminiResponse {
 }
 
 interface TranscriptSegment {
-    role: 'doctor' | 'patient';
-    text: string;
-    timestamp: number;
+   role: 'doctor' | 'patient';
+   text: string;
+   timestamp: number;
 }
 
 const SPECIALTIES = [
@@ -580,30 +580,43 @@ const ConsultationView: React.FC = () => {
       setShowBriefing(true);
   };
 
-  // --- CALLBACK CUANDO EL MÉDICO CIERRA EL BRIEFING (LÓGICA HÍBRIDA) ---
+  // --- CALLBACK CUANDO EL MÉDICO CIERRA EL BRIEFING (LÓGICA HÍBRIDA CORREGIDA) ---
   const handleBriefingComplete = (context: string) => {
-      setManualContext(context); // 1. Siempre guardamos para la IA (Memoria Virtual)
+      setManualContext(context); // 1. Guardamos en memoria para la IA (Esto aplica a AMBOS casos)
       setShowBriefing(false);    // 2. Cerramos el modal
       
-      // LÓGICA DE VISUALIZACIÓN HÍBRIDA
       // Detectamos si es paciente nuevo/temporal O si el snapshot actual está vacío/genérico
       const isNewOrEmpty = (selectedPatient as any).isTemporary || 
                            !selectedPatient?.history || 
+                           selectedPatient?.history.length < 20 || // Umbral bajo para considerar "vacío"
                            (vitalSnapshot?.evolution && vitalSnapshot.evolution.includes("Sin datos previos"));
 
-      // Si es nuevo y escribió algo, actualizamos el Vital Snapshot visualmente
+      // CASO A: PACIENTE NUEVO / VACÍO -> INYECCIÓN VISUAL
+      // Solo aquí sobrescribimos la tarjeta visual para que no se vea vacía.
       if (isNewOrEmpty && context.trim().length > 0) {
+          // 1. Actualizamos Sidebar Amarillo
+          setActiveMedicalContext(prev => ({
+              history: context, // Aquí sí mostramos lo que acabas de escribir como "Antecedente"
+              allergies: prev?.allergies || "No registradas",
+              lastConsultation: prev?.lastConsultation,
+              insurance: prev?.insurance
+          }));
+
+          // 2. Actualizamos Vital Snapshot (Tarjeta Grande)
           setVitalSnapshot({
-              evolution: `📝 CONTEXTO INICIAL (MÉDICO):\n"${context}"`, // Mostramos lo que escribió
+              evolution: `📝 CONTEXTO INICIAL (MÉDICO):\n"${context}"`,
               risk_flags: ["Paciente Nuevo - Valoración Inicial"],
               pending_actions: ["Realizar historia clínica completa"],
               medication_audit: "Pendiente de registro en nota"
           });
+          
           toast.success("Contexto inicial cargado en panel visual.");
       } 
-      // Si ya tiene historial, NO tocamos el Vital Snapshot (se queda el histórico)
-      else if (context) {
-          toast.success("Contexto guardado en memoria para la IA.");
+      
+      // CASO B: PACIENTE CON HISTORIA -> SOLO CONFIRMACIÓN
+      // No tocamos la tarjeta amarilla para no ocultar sus enfermedades crónicas.
+      else if (context.trim().length > 0) {
+          toast.success("Contexto agregado a la memoria de la IA (Historial visual preservado).");
       }
   };
 
@@ -1147,7 +1160,7 @@ const ConsultationView: React.FC = () => {
             <div className="flex-1 overflow-y-auto mb-4 pr-2 custom-scrollbar">
                 {chatMessages.map((m,i)=>(
                     <div key={i} className={`p-3 mb-3 rounded-2xl max-w-[85%] text-sm shadow-sm ${m.role==='user'?'bg-brand-teal text-white self-end ml-auto rounded-tr-none':'bg-slate-100 dark:bg-slate-800 dark:text-slate-200 self-start mr-auto rounded-tl-none'}`}>
-                                    <FormattedText content={m.text} />
+                                        <FormattedText content={m.text} />
                     </div>
                 ))}
                 <div ref={chatEndRef}/>
@@ -1297,8 +1310,8 @@ const ConsultationView: React.FC = () => {
                                                             <div key={idx} className={`flex ${line.speaker === 'Médico' ? 'justify-end' : 'justify-start'}`}>
                                                                 <div className={`max-w-[80%] rounded-2xl p-3 text-sm ${
                                                                     line.speaker === 'Médico' 
-                                                                        ? 'bg-blue-50 text-blue-900 dark:bg-blue-900/30 dark:text-blue-100 rounded-tr-none' 
-                                                                        : 'bg-white border border-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700 rounded-tl-none'
+                                                                    ? 'bg-blue-50 text-blue-900 dark:bg-blue-900/30 dark:text-blue-100 rounded-tr-none' 
+                                                                    : 'bg-white border border-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700 rounded-tl-none'
                                                                 }`}>
                                                                     <span className={`text-[10px] font-bold block mb-1 uppercase opacity-70 ${line.speaker === 'Médico' ? 'text-right' : 'text-left'}`}>
                                                                         {line.speaker}
@@ -1449,50 +1462,50 @@ const ConsultationView: React.FC = () => {
                                                                 showDanger ? 'bg-red-50 border-red-200 dark:bg-red-900/10 dark:border-red-800' : 'bg-slate-50 border-slate-100 dark:bg-slate-800/50 dark:border-slate-700'
                                                             }`}>
                                                                 <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-2">
-                                                                    <div className="relative">
+                                                                        <div className="relative">
+                                                                            <input 
+                                                                                className={`w-full font-bold bg-transparent outline-none border-b border-transparent focus:border-indigo-300 transition-colors ${
+                                                                                    showDanger ? 'text-red-800 dark:text-red-200' : 'text-slate-800 dark:text-white'
+                                                                                }`} 
+                                                                                value={med.drug} 
+                                                                                onChange={e=>handleUpdateMedication(idx,'drug',e.target.value)} 
+                                                                                placeholder="Nombre del medicamento" 
+                                                                            />
+                                                                            {showDanger && (
+                                                                                <div className="absolute right-0 top-1/2 -translate-y-1/2 text-red-500 animate-pulse" title="Alerta de Seguridad: Riesgo detectado">
+                                                                                    <AlertCircle size={16}/>
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
                                                                         <input 
-                                                                            className={`w-full font-bold bg-transparent outline-none border-b border-transparent focus:border-indigo-300 transition-colors ${
-                                                                                showDanger ? 'text-red-800 dark:text-red-200' : 'text-slate-800 dark:text-white'
+                                                                            className={`text-sm bg-transparent outline-none border-b border-transparent focus:border-indigo-300 transition-colors ${
+                                                                                showDanger ? 'text-red-600 font-bold uppercase tracking-wider' : 'text-slate-600 dark:text-slate-300'
                                                                             }`} 
-                                                                            value={med.drug} 
-                                                                            onChange={e=>handleUpdateMedication(idx,'drug',e.target.value)} 
-                                                                            placeholder="Nombre del medicamento" 
+                                                                            value={med.dose} 
+                                                                            readOnly={isManualBlocked}
+                                                                            onChange={e=>!isManualBlocked && handleUpdateMedication(idx,'dose',e.target.value)} 
+                                                                            placeholder="Dosis" 
                                                                         />
-                                                                        {showDanger && (
-                                                                            <div className="absolute right-0 top-1/2 -translate-y-1/2 text-red-500 animate-pulse" title="Alerta de Seguridad: Riesgo detectado">
-                                                                                <AlertCircle size={16}/>
-                                                                            </div>
-                                                                        )}
-                                                                    </div>
-                                                                    <input 
-                                                                        className={`text-sm bg-transparent outline-none border-b border-transparent focus:border-indigo-300 transition-colors ${
-                                                                            showDanger ? 'text-red-600 font-bold uppercase tracking-wider' : 'text-slate-600 dark:text-slate-300'
-                                                                        }`} 
-                                                                        value={med.dose} 
-                                                                        readOnly={isManualBlocked}
-                                                                        onChange={e=>!isManualBlocked && handleUpdateMedication(idx,'dose',e.target.value)} 
-                                                                        placeholder="Dosis" 
-                                                                    />
-                                                                    <div className="col-span-2 flex gap-2 text-xs">
-                                                                            <input 
-                                                                                className={`flex-1 bg-transparent outline-none border-b border-transparent focus:border-indigo-300 transition-colors ${
-                                                                                    showDanger ? 'text-red-400 text-center font-mono opacity-50' : 'text-slate-500'
-                                                                                }`} 
-                                                                                value={isManualBlocked ? '---' : med.frequency} 
-                                                                                readOnly={isManualBlocked}
-                                                                                onChange={e=>!isManualBlocked && handleUpdateMedication(idx,'frequency',e.target.value)} 
-                                                                                placeholder="Frecuencia" 
-                                                                            />
-                                                                            <input 
-                                                                                className={`flex-1 bg-transparent outline-none border-b border-transparent focus:border-indigo-300 transition-colors ${
-                                                                                    showDanger ? 'text-red-400 text-center font-mono opacity-50' : 'text-slate-500'
-                                                                                }`} 
-                                                                                value={isManualBlocked ? '---' : med.duration} 
-                                                                                readOnly={isManualBlocked}
-                                                                                onChange={e=>!isManualBlocked && handleUpdateMedication(idx,'duration',e.target.value)} 
-                                                                                placeholder="Duración" 
-                                                                            />
-                                                                    </div>
+                                                                        <div className="col-span-2 flex gap-2 text-xs">
+                                                                                <input 
+                                                                                    className={`flex-1 bg-transparent outline-none border-b border-transparent focus:border-indigo-300 transition-colors ${
+                                                                                        showDanger ? 'text-red-400 text-center font-mono opacity-50' : 'text-slate-500'
+                                                                                    }`} 
+                                                                                    value={isManualBlocked ? '---' : med.frequency} 
+                                                                                    readOnly={isManualBlocked}
+                                                                                    onChange={e=>!isManualBlocked && handleUpdateMedication(idx,'frequency',e.target.value)} 
+                                                                                    placeholder="Frecuencia" 
+                                                                                />
+                                                                                <input 
+                                                                                    className={`flex-1 bg-transparent outline-none border-b border-transparent focus:border-indigo-300 transition-colors ${
+                                                                                        showDanger ? 'text-red-400 text-center font-mono opacity-50' : 'text-slate-500'
+                                                                                    }`} 
+                                                                                    value={isManualBlocked ? '---' : med.duration} 
+                                                                                    readOnly={isManualBlocked}
+                                                                                    onChange={e=>!isManualBlocked && handleUpdateMedication(idx,'duration',e.target.value)} 
+                                                                                    placeholder="Duración" 
+                                                                                />
+                                                                        </div>
                                                                 </div>
                                                                 <button onClick={()=>handleRemoveMedication(idx)} className={`opacity-0 group-hover:opacity-100 transition-opacity ${showDanger ? 'text-red-400 hover:text-red-700' : 'text-slate-300 hover:text-red-500'}`}><X size={16}/></button>
                                                             </div>
