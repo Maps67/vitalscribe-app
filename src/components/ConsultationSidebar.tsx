@@ -3,14 +3,13 @@ import {
   Mic, Pause, Play, RefreshCw, Save, WifiOff, Trash2, 
   Stethoscope, Search, X, Calendar, UserPlus, ChevronUp, 
   ChevronDown, Activity, AlertCircle, ShieldCheck, Check, 
-  Sparkles, Paperclip, User, CornerDownLeft, Download 
+  Sparkles, Paperclip, User, CornerDownLeft, Download, Loader2 
 } from 'lucide-react';
 import { VitalSnapshotCard } from './VitalSnapshotCard';
 import { UploadMedico } from './UploadMedico';
 import { SpecialtyVault } from './SpecialtyVault';
 import { DoctorFileGallery } from './DoctorFileGallery';
 import { Patient, PatientInsight, DoctorProfile } from '../types';
-// NOTA: Ya no necesitamos importar 'supabase' aquí porque los datos ya vienen corregidos desde el origen.
 
 interface ConsultationSidebarProps {
   isOnline: boolean;
@@ -26,7 +25,8 @@ interface ConsultationSidebarProps {
   setSelectedPatient: (patient: any) => void;
   filteredPatients: any[];
   handleSelectPatient: (patient: any) => void;
-  handleCreateTemporary: (name: string) => void;
+  // CAMBIO CRÍTICO: Renombrado a handleCreatePatient y ahora devuelve Promesa (Async)
+  handleCreatePatient: (name: string) => Promise<void>; 
   vitalSnapshot: PatientInsight | null;
   isMobileSnapshotVisible: boolean;
   setIsMobileSnapshotVisible: (visible: boolean) => void;
@@ -76,7 +76,7 @@ export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
   setSelectedPatient,
   filteredPatients,
   handleSelectPatient,
-  handleCreateTemporary,
+  handleCreatePatient, // Prop actualizada
   vitalSnapshot,
   isMobileSnapshotVisible,
   setIsMobileSnapshotVisible,
@@ -107,13 +107,29 @@ export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
   onDownloadRecord
 }) => {
   const [isMobileContextExpanded, setIsMobileContextExpanded] = useState(false);
+  
+  // NUEVO ESTADO: Control de carga para creación de paciente
+  const [isCreatingPatient, setIsCreatingPatient] = useState(false);
 
-  // NOTA: Hemos eliminado el useEffect y el estado 'smartSummary'.
-  // Razón: Al normalizar la base de datos con SQL, 'activeMedicalContext.lastConsultation.summary'
-  // ahora contiene el dato correcto y real, eliminando la necesidad de parches en el frontend.
+  // NUEVA FUNCIÓN: Wrapper para manejar la creación asíncrona
+  const onTriggerCreatePatient = async () => {
+    if (!searchTerm.trim()) return;
+    try {
+        setIsCreatingPatient(true);
+        await handleCreatePatient(searchTerm);
+        // El padre se encarga de seleccionar el paciente y limpiar el search,
+        // o podemos limpiar aquí si es necesario.
+        // setSearchTerm(''); // Opcional, depende de la UX deseada
+    } catch (error) {
+        console.error("Error creando paciente desde Sidebar:", error);
+    } finally {
+        setIsCreatingPatient(false);
+    }
+  };
 
   return (
-    <div className={`w-full md:w-1/4 p-4 flex flex-col gap-2 border-r dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden h-full ${generatedNote ? 'hidden md:flex' : 'flex'}`}>
+    // FIX IPAD: overscroll-contain para evitar arrastre de página en Sidebar también
+    <div className={`w-full md:w-1/4 p-4 flex flex-col gap-2 border-r dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden overscroll-contain h-full ${generatedNote ? 'hidden md:flex' : 'flex'}`}>
       
       {/* --- HEADER --- */}
       <div className="flex-none flex flex-col gap-2">
@@ -170,7 +186,7 @@ export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
               )}
             </div>
             {searchTerm && !selectedPatient && (
-              <div className="absolute top-full left-0 w-full bg-white dark:bg-slate-800 border rounded-b-lg shadow-lg z-40 max-h-48 overflow-y-auto">
+              <div className="absolute top-full left-0 w-full bg-white dark:bg-slate-800 border rounded-b-lg shadow-lg z-40 max-h-48 overflow-y-auto custom-scrollbar">
                 {filteredPatients.map(p => (
                   <div key={p.id} onClick={() => handleSelectPatient(p)} className="p-3 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer border-b dark:border-slate-700 dark:text-white text-sm flex items-center justify-between">
                     <span>{p.name}</span>
@@ -179,11 +195,15 @@ export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
                 ))}
                 {filteredPatients.length === 0 && (
                   <div 
-                    onClick={() => handleCreateTemporary(searchTerm)} 
-                    className="p-3 hover:bg-teal-50 dark:hover:bg-teal-900/20 cursor-pointer border-b dark:border-slate-700 text-brand-teal font-bold text-sm flex items-center gap-2"
+                    onClick={!isCreatingPatient ? onTriggerCreatePatient : undefined} 
+                    className={`p-3 border-b dark:border-slate-700 font-bold text-sm flex items-center gap-2 transition-colors ${
+                        isCreatingPatient 
+                        ? 'bg-slate-100 text-slate-400 cursor-wait' 
+                        : 'hover:bg-teal-50 dark:hover:bg-teal-900/20 text-brand-teal cursor-pointer'
+                    }`}
                   >
-                    <UserPlus size={16}/>
-                    <span>Crear Nuevo: "{searchTerm}"</span>
+                    {isCreatingPatient ? <Loader2 size={16} className="animate-spin"/> : <UserPlus size={16}/>}
+                    <span>{isCreatingPatient ? "Registrando..." : `Crear Nuevo: "${searchTerm}"`}</span>
                   </div>
                 )}
               </div>
@@ -191,8 +211,9 @@ export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
           </div>
       </div>
 
-      {/* --- AREA CENTRAL --- */}
-      <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar flex flex-col gap-2 pr-1">
+      {/* --- AREA CENTRAL (Scrollable) --- */}
+      {/* FIX IPAD: -webkit-overflow-scrolling: touch (via CSS global) y overscroll-behavior */}
+      <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar overscroll-contain flex flex-col gap-2 pr-1">
           {/* Vital Snapshot */}
           <div className="w-full transition-all duration-300 ease-in-out shrink-0">
             {vitalSnapshot && (

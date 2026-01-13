@@ -327,13 +327,9 @@ const ConsultationView: React.FC = () => {
                     handleSelectPatient(existingPatient);
                     toast.success(`Paciente cargado: ${incomingName}`);
                 } else {
-                    const tempPatient: any = { 
-                        id: 'temp_' + Date.now(), 
-                        name: incomingName,
-                        isTemporary: true 
-                    };
-                    handleSelectPatient(tempPatient);
-                    toast.info(`Consulta libre para: ${incomingName}`);
+                    // Si viene por nombre pero no existe, usamos la nueva lógica
+                    handleCreatePatient(incomingName);
+                    toast.info(`Registrando nuevo paciente: ${incomingName}`);
                 }
                 window.history.replaceState({}, document.title);
             } else {
@@ -576,21 +572,38 @@ const ConsultationView: React.FC = () => {
       setShowBriefing(true);
   };
 
-  const handleCreateTemporary = (name: string) => {
-      const tempPatient: any = { 
-          id: 'temp_' + Date.now(), 
-          name: name,
-          isTemporary: true 
-      };
-      setSelectedPatient(tempPatient);
-      setSearchTerm('');
-      setManualContext(""); // Reset
-      setSessionSnapshot(null);
-      startTimeRef.current = Date.now(); 
-      toast.info(`Nuevo paciente temporal: ${name}`);
-      
-      // Activar Briefing para ingresar contexto inicial
-      setShowBriefing(true);
+  // --- NUEVA LÓGICA DE REGISTRO AUTOMÁTICO (JUST-IN-TIME) ---
+  const handleCreatePatient = async (name: string) => {
+    if (!currentUserId) return;
+    
+    // Inserción Inmediata en DB (Persistencia Automática)
+    const { data: newPatient, error } = await supabase.from('patients').insert({
+        name: name,
+        doctor_id: currentUserId,
+        history: JSON.stringify({ created_via: 'dashboard_quick_consult_v7.9' })
+    }).select().single();
+
+    if (error || !newPatient) {
+        toast.error("Error registrando paciente. Intente nuevamente.");
+        return;
+    }
+
+    // Actualizar lista local de pacientes
+    setPatients(prev => [newPatient, ...prev]);
+    
+    // Seleccionar el paciente REAL (ya tiene ID)
+    setSelectedPatient(newPatient);
+    setSearchTerm('');
+    
+    // Resetear estados de sesión
+    setManualContext(""); 
+    setSessionSnapshot(null);
+    startTimeRef.current = Date.now(); 
+    
+    toast.success(`Paciente registrado: ${name}`);
+    
+    // Activar Briefing Inmediatamente
+    setShowBriefing(true);
   };
 
   // --- CALLBACK CUANDO EL MÉDICO CIERRA EL BRIEFING (LÓGICA HÍBRIDA CORREGIDA) ---
@@ -1033,17 +1046,8 @@ const ConsultationView: React.FC = () => {
         
         let finalPatientId = selectedPatient.id;
 
-        if ((selectedPatient as any).isTemporary) {
-            const { data: newPatient, error: createError } = await supabase.from('patients').insert({
-                name: selectedPatient.name,
-                doctor_id: user.id,
-                history: JSON.stringify({ created_via: 'dashboard_quick_consult' })
-            }).select().single();
-            
-            if (createError) throw createError;
-            finalPatientId = newPatient.id;
-            toast.success("Paciente registrado automáticamente.");
-        }
+        // YA NO ES NECESARIO CREAR PACIENTE AQUÍ
+        // El paciente ya fue creado en handleCreatePatient (Registro Just-in-Time)
 
         const medsSummary = editablePrescriptions.length > 0 
             ? "\n\nMEDICAMENTOS:\n" + editablePrescriptions.map(m => `- ${m.drug} ${m.dose} (${m.frequency})`).join('\n')
@@ -1222,8 +1226,7 @@ const ConsultationView: React.FC = () => {
   );
 
   return (
-    // FIX IPAD: Se cambió h-[calc(100vh-64px)] por h-[calc(100dvh-64px)] y se agregó overflow-hidden
-    <div className="flex flex-col md:flex-row h-[calc(100dvh-64px)] bg-slate-100 dark:bg-slate-950 relative overflow-hidden">
+    <div className="flex flex-col md:flex-row h-[calc(100vh-64px)] bg-slate-100 dark:bg-slate-950 relative">
       
       <ConsultationSidebar 
         isOnline={isOnline}
@@ -1239,7 +1242,8 @@ const ConsultationView: React.FC = () => {
         setSelectedPatient={setSelectedPatient}
         filteredPatients={filteredPatients}
         handleSelectPatient={handleSelectPatient}
-        handleCreateTemporary={handleCreateTemporary}
+        // CAMBIO CRÍTICO: Pasamos la nueva función asíncrona
+        handleCreatePatient={handleCreatePatient} 
         vitalSnapshot={vitalSnapshot}
         isMobileSnapshotVisible={isMobileSnapshotVisible}
         setIsMobileSnapshotVisible={setIsMobileSnapshotVisible}
@@ -1299,8 +1303,7 @@ const ConsultationView: React.FC = () => {
                     })}
                 </div>
                 
-                {/* FIX IPAD: Se agrega overscroll-contain para evitar arrastre de página */}
-                <div className="flex-1 overflow-y-auto overscroll-contain p-4 md:p-8 bg-slate-100 dark:bg-slate-950">
+                <div className="flex-1 overflow-y-auto p-4 md:p-8 bg-slate-100 dark:bg-slate-950">
                     {!generatedNote ? (
                         <div className="h-full flex flex-col items-center justify-center text-slate-400 gap-4 opacity-50">
                             <FileText size={64} strokeWidth={1}/>
