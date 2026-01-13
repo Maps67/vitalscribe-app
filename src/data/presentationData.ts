@@ -9,7 +9,6 @@ export const presentationData: SlideData[] = [
     title: "VitalScribe AI v5.4",
     subtitle: "Protocolo Omni-Sentinel:",
     content: "Certificación de Arquitectura CDSS (Clinical Decision Support System) y Blindaje Legal Activo para el Mercado Mexicano.",
-    // Imagen: Red abstracta de seguridad azul
     image: "https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&q=80&w=2070", 
     meta: { gradient: "from-teal-600 to-slate-900" }
   },
@@ -26,7 +25,6 @@ export const presentationData: SlideData[] = [
       "Vulnerabilidad Legal: Notas escuetas por prisa que violan la NOM-004 y dejan indefenso al médico.",
       "Fuga de Datos: Sistemas web estándar sin aislamiento real entre consultorios."
     ],
-    // Imagen: Médico frotándose la frente por estrés/cansancio
     image: "https://images.unsplash.com/photo-1532938911079-1b06ac7ceec7?auto=format&fit=crop&q=80&w=2032"
   },
 
@@ -41,7 +39,6 @@ export const presentationData: SlideData[] = [
       "UX de Contención Visual: Diseño que prioriza alertas de 'Semáforo Rojo' antes de permitir la prescripción.",
       "Protocolo Fail-Safe: Si la red cae, el 'Core' local mantiene la encriptación y el guardado. Continuidad operativa absoluta."
     ],
-    // Imagen: Manos usando tecnología médica con precisión
     image: "https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?auto=format&fit=crop&q=80&w=2070"
   },
 
@@ -118,18 +115,16 @@ export const presentationData: SlideData[] = [
     ]
   },
 
-  // SLIDE 7: ARQUITECTURA TÉCNICA (SPLIT) - CORREGIDO
-  // Contexto: Servidores, integridad de datos y blindaje RLS.
+  // SLIDE 7: ARQUITECTURA TÉCNICA (SPLIT) - BLINDAJE REFORZADO
   {
     id: "tech",
     type: "split",
     title: "Soberanía Tecnológica & RLS",
     content: [
-      "Row Level Security (RLS): Aislamiento criptográfico a nivel motor de base de datos. Matemáticamente imposible ver pacientes ajenos.",
-      "Supabase Edge Functions: La lógica crítica corre en entorno seguro, nunca en el dispositivo cliente.",
-      "Offline-First Real: Arquitectura PWA militarizada para operar en zonas rurales sin comprometer datos."
+      "Cifrado Grado Bancario (AES-256): Los datos sensibles, notas médicas y diagnósticos están encriptados tanto en reposo como en tránsito, cumpliendo con estándares internacionales de privacidad.",
+      "Row Level Security (RLS): Aislamiento matemático a nivel motor de base de datos. Es imposible que un usuario acceda a registros de otro.",
+      "Vertex AI Secure Node: El procesamiento de IA ocurre en un entorno privado. Sus datos no se utilizan para entrenar modelos públicos, garantizando el secreto profesional médico."
     ],
-    // URL Actualizada: Imagen de alta disponibilidad para servidores y seguridad digital
     image: "https://images.unsplash.com/photo-1563986768609-322da13575f3?auto=format&fit=crop&q=80&w=2070"
   },
 
@@ -147,7 +142,6 @@ export const presentationData: SlideData[] = [
   },
 
   // SLIDE 9: SEGUROS (SPLIT)
-  // Contexto: Papeles, escritura, oficina, trámites.
   {
     id: "insurance",
     type: "split",
@@ -157,7 +151,6 @@ export const presentationData: SlideData[] = [
       "Formatos Oficiales Digitalizados: Biblioteca de formatos (GNP, AXA, MetLife) disponibles para que el médico vacíe los datos reales de la nota en tiempo real.",
       "Memoria de Siniestros: Rastreo automático de números de póliza entre sesiones."
     ],
-    // Imagen: Persona llenando documento médico/seguro
     image: "https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?auto=format&fit=crop&q=80&w=2000"
   },
 
@@ -169,19 +162,17 @@ export const presentationData: SlideData[] = [
     content: "Herramientas de negocio para la sustentabilidad del consultorio.",
     items: [
       { iconName: "Calculator", title: "Calculadora Quirúrgica", text: "Desglose automático de honorarios para equipos médicos. Transparencia total." },
-      { iconName: "Database", title: "Soberanía de Datos", text: "Exportación masiva (JSON/Excel). El expediente es propiedad del médico, no de la plataforma." }
+      { iconName: "ShieldCheck", title: "Evidencia Histórica", text: "Registro inmutable de la evolución. Tu mejor defensa ante disputas de aseguradoras por 'preexistencias'." }
     ]
   },
 
   // SLIDE 11: CIERRE (HERO)
-  // Contexto: Confianza, éxito, futuro.
   {
     id: "closing",
     type: "hero",
     title: "Medicina Protegida.",
     subtitle: "El Estándar v5.4",
     content: "VitalScribe AI no solo documenta; defiende su criterio y protege a su paciente.",
-    // Imagen: Médico dando la mano (Trust)
     image: "https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=1964",
     meta: { gradient: "from-teal-600 to-blue-900" }
   }
