@@ -44,6 +44,13 @@ interface TranscriptSegment {
    timestamp: number;
 }
 
+// Estructura para el Snapshot de Seguridad
+interface SessionSnapshot {
+    inputSignature: string;
+    data: EnhancedGeminiResponse;
+    timestamp: number;
+}
+
 const SPECIALTIES = [
   "Medicina General", 
   "Cardiología", 
@@ -138,6 +145,9 @@ const ConsultationView: React.FC = () => {
   
   const [generatedNote, setGeneratedNote] = useState<EnhancedGeminiResponse | null>(null);
   
+  // --- NUEVO ESTADO: SNAPSHOT DE SESIÓN (Inmutabilidad) ---
+  const [sessionSnapshot, setSessionSnapshot] = useState<SessionSnapshot | null>(null);
+
   const [consentGiven, setConsentGiven] = useState(false);
   const [activeTab, setActiveTab] = useState<TabType>('record');
   
@@ -475,6 +485,7 @@ const ConsultationView: React.FC = () => {
             setSegments([]);
             if (currentUserId) localStorage.removeItem(`draft_${currentUserId}`);
             setGeneratedNote(null);
+            setSessionSnapshot(null); // Reset Snapshot al cambiar paciente
             setIsRiskExpanded(false);
             startTimeRef.current = Date.now(); 
         } else if (!transcript) {
@@ -521,8 +532,9 @@ const ConsultationView: React.FC = () => {
   };
 
   const handleSelectPatient = async (patient: any) => {
-      // 1. Resetear el contexto manual previo
+      // 1. Resetear el contexto manual previo y el Snapshot
       setManualContext("");
+      setSessionSnapshot(null); // Seguridad: Nuevo paciente = Nueva sesión
       
       if (patient.isGhost) {
           const tempPatient = {
@@ -573,6 +585,7 @@ const ConsultationView: React.FC = () => {
       setSelectedPatient(tempPatient);
       setSearchTerm('');
       setManualContext(""); // Reset
+      setSessionSnapshot(null);
       startTimeRef.current = Date.now(); 
       toast.info(`Nuevo paciente temporal: ${name}`);
       
@@ -650,12 +663,19 @@ const ConsultationView: React.FC = () => {
   };
 
   const handleClearTranscript = () => {
-      if(confirm("¿Borrar borrador permanentemente?")) { 
+      if(confirm("¿Desea restablecer todo? Esto eliminará la nota actual y permitirá generar una nueva valoración.")) { 
           resetTranscript(); 
           setSegments([]);
           if (currentUserId) localStorage.removeItem(`draft_${currentUserId}`); 
           setGeneratedNote(null); 
+          
+          // 🛑 SNAPSHOT RESET: Romper el cristal
+          setSessionSnapshot(null); 
+          setEditableInstructions('');
+          setEditablePrescriptions([]);
+          
           setIsRiskExpanded(false); 
+          toast.info("Sesión reiniciada. Puede generar una nueva valoración.");
       }
   };
 
@@ -732,6 +752,27 @@ const ConsultationView: React.FC = () => {
     const loadingToast = toast.loading("⚡ Motor Prometheus V10: Analizando audio...");
 
     try {
+      // 🔒 PROTOCOLO DE SNAPSHOT (OPTION B)
+      // Antes de llamar a la IA, verificamos si ya existe una valoración válida para este input.
+      const inputSignature = fullTranscript + (manualContext || ""); // Firma Digital del Input
+      
+      if (sessionSnapshot && sessionSnapshot.inputSignature === inputSignature) {
+          // HIT: El médico intentó regenerar lo mismo. Restauramos el snapshot.
+          toast.dismiss(loadingToast);
+          toast.info("♻️ Recuperando valoración validada (Snapshot de Seguridad).");
+          
+          setGeneratedNote(sessionSnapshot.data);
+          setEditableInstructions(sessionSnapshot.data.patientInstructions || '');
+          setEditablePrescriptions(sessionSnapshot.data.prescriptions || []);
+          
+          if (sessionSnapshot.data.risk_analysis?.level === 'Alto') setIsRiskExpanded(true);
+          else setIsRiskExpanded(false);
+          
+          setActiveTab('record');
+          setIsProcessing(false);
+          return; // 🛑 DETENCIÓN DE TRÁFICO
+      }
+
       let fullMedicalContext = "";
       
       let activeContextString = "";
@@ -799,6 +840,13 @@ const ConsultationView: React.FC = () => {
       
       setEditableInstructions(response.patientInstructions || '');
       setEditablePrescriptions(response.prescriptions || []);
+      
+      // 💾 GUARDADO DEL SNAPSHOT
+      setSessionSnapshot({
+          inputSignature: inputSignature,
+          data: response,
+          timestamp: Date.now()
+      });
       
       if (response.risk_analysis?.level === 'Alto') {
           setIsRiskExpanded(true);
@@ -1008,7 +1056,7 @@ const ConsultationView: React.FC = () => {
         if (linkedAppointmentId) {
               await supabase.from('appointments')
                 .update({ 
-                    status: 'completed',
+                    status: 'completed', 
                     patient_id: finalPatientId 
                 })
                 .eq('id', linkedAppointmentId);
@@ -1046,6 +1094,10 @@ const ConsultationView: React.FC = () => {
         setSegments([]);
         if (currentUserId) localStorage.removeItem(`draft_${currentUserId}`); 
         setGeneratedNote(null); 
+        
+        // Limpieza de Snapshot tras guardar
+        setSessionSnapshot(null); 
+        
         setEditableInstructions(''); 
         setEditablePrescriptions([]); 
         setInsuranceData(null); 
@@ -1160,7 +1212,7 @@ const ConsultationView: React.FC = () => {
             <div className="flex-1 overflow-y-auto mb-4 pr-2 custom-scrollbar">
                 {chatMessages.map((m,i)=>(
                     <div key={i} className={`p-3 mb-3 rounded-2xl max-w-[85%] text-sm shadow-sm ${m.role==='user'?'bg-brand-teal text-white self-end ml-auto rounded-tr-none':'bg-slate-100 dark:bg-slate-800 dark:text-slate-200 self-start mr-auto rounded-tl-none'}`}>
-                                        <FormattedText content={m.text} />
+                                            <FormattedText content={m.text} />
                     </div>
                 ))}
                 <div ref={chatEndRef}/>
