@@ -7,7 +7,7 @@ import {
   Clock, UserPlus, Activity, Search, ArrowRight,
   CalendarX, Repeat, Ban, PlayCircle, PenLine, Calculator, Sparkles,
   BarChart3, FileSignature, Microscope, StickyNote, FileCheck, Printer,
-  Sunrise, Sunset, MoonStar, Send, Trash2, CalendarClock // <--- [NUEVO] Icono para reprogramar
+  Sunrise, Sunset, MoonStar, Send, Trash2, CalendarClock 
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { format, isToday, isTomorrow, parseISO, startOfDay, endOfDay, addDays, isPast } from 'date-fns';
@@ -452,7 +452,19 @@ const QuickDocs = ({ openModal }: { openModal: (type: 'justificante' | 'certific
     </div>
 );
 
-const ActionRadar = ({ items, onItemClick }: { items: PendingItem[], onItemClick: (item: PendingItem) => void }) => {
+// --- COMPONENTE ACTION RADAR (ACTUALIZADO) ---
+// Ahora acepta funciones para reprogramar y cancelar
+const ActionRadar = ({ 
+    items, 
+    onItemClick,
+    onReschedule,
+    onCancel
+}: { 
+    items: PendingItem[], 
+    onItemClick: (item: PendingItem) => void,
+    onReschedule: (e: React.MouseEvent, item: PendingItem) => void,
+    onCancel: (e: React.MouseEvent, item: PendingItem) => void
+}) => {
     if (items.length === 0) return (
         <div className="bg-gradient-to-br from-white to-amber-50/50 dark:from-slate-900 dark:to-slate-900 rounded-[2rem] p-6 border border-slate-100 dark:border-slate-800 shadow-sm flex flex-col items-center justify-center text-center h-48">
             <CheckCircle2 size={40} className="text-green-500 mb-2 opacity-50"/>
@@ -474,7 +486,28 @@ const ActionRadar = ({ items, onItemClick }: { items: PendingItem[], onItemClick
                             <p className="text-sm font-bold text-slate-700 dark:text-slate-200">{item.title}</p>
                             <p className="text-xs text-slate-400">{item.subtitle}</p>
                         </div>
-                        {item.type === 'note' ? <StickyNote size={16} className="text-slate-300"/> : <Clock size={16} className="text-slate-300"/>}
+                        
+                        {/* INYECCIÓN DE ACCIONES PARA CITAS PERDIDAS */}
+                        {item.type === 'appt' ? (
+                            <div className="flex items-center gap-1">
+                                <button 
+                                    onClick={(e) => onReschedule(e, item)}
+                                    className="p-2 text-indigo-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-full transition-all"
+                                    title="Reprogramar"
+                                >
+                                    <CalendarClock size={16}/>
+                                </button>
+                                <button 
+                                    onClick={(e) => onCancel(e, item)}
+                                    className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-all"
+                                    title="Eliminar del Radar"
+                                >
+                                    <Trash2 size={16}/>
+                                </button>
+                            </div>
+                        ) : (
+                            item.type === 'note' ? <StickyNote size={16} className="text-slate-300"/> : <Clock size={16} className="text-slate-300"/>
+                        )}
                     </div>
                 ))}
             </div>
@@ -641,6 +674,9 @@ const Dashboard: React.FC = () => {
 
           // Actualización optimista del estado local (Inmediata)
           setAppointments(prev => prev.filter(a => a.id !== aptId));
+          // [MEJORA] Limpiar también del Radar instantáneamente
+          setPendingItems(prev => prev.filter(i => i.id !== aptId));
+
           toast.success("Cita cancelada correctamente", { id: toastId });
           
           // Recalcular métricas en segundo plano
@@ -682,6 +718,10 @@ const Dashboard: React.FC = () => {
           if (error) throw error;
           
           toast.success(`Cita movida correctamente`, { id: toastId });
+          
+          // [MEJORA] Limpieza optimista del radar (si se movió al futuro, ya no es pendiente vencido)
+          setPendingItems(prev => prev.filter(i => i.id !== rescheduleTarget.id));
+          
           setRescheduleTarget(null);
           // Recargar datos para reordenar la lista
           fetchData(); 
@@ -844,7 +884,23 @@ const Dashboard: React.FC = () => {
              </div>
 
              <div className="xl:col-span-4 flex flex-col gap-8">
-                 <ActionRadar items={pendingItems} onItemClick={handleRadarClick} />
+                 {/* IMPLEMENTACIÓN DEL RADAR ACTIVO */}
+                 <ActionRadar 
+                    items={pendingItems} 
+                    onItemClick={handleRadarClick}
+                    onCancel={(e, item) => handleCancelAppointment(e, item.id)}
+                    onReschedule={(e, item) => {
+                        // Reconstrucción del objeto para el modal (Adapter)
+                        const realName = item.subtitle.split('•')[0].trim();
+                        const mockApt = { 
+                            id: item.id, 
+                            title: realName, 
+                            start_time: item.date, 
+                            status: 'scheduled' 
+                        } as DashboardAppointment;
+                        openRescheduleModal(e, mockApt);
+                    }}
+                 />
                  
                  <div className="bg-gradient-to-br from-white to-slate-100 dark:from-slate-900 dark:to-slate-900 rounded-[2rem] border border-slate-100 dark:border-slate-800 shadow-xl shadow-slate-200/50 dark:shadow-none flex-1 flex flex-col min-h-[400px]">
                       <div className="flex p-2 gap-2 bg-slate-50/50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-700">
