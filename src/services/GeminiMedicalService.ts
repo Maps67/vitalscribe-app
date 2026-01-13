@@ -32,7 +32,7 @@ export interface FollowUpMessage {
   message: string;
 }
 
-console.log("🚀 V-STABLE DEPLOY: Safety Override Protocol (v7.5 - DETERMINISTIC LOCK) [Identity Protocol Active]");
+console.log("🚀 V-STABLE DEPLOY: Safety Override Protocol (v7.6 - CITIZEN LANGUAGE) [Pedagogical Layer Active]");
 
 // ==========================================
 // CONSTANTE DE SEGURIDAD (SIN CAMBIOS)
@@ -256,10 +256,10 @@ export const GeminiMedicalService = {
     }
   },
 
-  // --- A. NOTA CLÍNICA (ANTI-CRASH + SAFETY AUDIT + LEGAL SAFE + CIE-10 + SOFIA PATCH) ---
+  // --- A. NOTA CLÍNICA (ANTI-CRASH + SAFETY AUDIT + LEGAL SAFE + CIE-10 + SOFIA PATCH + CITIZEN LANGUAGE) ---
   async generateClinicalNote(transcript: string, specialty: string = "Medicina General", patientHistory: string = "", manualContext: string = ""): Promise<GeminiResponse & { prescriptions?: MedicationItem[] }> {
     try {
-      console.log("⚡ Generando Nota Clínica Consistente (v7.2 - Sofia Patch)...");
+      console.log("⚡ Generando Nota Clínica Consistente (v7.6 - Citizen Language)...");
 
       const specialtyConfig = getSpecialtyPromptConfig(specialty);
       
@@ -314,6 +314,23 @@ export const GeminiMedicalService = {
             - SI K+ < 3.3 mEq/L -> PROHIBIDO INSULINA. Prioridad ABSOLUTA: Reponer Potasio.
             - Riesgo: Arritmia ventricular letal / Paro cardíaco.
             - Acción: Generar bloqueo en receta y alerta roja en análisis.
+
+        ===================================================
+        🗣️ PROTOCOLO DE LENGUAJE CIUDADANO (SOLO PARA 'patientInstructions')
+        ===================================================
+        Esta sección es EXCLUSIVAMENTE para el paciente. Debes "traducir" tu pensamiento médico a lenguaje cotidiano.
+        
+        REGLAS DE TRADUCCIÓN:
+        1. 🚫 PROHIBIDO TECNICISMOS: 
+           - No digas "Glucosa capilar", di "Nivel de azúcar en el dedo".
+           - No digas "Dieta hiposódica", di "Comer con poca sal".
+           - No digas "Deambulación", di "Caminar".
+           - No digas "Posprandial", di "Después de comer".
+        2. PEDAGOGÍA: Explica COMO SI FUERA PARA UN ADOLESCENTE DE 12 AÑOS. Sé claro y directo.
+        3. FORMATO: Usa verbos de acción (Tome, Vigile, Acuda) y listas numeradas.
+        4. OBJETIVO: Que el paciente entienda y cumpla el tratamiento sin miedo.
+
+        NOTA: En 'clinicalNote' y 'soapData' DEBES MANTENER EL LENGUAJE MÉDICO TÉCNICO Y PROFESIONAL.
 
         ===================================================
         💊 REGLAS DE RECETA ESTRUCTURADA (SAFETY OVERRIDE)
