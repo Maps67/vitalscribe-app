@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-  Upload, FileText, Video, Box, Activity, 
-  Trash2, Eye, Download, AlertTriangle, 
-  Database, ShieldCheck, File, Brain, RefreshCw 
+  Upload, FileText, Video, Box, 
+  Trash2, Eye, AlertTriangle, 
+  Database, ShieldCheck, File, RefreshCw 
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
+// Importamos la configuración externa para mantener el componente limpio
+import { SPECIALTY_CONFIG } from '../data/specialtyConfig';
 
 // Definición de Tipos Locales para el Módulo
 interface SpecialtyDocument {
@@ -23,47 +25,6 @@ interface SpecialtyVaultProps {
   specialty: string; // La especialidad del médico logueado
 }
 
-// Configuración de "Inteligencia por Especialidad"
-// Define qué tipos de archivos y etiquetas se permiten por rama médica
-const SPECIALTY_CONFIG: Record<string, { 
-  allowedTypes: string[], 
-  labels: string[], 
-  icon: React.ElementType,
-  color: string 
-}> = {
-  'Cardiología': {
-    allowedTypes: ['application/pdf', 'video/mp4', 'image/jpeg', 'image/png'],
-    labels: ['Electrocardiograma (ECG)', 'Ecocardiograma (Video)', 'Holter', 'Prueba de Esfuerzo'],
-    icon: Activity,
-    color: 'text-rose-600 bg-rose-50 border-rose-200'
-  },
-  'Neurología': {
-    allowedTypes: ['application/pdf', 'video/mp4', 'application/octet-stream'], // .EDF suele ser octet-stream
-    labels: ['Electroencefalograma (EEG)', 'Video Monitoreo', 'Tomografía (Reporte)', 'Resonancia'],
-    icon: Brain,
-    color: 'text-violet-600 bg-violet-50 border-violet-200'
-  },
-  'Traumatología y Ortopedia': {
-    allowedTypes: ['application/pdf', 'image/jpeg', 'model/stl', 'application/dicom'],
-    labels: ['Rayos X (Placa)', 'Modelo 3D (.STL)', 'Tomografía Ósea', 'Resonancia Musculoesquelética'],
-    icon: Box,
-    color: 'text-amber-600 bg-amber-50 border-amber-200'
-  },
-  'Cirugía General': {
-    allowedTypes: ['video/mp4', 'application/pdf'],
-    labels: ['Video Quirúrgico', 'Reporte Sinóptico', 'Protocolo Operatorio'],
-    icon: FileText,
-    color: 'text-emerald-600 bg-emerald-50 border-emerald-200'
-  },
-  // Fallback para otras especialidades
-  'default': {
-    allowedTypes: ['application/pdf', 'image/jpeg'],
-    labels: ['Estudio General', 'Reporte Clínico'],
-    icon: File,
-    color: 'text-slate-600 bg-slate-50 border-slate-200'
-  }
-};
-
 export const SpecialtyVault: React.FC<SpecialtyVaultProps> = ({ patientId, specialty }) => {
   const [documents, setDocuments] = useState<SpecialtyDocument[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -72,7 +33,8 @@ export const SpecialtyVault: React.FC<SpecialtyVaultProps> = ({ patientId, speci
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Normalizar especialidad para coincidir con la config
+  // Normalizar especialidad para coincidir con la config externa
+  // Busca coincidencia parcial (ej. "Cardiólogo" -> match "Cardiología")
   const normalizedSpecialty = Object.keys(SPECIALTY_CONFIG).find(key => 
     specialty.toLowerCase().includes(key.toLowerCase().split(' ')[0])
   ) || 'default';
