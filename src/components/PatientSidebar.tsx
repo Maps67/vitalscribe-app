@@ -1,11 +1,11 @@
 import React, { useMemo } from 'react';
 import { 
   Search, X, UserPlus, WifiOff, Trash2, Paperclip, 
-  ChevronDown, ChevronUp, Activity, Stethoscope, Calendar 
+  ChevronDown, ChevronUp, Activity, Stethoscope, Calendar,
+  Lock, ShieldCheck
 } from 'lucide-react';
 import { Patient, PatientInsight } from '../types';
 import { VitalSnapshotCard } from './VitalSnapshotCard';
-// 1. IMPORTAMOS EL COMPONENTE NUEVO
 import { SpecialtyVault } from './SpecialtyVault';
 
 interface PatientSidebarProps {
@@ -21,7 +21,7 @@ interface PatientSidebarProps {
   isOnline: boolean;
   selectedSpecialty: string;
   specialties: string[];
-  onSpecialtyChange: (val: string) => void;
+  onSpecialtyChange: (val: string) => void; // Se mantiene por compatibilidad de props, pero no se usa en la UI
   
   // Props de Vital Snapshot
   vitalSnapshot: PatientInsight | null;
@@ -49,15 +49,12 @@ export const PatientSidebar = React.memo(({
   hasTranscript,
   isOnline,
   selectedSpecialty,
-  specialties,
-  onSpecialtyChange,
+  // specialties, // Ya no necesitamos la lista para elegir
+  // onSpecialtyChange, // Ya no permitimos el cambio manual
   vitalSnapshot,
   loadingSnapshot,
   isMobileSnapshotVisible,
   setIsMobileSnapshotVisible,
-  activeMedicalContext,
-  isMobileContextExpanded,
-  setIsMobileContextExpanded,
   onLoadInsights,
   isLoadingInsights
 }: PatientSidebarProps) => {
@@ -81,18 +78,27 @@ export const PatientSidebar = React.memo(({
             </div>
         </div>
 
-        {/* SELECTOR DE ESPECIALIDAD */}
-        <div className="bg-indigo-50 dark:bg-indigo-900/20 p-3 rounded-lg border border-indigo-100 dark:border-indigo-800 shrink-0">
+        {/* 🛑 ZONA BLINDADA: LOGICA ADAPTATIVA AUTOMÁTICA 🛑 
+           Se eliminó el <select> interactivo.
+           Ahora mostramos una insignia de seguridad que confirma la especialidad activa.
+        */}
+        <div className="bg-gradient-to-r from-indigo-50 to-slate-50 dark:from-indigo-900/20 dark:to-slate-800 p-3 rounded-lg border border-indigo-100 dark:border-indigo-800 shrink-0">
             <div className="flex justify-between items-center mb-1">
-                <label className="text-xs font-bold text-indigo-600 dark:text-indigo-300 uppercase flex gap-1"><Stethoscope size={14}/> Especialidad</label>
+                <label className="text-[10px] font-bold text-slate-400 uppercase flex gap-1 items-center">
+                    <ShieldCheck size={12}/> Perfil Activo
+                </label>
+                <div className="flex items-center gap-1 text-[10px] text-green-600 bg-green-50 px-2 py-0.5 rounded-full border border-green-100">
+                    <Lock size={10} /> Sincronizado
+                </div>
             </div>
-            <select value={selectedSpecialty} onChange={(e)=>onSpecialtyChange(e.target.value)} className="w-full bg-transparent border-b border-indigo-200 outline-none py-1 text-sm dark:text-white cursor-pointer">
-                {specialties.map(s=><option key={s} value={s}>{s}</option>)}
-            </select>
+            <div className="flex items-center gap-2 text-indigo-700 dark:text-indigo-300 font-bold text-sm">
+                <Stethoscope size={16} className="shrink-0"/>
+                <span className="truncate">{selectedSpecialty || "Medicina General"}</span>
+            </div>
         </div>
 
         {/* BUSCADOR DE PACIENTES */}
-        <div className="relative z-10 shrink-0">
+        <div className="relative z-10 shrink-0 mt-2">
             <div className="flex items-center border rounded-lg px-3 py-2 bg-slate-50 dark:bg-slate-800 dark:border-slate-700">
                 <Search className="text-slate-400 mr-2" size={18}/><input placeholder="Buscar paciente..." className="w-full bg-transparent outline-none dark:text-white text-sm" value={selectedPatient?selectedPatient.name:searchTerm} onChange={(e)=>{setSearchTerm(e.target.value); if(selectedPatient) onSelectPatient(null);}}/>
                 {selectedPatient && <button onClick={()=>{onSelectPatient(null); setSearchTerm('')}}><X size={16}/></button>}
@@ -116,7 +122,7 @@ export const PatientSidebar = React.memo(({
         </div>
 
         {/* SCROLLABLE CONTENT AREA */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col gap-2">
+        <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col gap-2 mt-2">
             
             {/* VITAL SNAPSHOT CARD */}
             <div className="w-full transition-all duration-300 ease-in-out">
@@ -141,7 +147,7 @@ export const PatientSidebar = React.memo(({
                 </div>
             </div>
 
-            {/* 2. AQUÍ INTEGRAMOS LA BÓVEDA DE ESPECIALIDAD */}
+            {/* BÓVEDA DE ESPECIALIDAD */}
             {selectedPatient && !(selectedPatient as any).isTemporary && (
                 <div className="mt-2">
                     <SpecialtyVault 
@@ -161,7 +167,11 @@ export const PatientSidebar = React.memo(({
                     disabled={isLoadingInsights}
                     className="w-full py-3 bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-bold rounded-xl shadow-lg shadow-indigo-200 dark:shadow-none hover:shadow-xl hover:scale-[1.02] transition-all flex items-center justify-center gap-2 group"
                 >
-                    <span>Análisis Clínico 360°</span>
+                    {isLoadingInsights ? (
+                        <span className="animate-pulse">Analizando...</span>
+                    ) : (
+                        <><span>Análisis Clínico 360°</span> <Activity size={18} className="group-hover:rotate-12 transition-transform"/></>
+                    )}
                 </button>
             </div>
         )}
