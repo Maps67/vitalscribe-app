@@ -535,22 +535,30 @@ export const GeminiMedicalService = {
     } catch (e) { return []; }
   },
 
-  // --- F. CHAT AVANZADO CON INTERNET (REFORZADO ANTI-CRASH) ---
+  // --- F. CHAT AVANZADO CON INTERNET (REFORZADO RAG + ANTI-ALUCINACIÓN) ---
   async chatWithContext(context: string, userMessage: string): Promise<string> {
     try {
-        console.log("🧠 Iniciando razonamiento clínico complejo...");
+        console.log("🧠 Iniciando razonamiento clínico con RAG (Filtros de Veracidad v8.0)...");
         
         const prompt = `
-            ERES UN ASISTENTE MÉDICO EXPERTO CON ACCESO A INTERNET Y RAZONAMIENTO PROFUNDO.
-            CONTEXTO CLÍNICO ACTUAL: ${context}
+            ERES UN AUDITOR CLÍNICO BASADO EN EVIDENCIA (VitalScribe AI).
             
-            SOLICITUD DEL MÉDICO: "${userMessage}"
+            📜 CONTEXTO REAL DEL PACIENTE (FUENTE DE VERDAD ÚNICA):
+            ${context}
+            
+            ❓ PREGUNTA DEL MÉDICO:
+            "${userMessage}"
+            
+            🔒 REGLAS DE SEGURIDAD Y VERACIDAD (PROTOCOLO v8.0):
+            1. CITA LA FUENTE: Si dices que toma "Losartán", debes ver la palabra "Losartán" en el CONTEXTO.
+            2. TOLERANCIA CERO A LA INVENCIÓN: Si te preguntan "¿Es alérgico a la penicilina?" y el contexto NO menciona alergias, TU RESPUESTA DEBE SER: "No encuentro registro de alergias en el expediente proporcionado."
+            3. NO ASUMAS: No adivines dosis. Si la nota dice "Metformina" sin dosis, di "Metformina (Dosis no especificada en nota del [Fecha])".
+            4. PRIVACIDAD: No repitas datos sensibles innecesarios (ID, teléfonos) a menos que se pidan.
             
             INSTRUCCIONES DE RESPUESTA:
             1. Responde siempre en español profesional.
             2. Usa **negritas** para términos médicos y fármacos.
-            3. Si citas guías clínicas o dosis, menciona la fuente.
-            4. Responde con TEXTO NATURAL (Markdown), NO envíes objetos JSON.
+            3. Responde con TEXTO NATURAL (Markdown), NO envíes objetos JSON.
         `;
         
         const response = await generateWithFailover(prompt, false, true); // useTools = true
@@ -607,6 +615,73 @@ export const GeminiMedicalService = {
     } catch (e) {
         console.warn("⚠️ Error generando insights clínicos (No crítico):", e);
         return [];
+    }
+  },
+
+  // --- H. MOTOR RAG (RETRIEVAL-AUGMENTED GENERATION) ---
+  // Este módulo busca los datos REALES antes de dejar que la IA hable.
+  // [NEW] Implementación para Fase 1: Conexión a Base de Datos
+  async getPatientClinicalContext(patientNameQuery: string): Promise<string> {
+    try {
+      console.log(`🕵️ RAG SYSTEM: Buscando expediente de "${patientNameQuery}"...`);
+
+      // 1. BÚSQUEDA DE PACIENTE (Seguridad RLS activa por defecto en Supabase)
+      const { data: patients, error } = await supabase
+        .from('patients')
+        .select('id, name, history, created_at')
+        .ilike('name', `%${patientNameQuery}%`)
+        .limit(1);
+
+      if (error || !patients || patients.length === 0) {
+        return "SISTEMA: No se encontró ningún paciente con ese nombre en la base de datos real. La IA debe informar esto al usuario.";
+      }
+
+      const patient = patients[0];
+
+      // 2. EXTRACCIÓN QUIRÚRGICA DE DATOS (Historia + Últimas consultas)
+      // Buscamos las últimas 3 consultas para tener contexto reciente (Dosis vigentes)
+      const { data: appointments } = await supabase
+        .from('appointments')
+        .select('start_time, title, notes')
+        .eq('patient_id', patient.id)
+        .eq('status', 'completed')
+        .order('start_time', { ascending: false })
+        .limit(3);
+
+      // 3. CONSTRUCCIÓN DEL CONTEXTO BLINDADO
+      // Aquí sanitizamos los datos para la IA
+      let context = `--- EXPEDIENTE OFICIAL (CONFIDENCIAL) ---\n`;
+      context += `PACIENTE: ${patient.name}\n`;
+      context += `ID REGISTRO: ${patient.id.substring(0, 8)}...\n`; // Ocultamos ID completo por privacidad
+      
+      // Inyectamos Historia Base (Alergias, Crónicos)
+      if (patient.history) {
+        // Intentamos parsear si es JSON string, si no, texto plano
+        try {
+          const historyObj = JSON.parse(patient.history);
+          context += `ANTECEDENTES: ${JSON.stringify(historyObj, null, 2)}\n`;
+        } catch (e) {
+          context += `HISTORIAL: ${patient.history}\n`;
+        }
+      }
+
+      // Inyectamos Evolución Reciente (De aquí salen las dosis vigentes)
+      if (appointments && appointments.length > 0) {
+        context += `\n--- ÚLTIMAS CONSULTAS (EVIDENCIA) ---\n`;
+        appointments.forEach(apt => {
+          context += `FECHA: ${new Date(apt.start_time).toLocaleDateString()}\n`;
+          context += `MOTIVO: ${apt.title}\n`;
+          context += `NOTAS/RECETA: ${apt.notes || 'Sin notas registradas'}\n\n`;
+        });
+      } else {
+        context += `\n(Sin consultas previas registradas en plataforma)\n`;
+      }
+
+      return context;
+
+    } catch (err) {
+      console.error("❌ Error en RAG Retriever:", err);
+      return "ERROR DE SISTEMA: Fallo al conectar con la base de datos clínica.";
     }
   },
 

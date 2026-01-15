@@ -203,31 +203,70 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete, initialQuery }: { i
                   });
                   setStatus('answering');
 
-              // 3. FALLBACK CLINICO (CORRECCIÓN CRÍTICA):
-              // Si no es comando de sistema, se asume consulta médica (Trimebutina, Dosis, Colitis, etc.)
+              // 3. [NUEVO] DETECCIÓN DE CONSULTA RAG (PACIENTE ESPECÍFICO)
+              // Interceptamos preguntas sobre dosis, historial o pacientes antes del fallback genérico
+              } else if (lowerText.includes('paciente') || lowerText.includes('toma') || lowerText.includes('dosis') || lowerText.includes('diagnóstico') || lowerText.includes('historia') || lowerText.includes('recet') || lowerText.includes('medicamento')) {
+                  
+                  // A. Extracción de Nombre para búsqueda
+                  const namePrompt = `Extrae solo el nombre del paciente mencionado en esta frase: "${textToProcess}". Si no hay nombre, responde "NULL".`;
+                  const patientNameRaw = await GeminiMedicalService.chatWithContext("Eres un extractor de entidades.", namePrompt);
+                  const patientName = cleanMarkdown(patientNameRaw).replace(/["']/g, "").trim();
+
+                  if (patientName && patientName !== "NULL") {
+                      // B. Búsqueda en Supabase (RAG)
+                      const realClinicalData = await GeminiMedicalService.getPatientClinicalContext(patientName);
+                      
+                      // C. Respuesta con Contexto Real
+                      const finalAnswer = await GeminiMedicalService.chatWithContext(
+                          realClinicalData, 
+                          textToProcess
+                      );
+
+                      const cleanAnswer = cleanMarkdown(finalAnswer);
+                      setMedicalAnswer(cleanAnswer);
+                      setAiResponse({ 
+                          intent: 'MEDICAL_QUERY', 
+                          data: { source: 'RAG_SUPABASE' }, 
+                          message: 'Consulta de Expediente',
+                          originalText: textToProcess, 
+                          confidence: 1.0 
+                      });
+                      setStatus('answering');
+                      if(!manualText) speakResponse(cleanAnswer); 
+                  } else {
+                      // Si no hay nombre, pasamos al fallback genérico
+                      throw new Error("Pase a fallback"); 
+                  }
+
+              // 4. FALLBACK CLINICO: Consulta Genérica (Sin paciente específico)
               } else {
-                  
-                  const rawAnswer = await GeminiMedicalService.chatWithContext(
-                      "Contexto: El médico está en el Dashboard principal. Eres un Copiloto Clínico Senior. Responde directo, conciso y basado en evidencia.", 
-                      textToProcess
-                  );
-                  
-                  const cleanAnswer = cleanMarkdown(rawAnswer);
-                  
-                  setMedicalAnswer(cleanAnswer);
-                  setAiResponse({ 
-                      intent: 'MEDICAL_QUERY', 
-                      data: {}, 
-                      message: 'Consulta Clínica',
-                      originalText: textToProcess, 
-                      confidence: 1.0 
-                  });
-                  setStatus('answering');
-                  if(!manualText) speakResponse(cleanAnswer); 
+                  throw new Error("Pase a fallback");
               }
           };
 
-          await Promise.race([executeLogic(), timeoutPromise]);
+          // Wrapper para capturar el "throw" y ejecutar el fallback
+          try {
+            await Promise.race([executeLogic(), timeoutPromise]);
+          } catch (internalError) {
+             // Fallback Logic
+             const rawAnswer = await GeminiMedicalService.chatWithContext(
+                  "Contexto: El médico está en el Dashboard principal. Eres un Copiloto Clínico Senior. Responde directo, conciso y basado en evidencia.", 
+                  textToProcess
+              );
+              
+              const cleanAnswer = cleanMarkdown(rawAnswer);
+              
+              setMedicalAnswer(cleanAnswer);
+              setAiResponse({ 
+                  intent: 'MEDICAL_QUERY', 
+                  data: {}, 
+                  message: 'Consulta Clínica',
+                  originalText: textToProcess, 
+                  confidence: 1.0 
+              });
+              setStatus('answering');
+              if(!manualText) speakResponse(cleanAnswer);
+          }
 
       } catch (error) {
           console.error("Error en Asistente:", error);
@@ -771,17 +810,17 @@ const Dashboard: React.FC = () => {
       <div className="px-4 md:px-8 pt-4 md:pt-8 max-w-[1600px] mx-auto w-full">
          
          <SmartBriefingWidget 
-            greeting={dynamicGreeting.greeting} 
-            weather={weather} 
-            systemStatus={systemStatus} 
-            onOpenAssistant={() => { setInitialAssistantQuery(null); setIsAssistantOpen(true); }}
-            isLoading={isLoading} 
-            insights={{
-               nextTime: nextPatient ? format(parseISO(nextPatient.start_time), 'h:mm a') : null,
-               pending: pendingItems.length,
-               total: totalDailyLoad, 
-               done: completedTodayCount 
-            }}
+           greeting={dynamicGreeting.greeting} 
+           weather={weather} 
+           systemStatus={systemStatus} 
+           onOpenAssistant={() => { setInitialAssistantQuery(null); setIsAssistantOpen(true); }}
+           isLoading={isLoading} 
+           insights={{
+              nextTime: nextPatient ? format(parseISO(nextPatient.start_time), 'h:mm a') : null,
+              pending: pendingItems.length,
+              total: totalDailyLoad, 
+              done: completedTodayCount 
+           }}
          />
 
          <div className="mb-8 relative z-20 animate-fade-in-up" style={{ animationDelay: '100ms' }}>
