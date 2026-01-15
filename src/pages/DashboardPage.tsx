@@ -207,8 +207,20 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete, initialQuery }: { i
               // Interceptamos preguntas sobre dosis, historial o pacientes antes del fallback genérico
               } else if (lowerText.includes('paciente') || lowerText.includes('toma') || lowerText.includes('dosis') || lowerText.includes('diagnóstico') || lowerText.includes('historia') || lowerText.includes('recet') || lowerText.includes('medicamento')) {
                   
-                  // A. Extracción de Nombre para búsqueda
-                  const namePrompt = `Extrae solo el nombre del paciente mencionado en esta frase: "${textToProcess}". Si no hay nombre, responde "NULL".`;
+                  // A. Extracción de Nombre para búsqueda (Con Protocolo Anti-Homónimos)
+                  const namePrompt = `
+                      Tu misión es identificar al paciente para una búsqueda SQL exacta.
+                      Frase: "${textToProcess}"
+                      
+                      REGLAS DE EXTRACCIÓN (Protocolo de Identificación Rigurosa):
+                      1. OBJETIVO: Extraer "Primer Nombre + Primer Apellido" (ej. "Juan Pérez") siempre que sea posible para evitar homónimos.
+                      2. SANITIZACIÓN: Elimina honoríficos ("Don", "Doña", "Dr.", "Sra.", "El paciente").
+                      3. SI FALTAN DATOS: Si solo se menciona el nombre (ej. "Carmen") o solo el apellido, extrae eso, pero prioriza el nombre completo si existe.
+                      4. CORRECCIÓN: Estandariza ortografía (ej. "Alfonso" -> "Alfonzo" si es fonéticamente igual).
+                      
+                      SALIDA: Responde SOLO con el nombre limpio. Si no hay nombre, responde "NULL".
+                  `;
+
                   const patientNameRaw = await GeminiMedicalService.chatWithContext("Eres un extractor de entidades.", namePrompt);
                   const patientName = cleanMarkdown(patientNameRaw).replace(/["']/g, "").trim();
 
@@ -734,7 +746,7 @@ const Dashboard: React.FC = () => {
       }
   };
 
-  // --- [NUEVO] FUNCIONES PARA RECALENDARIZAR ---
+  // --- [NUEVO] FUNCIONES PARA RECALENDARIZACIÓN ---
   const openRescheduleModal = (e: React.MouseEvent, apt: DashboardAppointment) => {
       e.stopPropagation();
       setRescheduleTarget({ id: apt.id, title: apt.title });
