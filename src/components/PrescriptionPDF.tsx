@@ -22,7 +22,7 @@ const styles = StyleSheet.create({
   // 1. SECCIÓN LOGO
   logoSection: { 
     width: 80, 
-    height: 60,
+    minHeight: 60, // Changed from fixed height to minHeight
     justifyContent: 'center',
     alignItems: 'flex-start'
   },
@@ -43,17 +43,41 @@ const styles = StyleSheet.create({
   specialty: { fontSize: 10, fontFamily: 'Helvetica-Bold', color: '#555', marginBottom: 2, textTransform: 'uppercase', textAlign: 'center' },
   detailsLegal: { fontSize: 8, color: '#444', marginBottom: 1, textAlign: 'center' },
 
-  // 3. SECCIÓN QR
+  // 3. SECCIÓN QR (Modificada para soportar Folio)
   qrSection: {
     width: 80, 
-    height: 60,
+    minHeight: 60, // Changed from fixed height to minHeight
     justifyContent: 'center',
-    alignItems: 'flex-end' 
+    alignItems: 'flex-end',
+    display: 'flex',
+    flexDirection: 'column'
   },
   qrCodeHeader: {
     width: 60, 
     height: 60, 
     objectFit: 'contain'
+  },
+  // Estilo específico para el Folio Controlado
+  folioBadge: {
+    marginTop: 4,
+    borderWidth: 1,
+    borderColor: '#dc2626', // Red-600
+    borderRadius: 2,
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  folioLabel: {
+    fontSize: 5,
+    color: '#dc2626',
+    fontFamily: 'Helvetica-Bold',
+    marginBottom: 1
+  },
+  folioText: {
+    fontSize: 8,
+    color: '#dc2626',
+    fontFamily: 'Helvetica-Bold'
   },
   
   // Barra de paciente
@@ -113,13 +137,16 @@ interface PrescriptionPDFProps {
   riskAnalysis?: { level: string; reason: string };
   
   documentTitle?: string;
+  // --- Feature: Folio Controlado ---
+  specialFolio?: string;
 }
 
 const PrescriptionPDF: React.FC<PrescriptionPDFProps> = ({ 
   doctorName, specialty, license, phone, university, address, logoUrl, signatureUrl, qrCodeUrl,
   patientName, patientAge, date, 
   content, prescriptions, instructions, riskAnalysis,
-  documentTitle = "RECETA MÉDICA" 
+  documentTitle = "RECETA MÉDICA",
+  specialFolio // Destructuring del nuevo prop
 }) => {
 
   // --- LÓGICA DE FILTRADO DE SEGURIDAD (Mantiene la protección técnica) ---
@@ -210,6 +237,14 @@ const PrescriptionPDF: React.FC<PrescriptionPDFProps> = ({
           <View style={styles.qrSection}>
              {isValidUrl(qrCodeUrl) && (
                  <Image src={qrCodeUrl!} style={styles.qrCodeHeader} />
+             )}
+             
+             {/* --- FEATURE: FOLIO CONTROLADO VISUAL --- */}
+             {specialFolio && (
+                 <View style={styles.folioBadge}>
+                     <Text style={styles.folioLabel}>FOLIO / CERT:</Text>
+                     <Text style={styles.folioText}>{specialFolio}</Text>
+                 </View>
              )}
           </View>
         </View>

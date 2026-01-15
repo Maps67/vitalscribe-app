@@ -46,9 +46,9 @@ interface TranscriptSegment {
 
 // Estructura para el Snapshot de Seguridad
 interface SessionSnapshot {
-    inputSignature: string;
-    data: EnhancedGeminiResponse;
-    timestamp: number;
+   inputSignature: string;
+   data: EnhancedGeminiResponse;
+   timestamp: number;
 }
 
 const SPECIALTIES = [
@@ -80,6 +80,18 @@ const SPECIALTIES = [
   "Traumatología: Artroscopia", 
   "Urología", 
   "Urgencias Médicas"
+];
+
+// --- Feature: Folio Controlado (Lista Blanca de Especialidades) ---
+const SPECIALTIES_WITH_CONTROLLED_RX = [
+    'Psiquiatría',
+    'Neurología',
+    'Medicina Interna',
+    'Anestesiología',
+    'Algología',
+    'Cuidados Paliativos',
+    'Oncología Médica',
+    'Cirugía Oncológica'
 ];
 
 const cleanHistoryString = (input: any): string => {
@@ -156,6 +168,9 @@ const ConsultationView: React.FC = () => {
   const [editableInstructions, setEditableInstructions] = useState('');
   const [editablePrescriptions, setEditablePrescriptions] = useState<MedicationItem[]>([]);
   const [isEditingInstructions, setIsEditingInstructions] = useState(false);
+
+  // --- Feature: Folio Controlado (Estado Local) ---
+  const [specialFolio, setSpecialFolio] = useState('');
   
   const [insuranceData, setInsuranceData] = useState<{provider: string, policyNumber: string, accidentDate: string} | null>(null);
 
@@ -507,6 +522,9 @@ const ConsultationView: React.FC = () => {
   useEffect(() => {
     if (selectedPatient) {
         setPatientInsights(null);
+        // Feature: Resetear Folio al cambiar paciente
+        setSpecialFolio(''); 
+        
         const isTemp = (selectedPatient as any).isTemporary;
 
         if (!isTemp && transcript && confirm("¿Desea limpiar el dictado anterior para el nuevo paciente?")) {
@@ -720,6 +738,9 @@ const ConsultationView: React.FC = () => {
           setEditableInstructions('');
           setEditablePrescriptions([]);
           
+          // Reset Folio
+          setSpecialFolio('');
+
           setIsRiskExpanded(false); 
           toast.info("Sesión reiniciada. Puede generar una nueva valoración.");
       }
@@ -981,6 +1002,8 @@ const ConsultationView: React.FC = () => {
                 instructions={editableInstructions}
                 riskAnalysis={generatedNote?.risk_analysis}
                 content={editablePrescriptions.length > 0 ? undefined : legacyContent}
+                // Feature: Pasamos el folio al PDF
+                specialFolio={specialFolio}
             />
         ).toBlob();
       } catch (error) {
@@ -1144,6 +1167,10 @@ const ConsultationView: React.FC = () => {
         setPatientInsights(null);
         setLinkedAppointmentId(null);
         setManualContext(""); // Reset contexto
+        
+        // Reset Folio
+        setSpecialFolio('');
+        
         startTimeRef.current = Date.now(); 
 
     } catch (e:any) { 
@@ -1256,6 +1283,11 @@ const ConsultationView: React.FC = () => {
             </div>
             <form onSubmit={handleChatSend} className="flex gap-2 relative"><input className="flex-1 border dark:border-slate-700 p-4 pr-12 rounded-xl bg-slate-50 dark:bg-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-brand-teal shadow-sm" value={chatInput} onChange={e=>setChatInput(e.target.value)} placeholder="Pregunta al asistente..."/><button disabled={isChatting||!chatInput.trim()} className="absolute right-3 top-1/2 -translate-y-1/2 bg-brand-teal text-white p-2 rounded-lg hover:bg-teal-600 disabled:opacity-50 transition-all hover:scale-105 active:scale-95">{isChatting?<RefreshCw className="animate-spin" size={18}/>:<Send size={18}/>}</button></form>
       </div>
+  );
+
+  // --- Feature: Lógica de visualización del Folio ---
+  const showControlledInput = SPECIALTIES_WITH_CONTROLLED_RX.some(s => 
+      selectedSpecialty?.toLowerCase().includes(s.toLowerCase())
   );
 
   return (
@@ -1403,10 +1435,10 @@ const ConsultationView: React.FC = () => {
                                                                     ? 'bg-blue-50 text-blue-900 dark:bg-blue-900/30 dark:text-blue-100 rounded-tr-none' 
                                                                     : 'bg-white border border-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700 rounded-tl-none'
                                                                 }`}>
-                                                                        <span className={`text-[10px] font-bold block mb-1 uppercase opacity-70 ${line.speaker === 'Médico' ? 'text-right' : 'text-left'}`}>
-                                                                            {line.speaker}
-                                                                        </span>
-                                                                        {line.text}
+                                                                            <span className={`text-[10px] font-bold block mb-1 uppercase opacity-70 ${line.speaker === 'Médico' ? 'text-right' : 'text-left'}`}>
+                                                                                {line.speaker}
+                                                                            </span>
+                                                                            {line.text}
                                                                 </div>
                                                             </div>
                                                         ))}
@@ -1509,10 +1541,33 @@ const ConsultationView: React.FC = () => {
                                             </div>
 
                                             <div className="bg-white dark:bg-slate-900 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800">
-                                                <div className="flex justify-between items-center mb-4">
-                                                    <h3 className="font-bold text-lg flex items-center gap-2 text-indigo-600 dark:text-indigo-400">
-                                                        <Pill size={20}/> Receta Médica
-                                                    </h3>
+                                                
+                                                {/* Feature: Header de Receta con Folio Controlado Opcional */}
+                                                <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+                                                    <div className="flex items-center gap-4 w-full md:w-auto">
+                                                        <h3 className="font-bold text-lg flex items-center gap-2 text-indigo-600 dark:text-indigo-400">
+                                                            <Pill size={20}/> Receta Médica
+                                                        </h3>
+                                                        
+                                                        {/* CANDADO LÓGICO DE SEGURIDAD (Solo especialidades autorizadas) */}
+                                                        {showControlledInput && (
+                                                            <div className="flex-1 md:flex-none animate-fade-in-right">
+                                                                <div className="relative group">
+                                                                    <input 
+                                                                        type="text" 
+                                                                        placeholder="Folio / Código COFEPRIS" 
+                                                                        className="text-xs border-2 border-indigo-100 dark:border-indigo-900/50 bg-indigo-50/50 dark:bg-indigo-900/20 rounded-lg px-3 py-1.5 w-full md:w-56 outline-none focus:border-indigo-500 text-indigo-700 dark:text-indigo-300 font-medium placeholder:text-indigo-300 transition-all"
+                                                                        value={specialFolio}
+                                                                        onChange={(e) => setSpecialFolio(e.target.value)}
+                                                                    />
+                                                                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-slate-800 text-white text-[10px] rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+                                                                        Solo para Fracción I / II
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+
                                                     <button onClick={handleAddMedication} className="text-xs bg-indigo-50 text-indigo-600 px-3 py-1 rounded-full flex items-center gap-1 hover:bg-indigo-100 dark:bg-indigo-900/30 dark:text-indigo-300">
                                                         <Plus size={12}/> Agregar Fármaco
                                                     </button>
@@ -1523,19 +1578,15 @@ const ConsultationView: React.FC = () => {
                                                 ) : (
                                                     <div className="space-y-3">
                                                         {editablePrescriptions.map((med, idx) => {
-                                                            // 1. Normalización para búsqueda insensible a acentos/mayúsculas
                                                             const normalize = (str: string) => str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
                                                             
-                                                            // 2. Detección de Bloqueo Crítico (RED FLAG)
                                                             const isManualBlocked = (med as any).action === 'SUSPENDER' || (med.dose && med.dose.includes('BLOQUEO'));
 
-                                                            // 3. Detección de Riesgo Moderado/Interacción (YELLOW FLAG)
                                                             let isRisky = false;
                                                             if (!isManualBlocked && generatedNote?.risk_analysis?.reason) {
                                                                 const reason = normalize(generatedNote.risk_analysis.reason);
                                                                 const drugName = normalize(med.drug);
                                                                 
-                                                                // Coincidencia por primera palabra o nombre comercial en paréntesis
                                                                 const firstWord = drugName.split(' ')[0];
                                                                 const matchParens = med.drug.match(/\(([^)]+)\)/);
                                                                 
@@ -1543,7 +1594,6 @@ const ConsultationView: React.FC = () => {
                                                                 if (matchParens && reason.includes(normalize(matchParens[1]))) isRisky = true;
                                                             }
 
-                                                            // 4. Definición de Estilos Dinámicos
                                                             let containerClasses = "bg-slate-50 border-slate-100 dark:bg-slate-800/50 dark:border-slate-700";
                                                             let icon = null;
 
@@ -1555,77 +1605,72 @@ const ConsultationView: React.FC = () => {
 
                                                             return (
                                                             <div key={idx} className={`flex gap-3 items-start p-3 rounded-lg border group transition-all duration-200 ${containerClasses}`}>
-                                                                
-                                                                {/* Lógica de Renderizado Adaptativo */}
-                                                                {isManualBlocked ? (
-                                                                    /* --- VISTA DE BLOQUEO DE SEGURIDAD (Mensaje Completo) --- */
-                                                                    <div className="flex-1 flex flex-col gap-1">
-                                                                        <div className="flex items-center gap-2">
-                                                                            <ShieldCheck size={16} className="text-red-600 shrink-0" />
-                                                                            <input 
-                                                                                className="font-bold text-red-800 dark:text-red-300 bg-transparent outline-none w-full"
-                                                                                value={med.drug}
-                                                                                readOnly
-                                                                            />
-                                                                        </div>
-                                                                        {/* Banner de Mensaje Completo (Soluciona el truncamiento) */}
-                                                                        <div className="text-xs text-red-700 dark:text-red-200 bg-red-100/50 dark:bg-red-900/40 p-2 rounded border border-red-200 dark:border-red-800/50 break-words font-mono">
-                                                                            {med.dose.replace(/\*\*\*/g, '').trim() || "Fármaco bloqueado por protocolo de seguridad."}
-                                                                        </div>
-                                                                    </div>
-                                                                ) : (
-                                                                    /* --- VISTA ESTÁNDAR / PRECAUCIÓN --- */
-                                                                    <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-2">
-                                                                        <div className="relative">
-                                                                            <input 
-                                                                                className={`w-full font-bold bg-transparent outline-none border-b border-transparent focus:border-indigo-300 transition-colors ${
-                                                                                    isRisky ? 'text-amber-700 dark:text-amber-400 pr-6' : 'text-slate-800 dark:text-white'
-                                                                                }`} 
-                                                                                value={med.drug} 
-                                                                                onChange={e=>handleUpdateMedication(idx,'drug',e.target.value)} 
-                                                                                placeholder="Nombre del medicamento" 
-                                                                            />
-                                                                            {isRisky && (
-                                                                                <div className="absolute right-0 top-1/2 -translate-y-1/2 text-amber-500 cursor-help" title={`Precaución: Posible interacción detectada en análisis clínico.`}>
-                                                                                    <AlertCircle size={16}/>
-                                                                                </div>
-                                                                            )}
-                                                                        </div>
-                                                                        
-                                                                        <input 
-                                                                            className="text-sm bg-transparent outline-none border-b border-transparent focus:border-indigo-300 transition-colors text-slate-600 dark:text-slate-300"
-                                                                            value={med.dose} 
-                                                                            onChange={e=>handleUpdateMedication(idx,'dose',e.target.value)} 
-                                                                            placeholder="Dosis" 
-                                                                        />
-                                                                        
-                                                                        <div className="col-span-2 flex gap-2 text-xs">
+                                                                    
+                                                                    {isManualBlocked ? (
+                                                                        <div className="flex-1 flex flex-col gap-1">
+                                                                            <div className="flex items-center gap-2">
+                                                                                <ShieldCheck size={16} className="text-red-600 shrink-0" />
                                                                                 <input 
-                                                                                    className="flex-1 bg-transparent outline-none border-b border-transparent focus:border-indigo-300 transition-colors text-slate-500"
-                                                                                    value={med.frequency} 
-                                                                                    onChange={e=>handleUpdateMedication(idx,'frequency',e.target.value)} 
-                                                                                    placeholder="Frecuencia" 
+                                                                                    className="font-bold text-red-800 dark:text-red-300 bg-transparent outline-none w-full"
+                                                                                    value={med.drug}
+                                                                                    readOnly
                                                                                 />
-                                                                                <input 
-                                                                                    className="flex-1 bg-transparent outline-none border-b border-transparent focus:border-indigo-300 transition-colors text-slate-500"
-                                                                                    value={med.duration} 
-                                                                                    onChange={e=>handleUpdateMedication(idx,'duration',e.target.value)} 
-                                                                                    placeholder="Duración" 
-                                                                                />
+                                                                            </div>
+                                                                            <div className="text-xs text-red-700 dark:text-red-200 bg-red-100/50 dark:bg-red-900/40 p-2 rounded border border-red-200 dark:border-red-800/50 break-words font-mono">
+                                                                                {med.dose.replace(/\*\*\*/g, '').trim() || "Fármaco bloqueado por protocolo de seguridad."}
+                                                                            </div>
                                                                         </div>
-                                                                    </div>
-                                                                )}
+                                                                    ) : (
+                                                                        <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-2">
+                                                                            <div className="relative">
+                                                                                <input 
+                                                                                    className={`w-full font-bold bg-transparent outline-none border-b border-transparent focus:border-indigo-300 transition-colors ${
+                                                                                        isRisky ? 'text-amber-700 dark:text-amber-400 pr-6' : 'text-slate-800 dark:text-white'
+                                                                                    }`} 
+                                                                                    value={med.drug} 
+                                                                                    onChange={e=>handleUpdateMedication(idx,'drug',e.target.value)} 
+                                                                                    placeholder="Nombre del medicamento" 
+                                                                                />
+                                                                                {isRisky && (
+                                                                                    <div className="absolute right-0 top-1/2 -translate-y-1/2 text-amber-500 cursor-help" title={`Precaución: Posible interacción detectada en análisis clínico.`}>
+                                                                                        <AlertCircle size={16}/>
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+                                                                            
+                                                                            <input 
+                                                                                className="text-sm bg-transparent outline-none border-b border-transparent focus:border-indigo-300 transition-colors text-slate-600 dark:text-slate-300"
+                                                                                value={med.dose} 
+                                                                                onChange={e=>handleUpdateMedication(idx,'dose',e.target.value)} 
+                                                                                placeholder="Dosis" 
+                                                                            />
+                                                                            
+                                                                            <div className="col-span-2 flex gap-2 text-xs">
+                                                                                    <input 
+                                                                                        className="flex-1 bg-transparent outline-none border-b border-transparent focus:border-indigo-300 transition-colors text-slate-500"
+                                                                                        value={med.frequency} 
+                                                                                        onChange={e=>handleUpdateMedication(idx,'frequency',e.target.value)} 
+                                                                                        placeholder="Frecuencia" 
+                                                                                    />
+                                                                                    <input 
+                                                                                        className="flex-1 bg-transparent outline-none border-b border-transparent focus:border-indigo-300 transition-colors text-slate-500"
+                                                                                        value={med.duration} 
+                                                                                        onChange={e=>handleUpdateMedication(idx,'duration',e.target.value)} 
+                                                                                        placeholder="Duración" 
+                                                                                    />
+                                                                            </div>
+                                                                        </div>
+                                                                    )}
 
-                                                                {/* Botón de Eliminar (Siempre visible) */}
-                                                                <button 
-                                                                    onClick={()=>handleRemoveMedication(idx)} 
-                                                                    className={`opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 ${
-                                                                        isManualBlocked ? 'text-red-400' : 'text-slate-400'
-                                                                    }`}
-                                                                    title="Quitar de la lista"
-                                                                >
-                                                                    <X size={16}/>
-                                                                </button>
+                                                                    <button 
+                                                                        onClick={()=>handleRemoveMedication(idx)} 
+                                                                        className={`opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 ${
+                                                                            isManualBlocked ? 'text-red-400' : 'text-slate-400'
+                                                                        }`}
+                                                                        title="Quitar de la lista"
+                                                                    >
+                                                                        <X size={16}/>
+                                                                    </button>
                                                             </div>
                                                             )
                                                         })}

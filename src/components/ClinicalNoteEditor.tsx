@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useMemo } from 'react';
 import { 
   ArrowLeft, FileText, User, MessageSquare, Building2, 
   RefreshCw, Save, ShieldCheck, Quote, 
@@ -13,6 +13,18 @@ import InsurancePanel from './Insurance/InsurancePanel';
 
 // --- DEFINICIONES DE TIPOS ---
 type TabType = 'record' | 'patient' | 'chat' | 'insurance';
+
+// --- Feature: Folio Controlado (Lista Blanca de Especialidades) ---
+const SPECIALTIES_WITH_CONTROLLED_RX = [
+    'Psiquiatría',
+    'Neurología',
+    'Medicina Interna',
+    'Anestesiología',
+    'Algología',
+    'Cuidados Paliativos',
+    'Oncología Médica',
+    'Cirugía Oncológica'
+];
 
 interface SoapData {
     subjective: string;
@@ -62,6 +74,10 @@ interface ClinicalNoteEditorProps {
   // Acciones Extra
   onShareWhatsApp: () => void;
   onPrint: () => void;
+
+  // --- Feature: Folio Controlado (Nuevos Props Opcionales) ---
+  specialFolio?: string;
+  setSpecialFolio?: (folio: string) => void;
 }
 
 export const ClinicalNoteEditor = React.memo(({
@@ -92,8 +108,17 @@ export const ClinicalNoteEditor = React.memo(({
   chatEndRef,
   onInsuranceDataChange,
   onShareWhatsApp,
-  onPrint
+  onPrint,
+  specialFolio,      // Nuevo Prop
+  setSpecialFolio    // Nuevo Prop
 }: ClinicalNoteEditorProps) => {
+
+  // Feature: Lógica de visualización del Folio (Memoizado para rendimiento)
+  const showControlledInput = useMemo(() => {
+      return SPECIALTIES_WITH_CONTROLLED_RX.some(s => 
+          selectedSpecialty?.toLowerCase().includes(s.toLowerCase())
+      );
+  }, [selectedSpecialty]);
 
   // Si no hay nota generada, mostramos el placeholder
   if (!generatedNote) {
@@ -142,7 +167,12 @@ export const ClinicalNoteEditor = React.memo(({
                                    <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Nota de Evolución</h1>
                                    <p className="text-sm text-slate-500 dark:text-slate-400 uppercase tracking-wide">{selectedSpecialty}</p>
                                </div>
-                               <div className="flex flex-col items-end gap-3">
+                               <div className="flex flex-col items-end gap-2">
+                                   {/* --- DISCLAIMER VISUAL --- */}
+                                   <span className="text-[10px] uppercase tracking-wider font-bold text-slate-400 flex items-center gap-1 select-none">
+                                       <ShieldCheck size={12} className="text-brand-teal"/> IA: Borrador sujeto a revisión
+                                   </span>
+                                   
                                    <button 
                                        onClick={onSaveConsultation} 
                                        disabled={isSaving} 
@@ -207,9 +237,36 @@ export const ClinicalNoteEditor = React.memo(({
 
                        {/* LISTA DE MEDICAMENTOS */}
                        <div className="bg-white dark:bg-slate-900 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800">
-                            <div className="flex justify-between items-center mb-4">
-                               <h3 className="font-bold text-lg flex items-center gap-2 text-indigo-600 dark:text-indigo-400"><Pill size={20}/> Receta Médica</h3>
-                               <button onClick={onAddMedication} className="text-xs bg-indigo-50 text-indigo-600 px-3 py-1 rounded-full flex items-center gap-1 hover:bg-indigo-100 dark:bg-indigo-900/30 dark:text-indigo-300"><Plus size={12}/> Agregar Fármaco</button>
+                            
+                            {/* --- Feature: Header de Receta con Folio Controlado Opcional --- */}
+                            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+                                <div className="flex items-center gap-4 w-full md:w-auto">
+                                    <h3 className="font-bold text-lg flex items-center gap-2 text-indigo-600 dark:text-indigo-400">
+                                        <Pill size={20}/> Receta Médica
+                                    </h3>
+                                    
+                                    {/* CANDADO LÓGICO DE SEGURIDAD (Solo especialidades autorizadas) */}
+                                    {setSpecialFolio && showControlledInput && (
+                                        <div className="flex-1 md:flex-none animate-fade-in-right">
+                                            <div className="relative group">
+                                                <input 
+                                                    type="text" 
+                                                    placeholder="Folio / Código COFEPRIS" 
+                                                    className="text-xs border-2 border-indigo-100 dark:border-indigo-900/50 bg-indigo-50/50 dark:bg-indigo-900/20 rounded-lg px-3 py-1.5 w-full md:w-56 outline-none focus:border-indigo-500 text-indigo-700 dark:text-indigo-300 font-medium placeholder:text-indigo-300 transition-all"
+                                                    value={specialFolio || ''}
+                                                    onChange={(e) => setSpecialFolio(e.target.value)}
+                                                />
+                                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-slate-800 text-white text-[10px] rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+                                                    Solo para Fracción I / II
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                <button onClick={onAddMedication} className="text-xs bg-indigo-50 text-indigo-600 px-3 py-1 rounded-full flex items-center gap-1 hover:bg-indigo-100 dark:bg-indigo-900/30 dark:text-indigo-300">
+                                    <Plus size={12}/> Agregar Fármaco
+                                </button>
                             </div>
                             
                             <div className="space-y-3">
