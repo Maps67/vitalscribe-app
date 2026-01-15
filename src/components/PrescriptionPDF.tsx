@@ -336,9 +336,9 @@ const PrescriptionPDF: React.FC<PrescriptionPDFProps> = ({
              <Text style={styles.legalText}>
                 Este documento es un comprobante médico privado válido (NOM-004-SSA3-2012).
              </Text>
-             <Text style={styles.legalText}>
-                Generado vía VitalScribe AI. {new Date().toLocaleDateString()}
-             </Text>
+             {/* SE ELIMINÓ: Generado vía VitalScribe AI
+                Para garantizar limpieza visual y autoría exclusiva del médico.
+             */}
           </View>
           
           <View style={styles.signatureSection}>
