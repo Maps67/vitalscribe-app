@@ -6,7 +6,7 @@ import {
   Clock, UserCircle, Brain, FileSignature, Keyboard, Quote, 
   ChevronDown, ChevronUp, Sparkles, PenLine, UserPlus, 
   ShieldCheck, AlertCircle, RefreshCw, Pill, Plus, Building2,
-  Activity, ClipboardList
+  Activity, ClipboardList, Scissors // [NUEVO] Icono para Cirugía
 } from 'lucide-react';
 
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition'; 
@@ -31,6 +31,9 @@ import { ConsultationSidebar } from './ConsultationSidebar';
 import { ContextualInsights } from './ContextualInsights'; 
 // CORRECCIÓN DE RUTA: Al estar en la misma carpeta components
 import { PatientBriefing } from './Consultation/PatientBriefing'; 
+// [NUEVO] Importación del Generador Quirúrgico y PDF
+import SurgicalLeaveGenerator, { GeneratedLeaveData } from './SurgicalLeaveGenerator';
+import SurgicalLeavePDF from './SurgicalLeavePDF';
 
 type TabType = 'record' | 'patient' | 'chat' | 'insurance';
 
@@ -205,6 +208,9 @@ const ConsultationView: React.FC = () => {
   const [showBriefing, setShowBriefing] = useState(false);
   // Estado para guardar el "Contexto Inicial" escrito por el médico
   const [manualContext, setManualContext] = useState<string>("");
+
+  // [NUEVO] Estado para el Modal de Incapacidad Quirúrgica
+  const [isSurgicalModalOpen, setIsSurgicalModalOpen] = useState(false);
 
   const startTimeRef = useRef<number>(Date.now());
 
@@ -946,6 +952,44 @@ const ConsultationView: React.FC = () => {
     }
   };
 
+  // --- [ACTUALIZADO] MANEJADOR DE DATOS QUIRÚRGICOS (VERSIÓN PDF SEPARADO) ---
+  const handleSurgicalData = async (data: GeneratedLeaveData) => {
+      // Validaciones de seguridad
+      if (!doctorProfile || !selectedPatient) {
+        toast.error("Faltan datos del médico o paciente para generar la constancia.");
+        return;
+      }
+
+      const loadingToast = toast.loading("Generando Constancia de Incapacidad...");
+
+      try {
+        // 1. Generar el Blob del PDF
+        const blob = await pdf(
+          <SurgicalLeavePDF 
+            doctor={doctorProfile}
+            patientName={selectedPatient.name}
+            data={data}
+            date={new Date().toLocaleDateString('es-MX', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+          />
+        ).toBlob();
+
+        // 2. Crear URL y abrir/descargar
+        const url = URL.createObjectURL(blob);
+        
+        // Opción A: Abrir en nueva pestaña (Mejor para móviles/tablets)
+        window.open(url, '_blank');
+        
+        toast.success("Constancia generada exitosamente.", { icon: <Scissors size={18}/> });
+        setIsSurgicalModalOpen(false);
+
+      } catch (error) {
+        console.error("Error PDF Incapacidad:", error);
+        toast.error("Error al generar el documento PDF.");
+      } finally {
+        toast.dismiss(loadingToast);
+      }
+  };
+
   const handleRemoveMedication = (index: number) => {
       const newMeds = [...editablePrescriptions];
       newMeds.splice(index, 1);
@@ -1289,6 +1333,10 @@ const ConsultationView: React.FC = () => {
   const showControlledInput = SPECIALTIES_WITH_CONTROLLED_RX.some(s => 
       selectedSpecialty?.toLowerCase().includes(s.toLowerCase())
   );
+  
+  // [NUEVO] Lógica de visualización del Botón Quirúrgico
+  const isSurgicalSpecialty = selectedSpecialty?.toLowerCase().includes('cirug') || 
+                              doctorProfile?.specialty?.toLowerCase().includes('cirug');
 
   return (
     <div className="flex flex-col md:flex-row h-[calc(100vh-64px)] bg-slate-100 dark:bg-slate-950 relative">
@@ -1435,10 +1483,10 @@ const ConsultationView: React.FC = () => {
                                                                     ? 'bg-blue-50 text-blue-900 dark:bg-blue-900/30 dark:text-blue-100 rounded-tr-none' 
                                                                     : 'bg-white border border-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700 rounded-tl-none'
                                                                 }`}>
-                                                                            <span className={`text-[10px] font-bold block mb-1 uppercase opacity-70 ${line.speaker === 'Médico' ? 'text-right' : 'text-left'}`}>
-                                                                                {line.speaker}
-                                                                            </span>
-                                                                            {line.text}
+                                                                                <span className={`text-[10px] font-bold block mb-1 uppercase opacity-70 ${line.speaker === 'Médico' ? 'text-right' : 'text-left'}`}>
+                                                                                    {line.speaker}
+                                                                                </span>
+                                                                                {line.text}
                                                                 </div>
                                                             </div>
                                                         ))}
@@ -1535,6 +1583,18 @@ const ConsultationView: React.FC = () => {
                                             <div className="flex justify-between items-center mb-2">
                                                 <h3 className="font-bold text-xl dark:text-white">Plan de Tratamiento</h3>
                                                 <div className="flex gap-2">
+                                                    {/* [NUEVO] BOTÓN GENERADOR DE INCAPACIDAD (SOLO CIRUJANOS) */}
+                                                    {isSurgicalSpecialty && (
+                                                        <button 
+                                                            onClick={() => setIsSurgicalModalOpen(true)}
+                                                            className="p-2 bg-indigo-100 text-indigo-600 rounded-lg hover:bg-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-400 flex items-center gap-2"
+                                                            title="Generar Incapacidad Quirúrgica"
+                                                        >
+                                                            <Scissors size={18}/>
+                                                            <span className="text-xs font-bold hidden sm:inline">Incapacidad</span>
+                                                        </button>
+                                                    )}
+
                                                     <button onClick={handleShareWhatsApp} className="p-2 bg-green-100 text-green-600 rounded-lg hover:bg-green-200 dark:bg-green-900/30 dark:text-green-400"><Share2 size={18}/></button>
                                                     <button onClick={handlePrint} className="p-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 dark:bg-blue-900/30 dark:text-blue-400"><Download size={18}/></button>
                                                 </div>
@@ -1561,7 +1621,7 @@ const ConsultationView: React.FC = () => {
                                                                         onChange={(e) => setSpecialFolio(e.target.value)}
                                                                     />
                                                                     <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-slate-800 text-white text-[10px] rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
-                                                                        Solo para Fracción I / II
+                                                                            Solo para Fracción I / II
                                                                     </div>
                                                                 </div>
                                                             </div>
@@ -1606,71 +1666,71 @@ const ConsultationView: React.FC = () => {
                                                             return (
                                                             <div key={idx} className={`flex gap-3 items-start p-3 rounded-lg border group transition-all duration-200 ${containerClasses}`}>
                                                                     
-                                                                    {isManualBlocked ? (
-                                                                        <div className="flex-1 flex flex-col gap-1">
-                                                                            <div className="flex items-center gap-2">
-                                                                                <ShieldCheck size={16} className="text-red-600 shrink-0" />
-                                                                                <input 
-                                                                                    className="font-bold text-red-800 dark:text-red-300 bg-transparent outline-none w-full"
-                                                                                    value={med.drug}
-                                                                                    readOnly
-                                                                                />
-                                                                            </div>
-                                                                            <div className="text-xs text-red-700 dark:text-red-200 bg-red-100/50 dark:bg-red-900/40 p-2 rounded border border-red-200 dark:border-red-800/50 break-words font-mono">
-                                                                                {med.dose.replace(/\*\*\*/g, '').trim() || "Fármaco bloqueado por protocolo de seguridad."}
-                                                                            </div>
-                                                                        </div>
-                                                                    ) : (
-                                                                        <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-2">
-                                                                            <div className="relative">
-                                                                                <input 
-                                                                                    className={`w-full font-bold bg-transparent outline-none border-b border-transparent focus:border-indigo-300 transition-colors ${
-                                                                                        isRisky ? 'text-amber-700 dark:text-amber-400 pr-6' : 'text-slate-800 dark:text-white'
-                                                                                    }`} 
-                                                                                    value={med.drug} 
-                                                                                    onChange={e=>handleUpdateMedication(idx,'drug',e.target.value)} 
-                                                                                    placeholder="Nombre del medicamento" 
-                                                                                />
-                                                                                {isRisky && (
-                                                                                    <div className="absolute right-0 top-1/2 -translate-y-1/2 text-amber-500 cursor-help" title={`Precaución: Posible interacción detectada en análisis clínico.`}>
-                                                                                        <AlertCircle size={16}/>
-                                                                                    </div>
-                                                                                )}
-                                                                            </div>
-                                                                            
+                                                                {isManualBlocked ? (
+                                                                    <div className="flex-1 flex flex-col gap-1">
+                                                                        <div className="flex items-center gap-2">
+                                                                            <ShieldCheck size={16} className="text-red-600 shrink-0" />
                                                                             <input 
-                                                                                className="text-sm bg-transparent outline-none border-b border-transparent focus:border-indigo-300 transition-colors text-slate-600 dark:text-slate-300"
-                                                                                value={med.dose} 
-                                                                                onChange={e=>handleUpdateMedication(idx,'dose',e.target.value)} 
-                                                                                placeholder="Dosis" 
+                                                                                className="font-bold text-red-800 dark:text-red-300 bg-transparent outline-none w-full"
+                                                                                value={med.drug}
+                                                                                readOnly
                                                                             />
-                                                                            
-                                                                            <div className="col-span-2 flex gap-2 text-xs">
-                                                                                    <input 
-                                                                                        className="flex-1 bg-transparent outline-none border-b border-transparent focus:border-indigo-300 transition-colors text-slate-500"
-                                                                                        value={med.frequency} 
-                                                                                        onChange={e=>handleUpdateMedication(idx,'frequency',e.target.value)} 
-                                                                                        placeholder="Frecuencia" 
-                                                                                    />
-                                                                                    <input 
-                                                                                        className="flex-1 bg-transparent outline-none border-b border-transparent focus:border-indigo-300 transition-colors text-slate-500"
-                                                                                        value={med.duration} 
-                                                                                        onChange={e=>handleUpdateMedication(idx,'duration',e.target.value)} 
-                                                                                        placeholder="Duración" 
-                                                                                    />
-                                                                            </div>
                                                                         </div>
-                                                                    )}
+                                                                        <div className="text-xs text-red-700 dark:text-red-200 bg-red-100/50 dark:bg-red-900/40 p-2 rounded border border-red-200 dark:border-red-800/50 break-words font-mono">
+                                                                            {med.dose.replace(/\*\*\*/g, '').trim() || "Fármaco bloqueado por protocolo de seguridad."}
+                                                                        </div>
+                                                                    </div>
+                                                                ) : (
+                                                                    <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-2">
+                                                                        <div className="relative">
+                                                                            <input 
+                                                                                className={`w-full font-bold bg-transparent outline-none border-b border-transparent focus:border-indigo-300 transition-colors ${
+                                                                                    isRisky ? 'text-amber-700 dark:text-amber-400 pr-6' : 'text-slate-800 dark:text-white'
+                                                                                }`} 
+                                                                                value={med.drug} 
+                                                                                onChange={e=>handleUpdateMedication(idx,'drug',e.target.value)} 
+                                                                                placeholder="Nombre del medicamento" 
+                                                                            />
+                                                                            {isRisky && (
+                                                                                <div className="absolute right-0 top-1/2 -translate-y-1/2 text-amber-500 cursor-help" title={`Precaución: Posible interacción detectada en análisis clínico.`}>
+                                                                                        <AlertCircle size={16}/>
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+                                                                        
+                                                                        <input 
+                                                                            className="text-sm bg-transparent outline-none border-b border-transparent focus:border-indigo-300 transition-colors text-slate-600 dark:text-slate-300"
+                                                                            value={med.dose} 
+                                                                            onChange={e=>handleUpdateMedication(idx,'dose',e.target.value)} 
+                                                                            placeholder="Dosis" 
+                                                                        />
+                                                                        
+                                                                        <div className="col-span-2 flex gap-2 text-xs">
+                                                                                <input 
+                                                                                    className="flex-1 bg-transparent outline-none border-b border-transparent focus:border-indigo-300 transition-colors text-slate-500"
+                                                                                    value={med.frequency} 
+                                                                                    onChange={e=>handleUpdateMedication(idx,'frequency',e.target.value)} 
+                                                                                    placeholder="Frecuencia" 
+                                                                                />
+                                                                                <input 
+                                                                                    className="flex-1 bg-transparent outline-none border-b border-transparent focus:border-indigo-300 transition-colors text-slate-500"
+                                                                                    value={med.duration} 
+                                                                                    onChange={e=>handleUpdateMedication(idx,'duration',e.target.value)} 
+                                                                                    placeholder="Duración" 
+                                                                                />
+                                                                        </div>
+                                                                    </div>
+                                                                )}
 
-                                                                    <button 
-                                                                        onClick={()=>handleRemoveMedication(idx)} 
-                                                                        className={`opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 ${
-                                                                            isManualBlocked ? 'text-red-400' : 'text-slate-400'
-                                                                        }`}
-                                                                        title="Quitar de la lista"
-                                                                    >
-                                                                        <X size={16}/>
-                                                                    </button>
+                                                                <button 
+                                                                    onClick={()=>handleRemoveMedication(idx)} 
+                                                                    className={`opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 ${
+                                                                        isManualBlocked ? 'text-red-400' : 'text-slate-400'
+                                                                    }`}
+                                                                    title="Quitar de la lista"
+                                                                >
+                                                                    <X size={16}/>
+                                                                </button>
                                                             </div>
                                                             )
                                                         })}
@@ -1801,6 +1861,20 @@ const ConsultationView: React.FC = () => {
             patientName={selectedPatient.name} 
         />
       )}
+
+      {/* [NUEVO] MODAL DE INCAPACIDAD QUIRÚRGICA */}
+      {isSurgicalModalOpen && selectedPatient && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+              <div className="max-w-3xl w-full">
+                  <SurgicalLeaveGenerator 
+                      patientName={selectedPatient.name}
+                      onClose={() => setIsSurgicalModalOpen(false)}
+                      onGenerate={handleSurgicalData}
+                  />
+              </div>
+          </div>
+      )}
+
     </div>
   );
 };
