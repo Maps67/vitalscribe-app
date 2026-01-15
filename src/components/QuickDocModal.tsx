@@ -4,7 +4,7 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { pdf } from '@react-pdf/renderer';
 import { toast } from 'sonner';
-import PrescriptionPDF from './PrescriptionPDF'; // Importamos la "Impresora B"
+import PrescriptionPDF from './PrescriptionPDF';
 
 interface QuickDocModalProps {
   isOpen: boolean;
@@ -31,7 +31,6 @@ export const QuickDocModal: React.FC<QuickDocModalProps> = ({ isOpen, onClose, d
     const loadingToast = toast.loading("Generando documento oficial...");
 
     try {
-        // 1. Título Dinámico para el PDF
         const titleMap = {
             'justificante': 'JUSTIFICANTE MÉDICO',
             'certificado': 'CERTIFICADO DE SALUD',
@@ -39,8 +38,6 @@ export const QuickDocModal: React.FC<QuickDocModalProps> = ({ isOpen, onClose, d
         };
         const finalTitle = titleMap[docType];
 
-        // 2. Construcción del Texto Legal (NOM-004) en Texto Plano para el PDF
-        // Usamos saltos de línea \n que PrescriptionPDF interpretará como párrafos.
         let bodyText = "";
 
         if (docType === 'justificante') {
@@ -56,19 +53,15 @@ export const QuickDocModal: React.FC<QuickDocModalProps> = ({ isOpen, onClose, d
             `El paciente se encuentra APTO para realizar las actividades físicas, laborales o escolares requeridas.\n\n` +
             `Se extiende el presente certificado a solicitud del interesado para los usos que estime convenientes.`;
         } else {
-            // Receta manual
             bodyText = content || "Sin prescripciones agregadas.";
         }
 
-        // 🔴 IDENTIDAD MÉDICA: PREFIJO FORZOSO 🔴
         const rawName = doctorProfile?.full_name || '';
         const doctorNameForced = /^(Dr\.|Dra\.)/i.test(rawName) ? rawName : `Dr. ${rawName}`;
 
-        // 3. Generar el PDF usando el motor unificado
-        // NOTA: Inyectamos qrCodeUrl para que aparezca el QR igual que en la consulta
         const blob = await pdf(
             <PrescriptionPDF 
-                doctorName={doctorNameForced} // Pasamos el nombre blindado
+                doctorName={doctorNameForced}
                 specialty={doctorProfile?.specialty || 'Medicina General'}
                 license={doctorProfile?.license_number || ''}
                 university={doctorProfile?.university || ''}
@@ -76,16 +69,15 @@ export const QuickDocModal: React.FC<QuickDocModalProps> = ({ isOpen, onClose, d
                 address={doctorProfile?.address || ''}
                 logoUrl={doctorProfile?.logo_url}
                 signatureUrl={doctorProfile?.signature_url}
-                qrCodeUrl={doctorProfile?.qr_code_url} // <--- CONEXIÓN DE QR APLICADA
+                qrCodeUrl={doctorProfile?.qr_code_url}
                 patientName={patientName}
                 patientAge={age || ''}
                 date={todayLong}
-                documentTitle={finalTitle} // <--- Título variable
-                content={bodyText}         // <--- Contenido legal variable
+                documentTitle={finalTitle}
+                content={bodyText}
             />
         ).toBlob();
 
-        // 4. Abrir
         const url = URL.createObjectURL(blob);
         window.open(url, '_blank');
         toast.dismiss(loadingToast);
@@ -101,6 +93,10 @@ export const QuickDocModal: React.FC<QuickDocModalProps> = ({ isOpen, onClose, d
   };
 
   if (!isOpen) return null;
+
+  // CLASES DE SEGURIDAD VISUAL (iPad Safe)
+  // forzamos bg-white y text-slate-900 para anular el Dark Mode del sistema
+  const inputClass = "w-full border border-slate-200 rounded-xl font-bold focus:ring-2 focus:ring-teal-500 outline-none text-sm bg-white text-slate-900 placeholder:text-slate-400 appearance-none";
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
@@ -121,47 +117,75 @@ export const QuickDocModal: React.FC<QuickDocModalProps> = ({ isOpen, onClose, d
         {/* Content */}
         <div className="p-6 overflow-y-auto flex-1 bg-white">
           <div className="flex p-1 bg-slate-100 rounded-xl mb-6">
-             {['justificante', 'certificado', 'receta'].map((t) => (
-               <button key={t} onClick={() => setDocType(t as any)} className={`flex-1 py-2 rounded-lg text-xs font-bold uppercase transition-all ${docType === t ? 'bg-white text-teal-700 shadow-sm ring-1 ring-black/5' : 'text-slate-500 hover:text-slate-700'}`}>
-                 {t}
-               </button>
-             ))}
+              {['justificante', 'certificado', 'receta'].map((t) => (
+                <button key={t} onClick={() => setDocType(t as any)} className={`flex-1 py-2 rounded-lg text-xs font-bold uppercase transition-all ${docType === t ? 'bg-white text-teal-700 shadow-sm ring-1 ring-black/5' : 'text-slate-500 hover:text-slate-700'}`}>
+                  {t}
+                </button>
+              ))}
           </div>
 
           <div className="space-y-4">
-             <div className="grid grid-cols-4 gap-4">
-                 <div className="col-span-3">
-                   <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1.5 ml-1">Paciente</label>
-                   <div className="relative">
-                       <User size={16} className="absolute left-3 top-3 text-slate-400"/>
-                       <input type="text" value={patientName} onChange={e => setPatientName(e.target.value)} className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl font-bold text-slate-700 focus:ring-2 focus:ring-teal-500 outline-none text-sm" placeholder="Nombre completo..."/>
-                   </div>
-                 </div>
-                 <div className="col-span-1">
-                   <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1.5 ml-1">Edad (Opcional)</label>
-                   <input type="text" value={age} onChange={e => setAge(e.target.value)} className="w-full px-3 py-2.5 border border-slate-200 rounded-xl font-medium text-slate-700 focus:ring-2 focus:ring-teal-500 outline-none text-sm" placeholder="Ej. 32"/>
-                 </div>
-             </div>
+              <div className="grid grid-cols-4 gap-4">
+                  <div className="col-span-3">
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1.5 ml-1">Paciente</label>
+                    <div className="relative">
+                        <User size={16} className="absolute left-3 top-3 text-slate-400"/>
+                        <input 
+                            type="text" 
+                            value={patientName} 
+                            onChange={e => setPatientName(e.target.value)} 
+                            className={`${inputClass} pl-9 pr-4 py-2.5`} 
+                            placeholder="Nombre completo..."
+                        />
+                    </div>
+                  </div>
+                  <div className="col-span-1">
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1.5 ml-1">Edad (Opcional)</label>
+                    <input 
+                        type="text" 
+                        value={age} 
+                        onChange={e => setAge(e.target.value)} 
+                        className={`${inputClass} px-3 py-2.5 font-medium`} 
+                        placeholder="Ej. 32"
+                    />
+                  </div>
+              </div>
 
-             {docType === 'justificante' && (
-               <div className="bg-teal-50/50 p-4 rounded-xl border border-teal-100 grid grid-cols-1 md:grid-cols-2 gap-4">
+              {docType === 'justificante' && (
+                <div className="bg-teal-50/50 p-4 rounded-xl border border-teal-100 grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-[10px] font-bold text-teal-700 uppercase mb-1.5 ml-1">Días de Reposo</label>
-                    <input type="number" value={restDays} onChange={e => setRestDays(e.target.value)} className="w-full px-3 py-2 border border-slate-200 rounded-xl font-bold text-teal-800 text-center" />
+                    <input 
+                        type="number" 
+                        value={restDays} 
+                        onChange={e => setRestDays(e.target.value)} 
+                        className={`${inputClass} px-3 py-2 text-teal-800 text-center`} 
+                    />
                   </div>
                   <div>
                     <label className="block text-[10px] font-bold text-teal-700 uppercase mb-1.5 ml-1">Diagnóstico (CIE-10)</label>
-                    <input type="text" value={diagnosis} onChange={e => setDiagnosis(e.target.value)} className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm" placeholder="Ej. Faringitis..."/>
+                    <input 
+                        type="text" 
+                        value={diagnosis} 
+                        onChange={e => setDiagnosis(e.target.value)} 
+                        className={`${inputClass} px-3 py-2`} 
+                        placeholder="Ej. Faringitis..."
+                    />
                   </div>
-               </div>
-             )}
+                </div>
+              )}
 
-             {docType === 'receta' && (
+              {docType === 'receta' && (
                 <div>
                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1.5 ml-1"><AlignLeft size={12} className="inline mr-1"/>Prescripción Manual</label>
-                   <textarea value={content} onChange={e => setContent(e.target.value)} className="w-full p-4 border border-slate-200 rounded-xl h-40 text-sm leading-relaxed focus:ring-2 focus:ring-teal-500 outline-none resize-none font-mono" placeholder="Escriba medicamentos e indicaciones..."></textarea>
+                   <textarea 
+                        value={content} 
+                        onChange={e => setContent(e.target.value)} 
+                        className={`${inputClass} w-full p-4 h-40 leading-relaxed resize-none font-mono`} 
+                        placeholder="Escriba medicamentos e indicaciones..."
+                   />
                 </div>
-             )}
+              )}
           </div>
         </div>
 
