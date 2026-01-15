@@ -132,7 +132,7 @@ const SurgicalLeavePDF: React.FC<SurgicalLeavePDFProps> = ({ doctor, patientName
           </View>
 
           <Text style={styles.legalText}>
-            Documento generado electrónicamente por plataforma VitalScribe AI bajo la NOM-004-SSA3-2012. 
+            Documento generado electrónicamente bajo la NOM-004-SSA3-2012. 
             La autenticidad de este documento puede ser verificada con el médico tratante.
           </Text>
         </View>
