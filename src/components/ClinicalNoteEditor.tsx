@@ -1,4 +1,4 @@
-import React, { useRef, useMemo } from 'react';
+import React, { useMemo } from 'react';
 import { 
   ArrowLeft, FileText, User, MessageSquare, Building2, 
   RefreshCw, Save, ShieldCheck, Quote, 
@@ -11,9 +11,6 @@ import FormattedText from './FormattedText';
 import { RiskBadge as RiskBadgeComponent } from './RiskBadge';
 import InsurancePanel from './Insurance/InsurancePanel';
 
-// --- DEFINICIONES DE TIPOS ---
-type TabType = 'record' | 'patient' | 'chat' | 'insurance';
-
 // --- Feature: Folio Controlado (Lista Blanca de Especialidades) ---
 const SPECIALTIES_WITH_CONTROLLED_RX = [
     'Psiquiatría',
@@ -25,6 +22,9 @@ const SPECIALTIES_WITH_CONTROLLED_RX = [
     'Oncología Médica',
     'Cirugía Oncológica'
 ];
+
+// --- DEFINICIONES DE TIPOS ---
+type TabType = 'record' | 'patient' | 'chat' | 'insurance';
 
 interface SoapData {
     subjective: string;
@@ -109,14 +109,15 @@ export const ClinicalNoteEditor = React.memo(({
   onInsuranceDataChange,
   onShareWhatsApp,
   onPrint,
-  specialFolio,      // Nuevo Prop
-  setSpecialFolio    // Nuevo Prop
+  specialFolio,      // Feature: Nuevo Prop
+  setSpecialFolio    // Feature: Nuevo Prop
 }: ClinicalNoteEditorProps) => {
 
   // Feature: Lógica de visualización del Folio (Memoizado para rendimiento)
   const showControlledInput = useMemo(() => {
+      if (!selectedSpecialty) return false;
       return SPECIALTIES_WITH_CONTROLLED_RX.some(s => 
-          selectedSpecialty?.toLowerCase().includes(s.toLowerCase())
+          selectedSpecialty.toLowerCase().includes(s.toLowerCase())
       );
   }, [selectedSpecialty]);
 
@@ -167,11 +168,15 @@ export const ClinicalNoteEditor = React.memo(({
                                    <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Nota de Evolución</h1>
                                    <p className="text-sm text-slate-500 dark:text-slate-400 uppercase tracking-wide">{selectedSpecialty}</p>
                                </div>
+                               
+                               {/* --- ZONA DE ACCIONES Y BLINDAJE --- */}
                                <div className="flex flex-col items-end gap-2">
-                                   {/* --- DISCLAIMER VISUAL --- */}
+                                   
+                                   {/* 🛡️ BLINDAJE VISUAL (CORREGIDO: Ahora sí aparece) */}
                                    <span className="text-[10px] uppercase tracking-wider font-bold text-slate-400 flex items-center gap-1 select-none">
                                        <ShieldCheck size={12} className="text-brand-teal"/> IA: Borrador sujeto a revisión
                                    </span>
+                                   {/* ----------------------------------------------- */}
                                    
                                    <button 
                                        onClick={onSaveConsultation} 
@@ -238,14 +243,14 @@ export const ClinicalNoteEditor = React.memo(({
                        {/* LISTA DE MEDICAMENTOS */}
                        <div className="bg-white dark:bg-slate-900 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800">
                             
-                            {/* --- Feature: Header de Receta con Folio Controlado Opcional --- */}
+                            {/* --- HEADER CON FOLIO CONTROLADO (Feature Request) --- */}
                             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
                                 <div className="flex items-center gap-4 w-full md:w-auto">
                                     <h3 className="font-bold text-lg flex items-center gap-2 text-indigo-600 dark:text-indigo-400">
                                         <Pill size={20}/> Receta Médica
                                     </h3>
                                     
-                                    {/* CANDADO LÓGICO DE SEGURIDAD (Solo especialidades autorizadas) */}
+                                    {/* --- CANDADO LÓGICO DE SEGURIDAD (Solo especialidades autorizadas) --- */}
                                     {setSpecialFolio && showControlledInput && (
                                         <div className="flex-1 md:flex-none animate-fade-in-right">
                                             <div className="relative group">
