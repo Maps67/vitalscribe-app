@@ -811,11 +811,13 @@ const Dashboard: React.FC = () => {
   const appointmentsToday = appointments.filter(a => isToday(parseISO(a.start_time))).length;
   const totalDailyLoad = completedTodayCount + appointmentsToday;
 
-  // NUEVO: Mensaje de garantía de privacidad (Cada vez que entra al Dashboard tras Login)
+  // NUEVO: Mensaje de garantía de privacidad (PC y Tablets solamente)
   useEffect(() => {
-    if (window.innerWidth < 768) return;
+    // FILTRO DE DISPOSITIVO: 
+    // < 480px = Celulares (No sale)
+    // >= 480px = Tablets y PC (Sí sale)
+    if (window.innerWidth < 480) return;
 
-    // Usamos una marca temporal en memoria local
     const hasSeenThisLogin = sessionStorage.getItem('login_notice_shown');
 
     if (!hasSeenThisLogin) {
