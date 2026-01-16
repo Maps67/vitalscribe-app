@@ -27,7 +27,7 @@ const SPECIALTIES = [
   "Endocrinología", "Gastroenterología", "Geriatría", "Ginecología y Obstetricia", "Medicina del Deporte", 
   "Medicina Interna", "Nefrología", "Neumología", "Neurocirugía", "Neurología", "Oftalmología", 
   "Otorrinolaringología", "Pediatría", "Psiquiatría", "Reumatología", "Traumatología y Ortopedia", 
-  "Traumatología: Artroscopia", "Urología", "Urgencias Médicas"
+  "Traumatología: Artroscopia", "Urología", "Urgencias Médicas","Cirugía Cardiotorácica"
 ];
 
 interface AuthProps {

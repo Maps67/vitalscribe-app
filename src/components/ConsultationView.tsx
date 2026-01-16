@@ -55,7 +55,8 @@ interface SessionSnapshot {
 
 const SPECIALTIES = [
   "Medicina General", 
-  "Cardiología", 
+  "Cardiología",
+  "Cirugía Cardiotorácica", 
   "Cirugía General", 
   "Cirugía de Columna", 
   "Cirugía de Mano", 
