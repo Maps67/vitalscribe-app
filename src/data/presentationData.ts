@@ -12,7 +12,7 @@ export const presentationData: SlideData[] = [
     meta: { gradient: "from-teal-600 to-slate-900" }
   },
   
-  // SLIDE 2: GESTIÓN OPERATIVA (GRID) - ¡NUEVO! (Cubre Pilar 1)
+  // SLIDE 2: GESTIÓN OPERATIVA (GRID) - ACTUALIZADO (Lógica de Blindaje)
   {
     id: "operational",
     type: "grid",
@@ -21,7 +21,7 @@ export const presentationData: SlideData[] = [
     items: [
       { iconName: "Calendar", title: "Agenda Inteligente", text: "Gestión de citas Drag & Drop y admisión rápida con 'Lazy Registration' para pacientes nuevos." },
       { iconName: "Users", title: "Identidad Profesional", text: "Configuración de perfil, firma digital y carga de logotipos para personalización total." },
-      { iconName: "Layers", title: "Selector de Especialidad", text: "Modificador de 'Lente Clínico'. Ajusta la prioridad de la IA (ej. Cardio vs. Urgencias)." },
+      { iconName: "Lock", title: "Blindaje de Especialidad", text: "Vinculación estricta a Cédula. La IA calibra sus protocolos según la competencia legal, bloqueando cambios arbitrarios." },
       { iconName: "FileText", title: "Gestión de Archivos", text: "Carga y visualización de estudios externos (PDF/DICOM) vinculados al timeline." }
     ]
   },
