@@ -209,7 +209,7 @@ const ConsultationView: React.FC = () => {
 
   const [isSurgicalModalOpen, setIsSurgicalModalOpen] = useState(false);
 
-  // --- [RESTAURADO] ESTADOS DE INTERCONSULTA ---
+  // --- [NUEVO BLINDAJE] ESTADOS DE INTERCONSULTA ---
   const [isInterconsultationOpen, setIsInterconsultationOpen] = useState(false);
   const [interconsultationSpecialty, setInterconsultationSpecialty] = useState('Medicina Interna');
   const [interconsultationResult, setInterconsultationResult] = useState<string | null>(null);
@@ -762,7 +762,6 @@ const ConsultationView: React.FC = () => {
       }
   };
 
-  // --- [BLINDAJE] GENERACIÓN DE NOTA RESTRINGIDA A ESPECIALIDAD REAL ---
   const handleGenerate = async () => {
     if (!doctorProfile) return toast.error("Perfil médico no cargado.");
 
@@ -1143,6 +1142,10 @@ const ConsultationView: React.FC = () => {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) throw new Error("Sesión expirada");
         
+        // --- RESTAURACIÓN DE LÓGICA CRÍTICA PARA DEFINICIÓN DE VARIABLE ---
+        const currentText = transcript.trim() ? `\n[${activeSpeaker.toUpperCase()}]: ${transcript}` : '';
+        const fullTranscriptToSave = segments.map(s => `[${s.role === 'doctor' ? 'DOCTOR' : 'PACIENTE'}]: ${s.text}`).join('\n') + currentText;
+        
         let finalPatientId = selectedPatient.id;
 
         const medsSummary = editablePrescriptions.length > 0 
@@ -1308,7 +1311,6 @@ const ConsultationView: React.FC = () => {
 
   const isReadyToGenerate = isOnline && !isListening && !isPaused && !isProcessing && (transcript || segments.length > 0) && !generatedNote;
 
-  // Render del Componente Chat para reusarlo en Móvil y Escritorio
   const renderChatContent = () => (
       <div className="bg-white dark:bg-slate-900 p-4 rounded-xl shadow-sm h-full flex flex-col border dark:border-slate-800 animate-fade-in-up">
             <div className="flex-1 overflow-y-auto mb-4 pr-2 custom-scrollbar">
@@ -1376,7 +1378,6 @@ const ConsultationView: React.FC = () => {
         setIsAttachmentsOpen={setIsAttachmentsOpen}
         doctorProfile={doctorProfile}
         onDownloadRecord={handleDownloadFullRecord}
-        // [CONEXIÓN CRÍTICA] Aquí pasamos el handler al hijo
         onTriggerInterconsultation={handleSidebarInterconsultation} 
       />
       
@@ -1395,7 +1396,6 @@ const ConsultationView: React.FC = () => {
                 <div className="flex border-b dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0 items-center px-2">
                     <button onClick={()=>setGeneratedNote(null)} className="md:hidden p-4 text-slate-500"><ArrowLeft/></button>
                     {[{id:'record',icon:FileText,l:'EXPEDIENTE CLÍNICO'},{id:'patient',icon:User,l:'PLAN PACIENTE'},{id:'chat',icon:MessageSquare,l:'ASISTENTE'}, {id:'insurance', icon:Building2, l:'SEGUROS'}].map(t => {
-                        // FIX: Ocultar pestaña Chat en pantallas grandes (LG) porque ya se muestra en la 3ra columna
                         const hideOnDesktop = t.id === 'chat' ? 'lg:hidden' : '';
                         return (
                             <button key={t.id} onClick={()=>setActiveTab(t.id as TabType)} disabled={!generatedNote&&t.id!=='record'} className={`flex-1 py-4 flex justify-center gap-2 text-sm font-bold border-b-4 transition-colors ${hideOnDesktop} ${activeTab===t.id?'text-brand-teal border-brand-teal':'text-slate-400 border-transparent hover:text-slate-600'}`}>
@@ -1431,7 +1431,6 @@ const ConsultationView: React.FC = () => {
                                             <div className="flex justify-between items-start">
                                                 <div>
                                                     <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Nota de Evolución</h1>
-                                                    {/* BLINDAJE VISUAL: Muestra la especialidad REAL */}
                                                     <p className="text-sm text-slate-500 dark:text-slate-400 uppercase tracking-wide flex items-center gap-1">
                                                         <Lock size={12} className="text-green-600"/>
                                                         {doctorProfile?.specialty || "Cargando..."}
@@ -1877,7 +1876,7 @@ const ConsultationView: React.FC = () => {
         />
       )}
 
-      {/* [MODAL RESTAURADO] INTERCONSULTA AISLADA */}
+      {/* [MODAL] INTERCONSULTA AISLADA */}
       {isInterconsultationOpen && (
           <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4 backdrop-blur-sm">
               <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden animate-fade-in-up border border-indigo-100">
