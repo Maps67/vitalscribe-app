@@ -6,7 +6,7 @@ import {
   Clock, UserCircle, Brain, FileSignature, Keyboard, Quote, 
   ChevronDown, ChevronUp, Sparkles, PenLine, UserPlus, 
   ShieldCheck, AlertCircle, RefreshCw, Pill, Plus, Building2,
-  Activity, ClipboardList, Scissors // [NUEVO] Icono para Cirugía
+  Activity, ClipboardList, Scissors, Microscope, Eye, Lock
 } from 'lucide-react';
 
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition'; 
@@ -31,7 +31,6 @@ import { ConsultationSidebar } from './ConsultationSidebar';
 import { ContextualInsights } from './ContextualInsights'; 
 // CORRECCIÓN DE RUTA: Al estar en la misma carpeta components
 import { PatientBriefing } from './Consultation/PatientBriefing'; 
-// [NUEVO] Importación del Generador Quirúrgico y PDF
 import SurgicalLeaveGenerator, { GeneratedLeaveData } from './SurgicalLeaveGenerator';
 import SurgicalLeavePDF from './SurgicalLeavePDF';
 
@@ -166,6 +165,7 @@ const ConsultationView: React.FC = () => {
   const [consentGiven, setConsentGiven] = useState(false);
   const [activeTab, setActiveTab] = useState<TabType>('record');
   
+  // Este estado se mantiene para sincronizar el dropdown visual, pero NO afecta la lógica legal
   const [selectedSpecialty, setSelectedSpecialty] = useState('Medicina General');
   
   const [editableInstructions, setEditableInstructions] = useState('');
@@ -204,13 +204,16 @@ const ConsultationView: React.FC = () => {
   const [clinicalInsights, setClinicalInsights] = useState<ClinicalInsight[]>([]);
   const [loadingClinicalInsights, setLoadingClinicalInsights] = useState(false);
   
-  // Estado para controlar el modal de "Pase de Visita"
   const [showBriefing, setShowBriefing] = useState(false);
-  // Estado para guardar el "Contexto Inicial" escrito por el médico
   const [manualContext, setManualContext] = useState<string>("");
 
-  // [NUEVO] Estado para el Modal de Incapacidad Quirúrgica
   const [isSurgicalModalOpen, setIsSurgicalModalOpen] = useState(false);
+
+  // --- [NUEVO BLINDAJE] ESTADOS DE INTERCONSULTA ---
+  const [isInterconsultationOpen, setIsInterconsultationOpen] = useState(false);
+  const [interconsultationSpecialty, setInterconsultationSpecialty] = useState('Medicina Interna');
+  const [interconsultationResult, setInterconsultationResult] = useState<string | null>(null);
+  const [isProcessingInterconsultation, setIsProcessingInterconsultation] = useState(false);
 
   const startTimeRef = useRef<number>(Date.now());
 
@@ -219,8 +222,6 @@ const ConsultationView: React.FC = () => {
   const chatEndRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
-  // --- MODIFICACIÓN 1: Memoria de referencia para el "Copiloto Silencioso" ---
-  // Esto evita que busquemos lo mismo dos veces si el médico no ha cambiado nada importante.
   const lastAnalyzedRef = useRef<string>("");
 
   useEffect(() => {
@@ -245,55 +246,42 @@ const ConsultationView: React.FC = () => {
 
   // --- MODIFICACIÓN 2: Efecto de Sincronización con "Pausa Inteligente" (Debounce) ---
   useEffect(() => {
-    // 1. Si no hay nota, limpiamos sugerencias y salimos.
     if (!generatedNote || (!generatedNote.soapData && !generatedNote.clinicalNote)) {
         setClinicalInsights([]);
         return;
     }
 
-    // 2. Construimos el contenido actual que el sistema debe "leer".
     const currentContent = generatedNote.soapData 
         ? `${generatedNote.soapData.subjective} \n ${generatedNote.soapData.analysis} \n ${generatedNote.soapData.plan}`
         : generatedNote.clinicalNote || "";
 
-    // 3. Verificamos si realmente cambió algo significativo respecto a la última vez que "miramos".
-    // Esto ahorra recursos y evita parpadeos.
     if (currentContent.trim() === lastAnalyzedRef.current.trim()) {
         return;
     }
 
-    // 4. CONFIGURACIÓN DE LA PAUSA INTELIGENTE (3 Segundos)
     const debounceTimer = setTimeout(() => {
-        // Solo buscamos sugerencias si hay suficiente texto (evitar búsquedas por una sola letra)
         if (currentContent.length > 20) {
             setLoadingClinicalInsights(true);
-            lastAnalyzedRef.current = currentContent; // Actualizamos la memoria: "Ya leí esto"
+            lastAnalyzedRef.current = currentContent;
 
-            // 5. Llamada asíncrona al servicio (Lectura externa)
             GeminiMedicalService.generateClinicalInsights(currentContent, selectedSpecialty)
                 .then(insights => {
-                    // Solo actualizamos si obtuvimos algo útil
                     if (insights && insights.length > 0) {
                         setClinicalInsights(insights);
-                        // Feedback sutil (opcional, para que sepa que se actualizó)
-                        // toast.success("Sugerencias actualizadas", { icon: <Sparkles size={16}/> });
                     }
                 })
                 .catch(err => {
                     console.warn("Silent Insight Error:", err);
-                    // No mostramos error al usuario para no interrumpir su flujo (Silent Fail)
                 })
                 .finally(() => {
                     setLoadingClinicalInsights(false);
                 });
         }
-    }, 3000); // <--- TIEMPO DE ESPERA: 3000ms (3 segundos)
+    }, 3000); 
 
-    // 6. Limpieza: Si el médico escribe antes de los 3 segundos, cancelamos el timer anterior.
-    // Esto es lo que logra el efecto "Espera a que termine de escribir".
     return () => clearTimeout(debounceTimer);
 
-  }, [generatedNote, selectedSpecialty]); // Se ejecuta cada vez que generatedNote cambia (escribe)
+  }, [generatedNote, selectedSpecialty]); 
 
   useEffect(() => {
     let mounted = true;
@@ -339,6 +327,7 @@ const ConsultationView: React.FC = () => {
             const { data: profileData } = await supabase.from('profiles').select('*').eq('id', user.id).single();
             if (profileData) {
                 setDoctorProfile(profileData as DoctorProfile);
+                // Inicializamos la especialidad visual con la real
                 if (profileData.specialty) {
                     const matchedSpecialty = SPECIALTIES.find(s => s.toLowerCase() === profileData.specialty.toLowerCase());
                     setSelectedSpecialty(matchedSpecialty || profileData.specialty);
@@ -355,7 +344,6 @@ const ConsultationView: React.FC = () => {
                           isTemporary: true, 
                           appointmentId: incoming.appointmentId || incoming.id.replace('ghost_', '')
                       };
-                      // Se invoca la selección manual para activar el Briefing
                       handleSelectPatient(tempPatient);
                       if(incoming.appointmentId) setLinkedAppointmentId(incoming.appointmentId);
                       toast.info(`Iniciando consulta para: ${incoming.name}`);
@@ -381,7 +369,6 @@ const ConsultationView: React.FC = () => {
                     handleSelectPatient(existingPatient);
                     toast.success(`Paciente cargado: ${incomingName}`);
                 } else {
-                    // Si viene por nombre pero no existe, usamos la nueva lógica
                     handleCreatePatient(incomingName);
                     toast.info(`Registrando nuevo paciente: ${incomingName}`);
                 }
@@ -471,7 +458,7 @@ const ConsultationView: React.FC = () => {
   }, [selectedPatient]);
 
   useEffect(() => {
-    if (selectedPatient && !(selectedPatient as any).isTemporary) {
+    if (selectedPatient && !(selectedPatient as any).isTemporary && doctorProfile) {
         if (!activeMedicalContext) {
             setLoadingSnapshot(true);
             return; 
@@ -500,7 +487,8 @@ const ConsultationView: React.FC = () => {
             ${lastConsultationContext}
         `;
 
-        GeminiMedicalService.generateVitalSnapshot(fullContextForSnapshot, selectedSpecialty)
+        // SIEMPRE USA LA ESPECIALIDAD REAL DEL MEDICO
+        GeminiMedicalService.generateVitalSnapshot(fullContextForSnapshot, doctorProfile.specialty)
             .then(data => {
                 if (data) {
                     setVitalSnapshot(data);
@@ -523,12 +511,11 @@ const ConsultationView: React.FC = () => {
         setVitalSnapshot(null);
         setLoadingSnapshot(false);
     }
-  }, [selectedPatient?.id, activeMedicalContext, selectedSpecialty]); 
+  }, [selectedPatient?.id, activeMedicalContext, doctorProfile]); 
 
   useEffect(() => {
     if (selectedPatient) {
         setPatientInsights(null);
-        // Feature: Resetear Folio al cambiar paciente
         setSpecialFolio(''); 
         
         const isTemp = (selectedPatient as any).isTemporary;
@@ -538,7 +525,7 @@ const ConsultationView: React.FC = () => {
             setSegments([]);
             if (currentUserId) localStorage.removeItem(`draft_${currentUserId}`);
             setGeneratedNote(null);
-            setSessionSnapshot(null); // Reset Snapshot al cambiar paciente
+            setSessionSnapshot(null);
             setIsRiskExpanded(false);
             startTimeRef.current = Date.now(); 
         } else if (!transcript) {
@@ -585,9 +572,8 @@ const ConsultationView: React.FC = () => {
   };
 
   const handleSelectPatient = async (patient: any) => {
-      // 1. Resetear el contexto manual previo y el Snapshot
       setManualContext("");
-      setSessionSnapshot(null); // Seguridad: Nuevo paciente = Nueva sesión
+      setSessionSnapshot(null);
       
       if (patient.isGhost) {
           const tempPatient = {
@@ -625,15 +611,12 @@ const ConsultationView: React.FC = () => {
               console.error("Error en hidratación:", e);
           }
       }
-      // 2. ACTIVAR EL BRIEFING AUTOMÁTICAMENTE
       setShowBriefing(true);
   };
 
-  // --- NUEVA LÓGICA DE REGISTRO AUTOMÁTICO (JUST-IN-TIME) ---
   const handleCreatePatient = async (name: string) => {
     if (!currentUserId) return;
     
-    // Inserción Inmediata en DB (Persistencia Automática)
     const { data: newPatient, error } = await supabase.from('patients').insert({
         name: name,
         doctor_id: currentUserId,
@@ -645,47 +628,35 @@ const ConsultationView: React.FC = () => {
         return;
     }
 
-    // Actualizar lista local de pacientes
     setPatients(prev => [newPatient, ...prev]);
-    
-    // Seleccionar el paciente REAL (ya tiene ID)
     setSelectedPatient(newPatient);
     setSearchTerm('');
     
-    // Resetear estados de sesión
     setManualContext(""); 
     setSessionSnapshot(null);
     startTimeRef.current = Date.now(); 
     
     toast.success(`Paciente registrado: ${name}`);
-    
-    // Activar Briefing Inmediatamente
     setShowBriefing(true);
   };
 
-  // --- CALLBACK CUANDO EL MÉDICO CIERRA EL BRIEFING (LÓGICA HÍBRIDA CORREGIDA) ---
   const handleBriefingComplete = (context: string) => {
-      setManualContext(context); // 1. Guardamos en memoria para la IA (Esto aplica a AMBOS casos)
-      setShowBriefing(false);    // 2. Cerramos el modal
+      setManualContext(context);
+      setShowBriefing(false);    
       
-      // Detectamos si es paciente nuevo/temporal O si el snapshot actual está vacío/genérico
       const isNewOrEmpty = (selectedPatient as any).isTemporary || 
                            !selectedPatient?.history || 
-                           selectedPatient?.history.length < 20 || // Umbral bajo para considerar "vacío"
+                           selectedPatient?.history.length < 20 || 
                            (vitalSnapshot?.evolution && vitalSnapshot.evolution.includes("Sin datos previos"));
 
-      // CASO A: PACIENTE NUEVO / VACÍO -> INYECCIÓN VISUAL
-      // Solo aquí sobrescribimos la tarjeta visual para que no se vea vacía.
       if (isNewOrEmpty && context.trim().length > 0) {
-          // 1. Actualizamos Sidebar Amarillo
           setActiveMedicalContext(prev => ({
-              history: context, // Aquí sí mostramos lo que acabas de escribir como "Antecedente"
+              history: context,
               allergies: prev?.allergies || "No registradas",
               lastConsultation: prev?.lastConsultation,
               insurance: prev?.insurance
           }));
 
-          // 2. Actualizamos Vital Snapshot (Tarjeta Grande)
           setVitalSnapshot({
               evolution: `📝 CONTEXTO INICIAL (MÉDICO):\n"${context}"`,
               risk_flags: ["Paciente Nuevo - Valoración Inicial"],
@@ -695,9 +666,6 @@ const ConsultationView: React.FC = () => {
           
           toast.success("Contexto inicial cargado en panel visual.");
       } 
-      
-      // CASO B: PACIENTE CON HISTORIA -> SOLO CONFIRMACIÓN
-      // No tocamos la tarjeta amarilla para no ocultar sus enfermedades crónicas.
       else if (context.trim().length > 0) {
           toast.success("Contexto agregado a la memoria de la IA (Historial visual preservado).");
       }
@@ -708,9 +676,7 @@ const ConsultationView: React.FC = () => {
         toast.info("Sin internet: Use el teclado o el dictado de su dispositivo.");
         return;
     }
-    
     if (!isAPISupported) { toast.error("Navegador no compatible."); return; }
-    
     if (!consentGiven) { toast.warning("Falta consentimiento."); return; }
 
     if (isListening) {
@@ -738,15 +704,10 @@ const ConsultationView: React.FC = () => {
           setSegments([]);
           if (currentUserId) localStorage.removeItem(`draft_${currentUserId}`); 
           setGeneratedNote(null); 
-          
-          // 🛑 SNAPSHOT RESET: Romper el cristal
           setSessionSnapshot(null); 
           setEditableInstructions('');
           setEditablePrescriptions([]);
-          
-          // Reset Folio
           setSpecialFolio('');
-
           setIsRiskExpanded(false); 
           toast.info("Sesión reiniciada. Puede generar una nueva valoración.");
       }
@@ -801,6 +762,8 @@ const ConsultationView: React.FC = () => {
   };
 
   const handleGenerate = async () => {
+    if (!doctorProfile) return toast.error("Perfil médico no cargado.");
+
     commitCurrentTranscript(); 
     
     const currentText = transcript.trim() ? `\n[${activeSpeaker.toUpperCase()}]: ${transcript}` : '';
@@ -822,15 +785,12 @@ const ConsultationView: React.FC = () => {
     abortControllerRef.current = new AbortController();
     
     setIsProcessing(true);
-    const loadingToast = toast.loading("⚡ Motor Prometheus V10: Analizando audio...");
+    const loadingToast = toast.loading(`Analizando como ${doctorProfile.specialty.toUpperCase()}...`);
 
     try {
-      // 🔒 PROTOCOLO DE SNAPSHOT (OPTION B)
-      // Antes de llamar a la IA, verificamos si ya existe una valoración válida para este input.
-      const inputSignature = fullTranscript + (manualContext || ""); // Firma Digital del Input
+      const inputSignature = fullTranscript + (manualContext || ""); 
       
       if (sessionSnapshot && sessionSnapshot.inputSignature === inputSignature) {
-          // HIT: El médico intentó regenerar lo mismo. Restauramos el snapshot.
           toast.dismiss(loadingToast);
           toast.info("♻️ Recuperando valoración validada (Snapshot de Seguridad).");
           
@@ -843,7 +803,7 @@ const ConsultationView: React.FC = () => {
           
           setActiveTab('record');
           setIsProcessing(false);
-          return; // 🛑 DETENCIÓN DE TRÁFICO
+          return; 
       }
 
       let fullMedicalContext = "";
@@ -864,8 +824,6 @@ const ConsultationView: React.FC = () => {
           }
       }
 
-      // --- INYECCIÓN DE CONTEXTO MANUAL ---
-      // Si el médico escribió algo en el Briefing, lo agregamos aquí
       if (manualContext && manualContext.trim().length > 0) {
           activeContextString += `
             \n>>> CONTEXTO ACTUAL DEFINIDO POR EL MÉDICO (PRIORIDAD ALTA):
@@ -897,12 +855,12 @@ const ConsultationView: React.FC = () => {
           fullMedicalContext = activeContextString;
       }
 
-      // MODIFICACIÓN: Pasamos manualContext como argumento separado (preparando para el cambio en Service)
+      // CANDADO DE SEGURIDAD v5.5: USA doctorProfile.specialty
       const response = await GeminiMedicalService.generateClinicalNote(
           fullTranscript, 
-          selectedSpecialty, 
+          doctorProfile.specialty, 
           fullMedicalContext,
-          manualContext // <--- NUEVO ARGUMENTO
+          manualContext 
       ) as EnhancedGeminiResponse;
       
       if (!response || (!response.soapData && !response.clinicalNote)) {
@@ -914,7 +872,6 @@ const ConsultationView: React.FC = () => {
       setEditableInstructions(response.patientInstructions || '');
       setEditablePrescriptions(response.prescriptions || []);
       
-      // 💾 GUARDADO DEL SNAPSHOT
       setSessionSnapshot({
           inputSignature: inputSignature,
           data: response,
@@ -932,14 +889,14 @@ const ConsultationView: React.FC = () => {
       } else {
           setIsRiskExpanded(false);
           toast.dismiss(loadingToast);
-          toast.success("Nota y Receta generadas.");
+          toast.success("Nota generada bajo su especialidad.");
       }
       
       setActiveTab('record');
       
       const chatWelcome = fullMedicalContext 
-          ? `He analizado la transcripción y separado los medicamentos de las instrucciones narrativas. Por favor revise la pestaña 'Plan Paciente'.` 
-          : `Nota de primera vez generada con receta estructurada. ¿Dudas?`;
+          ? `He analizado la transcripción bajo el perfil de ${doctorProfile.specialty}. Revise el Plan Paciente.` 
+          : `Nota de primera vez generada. ¿Dudas?`;
           
       setChatMessages([{ role: 'model', text: chatWelcome }]);
 
@@ -952,9 +909,62 @@ const ConsultationView: React.FC = () => {
     }
   };
 
-  // --- [ACTUALIZADO] MANEJADOR DE DATOS QUIRÚRGICOS (VERSIÓN PDF SEPARADO) ---
+  // --- [NUEVA FUNCIÓN DE ENLACE] ---
+  // Esta función es la que el Sidebar llamará cuando el usuario intente cambiar la especialidad
+  const handleSidebarInterconsultation = (specialty: string) => {
+      setInterconsultationSpecialty(specialty);
+      setIsInterconsultationOpen(true);
+  };
+
+  const handleRequestInterconsultation = async () => {
+      if (!isOnline) return toast.error("Requiere internet.");
+      
+      const currentText = transcript.trim() ? `\n[${activeSpeaker.toUpperCase()}]: ${transcript}` : '';
+      const fullTranscript = segments.map(s => `[${s.role === 'doctor' ? 'DOCTOR' : 'PACIENTE'}]: ${s.text}`).join('\n') + currentText;
+      
+      let contextData = "";
+      if (generatedNote?.soapData) {
+          contextData = `RESUMEN ACTUAL (Nota Dr. Titular): S: ${generatedNote.soapData.subjective} O: ${generatedNote.soapData.objective} A: ${generatedNote.soapData.analysis}`;
+      } else if (fullTranscript) {
+          contextData = `TRANSCRIPCIÓN BRUTA: ${fullTranscript}`;
+      } else {
+          return toast.error("No hay datos clínicos (nota o transcripción) para consultar.");
+      }
+
+      setIsProcessingInterconsultation(true);
+      setInterconsultationResult(null);
+
+      try {
+          const prompt = `
+            ACTÚA COMO: Especialista en ${interconsultationSpecialty}.
+            TAREA: Analizar el caso proporcionado por el Médico Tratante (${doctorProfile?.specialty}).
+            
+            CASO CLÍNICO:
+            ${contextData}
+
+            INSTRUCCIONES DE SALIDA:
+            Genera un reporte breve de interconsulta que incluya:
+            1. Opinión diagnóstica desde tu especialidad.
+            2. Sugerencias de manejo o estudios complementarios.
+            3. Banderas rojas específicas de tu área.
+            
+            IMPORTANTE:
+            - NO generes una nota completa.
+            - Sé conciso y directo.
+            - Usa formato Markdown legible.
+          `;
+
+          const response = await GeminiMedicalService.chatWithContext("Eres un sistema de interconsulta médica experto.", prompt);
+          setInterconsultationResult(response);
+      } catch (e) {
+          toast.error("Error en la interconsulta.");
+          console.error(e);
+      } finally {
+          setIsProcessingInterconsultation(false);
+      }
+  };
+
   const handleSurgicalData = async (data: GeneratedLeaveData) => {
-      // Validaciones de seguridad
       if (!doctorProfile || !selectedPatient) {
         toast.error("Faltan datos del médico o paciente para generar la constancia.");
         return;
@@ -963,7 +973,6 @@ const ConsultationView: React.FC = () => {
       const loadingToast = toast.loading("Generando Constancia de Incapacidad...");
 
       try {
-        // 1. Generar el Blob del PDF
         const blob = await pdf(
           <SurgicalLeavePDF 
             doctor={doctorProfile}
@@ -973,10 +982,7 @@ const ConsultationView: React.FC = () => {
           />
         ).toBlob();
 
-        // 2. Crear URL y abrir/descargar
         const url = URL.createObjectURL(blob);
-        
-        // Opción A: Abrir en nueva pestaña (Mejor para móviles/tablets)
         window.open(url, '_blank');
         
         toast.success("Constancia generada exitosamente.", { icon: <Scissors size={18}/> });
@@ -1038,7 +1044,7 @@ const ConsultationView: React.FC = () => {
                 address={doctorProfile.address || ""}
                 logoUrl={doctorProfile.logo_url} 
                 signatureUrl={doctorProfile.signature_url} 
-                qrCodeUrl={doctorProfile.qr_code_url} // <--- AQUI ESTA LA CORRECCION
+                qrCodeUrl={doctorProfile.qr_code_url}
                 patientName={selectedPatient.name}
                 patientAge={ageDisplay} 
                 date={new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' })}
@@ -1046,7 +1052,6 @@ const ConsultationView: React.FC = () => {
                 instructions={editableInstructions}
                 riskAnalysis={generatedNote?.risk_analysis}
                 content={editablePrescriptions.length > 0 ? undefined : legacyContent}
-                // Feature: Pasamos el folio al PDF
                 specialFolio={specialFolio}
             />
         ).toBlob();
@@ -1066,9 +1071,7 @@ const ConsultationView: React.FC = () => {
       }
   };
 
-  // --- NUEVA FUNCIÓN: Descarga de Expediente Completo (NOM-004) ---
   const handleDownloadFullRecord = async () => {
-    // 1. Blindaje contra error de perfil nulo
     if (!selectedPatient || !doctorProfile) {
       if (!doctorProfile) toast.error("Error crítico: Perfil médico no cargado. Recargue la página.");
       else toast.error("Seleccione un paciente primero.");
@@ -1078,16 +1081,14 @@ const ConsultationView: React.FC = () => {
     const loadingToast = toast.loading("Recopilando historial completo (NOM-004)...");
 
     try {
-      // 2. Fetch de TODAS las consultas (Acumulación histórica)
       const { data: fullHistory, error } = await supabase
         .from('consultations')
         .select('*')
         .eq('patient_id', selectedPatient.id)
-        .order('created_at', { ascending: false }); // Del más reciente al más antiguo para orden de lectura
+        .order('created_at', { ascending: false });
 
       if (error) throw error;
 
-      // 3. Generación del Blob PDF usando el nuevo componente legal
       const blob = await pdf(
         <MedicalRecordPDF 
           doctor={doctorProfile}
@@ -1097,16 +1098,14 @@ const ConsultationView: React.FC = () => {
         />
       ).toBlob();
 
-      // 4. Descarga segura (Evita bloqueo de pop-ups)
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      // Formato de nombre de archivo estandarizado
       link.download = `EXPEDIENTE_${selectedPatient.name.toUpperCase().replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      URL.revokeObjectURL(url); // Limpieza de memoria
+      URL.revokeObjectURL(url);
 
       toast.success("Expediente descargado correctamente.");
 
@@ -1145,9 +1144,6 @@ const ConsultationView: React.FC = () => {
         if (!user) throw new Error("Sesión expirada");
         
         let finalPatientId = selectedPatient.id;
-
-        // YA NO ES NECESARIO CREAR PACIENTE AQUÍ
-        // El paciente ya fue creado en handleCreatePatient (Registro Just-in-Time)
 
         const medsSummary = editablePrescriptions.length > 0 
             ? "\n\nMEDICAMENTOS:\n" + editablePrescriptions.map(m => `- ${m.drug} ${m.dose} (${m.frequency})`).join('\n')
@@ -1199,7 +1195,6 @@ const ConsultationView: React.FC = () => {
         if (currentUserId) localStorage.removeItem(`draft_${currentUserId}`); 
         setGeneratedNote(null); 
         
-        // Limpieza de Snapshot tras guardar
         setSessionSnapshot(null); 
         
         setEditableInstructions(''); 
@@ -1210,9 +1205,8 @@ const ConsultationView: React.FC = () => {
         setIsRiskExpanded(false);
         setPatientInsights(null);
         setLinkedAppointmentId(null);
-        setManualContext(""); // Reset contexto
+        setManualContext(""); 
         
-        // Reset Folio
         setSpecialFolio('');
         
         startTimeRef.current = Date.now(); 
@@ -1314,13 +1308,12 @@ const ConsultationView: React.FC = () => {
 
   const isReadyToGenerate = isOnline && !isListening && !isPaused && !isProcessing && (transcript || segments.length > 0) && !generatedNote;
 
-  // Render del Componente Chat para reusarlo en Móvil y Escritorio
   const renderChatContent = () => (
       <div className="bg-white dark:bg-slate-900 p-4 rounded-xl shadow-sm h-full flex flex-col border dark:border-slate-800 animate-fade-in-up">
             <div className="flex-1 overflow-y-auto mb-4 pr-2 custom-scrollbar">
                 {chatMessages.map((m,i)=>(
                     <div key={i} className={`p-3 mb-3 rounded-2xl max-w-[85%] text-sm shadow-sm ${m.role==='user'?'bg-brand-teal text-white self-end ml-auto rounded-tr-none':'bg-slate-100 dark:bg-slate-800 dark:text-slate-200 self-start mr-auto rounded-tl-none'}`}>
-                                                                                                        <FormattedText content={m.text} />
+                                <FormattedText content={m.text} />
                     </div>
                 ))}
                 <div ref={chatEndRef}/>
@@ -1329,12 +1322,10 @@ const ConsultationView: React.FC = () => {
       </div>
   );
 
-  // --- Feature: Lógica de visualización del Folio ---
   const showControlledInput = SPECIALTIES_WITH_CONTROLLED_RX.some(s => 
       selectedSpecialty?.toLowerCase().includes(s.toLowerCase())
   );
   
-  // [NUEVO] Lógica de visualización del Botón Quirúrgico
   const isSurgicalSpecialty = selectedSpecialty?.toLowerCase().includes('cirug') || 
                                 doctorProfile?.specialty?.toLowerCase().includes('cirug');
 
@@ -1355,7 +1346,6 @@ const ConsultationView: React.FC = () => {
         setSelectedPatient={setSelectedPatient}
         filteredPatients={filteredPatients}
         handleSelectPatient={handleSelectPatient}
-        // CAMBIO CRÍTICO: Pasamos la nueva función asíncrona
         handleCreatePatient={handleCreatePatient} 
         vitalSnapshot={vitalSnapshot}
         isMobileSnapshotVisible={isMobileSnapshotVisible}
@@ -1384,20 +1374,18 @@ const ConsultationView: React.FC = () => {
         isAttachmentsOpen={isAttachmentsOpen}
         setIsAttachmentsOpen={setIsAttachmentsOpen}
         doctorProfile={doctorProfile}
-        onDownloadRecord={handleDownloadFullRecord} // <-- SE PASA LA FUNCIÓN AL HIJO
+        onDownloadRecord={handleDownloadFullRecord}
+        // [CONEXIÓN CRÍTICA] Aquí pasamos el handler al hijo
+        onTriggerInterconsultation={handleSidebarInterconsultation} 
       />
       
-      {/* Contenedor Flex para la derecha (Contenido Central + Chat) */}
       <div className={`flex-1 flex w-full md:w-3/4 overflow-hidden ${!generatedNote?'hidden md:flex':'flex'}`}>
-          
-          {/* COLUMNA CENTRAL: Nota / Recetas */}
           <div className="flex-1 flex flex-col bg-slate-100 dark:bg-slate-950 border-l dark:border-slate-800 min-w-0 relative">
                 
-                {/* --- RENDERIZADO DEL PATIENT BRIEFING (PASE DE VISITA) --- */}
                 {showBriefing && selectedPatient && (
                     <PatientBriefing 
                         patient={selectedPatient}
-                        lastInsight={vitalSnapshot} // Usamos el snapshot si ya está disponible
+                        lastInsight={vitalSnapshot} 
                         onComplete={handleBriefingComplete}
                         onCancel={() => setShowBriefing(false)}
                     />
@@ -1406,7 +1394,6 @@ const ConsultationView: React.FC = () => {
                 <div className="flex border-b dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0 items-center px-2">
                     <button onClick={()=>setGeneratedNote(null)} className="md:hidden p-4 text-slate-500"><ArrowLeft/></button>
                     {[{id:'record',icon:FileText,l:'EXPEDIENTE CLÍNICO'},{id:'patient',icon:User,l:'PLAN PACIENTE'},{id:'chat',icon:MessageSquare,l:'ASISTENTE'}, {id:'insurance', icon:Building2, l:'SEGUROS'}].map(t => {
-                        // FIX: Ocultar pestaña Chat en pantallas grandes (LG) porque ya se muestra en la 3ra columna
                         const hideOnDesktop = t.id === 'chat' ? 'lg:hidden' : '';
                         return (
                             <button key={t.id} onClick={()=>setActiveTab(t.id as TabType)} disabled={!generatedNote&&t.id!=='record'} className={`flex-1 py-4 flex justify-center gap-2 text-sm font-bold border-b-4 transition-colors ${hideOnDesktop} ${activeTab===t.id?'text-brand-teal border-brand-teal':'text-slate-400 border-transparent hover:text-slate-600'}`}>
@@ -1414,6 +1401,17 @@ const ConsultationView: React.FC = () => {
                             </button>
                         );
                     })}
+                    {/* BOTÓN INTERCONSULTA (BARRA SUPERIOR) */}
+                    {selectedPatient && !isInterconsultationOpen && (
+                        <button 
+                            onClick={() => setIsInterconsultationOpen(true)}
+                            className="ml-auto mr-2 p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg flex items-center gap-2 transition-colors border border-transparent hover:border-indigo-100"
+                            title="Solicitar Interconsulta IA"
+                        >
+                            <Microscope size={18}/>
+                            <span className="text-xs font-bold hidden xl:inline">Interconsulta</span>
+                        </button>
+                    )}
                 </div>
                 
                 <div className="flex-1 overflow-y-auto p-4 md:p-8 bg-slate-100 dark:bg-slate-950">
@@ -1430,13 +1428,15 @@ const ConsultationView: React.FC = () => {
                                             <div className="flex justify-between items-start">
                                                 <div>
                                                     <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Nota de Evolución</h1>
-                                                    <p className="text-sm text-slate-500 dark:text-slate-400 uppercase tracking-wide">{selectedSpecialty}</p>
+                                                    {/* BLINDAJE VISUAL: Muestra la especialidad REAL */}
+                                                    <p className="text-sm text-slate-500 dark:text-slate-400 uppercase tracking-wide flex items-center gap-1">
+                                                        <Lock size={12} className="text-green-600"/>
+                                                        {doctorProfile?.specialty || "Cargando..."}
+                                                    </p>
                                                 </div>
                                                 
                                                 <div className="flex flex-col items-end gap-3">
                                                 
-                                                {/* --- BOTÓN DE DESCARGA REDUNDANTE ELIMINADO --- */}
-
                                                 <button 
                                                     onClick={handleSaveConsultation} 
                                                     disabled={isSaving} 
@@ -1480,13 +1480,13 @@ const ConsultationView: React.FC = () => {
                                                             <div key={idx} className={`flex ${line.speaker === 'Médico' ? 'justify-end' : 'justify-start'}`}>
                                                                 <div className={`max-w-[80%] rounded-2xl p-3 text-sm ${
                                                                     line.speaker === 'Médico' 
-                                                                    ? 'bg-blue-50 text-blue-900 dark:bg-blue-900/30 dark:text-blue-100 rounded-tr-none' 
-                                                                    : 'bg-white border border-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700 rounded-tl-none'
+                                                                        ? 'bg-blue-50 text-blue-900 dark:bg-blue-900/30 dark:text-blue-100 rounded-tr-none' 
+                                                                        : 'bg-white border border-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700 rounded-tl-none'
                                                                 }`}>
-                                                                                <span className={`text-[10px] font-bold block mb-1 uppercase opacity-70 ${line.speaker === 'Médico' ? 'text-right' : 'text-left'}`}>
-                                                                                    {line.speaker}
-                                                                                </span>
-                                                                                {line.text}
+                                                                    <span className={`text-[10px] font-bold block mb-1 uppercase opacity-70 ${line.speaker === 'Médico' ? 'text-right' : 'text-left'}`}>
+                                                                        {line.speaker}
+                                                                    </span>
+                                                                    {line.text}
                                                                 </div>
                                                             </div>
                                                         ))}
@@ -1583,7 +1583,6 @@ const ConsultationView: React.FC = () => {
                                             <div className="flex justify-between items-center mb-2">
                                                 <h3 className="font-bold text-xl dark:text-white">Plan de Tratamiento</h3>
                                                 <div className="flex gap-2">
-                                                    {/* [NUEVO] BOTÓN GENERADOR DE INCAPACIDAD (SOLO CIRUJANOS) */}
                                                     {isSurgicalSpecialty && (
                                                         <button 
                                                             onClick={() => setIsSurgicalModalOpen(true)}
@@ -1602,14 +1601,12 @@ const ConsultationView: React.FC = () => {
 
                                             <div className="bg-white dark:bg-slate-900 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800">
                                                 
-                                                {/* Feature: Header de Receta con Folio Controlado Opcional */}
                                                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
                                                     <div className="flex items-center gap-4 w-full md:w-auto">
                                                         <h3 className="font-bold text-lg flex items-center gap-2 text-indigo-600 dark:text-indigo-400">
                                                             <Pill size={20}/> Receta Médica
                                                         </h3>
                                                         
-                                                        {/* CANDADO LÓGICO DE SEGURIDAD (Solo especialidades autorizadas) */}
                                                         {showControlledInput && (
                                                             <div className="flex-1 md:flex-none animate-fade-in-right">
                                                                 <div className="relative group">
@@ -1762,15 +1759,14 @@ const ConsultationView: React.FC = () => {
                                 )}
 
                                 {activeTab==='chat' && (
-                                    /* --- MODIFICACIÓN QUIRÚRGICA: Habilitar Sugerencias en Móvil --- */
                                     <div className="lg:hidden h-full flex flex-col gap-2 overflow-hidden">
-                                        <ContextualInsights 
-                                            insights={clinicalInsights} 
-                                            isLoading={loadingClinicalInsights} 
-                                        />
-                                        <div className="flex-1 overflow-hidden">
-                                            {renderChatContent()}
-                                        </div>
+                                            <ContextualInsights 
+                                                insights={clinicalInsights} 
+                                                isLoading={loadingClinicalInsights} 
+                                            />
+                                            <div className="flex-1 overflow-hidden">
+                                                {renderChatContent()}
+                                            </div>
                                     </div>
                                 )}
 
@@ -1791,7 +1787,6 @@ const ConsultationView: React.FC = () => {
                 </div>
           </div>
 
-          {/* TERCERA COLUMNA: CHAT FIJO (Visible solo en Escritorio LG+) */}
           {generatedNote && (
             <div className="hidden lg:flex lg:w-[30%] border-l dark:border-slate-800 flex-col bg-white dark:bg-slate-900">
                  <div className="p-4 border-b dark:border-slate-800 font-bold flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900/50">
@@ -1822,7 +1817,7 @@ const ConsultationView: React.FC = () => {
                     <button onClick={() => setIsAttachmentsOpen(false)} className="p-2 hover:bg-slate-100 dark:bg-slate-800 rounded-full transition-colors"><X size={20} className="text-slate-500"/></button>
                 </div>
                 <div className="flex-1 overflow-y-auto flex flex-col gap-4">
-                    <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-lg"><p className="text-xs font-bold text-slate-500 mb-2 uppercase">Agregar archivo:</p><UploadMedico preSelectedPatient={selectedPatient} onUploadComplete={() => { toast.success("Archivo agregado."); }} /></div>
+                    <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-lg"><p className="text-xs font-bold text-slate-500 mb-2 uppercase">Agregar archivo:</p><UploadMedico preSelectedPatient={selectedPatient} onUploadComplete={() => { /* toast.success manejado en componente */ }} /></div>
                     
                     {doctorProfile && (
                         <div className="mt-4">
@@ -1869,7 +1864,95 @@ const ConsultationView: React.FC = () => {
         />
       )}
 
-      {/* [NUEVO] MODAL DE INCAPACIDAD QUIRÚRGICA */}
+      {/* [MODAL] INTERCONSULTA AISLADA */}
+      {isInterconsultationOpen && (
+          <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4 backdrop-blur-sm">
+              <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden animate-fade-in-up border border-indigo-100">
+                  
+                  <div className="p-4 bg-indigo-600 text-white flex justify-between items-center shrink-0">
+                      <div className="flex items-center gap-2">
+                          <Microscope size={20}/>
+                          <div>
+                              <h3 className="font-bold text-lg leading-tight">Interconsulta IA</h3>
+                              <p className="text-[10px] opacity-80">Segunda Opinión / Análisis Cruzado</p>
+                          </div>
+                      </div>
+                      <button onClick={()=>setIsInterconsultationOpen(false)} className="p-1 hover:bg-white/20 rounded-full"><X size={20}/></button>
+                  </div>
+
+                  <div className="p-6 overflow-y-auto custom-scrollbar flex-1">
+                      
+                      {!interconsultationResult && !isProcessingInterconsultation && (
+                          <div className="flex flex-col gap-4">
+                              <div className="bg-indigo-50 dark:bg-indigo-900/20 p-4 rounded-xl border border-indigo-100 dark:border-indigo-800 text-sm text-indigo-800 dark:text-indigo-200">
+                                  <p className="font-bold flex items-center gap-2 mb-2"><AlertCircle size={16}/> Aviso Legal</p>
+                                  Esta herramienta genera un análisis basado en IA simulando otra especialidad. 
+                                  <strong> No sustituye la valoración real de un especialista.</strong> 
+                                  El resultado es meramente informativo y no se guardará en el expediente legal.
+                              </div>
+                              
+                              <div>
+                                  <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Seleccionar Especialidad a Consultar:</label>
+                                  <div className="relative">
+                                      <select 
+                                          value={interconsultationSpecialty}
+                                          onChange={e=>setInterconsultationSpecialty(e.target.value)}
+                                          className="w-full p-3 pl-10 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 font-bold text-slate-700 dark:text-white appearance-none outline-none focus:ring-2 focus:ring-indigo-500"
+                                      >
+                                          {SPECIALTIES.filter(s => s !== doctorProfile?.specialty).map(s => <option key={s} value={s}>{s}</option>)}
+                                      </select>
+                                      <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+                                          <Eye size={18}/>
+                                      </div>
+                                      <div className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+                                          <ChevronDown size={18}/>
+                                      </div>
+                                  </div>
+                              </div>
+                          </div>
+                      )}
+
+                      {isProcessingInterconsultation && (
+                          <div className="flex flex-col items-center justify-center h-48 gap-4">
+                              <RefreshCw className="animate-spin text-indigo-600" size={32}/>
+                              <p className="text-sm font-bold text-slate-500 animate-pulse">Consultando base de conocimientos de {interconsultationSpecialty}...</p>
+                          </div>
+                      )}
+
+                      {interconsultationResult && (
+                          <div className="animate-fade-in">
+                              <div className="flex items-center justify-between mb-4 pb-2 border-b">
+                                  <span className="text-xs font-bold text-slate-400 uppercase">Resultado del Análisis</span>
+                                  <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded">Perspectiva: {interconsultationSpecialty}</span>
+                              </div>
+                              <div className="prose dark:prose-invert text-sm max-w-none">
+                                  <FormattedText content={interconsultationResult}/>
+                              </div>
+                          </div>
+                      )}
+                  </div>
+
+                  <div className="p-4 border-t dark:border-slate-800 bg-slate-50 dark:bg-slate-900 shrink-0 flex justify-end gap-3">
+                      {!interconsultationResult ? (
+                          <button 
+                              onClick={handleRequestInterconsultation} 
+                              disabled={isProcessingInterconsultation}
+                              className="bg-indigo-600 text-white px-6 py-2 rounded-xl font-bold hover:bg-indigo-700 transition-colors shadow-lg disabled:opacity-50 flex items-center gap-2"
+                          >
+                              {isProcessingInterconsultation ? 'Analizando...' : 'Generar Opinión'} <Sparkles size={16}/>
+                          </button>
+                      ) : (
+                          <>
+                              <button onClick={() => setInterconsultationResult(null)} className="text-slate-500 font-bold text-sm px-4 hover:text-slate-700">Nueva Consulta</button>
+                              <button onClick={() => setIsInterconsultationOpen(false)} className="bg-slate-800 text-white px-6 py-2 rounded-xl font-bold hover:bg-slate-900 transition-colors">Cerrar</button>
+                          </>
+                      )}
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {/* [MODAL] INCAPACIDAD QUIRÚRGICA */}
       {isSurgicalModalOpen && selectedPatient && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
               <div className="max-w-3xl w-full">
