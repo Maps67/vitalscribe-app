@@ -59,7 +59,7 @@ export const PatientWizard: React.FC<PatientWizardProps> = ({ initialData, onClo
   const [errors, setErrors] = useState<{ [key: string]: boolean }>({});
   const [activeTab, setActiveTab] = useState<'general' | 'background' | 'admin'>('general');
 
-  // Inicialización Segura
+  // Inicialización Segura (Strings vacíos en lugar de Objetos para evitar [object Object])
   const [formData, setFormData] = useState<WizardData>({
     name: '', dob: '', age: '', gender: 'Masculino', 
     curp: '', bloodType: '', 
@@ -74,10 +74,11 @@ export const PatientWizard: React.FC<PatientWizardProps> = ({ initialData, onClo
   // Carga de datos iniciales
   useEffect(() => {
     if (initialData) {
+      // Nos aseguramos de mezclar los datos entrantes con el estado base
       setFormData(prev => ({
         ...prev,
         ...initialData,
-        // Sanitización para evitar crash por null en textareas
+        // Conversión de seguridad por si la DB devuelve objetos en lugar de strings
         pathological: typeof initialData.pathological === 'string' ? initialData.pathological : JSON.stringify(initialData.pathological || ''),
         nonPathological: typeof initialData.nonPathological === 'string' ? initialData.nonPathological : JSON.stringify(initialData.nonPathological || ''),
         family: typeof initialData.family === 'string' ? initialData.family : JSON.stringify(initialData.family || ''),
@@ -109,10 +110,11 @@ export const PatientWizard: React.FC<PatientWizardProps> = ({ initialData, onClo
   const validateAndSave = async () => {
     const newErrors: { [key: string]: boolean } = {};
     
-    // Validaciones
+    // Validaciones NOM-004 Básicas
     if (!formData.name.trim()) newErrors.name = true;
     if (!formData.gender) newErrors.gender = true;
     
+    // Validación visual
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
       toast.error("Complete los campos obligatorios marcados en rojo.");
@@ -122,7 +124,7 @@ export const PatientWizard: React.FC<PatientWizardProps> = ({ initialData, onClo
 
     setIsSaving(true);
     
-    // BLINDAJE 2: Sanitización final antes de enviar
+    // BLINDAJE 2: Sanitización final antes de enviar (Trim + Lowercase email)
     const cleanData = {
         ...formData,
         name: formData.name.trim(),
@@ -134,15 +136,21 @@ export const PatientWizard: React.FC<PatientWizardProps> = ({ initialData, onClo
     try {
       await onSave(cleanData);
     } catch (e: any) {
-      console.error("Error al guardar paciente:", e);
+      console.error("Error al guardar paciente (Wizard Catch):", e);
       
       // BLINDAJE 3: Manejo específico del error 409 (Duplicado)
-      if (e?.code === '23505' || e?.status === 409 || e?.message?.includes('duplicate')) {
-          toast.error("⚠️ Error: Ya existe un paciente registrado con ese CURP, Email o Teléfono.");
-          // Opcional: Podrías resaltar el campo CURP aquí si supieras que fue ese
-          if (cleanData.curp) setErrors(prev => ({ ...prev, curp: true }));
+      // Capturamos códigos de PostgREST/Supabase
+      if (e?.code === '23505' || e?.status === 409 || e?.message?.includes('duplicate') || e?.details?.includes('already exists')) {
+          toast.error("⚠️ PACIENTE DUPLICADO: Ya existe un registro con este CURP, Email o Teléfono.");
+          
+          // Ayuda visual: Si hay CURP, marcamos el campo y regresamos a la tab general
+          if (cleanData.curp) {
+              setErrors(prev => ({ ...prev, curp: true }));
+              setActiveTab('general');
+          }
       } else {
-          toast.error("Error al guardar: " + (e.message || "Error desconocido"));
+          // Si no es duplicado, mostramos el mensaje que venga o uno genérico
+          toast.error("Error al guardar: " + (e.message || "Error de conexión o base de datos."));
       }
     } finally {
         setIsSaving(false);
@@ -158,7 +166,7 @@ export const PatientWizard: React.FC<PatientWizardProps> = ({ initialData, onClo
   return (
     <div className="flex flex-col h-full bg-white dark:bg-slate-950 font-sans">
       
-      {/* HEADER */}
+      {/* HEADER ELEGANTE */}
       <div className="bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 px-6 py-4 flex justify-between items-center shadow-sm z-20 flex-shrink-0">
         <div>
           <h2 className="text-xl font-bold text-slate-800 dark:text-white flex items-center gap-3">
@@ -176,7 +184,7 @@ export const PatientWizard: React.FC<PatientWizardProps> = ({ initialData, onClo
         </button>
       </div>
 
-      {/* TABS */}
+      {/* TABS DE NAVEGACIÓN STICKY */}
       <div className="flex border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 md:px-8 sticky top-0 z-10 flex-shrink-0 overflow-x-auto">
         {tabs.map(tab => (
           <button
@@ -193,7 +201,7 @@ export const PatientWizard: React.FC<PatientWizardProps> = ({ initialData, onClo
         ))}
       </div>
 
-      {/* BODY */}
+      {/* BODY (SCROLLABLE AREA) */}
       <div className="flex-1 overflow-y-auto p-4 md:p-8 bg-slate-50/50 dark:bg-slate-950 custom-scrollbar">
         <div className="max-w-5xl mx-auto space-y-6 pb-20">
 
@@ -201,13 +209,14 @@ export const PatientWizard: React.FC<PatientWizardProps> = ({ initialData, onClo
           {activeTab === 'general' && (
             <div className="grid grid-cols-12 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                 
-                {/* TARJETA 1: IDENTIDAD */}
+                {/* TARJETA 1: IDENTIDAD PRINCIPAL (Full Width Top) */}
                 <div className="col-span-12 bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
                     <h4 className="text-xs font-bold text-indigo-500 uppercase tracking-widest mb-6 flex items-center gap-2">
                         <FileBadge size={14}/> Identificación Principal
                     </h4>
                     
                     <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+                        {/* Nombre */}
                         <div className="md:col-span-8">
                             <label className={LABEL_CLASS}>Nombre Completo <span className="text-red-500">*</span></label>
                             <div className="relative group">
@@ -222,6 +231,7 @@ export const PatientWizard: React.FC<PatientWizardProps> = ({ initialData, onClo
                             </div>
                         </div>
 
+                        {/* Género */}
                         <div className="md:col-span-4">
                             <label className={LABEL_CLASS}>Género <span className="text-red-500">*</span></label>
                             <select className={INPUT_CLASS} value={formData.gender} onChange={(e) => handleChange('gender', e.target.value)}>
@@ -230,6 +240,7 @@ export const PatientWizard: React.FC<PatientWizardProps> = ({ initialData, onClo
                             </select>
                         </div>
 
+                        {/* Fecha Nacimiento */}
                         <div className="md:col-span-4">
                             <label className={LABEL_CLASS}>Fecha Nacimiento</label>
                             <div className="relative">
@@ -238,6 +249,7 @@ export const PatientWizard: React.FC<PatientWizardProps> = ({ initialData, onClo
                             </div>
                         </div>
 
+                        {/* Edad (Auto) */}
                         <div className="md:col-span-2">
                             <label className={LABEL_CLASS}>Edad</label>
                             <div className={`${INPUT_CLASS} bg-slate-100 dark:bg-slate-800 text-center font-bold text-slate-600`}>
@@ -245,6 +257,7 @@ export const PatientWizard: React.FC<PatientWizardProps> = ({ initialData, onClo
                             </div>
                         </div>
 
+                        {/* CURP */}
                         <div className="md:col-span-6">
                             <label className={LABEL_CLASS}>CURP (18 Caracteres)</label>
                             <div className="relative">
@@ -258,12 +271,12 @@ export const PatientWizard: React.FC<PatientWizardProps> = ({ initialData, onClo
                                 <Hash size={16} className="absolute left-3 top-3.5 text-slate-400"/>
                             </div>
                             {/* Mensaje de ayuda visual si hay error de duplicado */}
-                            {errors.curp && <p className="text-xs text-red-500 mt-1 font-bold">Verifique duplicidad en CURP.</p>}
+                            {errors.curp && <p className="text-xs text-red-500 mt-1 font-bold animate-pulse">⚠️ Este CURP ya está registrado en el sistema.</p>}
                         </div>
                     </div>
                 </div>
 
-                {/* TARJETA 2: CONTACTO */}
+                {/* TARJETA 2: CONTACTO (Izquierda) */}
                 <div className="col-span-12 md:col-span-6 bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm h-full">
                     <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-2">
                         <Phone size={14}/> Datos de Contacto
@@ -292,7 +305,7 @@ export const PatientWizard: React.FC<PatientWizardProps> = ({ initialData, onClo
                     </div>
                 </div>
 
-                {/* TARJETA 3: UBICACIÓN */}
+                {/* TARJETA 3: UBICACIÓN (Derecha) */}
                 <div className="col-span-12 md:col-span-6 bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm h-full">
                     <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-2">
                         <MapPin size={14}/> Domicilio & Ocupación
@@ -324,7 +337,7 @@ export const PatientWizard: React.FC<PatientWizardProps> = ({ initialData, onClo
           {activeTab === 'background' && (
             <div className="grid grid-cols-12 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                 
-                {/* ALERTA: ALERGIAS */}
+                {/* ALERTA: ALERGIAS (Destacado Rojo) */}
                 <div className="col-span-12 bg-red-50 dark:bg-red-900/10 p-6 rounded-2xl border border-red-200 dark:border-red-900/30">
                     <div className="flex justify-between items-start mb-4">
                         <label className={`${LABEL_CLASS} text-red-700 dark:text-red-400 flex items-center gap-2`}>
@@ -341,7 +354,7 @@ export const PatientWizard: React.FC<PatientWizardProps> = ({ initialData, onClo
                     />
                 </div>
 
-                {/* GRUPO SANGUÍNEO */}
+                {/* GRUPO SANGUÍNEO (Tarjeta Pequeña) */}
                 <div className="col-span-12 md:col-span-4 bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800">
                     <label className={`${LABEL_CLASS} flex items-center gap-2 mb-4`}><Droplet size={14} className="text-red-500"/> Tipo de Sangre</label>
                     <div className="grid grid-cols-4 gap-2">
@@ -359,7 +372,7 @@ export const PatientWizard: React.FC<PatientWizardProps> = ({ initialData, onClo
                     </div>
                 </div>
 
-                {/* APP */}
+                {/* APP (Patológicos) */}
                 <div className="col-span-12 md:col-span-8 bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800">
                     <label className={`${LABEL_CLASS} mb-2 block`}>Antecedentes Personales Patológicos (APP)</label>
                     <textarea 
@@ -370,7 +383,7 @@ export const PatientWizard: React.FC<PatientWizardProps> = ({ initialData, onClo
                     />
                 </div>
 
-                {/* AHF */}
+                {/* AHF (Heredofamiliares) */}
                 <div className="col-span-12 md:col-span-6 bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800">
                     <label className={`${LABEL_CLASS} mb-2 block`}>Heredofamiliares (AHF)</label>
                     <textarea 
@@ -381,7 +394,7 @@ export const PatientWizard: React.FC<PatientWizardProps> = ({ initialData, onClo
                     />
                 </div>
 
-                {/* APNP */}
+                {/* APNP (No Patológicos) */}
                 <div className="col-span-12 md:col-span-6 bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800">
                     <label className={`${LABEL_CLASS} mb-2 block`}>No Patológicos (APNP)</label>
                     <textarea 
