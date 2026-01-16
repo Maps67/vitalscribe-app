@@ -209,7 +209,7 @@ const ConsultationView: React.FC = () => {
 
   const [isSurgicalModalOpen, setIsSurgicalModalOpen] = useState(false);
 
-  // --- [NUEVO BLINDAJE] ESTADOS DE INTERCONSULTA ---
+  // --- [RESTAURADO] ESTADOS DE INTERCONSULTA ---
   const [isInterconsultationOpen, setIsInterconsultationOpen] = useState(false);
   const [interconsultationSpecialty, setInterconsultationSpecialty] = useState('Medicina Interna');
   const [interconsultationResult, setInterconsultationResult] = useState<string | null>(null);
@@ -327,7 +327,6 @@ const ConsultationView: React.FC = () => {
             const { data: profileData } = await supabase.from('profiles').select('*').eq('id', user.id).single();
             if (profileData) {
                 setDoctorProfile(profileData as DoctorProfile);
-                // Inicializamos la especialidad visual con la real
                 if (profileData.specialty) {
                     const matchedSpecialty = SPECIALTIES.find(s => s.toLowerCase() === profileData.specialty.toLowerCase());
                     setSelectedSpecialty(matchedSpecialty || profileData.specialty);
@@ -676,7 +675,9 @@ const ConsultationView: React.FC = () => {
         toast.info("Sin internet: Use el teclado o el dictado de su dispositivo.");
         return;
     }
+    
     if (!isAPISupported) { toast.error("Navegador no compatible."); return; }
+    
     if (!consentGiven) { toast.warning("Falta consentimiento."); return; }
 
     if (isListening) {
@@ -761,6 +762,7 @@ const ConsultationView: React.FC = () => {
       }
   };
 
+  // --- [BLINDAJE] GENERACIÓN DE NOTA RESTRINGIDA A ESPECIALIDAD REAL ---
   const handleGenerate = async () => {
     if (!doctorProfile) return toast.error("Perfil médico no cargado.");
 
@@ -858,7 +860,7 @@ const ConsultationView: React.FC = () => {
       // CANDADO DE SEGURIDAD v5.5: USA doctorProfile.specialty
       const response = await GeminiMedicalService.generateClinicalNote(
           fullTranscript, 
-          doctorProfile.specialty, 
+          doctorProfile.specialty, // <--- RESTRICCIÓN LEGAL APLICADA
           fullMedicalContext,
           manualContext 
       ) as EnhancedGeminiResponse;
@@ -916,6 +918,7 @@ const ConsultationView: React.FC = () => {
       setIsInterconsultationOpen(true);
   };
 
+  // --- [RESTAURADO] INTERCONSULTA AISLADA ---
   const handleRequestInterconsultation = async () => {
       if (!isOnline) return toast.error("Requiere internet.");
       
@@ -1137,9 +1140,6 @@ const ConsultationView: React.FC = () => {
     setIsSaving(true);
     try {
         commitCurrentTranscript();
-        const currentText = transcript.trim() ? `\n[${activeSpeaker.toUpperCase()}]: ${transcript}` : '';
-        const fullTranscriptToSave = segments.map(s => `[${s.role === 'doctor' ? 'DOCTOR' : 'PACIENTE'}]: ${s.text}`).join('\n') + currentText;
-
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) throw new Error("Sesión expirada");
         
@@ -1308,6 +1308,7 @@ const ConsultationView: React.FC = () => {
 
   const isReadyToGenerate = isOnline && !isListening && !isPaused && !isProcessing && (transcript || segments.length > 0) && !generatedNote;
 
+  // Render del Componente Chat para reusarlo en Móvil y Escritorio
   const renderChatContent = () => (
       <div className="bg-white dark:bg-slate-900 p-4 rounded-xl shadow-sm h-full flex flex-col border dark:border-slate-800 animate-fade-in-up">
             <div className="flex-1 overflow-y-auto mb-4 pr-2 custom-scrollbar">
@@ -1394,6 +1395,7 @@ const ConsultationView: React.FC = () => {
                 <div className="flex border-b dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0 items-center px-2">
                     <button onClick={()=>setGeneratedNote(null)} className="md:hidden p-4 text-slate-500"><ArrowLeft/></button>
                     {[{id:'record',icon:FileText,l:'EXPEDIENTE CLÍNICO'},{id:'patient',icon:User,l:'PLAN PACIENTE'},{id:'chat',icon:MessageSquare,l:'ASISTENTE'}, {id:'insurance', icon:Building2, l:'SEGUROS'}].map(t => {
+                        // FIX: Ocultar pestaña Chat en pantallas grandes (LG) porque ya se muestra en la 3ra columna
                         const hideOnDesktop = t.id === 'chat' ? 'lg:hidden' : '';
                         return (
                             <button key={t.id} onClick={()=>setActiveTab(t.id as TabType)} disabled={!generatedNote&&t.id!=='record'} className={`flex-1 py-4 flex justify-center gap-2 text-sm font-bold border-b-4 transition-colors ${hideOnDesktop} ${activeTab===t.id?'text-brand-teal border-brand-teal':'text-slate-400 border-transparent hover:text-slate-600'}`}>
@@ -1401,11 +1403,12 @@ const ConsultationView: React.FC = () => {
                             </button>
                         );
                     })}
-                    {/* BOTÓN INTERCONSULTA (BARRA SUPERIOR) */}
+                    
+                    {/* [AJUSTE MÓVIL 1] Top Bar: Botón Interconsulta con shrink-0 para evitar colapso */}
                     {selectedPatient && !isInterconsultationOpen && (
                         <button 
                             onClick={() => setIsInterconsultationOpen(true)}
-                            className="ml-auto mr-2 p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg flex items-center gap-2 transition-colors border border-transparent hover:border-indigo-100"
+                            className="ml-auto mr-2 p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg flex items-center gap-2 transition-colors border border-transparent hover:border-indigo-100 shrink-0"
                             title="Solicitar Interconsulta IA"
                         >
                             <Microscope size={18}/>
@@ -1583,6 +1586,16 @@ const ConsultationView: React.FC = () => {
                                             <div className="flex justify-between items-center mb-2">
                                                 <h3 className="font-bold text-xl dark:text-white">Plan de Tratamiento</h3>
                                                 <div className="flex gap-2">
+                                                    
+                                                    {/* [AJUSTE MÓVIL 2] Inyección en Barra de Acciones: Botón adicional de Interconsulta */}
+                                                    <button 
+                                                        onClick={() => setIsInterconsultationOpen(true)}
+                                                        className="p-2 bg-indigo-100 text-indigo-600 rounded-lg hover:bg-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-400 flex items-center gap-2"
+                                                        title="Segunda Opinión / Interconsulta"
+                                                    >
+                                                        <Microscope size={18}/>
+                                                    </button>
+
                                                     {isSurgicalSpecialty && (
                                                         <button 
                                                             onClick={() => setIsSurgicalModalOpen(true)}
@@ -1817,7 +1830,7 @@ const ConsultationView: React.FC = () => {
                     <button onClick={() => setIsAttachmentsOpen(false)} className="p-2 hover:bg-slate-100 dark:bg-slate-800 rounded-full transition-colors"><X size={20} className="text-slate-500"/></button>
                 </div>
                 <div className="flex-1 overflow-y-auto flex flex-col gap-4">
-                    <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-lg"><p className="text-xs font-bold text-slate-500 mb-2 uppercase">Agregar archivo:</p><UploadMedico preSelectedPatient={selectedPatient} onUploadComplete={() => { /* toast.success manejado en componente */ }} /></div>
+                    <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-lg"><p className="text-xs font-bold text-slate-500 mb-2 uppercase">Agregar archivo:</p><UploadMedico preSelectedPatient={selectedPatient} onUploadComplete={() => {}} /></div>
                     
                     {doctorProfile && (
                         <div className="mt-4">
@@ -1864,7 +1877,7 @@ const ConsultationView: React.FC = () => {
         />
       )}
 
-      {/* [MODAL] INTERCONSULTA AISLADA */}
+      {/* [MODAL RESTAURADO] INTERCONSULTA AISLADA */}
       {isInterconsultationOpen && (
           <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4 backdrop-blur-sm">
               <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden animate-fade-in-up border border-indigo-100">
@@ -1952,7 +1965,6 @@ const ConsultationView: React.FC = () => {
           </div>
       )}
 
-      {/* [MODAL] INCAPACIDAD QUIRÚRGICA */}
       {isSurgicalModalOpen && selectedPatient && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
               <div className="max-w-3xl w-full">
