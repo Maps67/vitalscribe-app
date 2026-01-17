@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { X, User, Calendar, PlayCircle, Loader2, Zap, AlertCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
+// ✅ CONEXIÓN 1: Importamos el cerebro de la aplicación
+import { PatientService } from '../services/PatientService';
 
 interface FastAdmitModalProps {
   isOpen: boolean;
@@ -28,54 +30,54 @@ export const FastAdmitModal: React.FC<FastAdmitModalProps> = ({ isOpen, onClose 
     setIsSubmitting(true);
 
     try {
-      // 1. Obtener usuario actual (Doctor)
+      // 1. Validar sesión
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("No hay sesión activa");
 
-      // --- CORRECCIÓN MATEMÁTICA ---
-      // Calculamos el año de nacimiento basado en la edad para evitar el error de "0 años"
-      let calculatedBirthDate = null;
+      // 2. Lógica de Negocio: Calcular fecha aproximada
+      let calculatedBirthDate = undefined;
+      
       if (patientAge && !isNaN(Number(patientAge))) {
         const currentYear = new Date().getFullYear();
         const birthYear = currentYear - parseInt(patientAge);
-        calculatedBirthDate = `${birthYear}-01-01`; // Fijamos 1ro de Enero por defecto
+        calculatedBirthDate = `${birthYear}-01-01`;
       }
 
-      // 2. Crear el paciente en la base de datos CON LA FECHA CORRECTA
-      const { data: newPatient, error } = await supabase
-        .from('patients')
-        .insert({
-          name: patientName.trim(),
-          doctor_id: user.id,
-          birth_date: calculatedBirthDate, // <--- Esto soluciona el error al editar después
-          history: { 
+      // 🔥 CORRECCIÓN TYPESCRIPT: Generamos ID temporal explícito
+      const tempId = `temp_fast_${Date.now()}`;
+
+      // 3. Crear paciente vía Servicio Blindado
+      const newPatientId = await PatientService.ensurePatientId({
+        id: tempId, // ✅ Ahora cumplimos con la interfaz obligatoria
+        name: patientName.trim(),
+        birth_date: calculatedBirthDate,
+        isTemporary: true, // ✅ Bandera explícita para que el servicio sepa qué hacer
+        history: { 
             type: 'fast_admit', 
             original_age_input: patientAge,
             created_at: new Date().toISOString() 
-          }
-        })
-        .select()
-        .single();
+        }
+      });
 
-      if (error) throw error;
+      if (!newPatientId) throw new Error("No se pudo generar el ID del paciente");
 
-      // 3. Éxito: Notificar y Navegar
+      // 4. Éxito
       toast.success("Paciente registrado correctamente.");
       
       onClose();
       
-      // Navegamos directo a la consulta con los datos listos
+      // Navegamos usando el ID seguro que nos devolvió el servicio
       navigate('/consultation', { 
         state: { 
           patientData: { 
-            id: newPatient.id, 
-            name: newPatient.name,
-            age: patientAge // La UI mostrará la edad correcta inmediatamente
+            id: newPatientId, 
+            name: patientName.trim(),
+            age: patientAge 
           } 
         } 
       });
 
-      // Limpiamos el formulario
+      // Limpieza
       setPatientName('');
       setPatientAge('');
 
@@ -96,14 +98,19 @@ export const FastAdmitModal: React.FC<FastAdmitModalProps> = ({ isOpen, onClose 
         
         {/* Encabezado Visual */}
         <div className="bg-gradient-to-r from-indigo-600 to-purple-600 p-6 text-white relative overflow-hidden">
-          <div className="absolute top-0 right-0 p-4 opacity-10">
+          
+          {/* UX BLINDAJE: Elemento decorativo ignora clics */}
+          <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none select-none">
             <Zap size={120} />
           </div>
+
+          {/* UX BLINDAJE: Botón con Z-Index superior y área de toque mejorada */}
           <button 
             onClick={onClose}
-            className="absolute top-4 right-4 p-2 bg-white/20 hover:bg-white/30 rounded-full transition-colors text-white"
+            aria-label="Cerrar ventana"
+            className="absolute top-4 right-4 p-3 bg-white/20 hover:bg-white/30 rounded-full transition-colors text-white z-50 active:scale-95 focus:outline-none focus:ring-2 focus:ring-white/50"
           >
-            <X size={18} />
+            <X size={20} />
           </button>
           
           <div className="relative z-10">

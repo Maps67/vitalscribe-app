@@ -170,7 +170,10 @@ export const PatientService = {
         isTemporary: false, 
         // Preservamos otros datos si existen en el objeto temporal
         email: patient.email || null,
-        phone: patient.phone || null
+        phone: patient.phone || null,
+        // ✅ FIX: Persistencia de datos de Admisión Rápida
+        birth_date: patient.birth_date || patient.birthDate || null,
+        history: patient.history || null
       })
       .select('id') // Solo nos importa el nuevo ID
       .single();
