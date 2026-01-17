@@ -823,7 +823,7 @@ const ConsultationView: React.FC = () => {
           
           if (activeMedicalContext.lastConsultation) {
               activeContextString += `
-              - RESUMEN ÚLTIMA CONSULTA (${new Date(activeMedicalContext.lastConsultation.date).toLocaleDateString()}): 
+              - RESUMEN ÚLTIMA CONSULTA (${new Date(activeMedicalContext.lastConsultation.date).toLocaleDateString()}) ===
               ${activeMedicalContext.lastConsultation.summary}
               `;
           }
@@ -1039,6 +1039,16 @@ const ConsultationView: React.FC = () => {
 
       const legacyContent = generatedNote?.clinicalNote || "";
 
+      // FILTRO DE SEGURIDAD: Excluir medicamentos suspendidos de la receta impresa
+      // Esto evita que aparezcan tachados o con la leyenda "SUSPENDER" en el PDF,
+      // reduciendo el riesgo de que el paciente los compre por error.
+      const activePrescriptions = editablePrescriptions.filter(med => {
+          const isSuspended = (med as any).action === 'SUSPENDER' || 
+                              (med.dose && med.dose.toUpperCase().includes('SUSPENDER')) || 
+                              (med.dose && med.dose.toUpperCase().includes('BLOQUEO'));
+          return !isSuspended;
+      });
+
       try {
         return await pdf(
             <PrescriptionPDF 
@@ -1054,10 +1064,10 @@ const ConsultationView: React.FC = () => {
                 patientName={selectedPatient.name}
                 patientAge={ageDisplay} 
                 date={new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' })}
-                prescriptions={editablePrescriptions} 
+                prescriptions={activePrescriptions}  // <--- SE ENVÍA LISTA FILTRADA
                 instructions={editableInstructions}
                 riskAnalysis={generatedNote?.risk_analysis}
-                content={editablePrescriptions.length > 0 ? undefined : legacyContent}
+                content={activePrescriptions.length > 0 ? undefined : legacyContent}
                 specialFolio={specialFolio}
             />
         ).toBlob();
