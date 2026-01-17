@@ -578,18 +578,22 @@ const ConsultationView: React.FC = () => {
       if (patient.isGhost) {
           const tempPatient = {
               ...patient,
-              id: `temp_${Date.now()}`,
-              isTemporary: true,
+              id: `temp_${Date.now()}`, 
+              isTemporary: true, 
               appointmentId: patient.appointmentId 
           };
           setSelectedPatient(tempPatient);
           if (patient.appointmentId) setLinkedAppointmentId(patient.appointmentId);
           toast.info(`Paciente temporal: ${patient.name} (Se registrará al guardar)`);
+          
+          setShowBriefing(true); // <--- INICIO RÁPIDO PARA GHOST
       } 
       else {
           setSelectedPatient(patient);
           setSearchTerm(''); 
           setIsMobileSnapshotVisible(true); 
+          
+          setShowBriefing(true); // <--- CORRECCIÓN CRÍTICA: UI OPTIMISTA (Inicio inmediato)
 
           try {
               const loadingHistory = toast.loading("Sincronizando historial...");
@@ -611,7 +615,7 @@ const ConsultationView: React.FC = () => {
               console.error("Error en hidratación:", e);
           }
       }
-      setShowBriefing(true);
+      // La llamada tardía ha sido eliminada para evitar retrasos
   };
 
   const handleCreatePatient = async (name: string) => {
@@ -1631,7 +1635,7 @@ const ConsultationView: React.FC = () => {
                                                                         onChange={(e) => setSpecialFolio(e.target.value)}
                                                                     />
                                                                     <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-slate-800 text-white text-[10px] rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
-                                                                            Solo para Fracción I / II
+                                                                                Solo para Fracción I / II
                                                                     </div>
                                                                 </div>
                                                             </div>
@@ -1692,43 +1696,43 @@ const ConsultationView: React.FC = () => {
                                                                     </div>
                                                                 ) : (
                                                                     <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-2">
-                                                                        <div className="relative">
+                                                                            <div className="relative">
+                                                                                <input 
+                                                                                    className={`w-full font-bold bg-transparent outline-none border-b border-transparent focus:border-indigo-300 transition-colors ${
+                                                                                        isRisky ? 'text-amber-700 dark:text-amber-400 pr-6' : 'text-slate-800 dark:text-white'
+                                                                                    }`} 
+                                                                                    value={med.drug} 
+                                                                                    onChange={e=>handleUpdateMedication(idx,'drug',e.target.value)} 
+                                                                                    placeholder="Nombre del medicamento" 
+                                                                                />
+                                                                                {isRisky && (
+                                                                                    <div className="absolute right-0 top-1/2 -translate-y-1/2 text-amber-500 cursor-help" title={`Precaución: Posible interacción detectada en análisis clínico.`}>
+                                                                                                <AlertCircle size={16}/>
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+                                                                            
                                                                             <input 
-                                                                                className={`w-full font-bold bg-transparent outline-none border-b border-transparent focus:border-indigo-300 transition-colors ${
-                                                                                    isRisky ? 'text-amber-700 dark:text-amber-400 pr-6' : 'text-slate-800 dark:text-white'
-                                                                                }`} 
-                                                                                value={med.drug} 
-                                                                                onChange={e=>handleUpdateMedication(idx,'drug',e.target.value)} 
-                                                                                placeholder="Nombre del medicamento" 
+                                                                                className="text-sm bg-transparent outline-none border-b border-transparent focus:border-indigo-300 transition-colors text-slate-600 dark:text-slate-300"
+                                                                                value={med.dose} 
+                                                                                onChange={e=>handleUpdateMedication(idx,'dose',e.target.value)} 
+                                                                                placeholder="Dosis" 
                                                                             />
-                                                                            {isRisky && (
-                                                                                <div className="absolute right-0 top-1/2 -translate-y-1/2 text-amber-500 cursor-help" title={`Precaución: Posible interacción detectada en análisis clínico.`}>
-                                                                                        <AlertCircle size={16}/>
-                                                                                </div>
-                                                                            )}
-                                                                        </div>
-                                                                        
-                                                                        <input 
-                                                                            className="text-sm bg-transparent outline-none border-b border-transparent focus:border-indigo-300 transition-colors text-slate-600 dark:text-slate-300"
-                                                                            value={med.dose} 
-                                                                            onChange={e=>handleUpdateMedication(idx,'dose',e.target.value)} 
-                                                                            placeholder="Dosis" 
-                                                                        />
-                                                                        
-                                                                        <div className="col-span-2 flex gap-2 text-xs">
-                                                                                <input 
-                                                                                    className="flex-1 bg-transparent outline-none border-b border-transparent focus:border-indigo-300 transition-colors text-slate-500"
-                                                                                    value={med.frequency} 
-                                                                                    onChange={e=>handleUpdateMedication(idx,'frequency',e.target.value)} 
-                                                                                    placeholder="Frecuencia" 
-                                                                                />
-                                                                                <input 
-                                                                                    className="flex-1 bg-transparent outline-none border-b border-transparent focus:border-indigo-300 transition-colors text-slate-500"
-                                                                                    value={med.duration} 
-                                                                                    onChange={e=>handleUpdateMedication(idx,'duration',e.target.value)} 
-                                                                                    placeholder="Duración" 
-                                                                                />
-                                                                        </div>
+                                                                            
+                                                                            <div className="col-span-2 flex gap-2 text-xs">
+                                                                                    <input 
+                                                                                        className="flex-1 bg-transparent outline-none border-b border-transparent focus:border-indigo-300 transition-colors text-slate-500"
+                                                                                        value={med.frequency} 
+                                                                                        onChange={e=>handleUpdateMedication(idx,'frequency',e.target.value)} 
+                                                                                        placeholder="Frecuencia" 
+                                                                                    />
+                                                                                    <input 
+                                                                                        className="flex-1 bg-transparent outline-none border-b border-transparent focus:border-indigo-300 transition-colors text-slate-500"
+                                                                                        value={med.duration} 
+                                                                                        onChange={e=>handleUpdateMedication(idx,'duration',e.target.value)} 
+                                                                                        placeholder="Duración" 
+                                                                                    />
+                                                                            </div>
                                                                     </div>
                                                                 )}
 
