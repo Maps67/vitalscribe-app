@@ -7,7 +7,7 @@ import {
   Clock, UserPlus, Activity, Search, ArrowRight,
   CalendarX, Repeat, Ban, PlayCircle, PenLine, Calculator, Sparkles,
   BarChart3, FileSignature, Microscope, StickyNote, FileCheck, Printer,
-  Sunrise, Sunset, MoonStar, Send, Trash2, CalendarClock 
+  Sunrise, Sunset, MoonStar, Send, Trash2, CalendarClock, HelpCircle 
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { format, isToday, isTomorrow, parseISO, startOfDay, endOfDay, addDays, isPast } from 'date-fns';
@@ -24,7 +24,8 @@ import { DoctorFileGallery } from '../components/DoctorFileGallery';
 import { QuickNotes } from '../components/QuickNotes';
 import { MedicalCalculators } from '../components/MedicalCalculators';
 import { QuickDocModal } from '../components/QuickDocModal';
-import { FastAdmitModal } from '../components/FastAdmitModal'; // <--- CAMBIO 1: IMPORTACIÓN
+import { FastAdmitModal } from '../components/FastAdmitModal';
+import { UserGuideModal } from '../components/UserGuideModal';
 
 import { ImpactMetrics } from '../components/ImpactMetrics';
 import SmartBriefingWidget from '../components/SmartBriefingWidget'; 
@@ -596,6 +597,7 @@ const Dashboard: React.FC = () => {
   const [docType, setDocType] = useState<'justificante' | 'certificado' | 'receta'>('justificante');
   const [toolsTab, setToolsTab] = useState<'notes' | 'calc'>('notes');
   const [isFastAdmitOpen, setIsFastAdmitOpen] = useState(false); // <--- CAMBIO 2: NUEVO ESTADO
+  const [isGuideOpen, setIsGuideOpen] = useState(false); // <--- CAMBIO: ESTADO NUEVO PARA GUÍA
   
   const [searchInput, setSearchInput] = useState('');
 
@@ -880,6 +882,7 @@ const Dashboard: React.FC = () => {
                         placeholder="Pregunta clínica, dosis, interacción o búsqueda rápida..." 
                         className="flex-1 bg-transparent border-none outline-none text-slate-700 dark:text-white font-medium placeholder:text-slate-400 text-sm md:text-base h-10 px-2"
                     />
+                    
                     <button 
                         type="button" 
                         onClick={() => { setInitialAssistantQuery(null); setIsAssistantOpen(true); }} 
@@ -1052,9 +1055,18 @@ const Dashboard: React.FC = () => {
         </div>
       )}
 
+      {/* --- BOTÓN FLOTANTE DE AYUDA (NUEVO) --- */}
+      <button
+        onClick={() => setIsGuideOpen(true)}
+        className="fixed bottom-6 right-6 bg-indigo-600 text-white px-5 py-3 rounded-full shadow-2xl font-bold flex items-center gap-2 z-50 hover:scale-105 transition-transform hover:shadow-indigo-500/50"
+      >
+        <HelpCircle size={20} /> ¿Cómo funciona?
+      </button>
+
       <QuickDocModal isOpen={isDocModalOpen} onClose={() => setIsDocModalOpen(false)} doctorProfile={doctorProfile} defaultType={docType} />
       <AssistantModal isOpen={isAssistantOpen} onClose={() => setIsAssistantOpen(false)} onActionComplete={fetchData} initialQuery={initialAssistantQuery} />
-      <FastAdmitModal isOpen={isFastAdmitOpen} onClose={() => setIsFastAdmitOpen(false)} /> {/* <--- CAMBIO 4: RENDERIZADO DEL MODAL */}
+      <FastAdmitModal isOpen={isFastAdmitOpen} onClose={() => setIsFastAdmitOpen(false)} /> 
+      <UserGuideModal isOpen={isGuideOpen} onClose={() => setIsGuideOpen(false)} />
     </div>
   );
 };
