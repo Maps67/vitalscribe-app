@@ -1700,13 +1700,15 @@ const ConsultationView: React.FC = () => {
                                                                 ) : (
                                                                     <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-2">
                                                                             <div className="relative">
-                                                                                <input 
-                                                                                    className={`w-full font-bold bg-transparent outline-none border-b border-transparent focus:border-indigo-300 transition-colors ${
+                                                                                <textarea 
+                                                                                    rows={1}
+                                                                                    className={`w-full font-bold bg-transparent outline-none border-b border-transparent focus:border-indigo-300 transition-colors resize-none overflow-hidden ${
                                                                                         isRisky ? 'text-amber-700 dark:text-amber-400 pr-6' : 'text-slate-800 dark:text-white'
                                                                                     }`} 
                                                                                     value={med.drug} 
                                                                                     onChange={e=>handleUpdateMedication(idx,'drug',e.target.value)} 
                                                                                     placeholder="Nombre del medicamento" 
+                                                                                    ref={(el) => { if(el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; }}}
                                                                                 />
                                                                                 {isRisky && (
                                                                                     <div className="absolute right-0 top-1/2 -translate-y-1/2 text-amber-500 cursor-help" title={`Precaución: Posible interacción detectada en análisis clínico.`}>
