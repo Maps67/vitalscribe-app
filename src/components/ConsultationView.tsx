@@ -787,7 +787,7 @@ const ConsultationView: React.FC = () => {
     abortControllerRef.current = new AbortController();
     
     setIsProcessing(true);
-    const loadingToast = toast.loading(`Analizando como ${doctorProfile.specialty.toUpperCase()}...`);
+    const loadingToast = toast.loading(`VitalScribe AI: Aplicando criterio de... ${doctorProfile.specialty.toUpperCase()}...`);
 
     try {
       const inputSignature = fullTranscript + (manualContext || ""); 

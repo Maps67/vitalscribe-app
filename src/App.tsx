@@ -181,8 +181,8 @@ const App: React.FC = () => {
   if (isUpdatePasswordRoute) {
       return (
         <ThemeProvider>
-            {/* CONFIGURACIÓN CORREGIDA: Bottom-Right */}
-            <Toaster richColors position="bottom-right" />
+            {/* CONFIGURACIÓN ACTUALIZADA: Top-Center */}
+            <Toaster richColors position="top-center" />
             <UpdatePassword onSuccess={() => window.location.href = '/'} />
         </ThemeProvider>
       );
@@ -192,8 +192,8 @@ const App: React.FC = () => {
   if (!session) {
     return (
       <ThemeProvider>
-        {/* CONFIGURACIÓN CORREGIDA: Bottom-Right */}
-        <Toaster richColors position="bottom-right" />
+        {/* CONFIGURACIÓN ACTUALIZADA: Top-Center */}
+        <Toaster richColors position="top-center" />
         <ReloadPrompt />
         <AuthView onLoginSuccess={() => {}} />
       </ThemeProvider>
@@ -204,8 +204,8 @@ const App: React.FC = () => {
   return (
     <ThemeProvider>
       <BrowserRouter>
-        {/* CONFIGURACIÓN CORREGIDA: Bottom-Right */}
-        <Toaster richColors position="bottom-right" closeButton />
+        {/* CONFIGURACIÓN ACTUALIZADA: Top-Center */}
+        <Toaster richColors position="top-center" closeButton />
         <ReloadPrompt />
         <MainLayout session={session} onLogout={handleGlobalLogout} />
       </BrowserRouter>
@@ -214,4 +214,4 @@ const App: React.FC = () => {
 };
 
 export default App;
-// Forzando actualización del visor v2.0
+// Forzando actualización del visor v2.1
