@@ -586,14 +586,14 @@ const ConsultationView: React.FC = () => {
           if (patient.appointmentId) setLinkedAppointmentId(patient.appointmentId);
           toast.info(`Paciente temporal: ${patient.name} (Se registrará al guardar)`);
           
-          setShowBriefing(true); // <--- INICIO RÁPIDO PARA GHOST
+          setShowBriefing(true); 
       } 
       else {
           setSelectedPatient(patient);
           setSearchTerm(''); 
           setIsMobileSnapshotVisible(true); 
           
-          setShowBriefing(true); // <--- CORRECCIÓN CRÍTICA: UI OPTIMISTA (Inicio inmediato)
+          setShowBriefing(true); // <--- UI OPTIMISTA: INICIO INMEDIATO
 
           try {
               const loadingHistory = toast.loading("Sincronizando historial...");
@@ -615,7 +615,6 @@ const ConsultationView: React.FC = () => {
               console.error("Error en hidratación:", e);
           }
       }
-      // La llamada tardía ha sido eliminada para evitar retrasos
   };
 
   const handleCreatePatient = async (name: string) => {
@@ -791,7 +790,7 @@ const ConsultationView: React.FC = () => {
     abortControllerRef.current = new AbortController();
     
     setIsProcessing(true);
-    const loadingToast = toast.loading(`VitalScribe AI: Aplicando criterio de... ${doctorProfile.specialty.toUpperCase()}...`);
+    const loadingToast = toast.loading(`VitalScribe AI: Aplicando criterio de ${doctorProfile.specialty.toUpperCase()}...`);
 
     try {
       const inputSignature = fullTranscript + (manualContext || ""); 
@@ -1389,14 +1388,8 @@ const ConsultationView: React.FC = () => {
       <div className={`flex-1 flex w-full md:w-3/4 overflow-hidden ${!generatedNote?'hidden md:flex':'flex'}`}>
           <div className="flex-1 flex flex-col bg-slate-100 dark:bg-slate-950 border-l dark:border-slate-800 min-w-0 relative">
                 
-                {showBriefing && selectedPatient && (
-                    <PatientBriefing 
-                        patient={selectedPatient}
-                        lastInsight={vitalSnapshot} 
-                        onComplete={handleBriefingComplete}
-                        onCancel={() => setShowBriefing(false)}
-                    />
-                )}
+                {/* 🛑 ELIMINADO DE AQUÍ (ZONA DE RIESGO DE OCULTAMIENTO) */}
+                {/* {showBriefing && selectedPatient && ( <PatientBriefing ... /> )} */}
 
                 <div className="flex border-b dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0 items-center px-2">
                     <button onClick={()=>setGeneratedNote(null)} className="md:hidden p-4 text-slate-500"><ArrowLeft/></button>
@@ -1879,6 +1872,16 @@ const ConsultationView: React.FC = () => {
             isLoading={isLoadingInsights} 
             patientName={selectedPatient.name} 
         />
+      )}
+
+      {/* ✅ SOLUCIÓN CRÍTICA: PatientBriefing MOVIDO A ZONA DE MODALES (Fuera del layout condicional) */}
+      {showBriefing && selectedPatient && (
+          <PatientBriefing 
+              patient={selectedPatient}
+              lastInsight={vitalSnapshot} 
+              onComplete={handleBriefingComplete}
+              onCancel={() => setShowBriefing(false)}
+          />
       )}
 
       {/* [MODAL] INTERCONSULTA AISLADA */}
