@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { Calendar, dateFnsLocalizer, ToolbarProps, EventProps } from 'react-big-calendar';
-// CORRECCIÓN DE IMPORTACIONES DATE-FNS
 import { format, parse, startOfWeek, getDay } from 'date-fns';
 import { es } from 'date-fns/locale';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
@@ -8,9 +7,19 @@ import { AppointmentService } from '../services/AppointmentService';
 import { Appointment, Patient } from '../types';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
-import { Plus, X, Calendar as CalendarIcon, Smartphone, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, X, Calendar as CalendarIcon, Smartphone, Trash2, ChevronLeft, ChevronRight, User, UserPlus, List } from 'lucide-react';
 import './CalendarDarkOverrides.css';
 import { generateGoogleCalendarUrl, downloadIcsFile } from '../utils/calendarUtils';
+import { PatientService } from '../services/PatientService';
+
+// ✅ SOLUCIÓN DE TYPESCRIPT: Extendemos la interfaz localmente
+// Esto le dice a TS que en ESTA vista, la cita trae los datos del paciente anidados.
+interface ExtendedAppointment extends Appointment {
+  patient?: {
+    name: string;
+    [key: string]: any;
+  };
+}
 
 const locales = { 'es': es };
 const localizer = dateFnsLocalizer({
@@ -73,11 +82,14 @@ const CustomEvent = ({ event }: EventProps<any>) => {
 };
 
 const CalendarView: React.FC = () => {
-  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  // ✅ ACTUALIZACIÓN 1: Usamos ExtendedAppointment para que el estado acepte la propiedad 'patient'
+  const [appointments, setAppointments] = useState<ExtendedAppointment[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   
+  const [isManualPatient, setIsManualPatient] = useState(false);
+
   const [formData, setFormData] = useState({
     id: '', patientId: '', patientName: '', title: '', notes: '', startTime: '', endTime: ''
   });
@@ -91,7 +103,8 @@ const CalendarView: React.FC = () => {
       const { data: patientsData } = await supabase.from('patients').select('*').order('name');
       setPatients(patientsData || []);
       const appointmentsData = await AppointmentService.getAppointments();
-      setAppointments(appointmentsData);
+      // Forzamos el tipado porque sabemos que Supabase trae la relación
+      setAppointments(appointmentsData as unknown as ExtendedAppointment[]);
     } catch (error) { toast.error("Error de conexión"); } 
     finally { setLoading(false); }
   };
@@ -105,6 +118,7 @@ const CalendarView: React.FC = () => {
   };
 
   const eventStyleGetter = (event: any) => {
+    // Aquí event.resource ya tiene el tipo correcto implícito
     const patientName = event.resource.patient?.name || '';
     const bgColor = getPatientColor(patientName);
     return {
@@ -125,6 +139,7 @@ const CalendarView: React.FC = () => {
 
   const calendarEvents = appointments.map(app => ({
     id: app.id,
+    // ✅ ACTUALIZACIÓN 2: Ahora TS sabe que 'patient' existe en 'app'
     title: `${app.patient?.name || 'Paciente'}`,
     start: new Date(app.start_time),
     end: new Date(app.end_time),
@@ -155,11 +170,14 @@ const CalendarView: React.FC = () => {
       startTime: toLocalISO(finalStart), 
       endTime: toLocalISO(finalEnd)
     });
+    setIsManualPatient(false); 
     setIsModalOpen(true);
   };
 
   const handleSelectEvent = (event: any) => {
-    const app = event.resource as Appointment;
+    // ✅ ACTUALIZACIÓN 3: Casting explícito a ExtendedAppointment
+    const app = event.resource as ExtendedAppointment;
+    
     const toLocalISO = (dateString: string) => {
         const date = new Date(dateString);
         const offset = date.getTimezoneOffset() * 60000;
@@ -168,12 +186,14 @@ const CalendarView: React.FC = () => {
     setFormData({
         id: app.id,
         patientId: app.patient_id,
+        // Ahora TS permite acceder a app.patient sin errores
         patientName: app.patient?.name || '',
         title: app.title,
         notes: app.notes || '',
         startTime: toLocalISO(app.start_time),
         endTime: toLocalISO(app.end_time)
     });
+    setIsManualPatient(false); 
     setIsModalOpen(true);
   };
 
@@ -181,13 +201,22 @@ const CalendarView: React.FC = () => {
     e.preventDefault();
     setIsSaving(true);
     try {
+      let finalPatientId = formData.patientId;
+
+      if (isManualPatient && formData.patientName) {
+          finalPatientId = await PatientService.ensurePatientId({
+              id: `temp_${Date.now()}`,
+              name: formData.patientName,
+              isTemporary: true
+          });
+      }
+
       const payload = {
-        patient_id: formData.patientId,
+        patient_id: finalPatientId, 
         title: formData.title,
         start_time: new Date(formData.startTime).toISOString(),
         end_time: new Date(formData.endTime).toISOString(),
         notes: formData.notes,
-        // CORRECCIÓN: Forzamos el tipado literal para evitar error de string genérico
         status: 'scheduled' as 'scheduled' 
       };
 
@@ -198,8 +227,11 @@ const CalendarView: React.FC = () => {
       }
       toast.success(formData.id ? "Cita actualizada" : "Cita agendada");
       setIsModalOpen(false);
+      
+      // Recargar datos
       const refresh = await AppointmentService.getAppointments();
-      setAppointments(refresh);
+      setAppointments(refresh as unknown as ExtendedAppointment[]);
+      
     } catch (error) { toast.error("Error al guardar"); } 
     finally { setIsSaving(false); }
   };
@@ -211,7 +243,7 @@ const CalendarView: React.FC = () => {
           toast.success("Cita eliminada");
           setIsModalOpen(false);
           const refresh = await AppointmentService.getAppointments();
-          setAppointments(refresh);
+          setAppointments(refresh as unknown as ExtendedAppointment[]);
       } catch (e) { toast.error("Error al eliminar"); }
   };
 
@@ -292,19 +324,46 @@ const CalendarView: React.FC = () => {
             
             <form onSubmit={handleSave} className="p-6 space-y-4 text-slate-700 dark:text-slate-200">
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Paciente</label>
-                <select 
-                  required disabled={!!formData.id}
-                  className="w-full p-3 border border-slate-200 dark:border-slate-700 rounded-lg outline-none bg-slate-50 dark:bg-slate-800 focus:ring-2 focus:ring-brand-teal transition-colors disabled:opacity-60"
-                  value={formData.patientId}
-                  onChange={e => {
-                      const selected = patients.find(p => p.id === e.target.value);
-                      setFormData({...formData, patientId: e.target.value, patientName: selected?.name || ''})
-                  }}
-                >
-                  <option value="">-- Seleccionar --</option>
-                  {patients.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
+                <div className="flex justify-between items-center mb-1">
+                    <label className="block text-xs font-bold text-slate-500 uppercase">Paciente</label>
+                    {!formData.id && (
+                        <button 
+                            type="button" 
+                            onClick={() => setIsManualPatient(!isManualPatient)} 
+                            className="text-[10px] text-teal-600 font-bold bg-teal-50 px-2 py-0.5 rounded transition-colors hover:bg-teal-100 flex items-center gap-1"
+                        >
+                            {isManualPatient ? <><List size={10} /> Seleccionar Lista</> : <><UserPlus size={10} /> Ingresar Manual</>}
+                        </button>
+                    )}
+                </div>
+                
+                <div className="relative">
+                    <User className="absolute left-3 top-3 text-slate-400" size={18} />
+                    {isManualPatient ? (
+                        <input 
+                            type="text" 
+                            required 
+                            placeholder="Nombre del paciente..." 
+                            className="w-full pl-10 pr-4 py-3 border border-slate-200 dark:border-slate-700 rounded-lg outline-none bg-white dark:bg-slate-800 focus:ring-2 focus:ring-brand-teal transition-all" 
+                            value={formData.patientName} 
+                            onChange={e => setFormData({...formData, patientName: e.target.value})} 
+                        />
+                    ) : (
+                        <select 
+                          required 
+                          disabled={!!formData.id}
+                          className="w-full pl-10 pr-4 py-3 border border-slate-200 dark:border-slate-700 rounded-lg outline-none bg-slate-50 dark:bg-slate-800 focus:ring-2 focus:ring-brand-teal transition-colors disabled:opacity-60 appearance-none"
+                          value={formData.patientId}
+                          onChange={e => {
+                              const selected = patients.find(p => p.id === e.target.value);
+                              setFormData({...formData, patientId: e.target.value, patientName: selected?.name || ''})
+                          }}
+                        >
+                          <option value="">-- Seleccionar --</option>
+                          {patients.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                        </select>
+                    )}
+                </div>
               </div>
 
               <div>

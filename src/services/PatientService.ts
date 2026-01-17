@@ -138,5 +138,51 @@ export const PatientService = {
       if (error) throw error;
       return { patient: data, action: 'created' };
     }
+  },
+
+  /**
+   * 🌟 NUEVA FUNCIÓN (Solución Error UUID 22P02)
+   * Materializador de Pacientes:
+   * Convierte un paciente temporal (ID 'temp_...') en uno real en BD antes de guardar consultas.
+   */
+  async ensurePatientId(patient: { id: string; name: string; [key:string]: any }): Promise<string> {
+    // 1. Análisis rápido: ¿Parece un ID temporal o es un paciente marcado como temporal?
+    const isTemp = patient.id.startsWith('temp_') || patient.id.length < 20 || patient.isTemporary === true;
+
+    if (!isTemp) {
+      // Es un UUID real, no hacemos nada, retornamos el ID.
+      return patient.id;
+    }
+
+    console.log('⚡ [PatientService] Detectado paciente temporal. Materializando:', patient.name);
+
+    // 2. Obtener al doctor actual (para el RLS y ownership)
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('No se puede crear paciente sin sesión de doctor activa.');
+
+    // 3. Insertar el paciente real en la Base de Datos
+    const { data: newRealPatient, error } = await supabase
+      .from('patients')
+      .insert({
+        name: patient.name,
+        doctor_id: user.id,
+        // Al materializarlo, ya no es temporal
+        isTemporary: false, 
+        // Preservamos otros datos si existen en el objeto temporal
+        email: patient.email || null,
+        phone: patient.phone || null
+      })
+      .select('id') // Solo nos importa el nuevo ID
+      .single();
+
+    if (error) {
+      console.error('❌ Error crítico materializando paciente:', error);
+      throw error;
+    }
+
+    console.log('✅ [PatientService] Paciente materializado con nuevo UUID:', newRealPatient.id);
+    
+    // 4. Retornamos el NUEVO UUID válido para usar en FKs
+    return newRealPatient.id;
   }
 };

@@ -19,6 +19,7 @@ import { pdf } from '@react-pdf/renderer';
 import PrescriptionPDF from './PrescriptionPDF';
 import MedicalRecordPDF from './MedicalRecordPDF'; 
 import { AppointmentService } from '../services/AppointmentService';
+import { PatientService } from '../services/PatientService'; // ✅ PUNTO A: IMPORTACIÓN AGREGADA
 import QuickRxModal from './QuickRxModal';
 import { DoctorFileGallery } from './DoctorFileGallery';
 import { UploadMedico } from './UploadMedico';
@@ -1160,7 +1161,8 @@ const ConsultationView: React.FC = () => {
         const currentText = transcript.trim() ? `\n[${activeSpeaker.toUpperCase()}]: ${transcript}` : '';
         const fullTranscriptToSave = segments.map(s => `[${s.role === 'doctor' ? 'DOCTOR' : 'PACIENTE'}]: ${s.text}`).join('\n') + currentText;
         
-        let finalPatientId = selectedPatient.id;
+        // 🔥 PUNTO B: CORRECCIÓN CRÍTICA: Materializar paciente temporal antes de guardar
+        const finalPatientId = await PatientService.ensurePatientId(selectedPatient);
 
         const medsSummary = editablePrescriptions.length > 0 
             ? "\n\nMEDICAMENTOS:\n" + editablePrescriptions.map(m => `- ${m.drug} ${m.dose} (${m.frequency})`).join('\n')
@@ -1330,7 +1332,7 @@ const ConsultationView: React.FC = () => {
             <div className="flex-1 overflow-y-auto mb-4 pr-2 custom-scrollbar">
                 {chatMessages.map((m,i)=>(
                     <div key={i} className={`p-3 mb-3 rounded-2xl max-w-[85%] text-sm shadow-sm ${m.role==='user'?'bg-brand-teal text-white self-end ml-auto rounded-tr-none':'bg-slate-100 dark:bg-slate-800 dark:text-slate-200 self-start mr-auto rounded-tl-none'}`}>
-                                <FormattedText content={m.text} />
+                                    <FormattedText content={m.text} />
                     </div>
                 ))}
                 <div ref={chatEndRef}/>
@@ -1694,7 +1696,7 @@ const ConsultationView: React.FC = () => {
                                                                             />
                                                                         </div>
                                                                         <div className="text-xs text-red-700 dark:text-red-200 bg-red-100/50 dark:bg-red-900/40 p-2 rounded border border-red-200 dark:border-red-800/50 break-words font-mono">
-                                                                            {med.dose.replace(/\*\*\*/g, '').trim() || "Fármaco bloqueado por protocolo de seguridad."}
+                                                                                {med.dose.replace(/\*\*\*/g, '').trim() || "Fármaco bloqueado por protocolo de seguridad."}
                                                                         </div>
                                                                     </div>
                                                                 ) : (
@@ -1713,7 +1715,7 @@ const ConsultationView: React.FC = () => {
                                                                                     />
                                                                                     {isRisky && (
                                                                                         <div className="absolute right-0 top-1/2 -translate-y-1/2 text-amber-500 cursor-help" title={`Precaución: Posible interacción detectada en análisis clínico.`}>
-                                                                                                    <AlertCircle size={16}/>
+                                                                                                        <AlertCircle size={16}/>
                                                                                         </div>
                                                                                     )}
                                                                                 </div>
@@ -1986,15 +1988,15 @@ const ConsultationView: React.FC = () => {
       )}
 
       {isSurgicalModalOpen && selectedPatient && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-              <div className="max-w-3xl w-full">
-                  <SurgicalLeaveGenerator 
-                      patientName={selectedPatient.name}
-                      onClose={() => setIsSurgicalModalOpen(false)}
-                      onGenerate={handleSurgicalData}
-                  />
-              </div>
-          </div>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+            <div className="max-w-3xl w-full">
+                <SurgicalLeaveGenerator 
+                    patientName={selectedPatient.name}
+                    onClose={() => setIsSurgicalModalOpen(false)}
+                    onGenerate={handleSurgicalData}
+                />
+            </div>
+        </div>
       )}
 
     </div>

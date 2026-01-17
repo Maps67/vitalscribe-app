@@ -38,6 +38,8 @@ import {
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
+// ✅ INYECCIÓN 1: Servicio de Blindaje
+import { PatientService } from '../services/PatientService';
 
 // --- TIPOS ---
 type AppointmentType = 'consulta' | 'urgencia' | 'seguimiento';
@@ -99,8 +101,8 @@ const getCalendarLink = (appt: any, provider: CalendarProvider) => {
       'BEGIN:VCALENDAR',
       'VERSION:2.0',
       'BEGIN:VEVENT',
-      `DTSTART:${formatDate(startDate)}`,
-      `DTEND:${formatDate(endDate)}`,
+      'DTSTART:${formatDate(startDate)}',
+      'DTEND:${formatDate(endDate)}',
       `SUMMARY:${title}`,
       `DESCRIPTION:${description.replace(/\n/g, '\\n')}`,
       `LOCATION:${location}`,
@@ -219,11 +221,15 @@ const AppointmentModal = ({ isOpen, onClose, onSave, onDelete, initialDate, exis
     e.preventDefault();
     const dateTimeString = `${dateStr}T${timeStr}:00`;
     const finalDate = new Date(dateTimeString); 
+    
+    // NOTA: La lógica de guardado real ocurre en 'onSave' (AgendaView),
+    // aquí solo preparamos los datos para enviarlos hacia arriba.
     let titleToSave = isManual ? formData.manual_name : (patients.find((p:any) => p.id === formData.patient_id)?.name || 'Cita');
 
     onSave({
       id: existingAppt?.id,
       patient_id: isManual ? null : formData.patient_id,
+      manual_name: isManual ? formData.manual_name : null, // Pasamos el nombre manual explícitamente
       start_time: finalDate.toISOString(),
       title: titleToSave,
       status: 'scheduled',
@@ -399,6 +405,19 @@ const AgendaView = () => {
     setIsSaving(true);
     try {
         const { data: { user } } = await supabase.auth.getUser();
+        
+        // ✅ INYECCIÓN 2: Lógica de Blindaje "Materializar Paciente"
+        let finalPatientId = apptData.patient_id;
+
+        // Si viene un nombre manual y no hay ID (o es nulo), creamos el paciente
+        if (!finalPatientId && apptData.manual_name) {
+            finalPatientId = await PatientService.ensurePatientId({
+                id: `temp_${Date.now()}`,
+                name: apptData.manual_name,
+                isTemporary: true
+            });
+        }
+
         const payload: any = {
             doctor_id: user?.id,
             start_time: apptData.start_time,
@@ -406,7 +425,7 @@ const AgendaView = () => {
             status: apptData.status,
             notes: apptData.notes,
             duration_minutes: apptData.duration_minutes,
-            patient_id: apptData.patient_id || null
+            patient_id: finalPatientId || null // Usamos el ID seguro
         };
 
         if (apptData.id) await supabase.from('appointments').update(payload).eq('id', apptData.id);
