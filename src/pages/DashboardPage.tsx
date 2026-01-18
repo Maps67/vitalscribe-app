@@ -88,7 +88,7 @@ const AtomicClock = ({ location }: { location: string }) => {
     );
 };
 
-// --- Assistant Modal REFORZADO ---
+// --- Assistant Modal REFORZADO (MODIFICADO: SOLO CONSULTA Y NAVEGACIÓN) ---
 const AssistantModal = ({ isOpen, onClose, onActionComplete, initialQuery }: { isOpen: boolean; onClose: () => void; onActionComplete: () => void; initialQuery?: string | null }) => {
   const { isListening, transcript, startListening, stopListening, resetTranscript } = useSpeechRecognition();
   
@@ -169,32 +169,11 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete, initialQuery }: { i
           const executeLogic = async () => {
               const lowerText = textToProcess.toLowerCase();
               
-              // --- LÓGICA REVISADA: Prioridad a Comandos, Fallback a Clínica ---
+              // --- LÓGICA REVISADA: SOLO NAVEGACIÓN Y CONSULTA CLÍNICA ---
+              // (Se eliminó el bloque de 'CREATE_APPOINTMENT' por seguridad del producto)
               
-              // 1. Detección de Agendamiento
-              if (lowerText.includes('cita') || lowerText.includes('agendar') || lowerText.includes('programar')) {
-                  
-                  const extractionPrompt = `Analiza la instrucción: "${textToProcess}". Extrae el nombre del paciente si se menciona. Si no hay nombre, responde "Paciente Nuevo". Responde SOLO con el nombre, sin puntos ni texto extra.`;
-                  
-                  let extractedName = "Paciente Nuevo";
-                  try {
-                      const nameResponse = await GeminiMedicalService.chatWithContext("Eres un asistente administrativo.", extractionPrompt);
-                      extractedName = cleanMarkdown(nameResponse).replace(/^["']|["']$/g, '').trim();
-                  } catch (e) {
-                      console.warn("Fallo extracción nombre IA, usando default");
-                  }
-
-                  setAiResponse({ 
-                      intent: 'CREATE_APPOINTMENT', 
-                      data: { patientName: extractedName, start_time: new Date().toISOString() }, 
-                      message: `Agendar Cita para ${extractedName}`,
-                      originalText: textToProcess,
-                      confidence: 1.0
-                  });
-                  setStatus('answering');
-
-              // 2. Detección de Navegación Explícita
-              } else if (lowerText.includes('ir a') || lowerText.includes('navegar') || lowerText.includes('abrir') || lowerText.includes('ver pantalla')) {
+              // 1. Detección de Navegación Explícita
+              if (lowerText.includes('ir a') || lowerText.includes('navegar') || lowerText.includes('abrir') || lowerText.includes('ver pantalla')) {
                   
                   setAiResponse({ 
                       intent: 'NAVIGATION', 
@@ -205,20 +184,18 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete, initialQuery }: { i
                   });
                   setStatus('answering');
 
-              // 3. [NUEVO] DETECCIÓN DE CONSULTA RAG (PACIENTE ESPECÍFICO)
-              // Interceptamos preguntas sobre dosis, historial o pacientes antes del fallback genérico
+              // 2. DETECCIÓN DE CONSULTA RAG (PACIENTE ESPECÍFICO)
+              // Interceptamos preguntas sobre dosis, historial o pacientes
               } else if (lowerText.includes('paciente') || lowerText.includes('toma') || lowerText.includes('dosis') || lowerText.includes('diagnóstico') || lowerText.includes('historia') || lowerText.includes('recet') || lowerText.includes('medicamento')) {
                   
-                  // A. Extracción de Nombre para búsqueda (Con Protocolo Anti-Homónimos)
+                  // A. Extracción de Nombre para búsqueda
                   const namePrompt = `
                       Tu misión es identificar al paciente para una búsqueda SQL exacta.
                       Frase: "${textToProcess}"
                       
-                      REGLAS DE EXTRACCIÓN (Protocolo de Identificación Rigurosa):
-                      1. OBJETIVO: Extraer "Primer Nombre + Primer Apellido" (ej. "Juan Pérez") siempre que sea posible para evitar homónimos.
-                      2. SANITIZACIÓN: Elimina honoríficos ("Don", "Doña", "Dr.", "Sra.", "El paciente").
-                      3. SI FALTAN DATOS: Si solo se menciona el nombre (ej. "Carmen") o solo el apellido, extrae eso, pero prioriza el nombre completo si existe.
-                      4. CORRECCIÓN: Estandariza ortografía (ej. "Alfonso" -> "Alfonzo" si es fonéticamente igual).
+                      REGLAS DE EXTRACCIÓN:
+                      1. OBJETIVO: Extraer "Primer Nombre + Primer Apellido" (ej. "Juan Pérez").
+                      2. SANITIZACIÓN: Elimina honoríficos.
                       
                       SALIDA: Responde SOLO con el nombre limpio. Si no hay nombre, responde "NULL".
                   `;
@@ -252,7 +229,7 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete, initialQuery }: { i
                       throw new Error("Pase a fallback"); 
                   }
 
-              // 4. FALLBACK CLINICO: Consulta Genérica (Sin paciente específico)
+              // 3. FALLBACK CLINICO: Consulta Genérica (Sin paciente específico)
               } else {
                   throw new Error("Pase a fallback");
               }
@@ -264,7 +241,7 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete, initialQuery }: { i
           } catch (internalError) {
              // Fallback Logic
              const rawAnswer = await GeminiMedicalService.chatWithContext(
-                 "Contexto: El médico está en el Dashboard principal. Eres un Copiloto Clínico Senior. Responde directo, conciso y basado en evidencia.", 
+                 "Contexto: El médico está en el Dashboard principal. Eres un Copiloto Clínico Senior. Si el usuario intenta AGENDAR una cita, responde amablemente que esa función está deshabilitada por seguridad y deben usar la agenda manual. Para cualquier duda médica, responde directo y conciso.", 
                  textToProcess
              );
              
@@ -300,68 +277,8 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete, initialQuery }: { i
     setIsExecuting(true); 
 
     switch (aiResponse.intent) {
-      case 'CREATE_APPOINTMENT':
-        try {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) throw new Error("No auth");
-            
-            const nextHour = addDays(new Date(), 0); 
-            nextHour.setHours(new Date().getHours() + 1, 0, 0, 0);
-
-            const detectedName = aiResponse.data.patientName || "Paciente Nuevo (Voz)";
-            let finalPatientId = null;
-
-            const { data: existingPatient } = await supabase
-                .from('patients')
-                .select('id')
-                .eq('doctor_id', user.id)
-                .ilike('name', detectedName)
-                .maybeSingle();
-
-            if (existingPatient) {
-                finalPatientId = existingPatient.id;
-            } else {
-                const { data: newPatient, error: createError } = await supabase
-                    .from('patients')
-                    .insert({
-                        name: detectedName,
-                        doctor_id: user.id,
-                        history: JSON.stringify({ 
-                            origin: 'voice_assistant', 
-                            type: 'quick_entry',
-                            created_at: new Date().toISOString() 
-                        })
-                    })
-                    .select()
-                    .single();
-                
-                if (createError) throw createError;
-                finalPatientId = newPatient.id;
-            }
-
-            const { error } = await supabase.from('appointments').insert({
-                doctor_id: user.id,
-                patient_id: finalPatientId, 
-                title: detectedName,
-                start_time: nextHour.toISOString(),
-                duration_minutes: 30,
-                status: 'scheduled',
-                notes: "Creada vía Asistente de Voz (IA)"
-            });
-            
-            if (error) throw error;
-            
-            toast.success(`✅ Cita agendada para ${detectedName}`);
-            onActionComplete();
-            onClose();
-
-        } catch(e: any) { 
-            console.error("Error agendando:", e);
-            toast.error("Error al guardar cita: " + (e.message || "Error desconocido")); 
-            setIsExecuting(false); 
-        }
-        break;
-
+      // NOTA: Se eliminó el case 'CREATE_APPOINTMENT' para evitar errores de fechas.
+      
       case 'NAVIGATION':
         const dest = aiResponse.data.destination?.toLowerCase() || '';
         onClose();
@@ -396,7 +313,7 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete, initialQuery }: { i
           {(status === 'idle' || status === 'listening' || status === 'processing') && (
             <div className="flex flex-col items-center gap-8">
                <div className={`text-center text-xl font-medium leading-relaxed min-h-[3rem] ${transcript || initialQuery ? 'text-slate-800 dark:text-white' : 'text-slate-400'}`}>
-                 "{initialQuery || transcript || '¿Dosis, Tratamientos o Citas?'}"
+                 "{initialQuery || transcript || '¿Dosis, Tratamientos o Navegación?'}"
                </div>
                {status === 'processing' ? (
                  <div className="flex items-center gap-2 text-indigo-600 font-bold animate-pulse">
