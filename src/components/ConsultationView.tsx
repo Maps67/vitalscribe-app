@@ -6,7 +6,8 @@ import {
   Clock, UserCircle, Brain, FileSignature, Keyboard, Quote, 
   ChevronDown, ChevronUp, Sparkles, PenLine, UserPlus, 
   ShieldCheck, AlertCircle, RefreshCw, Pill, Plus, Building2,
-  Activity, ClipboardList, Scissors, Microscope, Eye, Lock
+  Activity, ClipboardList, Scissors, Microscope, Eye, Lock,
+  Mic, Square // <--- [NUEVO] Iconos agregados para el micrófono del chat
 } from 'lucide-react';
 
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition'; 
@@ -125,6 +126,7 @@ const cleanHistoryString = (input: any): string => {
 };
 
 const ConsultationView: React.FC = () => {
+  // --- [MOTOR 1] NOTA CLÍNICA (CANAL PRINCIPAL) ---
   const { 
       isListening, 
       isPaused, 
@@ -137,6 +139,22 @@ const ConsultationView: React.FC = () => {
       setTranscript, 
       isAPISupported 
   } = useSpeechRecognition();
+  
+  // --- [MOTOR 2] CHAT ASISTENTE (CANAL SECUNDARIO AISLADO) ---
+  const {
+      isListening: isChatListening,
+      transcript: chatTranscript,
+      startListening: startChatListening,
+      stopListening: stopChatListening,
+      resetTranscript: resetChatTranscript
+  } = useSpeechRecognition();
+
+  // Sincronización del Chat (Canal B)
+  useEffect(() => {
+      if (isChatListening && chatTranscript) {
+          setChatInput(chatTranscript);
+      }
+  }, [chatTranscript, isChatListening]);
   
   const location = useLocation(); 
   
@@ -685,7 +703,7 @@ const ConsultationView: React.FC = () => {
 
   const handleBriefingComplete = (context: string) => {
       setManualContext(context);
-      setShowBriefing(false);    
+      setShowBriefing(false);     
       
       const isNewOrEmpty = (selectedPatient as any).isTemporary || 
                            !selectedPatient?.history || 
@@ -724,6 +742,12 @@ const ConsultationView: React.FC = () => {
     
     if (!consentGiven) { toast.warning("Falta consentimiento."); return; }
 
+    // 🔒 INTERLOCK: Si el chat está escuchando, lo matamos primero
+    if (isChatListening) {
+        stopChatListening();
+        resetChatTranscript();
+    }
+
     if (isListening) {
         pauseListening(); 
     } else if (isPaused) {
@@ -737,6 +761,26 @@ const ConsultationView: React.FC = () => {
       commitCurrentTranscript(); 
       stopListening();
       toast.success("Dictado finalizado. Listo para generar.");
+  };
+
+  // --- NUEVA FUNCIÓN: INTERRUPTOR DEL CHAT (CON APAGADO DE NOTA) ---
+  const handleToggleChatRecording = (e: React.MouseEvent) => {
+      e.preventDefault(); 
+      
+      if (isChatListening) {
+          stopChatListening();
+      } else {
+          // 🔒 SEGURIDAD: Si la nota está escuchando, la detenemos primero
+          if (isListening) {
+              commitCurrentTranscript(); 
+              stopListening();
+              toast.info("Dictado de nota pausado para usar asistente.");
+          }
+          
+          setChatInput(''); 
+          resetChatTranscript();
+          startChatListening();
+      }
   };
 
   const handleManualSend = () => {
@@ -940,8 +984,8 @@ const ConsultationView: React.FC = () => {
       setActiveTab('record');
       
       const chatWelcome = fullMedicalContext 
-          ? `He analizado la transcripción bajo el perfil de ${doctorProfile.specialty}. Revise el Plan Paciente.` 
-          : `Nota de primera vez generada. ¿Dudas?`;
+          ? `✅ **Análisis de Caso Completado.**\nHe procesado la transcripción y el historial bajo el perfil de ${doctorProfile.specialty}.\n\n💡 **Guía de Fuentes:**\n🩺 = Estrictamente del Paciente\n🌐 = Medicina Universal` 
+          : `🤖 **Asistente Médico Activo.**\nEstoy listo para responder tus dudas.\n\n(🩺 Contexto Clínico | 🌐 Medicina Universal)`;
           
       setChatMessages([{ role: 'model', text: chatWelcome }]);
 
@@ -1323,24 +1367,30 @@ const ConsultationView: React.FC = () => {
           }
 
           const ctx = `
-          ACTÚA COMO: Un consultor médico experto senior.
-          CONTEXTO CLÍNICO: ${contextData}
-          INSTRUCCIONES VIGENTES: ${editableInstructions}
+          ROL: Eres un Copiloto Médico Senior. Tu prioridad es la SEGURIDAD DEL PACIENTE.
 
-          TU OBJETIVO: Responder a la duda del doctor de forma visual y profesional.
+          --- 1. DATOS DEL PACIENTE (FUENTE: 🩺) ---
+          ${contextData}
+          TRATAMIENTO ACTUAL: ${editableInstructions}
+          ---------------------------------------------------
 
-          REGLAS DE FORMATO OBLIGATORIAS:
-          1. Usa **negritas** para resaltar hallazgos clave, nombres de medicamentos o alertas.
-          2. Usa listas (guiones -) si das varios pasos o recomendaciones.
-          3. Usa párrafos cortos y directos.
-          4. IMPORTANTE: Responde SOLAMENTE con el texto de la respuesta. NO uses formato JSON, XML ni bloques de código.
+          --- 2. REGLAS DE RESPUESTA ESTRICTAS ---
           
-          Ejemplo de respuesta deseada:
-          "Recomiendo ajustar la dosis de **Metformina**.
-          
-          Consideraciones:
-          - Vigilarlos función renal.
-          - Riesgo de acidosis láctica."
+          CASO A: EL DOCTOR PREGUNTA SOBRE EL PACIENTE
+          (Ej: "¿Tiene alergias?", "¿Interacción con lo que toma?", "¿Qué sugieres para este caso?")
+          -> 🩺 USA SOLO LOS DATOS DE ARRIBA.
+          -> Si el dato no está en el historial, responde: "No se encuentra registro en la nota actual". NO INVENTES.
+
+          CASO B: EL DOCTOR HACE UNA PREGUNTA GENERAL / TEÓRICA
+          (Ej: "Dosis de X fármaco", "Criterios de Framingham", "Manejo de Cetoacidosis")
+          -> 🌐 USA TU CONOCIMIENTO MÉDICO GENERAL.
+          -> OBLIGATORIO: Cita la fuente de referencia implícita (ej: "Según guías ADA...", "Base FDA...", "Protocolo ACLS...").
+          -> Si es un uso "Off-label", adviértelo explícitamente.
+
+          FORMATO VISUAL:
+          - Usa iconos 🩺 o 🌐 al inicio para distinguir la fuente.
+          - Usa **negritas** para fármacos y dosis.
+          - Sé breve. Estilo "Bullet points".
           `;
           
           const reply = await GeminiMedicalService.chatWithContext(ctx, msg);
@@ -1369,19 +1419,115 @@ const ConsultationView: React.FC = () => {
 
   const isReadyToGenerate = isOnline && !isListening && !isPaused && !isProcessing && (transcript || segments.length > 0) && !generatedNote;
 
-  const renderChatContent = () => (
-      <div className="bg-white dark:bg-slate-900 p-4 rounded-xl shadow-sm h-full flex flex-col border dark:border-slate-800 animate-fade-in-up">
+  // --- UI DEL CHAT: CON CHIPS INTELIGENTES Y MICROFONO ---
+  const renderChatContent = () => {
+      
+      // 1. DEFINICIÓN DE CHIPS (MAPA HÍBRIDO + CIRUGÍA INTELIGENTE)
+      const SPECIALTY_CHIPS: Record<string, string[]> = {
+          
+          // --- CIRUGÍA GENERAL Y SUBESPECIALIDADES ---
+          // Cubre: Hernias, Vesícula, Apéndice, Post-op, Heridas.
+          // "Opciones Técnicas" activa la búsqueda de mallas, abordajes o nuevos procedimientos según el caso.
+          'Cirugía': ['📉 Riesgo Preoperatorio', '💊 Manejo Post-quirúrgico', '🛠️ Opciones Técnicas'],
+          
+          // --- OTRAS ÁREAS ---
+          'Pediatría': ['⚖️ Dosis Ponderal', '🚩 Signos de Alarma', '👶 Percentiles'],
+          'Cardiología': ['💓 Riesgo CV', '💊 Ajuste Renal', '⚠️ Interacción Fármacos'],
+          'Ginecología': ['🤰 Riesgo Embarazo', '💊 Lactancia', '🔍 Diagnóstico Diferencial'],
+          'Medicina Interna': ['💊 Interacciones', '🧪 Interpretación Labs', '🚩 Banderas Rojas'],
+          
+          // DEFAULT (Kit de supervivencia)
+          'default': ['💊 Verificar Interacciones', '🚩 Banderas Rojas', '📚 Guías Clínicas']
+      };
+
+      // 2. SELECCIÓN AUTOMÁTICA
+      const currentSpecialty = doctorProfile?.specialty || 'default';
+      // Busca si la especialidad del doctor coincide con alguna clave, si no, usa default
+      const activeChips = SPECIALTY_CHIPS[currentSpecialty] || 
+                          Object.entries(SPECIALTY_CHIPS).find(([key]) => currentSpecialty.includes(key))?.[1] || 
+                          SPECIALTY_CHIPS['default'];
+
+      // 3. FUNCIÓN DE EJECUCIÓN RÁPIDA
+      const handleChipClick = (text: string) => {
+          setChatInput(text); 
+          // Pequeño retardo para permitir que el estado se actualice antes de enviar
+          setTimeout(() => {
+              const fakeEvent = { preventDefault: () => {} } as React.FormEvent;
+              // Llamamos a la función de envío existente
+              // NOTA: Para que esto funcione perfecto, handleChatSend debe leer el estado actualizado.
+              // Como React es asíncrono, lo ideal es disparar el evento manualmente.
+              // Aquí simulamos el clic del usuario para mayor seguridad:
+              const submitBtn = document.getElementById('chat-submit-btn');
+              if(submitBtn) submitBtn.click();
+          }, 100);
+      };
+
+      return (
+        <div className="bg-white dark:bg-slate-900 p-4 rounded-xl shadow-sm h-full flex flex-col border dark:border-slate-800 animate-fade-in-up">
+            
+            {/* ZONA DE MENSAJES */}
             <div className="flex-1 overflow-y-auto mb-4 pr-2 custom-scrollbar">
                 {chatMessages.map((m,i)=>(
                     <div key={i} className={`p-3 mb-3 rounded-2xl max-w-[85%] text-sm shadow-sm ${m.role==='user'?'bg-brand-teal text-white self-end ml-auto rounded-tr-none':'bg-slate-100 dark:bg-slate-800 dark:text-slate-200 self-start mr-auto rounded-tl-none'}`}>
-                                    <FormattedText content={m.text} />
+                        <FormattedText content={m.text} />
                     </div>
                 ))}
                 <div ref={chatEndRef}/>
             </div>
-            <form onSubmit={handleChatSend} className="flex gap-2 relative"><input className="flex-1 border dark:border-slate-700 p-4 pr-12 rounded-xl bg-slate-50 dark:bg-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-brand-teal shadow-sm" value={chatInput} onChange={e=>setChatInput(e.target.value)} placeholder="Pregunta al asistente..."/><button disabled={isChatting||!chatInput.trim()} className="absolute right-3 top-1/2 -translate-y-1/2 bg-brand-teal text-white p-2 rounded-lg hover:bg-teal-600 disabled:opacity-50 transition-all hover:scale-105 active:scale-95">{isChatting?<RefreshCw className="animate-spin" size={18}/>:<Send size={18}/>}</button></form>
+            
+            {/* --- ✅ NUEVO: CHIPS DE PENSAMIENTO LATERAL --- */}
+            <div className="flex gap-2 mb-3 overflow-x-auto pb-1 px-1 no-scrollbar mask-linear-fade">
+                {activeChips.map((chip, idx) => (
+                    <button
+                        key={idx}
+                        onClick={() => handleChipClick(chip)}
+                        disabled={isChatting || isListening}
+                        className="whitespace-nowrap px-3 py-1.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-300 text-xs font-bold rounded-full border border-indigo-100 dark:border-indigo-800 hover:bg-indigo-100 dark:hover:bg-indigo-800 transition-colors shadow-sm flex-shrink-0 active:scale-95"
+                    >
+                        {chip}
+                    </button>
+                ))}
+            </div>
+
+            {/* INPUT Y MICROFONO */}
+            <form onSubmit={handleChatSend} className="flex gap-2 relative items-end">
+                 <div className="relative flex-1">
+                    <input 
+                        className={`w-full border dark:border-slate-700 p-4 pr-12 rounded-xl outline-none focus:ring-2 shadow-sm transition-all ${
+                            isChatListening 
+                            ? 'bg-red-50 border-red-200 text-red-700 focus:ring-red-500 placeholder:text-red-300' 
+                            : 'bg-slate-50 dark:bg-slate-800 dark:text-white focus:ring-brand-teal'
+                        }`} 
+                        value={chatInput} 
+                        onChange={e=>setChatInput(e.target.value)} 
+                        placeholder={isChatListening ? "Escuchando tu pregunta..." : "Pregunta al asistente..."}
+                    />
+                    {/* Botón de Micrófono dentro del input */}
+                    <button 
+                        type="button"
+                        onClick={handleToggleChatRecording}
+                        className={`absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-lg transition-all ${
+                            isChatListening 
+                            ? 'bg-red-500 text-white animate-pulse shadow-red-200 shadow-lg scale-110' 
+                            : 'text-slate-400 hover:text-slate-600 hover:bg-slate-200 dark:hover:bg-slate-700'
+                        }`}
+                    >
+                        {isChatListening ? <Square size={16} fill="currentColor"/> : <Mic size={18}/>}
+                    </button>
+                 </div>
+
+                 <button 
+                    id="chat-submit-btn" // ID necesario para el trigger automático de los chips
+                    type="submit"
+                    disabled={isChatting || !chatInput.trim() || isChatListening} 
+                    className="bg-brand-teal text-white p-4 rounded-xl hover:bg-teal-600 disabled:opacity-50 transition-all hover:scale-105 active:scale-95 shadow-sm h-[58px] w-[58px] flex items-center justify-center"
+                 >
+                    {isChatting ? <RefreshCw className="animate-spin" size={20}/> : <Send size={20}/>}
+                 </button>
+            </form>
       </div>
   );
+  };
 
   const showControlledInput = SPECIALTIES_WITH_CONTROLLED_RX.some(s => 
       selectedSpecialty?.toLowerCase().includes(s.toLowerCase())
@@ -1480,48 +1626,48 @@ const ConsultationView: React.FC = () => {
                                 {activeTab==='record' && generatedNote.soapData && (
                                 <div className="bg-white dark:bg-slate-900 rounded-sm shadow-lg border border-slate-200 dark:border-slate-800 p-8 md:p-12 min-h-full h-fit pb-32 animate-fade-in-up relative">
                                     <div className="relative md:sticky md:top-0 z-20 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm border-b border-slate-100 dark:border-slate-800 pb-4 mb-8 -mx-2 px-2 flex flex-col gap-2">
-                                            <div className="flex justify-between items-start">
-                                                <div>
-                                                    <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Nota de Evolución</h1>
-                                                    <p className="text-sm text-slate-500 dark:text-slate-400 uppercase tracking-wide flex items-center gap-1">
-                                                        <Lock size={12} className="text-green-600"/>
-                                                        {doctorProfile?.specialty || "Cargando..."}
-                                                    </p>
-                                                </div>
-                                                
-                                                <div className="flex flex-col items-end gap-3">
-                                                
-                                                <button 
-                                                    onClick={handleSaveConsultation} 
-                                                    disabled={isSaving} 
-                                                    className="bg-brand-teal text-white px-6 py-2 rounded-lg font-bold flex items-center gap-2 hover:bg-teal-600 shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                                                >
-                                                    {isSaving ? <RefreshCw className="animate-spin" size={16}/> : <Save size={16}/>} 
-                                                    Validar y Guardar
-                                                </button>
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Nota de Evolución</h1>
+                                            <p className="text-sm text-slate-500 dark:text-slate-400 uppercase tracking-wide flex items-center gap-1">
+                                                <Lock size={12} className="text-green-600"/>
+                                                {doctorProfile?.specialty || "Cargando..."}
+                                            </p>
+                                        </div>
+                                        
+                                        <div className="flex flex-col items-end gap-3">
+                                        
+                                        <button 
+                                            onClick={handleSaveConsultation} 
+                                            disabled={isSaving} 
+                                            className="bg-brand-teal text-white px-6 py-2 rounded-lg font-bold flex items-center gap-2 hover:bg-teal-600 shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                            {isSaving ? <RefreshCw className="animate-spin" size={16}/> : <Save size={16}/>} 
+                                            Validar y Guardar
+                                        </button>
 
-                                                <div className="flex items-start justify-end gap-1.5 max-w-xs text-right opacity-60 hover:opacity-100 transition-opacity duration-300 group cursor-help">
-                                                    <ShieldCheck className="w-3 h-3 text-slate-400 mt-[2px] flex-shrink-0 group-hover:text-brand-teal" />
-                                                    <p className="text-[10px] leading-3 text-slate-400 group-hover:text-slate-600 transition-colors">
-                                                    <span className="font-semibold text-brand-teal">VitalScribe AI</span> es una herramienta de soporte. La responsabilidad final del diagnóstico, tratamiento y el uso de los formatos administrativos recae exclusivamente en el médico tratante.
-                                                    </p>
-                                                </div>
-                                                </div>
+                                        <div className="flex items-start justify-end gap-1.5 max-w-xs text-right opacity-60 hover:opacity-100 transition-opacity duration-300 group cursor-help">
+                                            <ShieldCheck className="w-3 h-3 text-slate-400 mt-[2px] flex-shrink-0 group-hover:text-brand-teal" />
+                                            <p className="text-[10px] leading-3 text-slate-400 group-hover:text-slate-600 transition-colors">
+                                            <span className="font-semibold text-brand-teal">VitalScribe AI</span> es una herramienta de soporte. La responsabilidad final del diagnóstico, tratamiento y el uso de los formatos administrativos recae exclusivamente en el médico tratante.
+                                            </p>
+                                        </div>
+                                        </div>
 
-                                            </div>
+                                    </div>
 
-                                            {generatedNote.risk_analysis && (
-                                            <div className="mt-2">
-                                                <RiskBadge 
-                                                level={generatedNote.risk_analysis.level as "Alto" | "Medio" | "Bajo"} 
-                                                reason={generatedNote.risk_analysis.reason} 
-                                                />
-                                            </div>
-                                            )}
+                                    {generatedNote.risk_analysis && (
+                                    <div className="mt-2">
+                                        <RiskBadge 
+                                        level={generatedNote.risk_analysis.level as "Alto" | "Medio" | "Bajo"} 
+                                        reason={generatedNote.risk_analysis.reason} 
+                                        />
+                                    </div>
+                                    )}
 
-                                            <div className="text-xs font-bold text-slate-800 dark:text-slate-200 self-end">
-                                                {selectedPatient?.name || "Paciente no registrado"}
-                                            </div>
+                                    <div className="text-xs font-bold text-slate-800 dark:text-slate-200 self-end">
+                                        {selectedPatient?.name || "Paciente no registrado"}
+                                    </div>
                                     </div>
 
                                     {generatedNote.conversation_log && generatedNote.conversation_log.length > 0 && (
@@ -1682,7 +1828,7 @@ const ConsultationView: React.FC = () => {
                                                                         onChange={(e) => setSpecialFolio(e.target.value)}
                                                                     />
                                                                     <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-slate-800 text-white text-[10px] rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
-                                                                                Solo para Fracción I / II
+                                                                            Solo para Fracción I / II
                                                                     </div>
                                                                 </div>
                                                             </div>
@@ -1757,7 +1903,7 @@ const ConsultationView: React.FC = () => {
                                                                                     />
                                                                                     {isRisky && (
                                                                                         <div className="absolute right-0 top-1/2 -translate-y-1/2 text-amber-500 cursor-help" title={`Precaución: Posible interacción detectada en análisis clínico.`}>
-                                                                                                        <AlertCircle size={16}/>
+                                                                                                <AlertCircle size={16}/>
                                                                                         </div>
                                                                                     )}
                                                                                 </div>
