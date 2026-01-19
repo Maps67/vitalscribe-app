@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom'; // ✅ Importado para la redirección
 import { 
   Search, UserPlus, FileText, Trash2, Edit2, Eye, Calendar, 
   Share2, Download, FolderOpen, Paperclip, MoreVertical, X, 
-  FileCode, Phone, Pill, ChevronDown, ChevronUp, AlertTriangle, MessageCircle, Sparkles, CheckSquare, Square
+  FileCode, Phone, Pill, ChevronDown, ChevronUp, AlertTriangle, MessageCircle, Sparkles, CheckSquare, Square,
+  Scissors // ✅ Icono de Cirugía importado
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Patient, DoctorProfile, PatientInsight } from '../types';
@@ -19,7 +21,7 @@ import { InsightsPanel } from './InsightsPanel';
 import PatientDashboard from './PatientDashboard'; 
 import { GeminiMedicalService } from '../services/GeminiMedicalService'; 
 import { MedicalDataService } from '../services/MedicalDataService';
-import DataExportModal from './DataExportModal'; // ✅ INTEGRACIÓN 1: Importar Modal
+import DataExportModal from './DataExportModal'; 
 
 interface PatientData extends Omit<Partial<Patient>, 'age'> {
   id: string;
@@ -41,7 +43,26 @@ interface ConsultationRecord {
     transcript: string;
 }
 
+// ✅ LISTA BLANCA DE ESPECIALIDADES QUIRÚRGICAS (Mismo criterio que ConsultationView)
+const SURGICAL_SPECIALTIES = [
+  'Cirugía General',
+  'Cirugía Cardiotorácica',
+  'Cirugía de Columna',
+  'Cirugía de Mano',
+  'Cirugía Oncológica',
+  'Cirugía Pediátrica',
+  'Cirugía Plástica y Reconstructiva',
+  'Ginecología y Obstetricia',
+  'Neurocirugía',
+  'Oftalmología',
+  'Otorrinolaringología',
+  'Traumatología y Ortopedia',
+  'Traumatología: Artroscopia',
+  'Urología'
+];
+
 const PatientsView: React.FC = () => {
+  const navigate = useNavigate(); // ✅ Hook para navegación
   const [patients, setPatients] = useState<PatientData[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
     
@@ -64,6 +85,14 @@ const PatientsView: React.FC = () => {
 
   // ✅ INTEGRACIÓN 2: Estado para controlar el Modal de Exportación
   const [showExportModal, setShowExportModal] = useState(false);
+
+  // ✅ DETECCIÓN DE PERFIL QUIRÚRGICO
+  const isSurgicalProfile = useMemo(() => {
+    if (!doctorProfile?.specialty) return false;
+    return SURGICAL_SPECIALTIES.some(s => 
+      doctorProfile.specialty.toLowerCase().includes(s.toLowerCase())
+    );
+  }, [doctorProfile]);
 
   useEffect(() => {
     fetchPatients();
@@ -239,6 +268,17 @@ const PatientsView: React.FC = () => {
           phone: patient.phone,
           gender: patient.gender,
           age: patient.age
+      });
+  };
+
+  // ✅ ACCIÓN DE REDIRECCIÓN QUIRÚRGICA DIRECTA
+  const handleSurgicalDirect = (patient: PatientData) => {
+      // Navegamos a Consulta enviando un estado especial "mode: surgical_direct"
+      navigate('/consultation', { 
+          state: { 
+              patientData: patient,
+              mode: 'surgical_direct' 
+          } 
       });
   };
 
@@ -419,6 +459,18 @@ const PatientsView: React.FC = () => {
                   </td>
                   <td className="p-4 relative text-center">
                     <div className="flex justify-center gap-2">
+                          
+                          {/* ✅ BOTÓN DE CIRUGÍA (SOLO CIRUJANOS - ESCRITORIO) */}
+                          {isSurgicalProfile && (
+                              <button 
+                                onClick={() => handleSurgicalDirect(patient)} 
+                                className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" 
+                                title="Reporte Quirúrgico Directo"
+                              >
+                                  <Scissors size={18}/>
+                              </button>
+                          )}
+
                           <button onClick={() => handleLoadInsights(patient)} className="p-2 text-indigo-500 hover:bg-indigo-50 rounded-lg transition-colors" title="Balance 360°"><Sparkles size={18}/></button>
                           
                           {/* BOTÓN DESCARGA (ESCRITORIO) */}
@@ -475,6 +527,17 @@ const PatientsView: React.FC = () => {
 
                     {isExpanded && (
                         <div className="px-4 animate-fade-in-down ml-8">
+                            
+                            {/* ✅ BOTÓN DE ACCESO RÁPIDO A CIRUGÍA (DESTACADO EN MÓVIL SI ES CIRUJANO) */}
+                            {isSurgicalProfile && (
+                                <button 
+                                    onClick={(e) => { e.stopPropagation(); handleSurgicalDirect(patient); }}
+                                    className="w-full mb-2 py-2.5 bg-indigo-600 text-white shadow-lg shadow-indigo-500/30 rounded-xl text-xs font-bold flex items-center justify-center gap-2 hover:bg-indigo-700 transition-colors"
+                                >
+                                    <Scissors size={16} /> Crear Reporte Quirúrgico
+                                </button>
+                            )}
+
                             <button 
                                 onClick={(e) => { e.stopPropagation(); handleLoadInsights(patient); }}
                                 className="w-full mb-2 py-2 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-800 rounded-xl text-xs font-bold flex items-center justify-center gap-2 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors"
@@ -482,7 +545,7 @@ const PatientsView: React.FC = () => {
                                 <Sparkles size={16} /> Ver Balance Clínico 360°
                             </button>
 
-                            {/* GRID DE ACCIONES MÓVIL (Ajustado a 5 columnas para incluir descarga) */}
+                            {/* GRID DE ACCIONES MÓVIL */}
                             <div className="grid grid-cols-5 gap-2 mb-3">
                                 <button onClick={(e) => { e.stopPropagation(); handleCall(patient.phone); }} disabled={!patient.phone} className={`flex flex-col items-center justify-center py-2 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl shadow-sm active:scale-95 transition-all ${!patient.phone && 'opacity-50 grayscale'}`}>
                                     <Phone size={18} className="text-slate-600 dark:text-slate-300 mb-1" /><span className="text-[8px] font-bold text-slate-500 dark:text-slate-400">Llamar</span>

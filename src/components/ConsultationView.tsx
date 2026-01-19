@@ -443,6 +443,11 @@ const ConsultationView: React.FC = () => {
                 if (location.state.linkedAppointmentId) {
                     setLinkedAppointmentId(location.state.linkedAppointmentId);
                 }
+
+                // 👇 AQUÍ ESTÁ EL CAMBIO CRÍTICO: DETECTAR MODO QUIRÚRGICO DIRECTO 👇
+                if (location.state.mode === 'surgical_direct') {
+                    setActiveTab('surgical_report');
+                }
                 
                 window.history.replaceState({}, document.title);
             }
@@ -1616,7 +1621,7 @@ const ConsultationView: React.FC = () => {
       {/* Antes: Solo se mostraba si !generatedNote no era true (o sea, si había nota). */}
       {/* Ahora: Se muestra si hay nota generada O si hay paciente seleccionado. */}
       {/* Esto permite ver el panel derecho (donde están las tabs) aunque no haya nota. */}
-      <div className={`flex-1 flex w-full md:w-3/4 overflow-hidden ${(!generatedNote && !selectedPatient) ? 'hidden md:flex' : 'flex'}`}>
+      <div className={`flex-1 flex w-full md:w-3/4 overflow-hidden ${(!generatedNote && activeTab !== 'surgical_report') ? 'hidden md:flex' : 'flex'}`}>
           <div className="flex-1 flex flex-col bg-slate-100 dark:bg-slate-950 border-l dark:border-slate-800 min-w-0 relative">
                 
                 {/* 🛑 ELIMINADO DE AQUÍ (ZONA DE RIESGO DE OCULTAMIENTO) */}
