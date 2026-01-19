@@ -206,6 +206,12 @@ const SmartBriefingWidget: React.FC<SmartBriefingProps> = ({
                            <Zap size={16} className="text-yellow-300 fill-yellow-300 shrink-0"/> 
                            <span>{challenge.answer}</span>
                          </div>
+                         
+                         {/* LEYENDA CORREGIDA: Fuera del div flex, pero dentro del contenedor desplegable */}
+                         <p className="text-[9px] text-indigo-200/60 mt-2 text-center font-medium tracking-wide">
+                            * Generado por IA. Requiere verificación clínica.
+                         </p>
+
                       </div>
                    </div>
                    {!showAnswer && !loadingChallenge && (
