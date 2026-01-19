@@ -1612,7 +1612,11 @@ const ConsultationView: React.FC = () => {
         onTriggerInterconsultation={handleSidebarInterconsultation} 
       />
       
-      <div className={`flex-1 flex w-full md:w-3/4 overflow-hidden ${!generatedNote?'hidden md:flex':'flex'}`}>
+      {/* ⚠️ CORRECCIÓN CLAVE AQUÍ ABAJO ⚠️ */}
+      {/* Antes: Solo se mostraba si !generatedNote no era true (o sea, si había nota). */}
+      {/* Ahora: Se muestra si hay nota generada O si hay paciente seleccionado. */}
+      {/* Esto permite ver el panel derecho (donde están las tabs) aunque no haya nota. */}
+      <div className={`flex-1 flex w-full md:w-3/4 overflow-hidden ${(!generatedNote && !selectedPatient) ? 'hidden md:flex' : 'flex'}`}>
           <div className="flex-1 flex flex-col bg-slate-100 dark:bg-slate-950 border-l dark:border-slate-800 min-w-0 relative">
                 
                 {/* 🛑 ELIMINADO DE AQUÍ (ZONA DE RIESGO DE OCULTAMIENTO) */}
