@@ -65,7 +65,7 @@ export const PatientWizard: React.FC<PatientWizardProps> = ({ initialData, onClo
   // Inicialización Segura
   const [formData, setFormData] = useState<WizardData>({
     name: '', dob: '', age: '', 
-    gender: '', // <--- CAMBIO CLAVE: Inicia vacío para obligar selección
+    gender: '', // <--- CAMBIO CLAVE: Inicia vacío, pero ya no bloqueará el guardado
     curp: '', bloodType: '', 
     maritalStatus: 'Soltero/a',
     phone: '', email: '', address: '', occupation: '', emergencyContact: '',
@@ -126,16 +126,17 @@ export const PatientWizard: React.FC<PatientWizardProps> = ({ initialData, onClo
   const validateAndSave = async () => {
     const newErrors: { [key: string]: boolean } = {};
     
-    // Validaciones NOM-004 Básicas
+    // --- PROTOCOLO DE URGENCIA ACTIVADO ---
+    // Única validación estricta: El nombre.
     if (!formData.name.trim()) newErrors.name = true;
     
-    // VALIDACIÓN ESTRICTA DE GÉNERO
-    if (!formData.gender) newErrors.gender = true;
+    // NOTA: Se eliminó la validación estricta de género.
+    // if (!formData.gender) newErrors.gender = true; <-- LÍNEA ELIMINADA PARA PERMITIR GUARDADO RÁPIDO
     
     // Validación visual
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
-      toast.error("Complete los campos obligatorios marcados en rojo.");
+      toast.error("El nombre del paciente es obligatorio.");
       setActiveTab('general');
       return;
     }
@@ -157,6 +158,8 @@ export const PatientWizard: React.FC<PatientWizardProps> = ({ initialData, onClo
     const cleanData: WizardData = {
         ...formData,
         name: formData.name.trim(),
+        // Fallback seguro: Si no seleccionó género, enviamos 'No especificado' para evitar error en DB
+        gender: formData.gender || 'No especificado', 
         curp: formData.curp.trim().toUpperCase(),
         email: formData.email.trim().toLowerCase(),
         phone: formData.phone.trim(),
@@ -204,7 +207,7 @@ export const PatientWizard: React.FC<PatientWizardProps> = ({ initialData, onClo
             {initialData ? 'Editar Expediente' : 'Alta de Paciente'}
           </h2>
           <p className="text-xs text-slate-400 mt-1 ml-12 font-medium tracking-wide">
-            Cumplimiento NOM-004-SSA3-2012
+            Modo Rápido Habilitado - NOM-004 Compatible
           </p>
         </div>
         <button onClick={onClose} className="p-2 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-full text-slate-400 hover:text-red-500 transition-colors">
@@ -261,7 +264,7 @@ export const PatientWizard: React.FC<PatientWizardProps> = ({ initialData, onClo
 
                         {/* Género (CORREGIDO PARA OBLIGAR SELECCIÓN) */}
                         <div className="md:col-span-4">
-                            <label className={LABEL_CLASS}>Género <span className="text-red-500">*</span></label>
+                            <label className={LABEL_CLASS}>Género</label>
                             <select 
                                 className={`${INPUT_CLASS} ${!formData.gender ? 'text-slate-400' : ''} ${errors.gender ? INPUT_ERROR_CLASS : ''}`} 
                                 value={formData.gender} 
