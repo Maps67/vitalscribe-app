@@ -65,7 +65,7 @@ export const PatientWizard: React.FC<PatientWizardProps> = ({ initialData, onClo
   // Inicialización Segura
   const [formData, setFormData] = useState<WizardData>({
     name: '', dob: '', age: '', 
-    gender: '', // <--- CAMBIO CLAVE: Inicia vacío, pero ya no bloqueará el guardado
+    gender: '', 
     curp: '', bloodType: '', 
     maritalStatus: 'Soltero/a',
     phone: '', email: '', address: '', occupation: '', emergencyContact: '',
@@ -74,6 +74,13 @@ export const PatientWizard: React.FC<PatientWizardProps> = ({ initialData, onClo
     notes: '',
     insurance: '', rfc: '', invoice: false, patientType: 'Nuevo', referral: ''
   });
+
+  // UTILERÍA: Sanitización estricta para evitar el error "value prop on input should not be null"
+  // Convierte cualquier null/undefined entrante en una cadena vacía segura.
+  const safeValue = (val: any): string => {
+    if (val === null || val === undefined) return '';
+    return String(val);
+  };
 
   // Carga de datos iniciales con parseo seguro de historial
   useEffect(() => {
@@ -88,17 +95,37 @@ export const PatientWizard: React.FC<PatientWizardProps> = ({ initialData, onClo
         console.warn("Error parsing patient history JSON:", e);
       }
 
+      // CORRECCIÓN DEFINITIVA: Usamos safeValue() en CADA campo.
+      // Esto previene que 'null' entre al estado y cause el crash de .trim() más adelante.
       setFormData(prev => ({
         ...prev,
-        ...initialData,
-        // Si ya trae género (edición), lo usamos. Si es nuevo, vacío.
-        gender: initialData.gender || '', 
-        // Prioridad: Dato explícito > Dato del JSON > String vacío
-        pathological: typeof initialData.pathological === 'string' ? initialData.pathological : (parsedHistory.pathological || ''),
-        nonPathological: typeof initialData.nonPathological === 'string' ? initialData.nonPathological : (parsedHistory.nonPathological || ''),
-        family: typeof initialData.family === 'string' ? initialData.family : (parsedHistory.family || ''),
-        obgyn: typeof initialData.obgyn === 'string' ? initialData.obgyn : (parsedHistory.obgyn || ''),
-        allergies: typeof initialData.allergies === 'string' ? initialData.allergies : (parsedHistory.allergies || '')
+        // Campos directos
+        name: safeValue(initialData.name),
+        dob: safeValue(initialData.dob),
+        age: safeValue(initialData.age),
+        gender: safeValue(initialData.gender),
+        curp: safeValue(initialData.curp),
+        bloodType: safeValue(initialData.bloodType),
+        maritalStatus: safeValue(initialData.maritalStatus) || 'Soltero/a',
+        phone: safeValue(initialData.phone),
+        email: safeValue(initialData.email),
+        address: safeValue(initialData.address),
+        occupation: safeValue(initialData.occupation),
+        emergencyContact: safeValue(initialData.emergencyContact),
+        notes: safeValue(initialData.notes),
+        insurance: safeValue(initialData.insurance),
+        rfc: safeValue(initialData.rfc),
+        patientType: safeValue(initialData.patientType) || 'Nuevo',
+        referral: safeValue(initialData.referral),
+        invoice: initialData.invoice || false,
+
+        // Campos anidados o del historial
+        pathological: safeValue(initialData.pathological || parsedHistory.pathological),
+        nonPathological: safeValue(initialData.nonPathological || parsedHistory.nonPathological),
+        family: safeValue(initialData.family || parsedHistory.family),
+        obgyn: safeValue(initialData.obgyn || parsedHistory.obgyn),
+        allergies: safeValue(initialData.allergies || parsedHistory.allergies),
+        nonCriticalAllergies: safeValue(initialData.nonCriticalAllergies || parsedHistory.nonCriticalAllergies)
       }));
     }
   }, [initialData]);
@@ -116,7 +143,6 @@ export const PatientWizard: React.FC<PatientWizardProps> = ({ initialData, onClo
   }, [formData.dob]);
 
   const handleChange = (field: keyof WizardData, value: any) => {
-    // BLINDAJE 1: Mayúsculas forzadas en tiempo real para identificadores únicos
     if (field === 'curp' || field === 'rfc') value = value.toUpperCase().trim();
     
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -127,11 +153,10 @@ export const PatientWizard: React.FC<PatientWizardProps> = ({ initialData, onClo
     const newErrors: { [key: string]: boolean } = {};
     
     // --- PROTOCOLO DE URGENCIA ACTIVADO ---
-    // Única validación estricta: El nombre.
-    if (!formData.name.trim()) newErrors.name = true;
+    // Usamos safeValue aquí también por doble seguridad para evitar crash de .trim()
+    const safeName = safeValue(formData.name);
     
-    // NOTA: Se eliminó la validación estricta de género.
-    // if (!formData.gender) newErrors.gender = true; <-- LÍNEA ELIMINADA PARA PERMITIR GUARDADO RÁPIDO
+    if (!safeName.trim()) newErrors.name = true;
     
     // Validación visual
     if (Object.keys(newErrors).length > 0) {
@@ -143,7 +168,7 @@ export const PatientWizard: React.FC<PatientWizardProps> = ({ initialData, onClo
 
     setIsSaving(true);
     
-    // BLINDAJE 2: Empaquetado de Datos Clínicos (JSON History)
+    // Empaquetado de Datos Clínicos
     const clinicalData = {
       allergies: formData.allergies,
       nonCriticalAllergies: formData.nonCriticalAllergies,
@@ -154,16 +179,19 @@ export const PatientWizard: React.FC<PatientWizardProps> = ({ initialData, onClo
       bloodType: formData.bloodType
     };
 
-    // BLINDAJE 3: Sanitización final y Construcción del Payload
+    // CORRECCIÓN DEL ERROR 409 (Duplicados en DB):
+    // Si el campo está vacío, enviamos NULL, no string vacío "".
+    // Esto permite guardar múltiples pacientes sin CURP/Email sin que la DB marque error de unicidad.
     const cleanData: WizardData = {
         ...formData,
         name: formData.name.trim(),
-        // Fallback seguro: Si no seleccionó género, enviamos 'No especificado' para evitar error en DB
         gender: formData.gender || 'No especificado', 
-        curp: formData.curp.trim().toUpperCase(),
-        email: formData.email.trim().toLowerCase(),
-        phone: formData.phone.trim(),
-        // Inyectamos el JSON string para que el backend lo reciba correctamente
+        
+        // Lógica NULL-IF-EMPTY para evitar conflictos de constraint Unique
+        curp: formData.curp.trim() === '' ? (null as any) : formData.curp.trim().toUpperCase(),
+        email: formData.email.trim() === '' ? (null as any) : formData.email.trim().toLowerCase(),
+        phone: formData.phone.trim() === '' ? (null as any) : formData.phone.trim(),
+        
         history: JSON.stringify(clinicalData)
     };
 
@@ -172,11 +200,10 @@ export const PatientWizard: React.FC<PatientWizardProps> = ({ initialData, onClo
     } catch (e: any) {
       console.error("Error al guardar paciente (Wizard Catch):", e);
       
-      // BLINDAJE 4: Manejo específico del error 409 (Duplicado)
       if (e?.code === '23505' || e?.status === 409 || e?.message?.includes('duplicate') || e?.details?.includes('already exists')) {
           toast.error("⚠️ PACIENTE DUPLICADO: Ya existe un registro con este CURP, Email o Teléfono.");
           
-          if (cleanData.curp) {
+          if (formData.curp) {
               setErrors(prev => ({ ...prev, curp: true }));
               setActiveTab('general');
           }
