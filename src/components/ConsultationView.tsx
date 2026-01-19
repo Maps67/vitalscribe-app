@@ -1630,6 +1630,7 @@ const ConsultationView: React.FC = () => {
                     })}
                     
                     {/* 🔥 NUEVO: BOTÓN EXCLUSIVO PARA CIRUJANOS 🔥 */}
+                    {/* 👇 CAMBIO APLICADO AQUÍ: SE MUESTRA SI HAY PERFIL QX Y PACIENTE SELECCIONADO, SIN DEPENDER DE NOTA GENERADA */}
                     {isSurgicalProfile && selectedPatient && (
                        <button 
                            onClick={() => setActiveTab('surgical_report' as any)}
@@ -1663,6 +1664,7 @@ const ConsultationView: React.FC = () => {
                         <div className="min-h-full flex flex-col max-w-4xl mx-auto w-full gap-4 relative pb-8">
                                 
                                 {/* --- VISTA DE REPORTE QUIRÚRGICO --- */}
+                                {/* 👇 CAMBIO APLICADO AQUÍ: Muestra la vista si el tab está activo, aunque no haya nota generada */}
                                 {activeTab === 'surgical_report' && isSurgicalProfile && (
                                     <div className="animate-fade-in-up h-full">
                                         <SurgicalReportView 
@@ -1672,7 +1674,7 @@ const ConsultationView: React.FC = () => {
                                     </div>
                                 )}
 
-                                {activeTab==='record' && generatedNote.soapData && (
+                                {activeTab==='record' && generatedNote?.soapData && (
                                 <div className="bg-white dark:bg-slate-900 rounded-sm shadow-lg border border-slate-200 dark:border-slate-800 p-8 md:p-12 min-h-full h-fit pb-32 animate-fade-in-up relative">
                                     <div className="relative md:sticky md:top-0 z-20 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm border-b border-slate-100 dark:border-slate-800 pb-4 mb-8 -mx-2 px-2 flex flex-col gap-2">
                                     <div className="flex justify-between items-start">
@@ -1819,7 +1821,7 @@ const ConsultationView: React.FC = () => {
                                 </div>
                                 )}
 
-                                {activeTab==='record' && !generatedNote.soapData && generatedNote.clinicalNote && (
+                                {activeTab==='record' && generatedNote && !generatedNote.soapData && generatedNote.clinicalNote && (
                                     <div className="bg-white dark:bg-slate-900 p-8 rounded-xl shadow-sm h-full flex flex-col border dark:border-slate-800 overflow-hidden">
                                             <div className="bg-yellow-50 text-yellow-800 p-2 text-sm rounded mb-2 dark:bg-yellow-900/30 dark:text-yellow-200">Formato antiguo.</div>
                                             <div className="flex-1 overflow-y-auto pr-4 custom-scrollbar"><FormattedText content={generatedNote.clinicalNote}/></div>
