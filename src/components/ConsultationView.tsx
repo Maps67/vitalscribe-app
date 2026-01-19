@@ -7,7 +7,7 @@ import {
   ChevronDown, ChevronUp, Sparkles, PenLine, UserPlus, 
   ShieldCheck, AlertCircle, RefreshCw, Pill, Plus, Building2,
   Activity, ClipboardList, Scissors, Microscope, Eye, Lock,
-  Mic, Square // <--- [NUEVO] Iconos agregados para el micrófono del chat
+  Mic, Square 
 } from 'lucide-react';
 
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition'; 
@@ -21,7 +21,6 @@ import PrescriptionPDF from './PrescriptionPDF';
 import MedicalRecordPDF from './MedicalRecordPDF'; 
 import { AppointmentService } from '../services/AppointmentService';
 import { PatientService } from '../services/PatientService'; 
-// ✅ INYECCIÓN 1: Importar el hook de autoguardado
 import { useMedicalAutoSave } from '../hooks/useMedicalAutoSave';
 import QuickRxModal from './QuickRxModal';
 import { DoctorFileGallery } from './DoctorFileGallery';
@@ -36,9 +35,9 @@ import { ContextualInsights } from './ContextualInsights';
 import { PatientBriefing } from './Consultation/PatientBriefing'; 
 import SurgicalLeaveGenerator, { GeneratedLeaveData } from './SurgicalLeaveGenerator';
 import SurgicalLeavePDF from './SurgicalLeavePDF';
-import { SurgicalReportView } from './SurgicalReportView'; // <--- NUEVO COMPONENTE
+import { SurgicalReportView } from './SurgicalReportView'; 
 
-type TabType = 'record' | 'patient' | 'chat' | 'insurance' | 'surgical_report'; // <--- TIPO ACTUALIZADO
+type TabType = 'record' | 'patient' | 'chat' | 'insurance' | 'surgical_report';
 
 interface EnhancedGeminiResponse extends GeminiResponse {
    prescriptions?: MedicationItem[];
@@ -50,7 +49,6 @@ interface TranscriptSegment {
    timestamp: number;
 }
 
-// Estructura para el Snapshot de Seguridad
 interface SessionSnapshot {
    inputSignature: string;
    data: EnhancedGeminiResponse;
@@ -89,7 +87,6 @@ const SPECIALTIES = [
   "Urgencias Médicas"
 ];
 
-// --- Feature: Folio Controlado (Lista Blanca de Especialidades) ---
 const SPECIALTIES_WITH_CONTROLLED_RX = [
     'Psiquiatría',
     'Neurología',
@@ -101,7 +98,6 @@ const SPECIALTIES_WITH_CONTROLLED_RX = [
     'Cirugía Oncológica'
 ];
 
-// --- Feature: Reporte Quirúrgico (Lista Blanca de Especialidades Qx) ---
 const SURGICAL_SPECIALTIES = [
   'Cirugía General',
   'Cirugía Cardiotorácica',
@@ -145,7 +141,6 @@ const cleanHistoryString = (input: any): string => {
 };
 
 const ConsultationView: React.FC = () => {
-  // --- [MOTOR 1] NOTA CLÍNICA (CANAL PRINCIPAL) ---
   const { 
       isListening, 
       isPaused, 
@@ -159,7 +154,6 @@ const ConsultationView: React.FC = () => {
       isAPISupported 
   } = useSpeechRecognition();
   
-  // --- [MOTOR 2] CHAT ASISTENTE (CANAL SECUNDARIO AISLADO) ---
   const {
       isListening: isChatListening,
       transcript: chatTranscript,
@@ -168,7 +162,6 @@ const ConsultationView: React.FC = () => {
       resetTranscript: resetChatTranscript
   } = useSpeechRecognition();
 
-  // Sincronización del Chat (Canal B)
   useEffect(() => {
       if (isChatListening && chatTranscript) {
           setChatInput(chatTranscript);
@@ -199,20 +192,17 @@ const ConsultationView: React.FC = () => {
   
   const [generatedNote, setGeneratedNote] = useState<EnhancedGeminiResponse | null>(null);
   
-  // --- NUEVO ESTADO: SNAPSHOT DE SESIÓN (Inmutabilidad) ---
   const [sessionSnapshot, setSessionSnapshot] = useState<SessionSnapshot | null>(null);
 
   const [consentGiven, setConsentGiven] = useState(false);
   const [activeTab, setActiveTab] = useState<TabType>('record');
   
-  // Este estado se mantiene para sincronizar el dropdown visual, pero NO afecta la lógica legal
   const [selectedSpecialty, setSelectedSpecialty] = useState('Medicina General');
   
   const [editableInstructions, setEditableInstructions] = useState('');
   const [editablePrescriptions, setEditablePrescriptions] = useState<MedicationItem[]>([]);
   const [isEditingInstructions, setIsEditingInstructions] = useState(false);
 
-  // --- Feature: Folio Controlado (Estado Local) ---
   const [specialFolio, setSpecialFolio] = useState('');
   
   const [insuranceData, setInsuranceData] = useState<{provider: string, policyNumber: string, accidentDate: string} | null>(null);
@@ -240,10 +230,8 @@ const ConsultationView: React.FC = () => {
   const [segments, setSegments] = useState<TranscriptSegment[]>([]);
   const [activeSpeaker, setActiveSpeaker] = useState<'doctor' | 'patient'>('doctor');
 
-  // ✅ INYECCIÓN 2: Inicializar el hook de autoguardado
   const { saveData, loadData, clearData } = useMedicalAutoSave(currentUserId);
 
-  // --- NUEVOS ESTADOS: BRIEFING & MANUAL CONTEXT ---
   const [clinicalInsights, setClinicalInsights] = useState<ClinicalInsight[]>([]);
   const [loadingClinicalInsights, setLoadingClinicalInsights] = useState(false);
   
@@ -252,7 +240,6 @@ const ConsultationView: React.FC = () => {
 
   const [isSurgicalModalOpen, setIsSurgicalModalOpen] = useState(false);
 
-  // --- [NUEVO BLINDAJE] ESTADOS DE INTERCONSULTA ---
   const [isInterconsultationOpen, setIsInterconsultationOpen] = useState(false);
   const [interconsultationSpecialty, setInterconsultationSpecialty] = useState('Medicina Interna');
   const [interconsultationResult, setInterconsultationResult] = useState<string | null>(null);
@@ -267,7 +254,6 @@ const ConsultationView: React.FC = () => {
 
   const lastAnalyzedRef = useRef<string>("");
 
-  // --- [NUEVO] DETECCIÓN DE PERFIL QUIRÚRGICO ---
   const isSurgicalProfile = useMemo(() => {
     if (!doctorProfile?.specialty) return false;
     return SURGICAL_SPECIALTIES.some(s => 
@@ -295,26 +281,21 @@ const ConsultationView: React.FC = () => {
     };
   }, []);
 
-  // ✅ INYECCIÓN 3: Efecto de Restauración (Rehidratación)
   useEffect(() => {
     if (currentUserId && !transcript && !generatedNote) {
       const savedData = loadData();
       if (savedData) {
-        // Restauramos todo el estado perdido
         setTranscript(savedData.transcript || '');
         setGeneratedNote(savedData.generatedNote);
         setEditableInstructions(savedData.editableInstructions || '');
         setEditablePrescriptions(savedData.editablePrescriptions || []);
         setActiveSpeaker(savedData.activeSpeaker || 'doctor');
-        
         toast.info("🔄 Sesión restaurada: Se recuperaron tus datos no guardados.");
       }
     }
   }, [currentUserId]);
 
-  // ✅ INYECCIÓN 4: Efecto de Vigilancia (Autoguardado)
   useEffect(() => {
-    // Solo guardamos si hay algo relevante que guardar
     if (transcript || generatedNote || editableInstructions || editablePrescriptions.length > 0) {
       const timer = setTimeout(() => {
         saveData({
@@ -324,13 +305,12 @@ const ConsultationView: React.FC = () => {
           editablePrescriptions,
           activeSpeaker
         });
-      }, 2000); // Guardar 2 segundos después de dejar de escribir (Debounce)
+      }, 2000); 
 
       return () => clearTimeout(timer);
     }
   }, [transcript, generatedNote, editableInstructions, editablePrescriptions, activeSpeaker, saveData]);
 
-  // --- MODIFICACIÓN 2: Efecto de Sincronización con "Pausa Inteligente" (Debounce) ---
   useEffect(() => {
     if (!generatedNote || (!generatedNote.soapData && !generatedNote.clinicalNote)) {
         setClinicalInsights([]);
@@ -369,6 +349,7 @@ const ConsultationView: React.FC = () => {
 
   }, [generatedNote, selectedSpecialty]); 
 
+  // --- ⚠️ AQUÍ ESTÁ LA CORRECCIÓN CRÍTICA ⚠️ ---
   useEffect(() => {
     let mounted = true;
     const loadInitialData = async () => {
@@ -421,6 +402,7 @@ const ConsultationView: React.FC = () => {
 
             if (location.state?.patientData) {
                 const incoming = location.state.patientData;
+                const isSurgicalDirect = location.state.mode === 'surgical_direct'; // Detectamos modo directo
                 
                 if (incoming.isGhost) {
                       const tempPatient = {
@@ -429,24 +411,25 @@ const ConsultationView: React.FC = () => {
                           isTemporary: true, 
                           appointmentId: incoming.appointmentId || incoming.id.replace('ghost_', '')
                       };
-                      handleSelectPatient(tempPatient);
+                      handleSelectPatient(tempPatient, isSurgicalDirect); // Pasamos flag para silenciar briefing
                       if(incoming.appointmentId) setLinkedAppointmentId(incoming.appointmentId);
-                      toast.info(`Iniciando consulta para: ${incoming.name}`);
+                      if(!isSurgicalDirect) toast.info(`Iniciando consulta para: ${incoming.name}`);
                 } else {
                       const realPatient = loadedPatients.find(p => p.id === incoming.id);
-                      if (realPatient) handleSelectPatient(realPatient);
-                      else handleSelectPatient(incoming); 
+                      if (realPatient) handleSelectPatient(realPatient, isSurgicalDirect); // Pasamos flag
+                      else handleSelectPatient(incoming, isSurgicalDirect); 
                       
-                      toast.success(`Paciente cargado: ${incoming.name}`);
+                      if(!isSurgicalDirect) toast.success(`Paciente cargado: ${incoming.name}`);
                 }
 
                 if (location.state.linkedAppointmentId) {
                     setLinkedAppointmentId(location.state.linkedAppointmentId);
                 }
 
-                // 👇 AQUÍ ESTÁ EL CAMBIO CRÍTICO: DETECTAR MODO QUIRÚRGICO DIRECTO 👇
-                if (location.state.mode === 'surgical_direct') {
+                // 👇 FUERZA BRUTA: SI ES QUIRÚRGICO, MATAMOS EL BRIEFING Y CAMBIAMOS TAB 👇
+                if (isSurgicalDirect) {
                     setActiveTab('surgical_report');
+                    setShowBriefing(false); // <--- ESTO ES LO QUE FALTABA
                 }
                 
                 window.history.replaceState({}, document.title);
@@ -661,7 +644,8 @@ const ConsultationView: React.FC = () => {
       setActiveSpeaker(newRole);
   };
 
-  const handleSelectPatient = async (patient: any) => {
+  // ✅ CORRECCIÓN: Agregar parámetro opcional 'skipBriefing'
+  const handleSelectPatient = async (patient: any, skipBriefing = false) => {
       setManualContext("");
       setSessionSnapshot(null);
       
@@ -676,14 +660,14 @@ const ConsultationView: React.FC = () => {
           if (patient.appointmentId) setLinkedAppointmentId(patient.appointmentId);
           toast.info(`Paciente temporal: ${patient.name} (Se registrará al guardar)`);
           
-          setShowBriefing(true); 
+          if (!skipBriefing) setShowBriefing(true); 
       } 
       else {
           setSelectedPatient(patient);
           setSearchTerm(''); 
           setIsMobileSnapshotVisible(true); 
           
-          setShowBriefing(true); // <--- UI OPTIMISTA: INICIO INMEDIATO
+          if (!skipBriefing) setShowBriefing(true); // <--- CONDICIONAL APLICADA
 
           try {
               const loadingHistory = toast.loading("Sincronizando historial...");
@@ -1624,8 +1608,8 @@ const ConsultationView: React.FC = () => {
       <div className={`flex-1 flex w-full md:w-3/4 overflow-hidden ${(!generatedNote && activeTab !== 'surgical_report') ? 'hidden md:flex' : 'flex'}`}>
           <div className="flex-1 flex flex-col bg-slate-100 dark:bg-slate-950 border-l dark:border-slate-800 min-w-0 relative">
                 
-                {/* 🛑 ELIMINADO DE AQUÍ (ZONA DE RIESGO DE OCULTAMIENTO) */}
-                {/* {showBriefing && selectedPatient && ( <PatientBriefing ... /> )} */}
+                {/* ✅ SOLUCIÓN: Usamos "showBriefing" en lugar de renderizarlo condicionalmente aquí. */}
+                {/* PatientBriefing se movió al final del archivo como un MODAL, así que no estorba aquí. */}
 
                 <div className="flex border-b dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0 items-center px-2">
                     <button onClick={()=>setGeneratedNote(null)} className="md:hidden p-4 text-slate-500"><ArrowLeft/></button>
