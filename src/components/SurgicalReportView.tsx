@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { 
   Upload, Mic, FileText, X, CheckCircle, ShieldAlert, 
   Scissors, AlertTriangle, Save, RefreshCw, Square, 
-  User, Download, Activity, CalendarDays, FileImage, Music 
+  User, Download, Activity, CalendarDays, FileImage, Music, PenLine 
 } from 'lucide-react'; 
 import { toast } from 'sonner';
 import { GeminiMedicalService } from '../services/GeminiMedicalService';
@@ -31,7 +31,7 @@ export const SurgicalReportView: React.FC<SurgicalReportViewProps> = ({ doctor, 
   // --- ESTADOS PARA NOTA POST-QUIRÚRGICA (OP-SCRIBE) ---
   const [activeTab, setActiveTab] = useState<'dictation' | 'upload'>('dictation');
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
-  const [generatedReport, setGeneratedReport] = useState<string | null>(null);
+  const [generatedReport, setGeneratedReport] = useState<string | null>(null); // ✅ ESTE ES EL CONTENIDO EDITABLE
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   
@@ -53,11 +53,10 @@ export const SurgicalReportView: React.FC<SurgicalReportViewProps> = ({ doctor, 
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
       const allowedTypes = [
-        'audio/mpeg', 'audio/wav', 'audio/x-m4a', 'audio/ogg', 'audio/mp4', 'audio/webm',
+        'audio/mpeg', 'audio/wav', 'audio/x-m4a', 'audio/ogg', 'audio/mp4', 'audio/webm', 'audio/aac',
         'application/pdf', 'text/plain', 'image/jpeg', 'image/png'
       ];
 
-      // Validación laxa para tipos de audio que a veces varían por dispositivo
       const isAudio = file.type.startsWith('audio/');
       
       if (!allowedTypes.includes(file.type) && !isAudio) {
@@ -126,7 +125,7 @@ export const SurgicalReportView: React.FC<SurgicalReportViewProps> = ({ doctor, 
       if(fileInputRef.current) fileInputRef.current.value = "";
       if(audioInputRef.current) audioInputRef.current.value = "";
       
-      toast.success("Reporte Qx generado con éxito.");
+      toast.success("Reporte Qx generado. Puede editarlo ahora.");
 
     } catch (error: any) {
       toast.error(error.message || "Error generando reporte.");
@@ -299,7 +298,7 @@ export const SurgicalReportView: React.FC<SurgicalReportViewProps> = ({ doctor, 
                                         type="file" 
                                         ref={audioInputRef} 
                                         className="hidden" 
-                                        accept="audio/*" // ✅ ESTO FILTRA SOLO AUDIOS
+                                        accept="audio/*,.mp3,.wav,.m4a,.ogg,.mp4,.webm,.aac" // ✅ FIXED: EXPLICIT EXTENSIONS FOR WINDOWS
                                         onChange={handleFileChange}
                                     />
                                     <div className="bg-white dark:bg-slate-800 p-4 rounded-full text-indigo-600 shadow-sm group-hover:scale-110 transition-transform mb-3">
@@ -422,19 +421,31 @@ export const SurgicalReportView: React.FC<SurgicalReportViewProps> = ({ doctor, 
                   </p>
                 </div>
               ) : (
-                /* VISTA DE RESULTADO OP-NOTE */
+                /* VISTA DE RESULTADO OP-NOTE (AHORA EDITABLE) */
                 <div className="max-w-4xl mx-auto w-full animate-fade-in-up">
                    <div className="bg-white dark:bg-slate-900 rounded-xl shadow-lg border border-indigo-100 dark:border-indigo-900/50 overflow-hidden">
                       <div className="bg-indigo-50 dark:bg-indigo-900/20 p-4 border-b border-indigo-100 flex justify-between items-center">
                         <h3 className="font-bold text-indigo-800 dark:text-indigo-200 flex items-center gap-2">
                           <FileText size={18}/> Nota Post-Operatoria Generada
                         </h3>
-                        <button onClick={() => setGeneratedReport(null)} className="text-xs text-indigo-600 font-bold hover:underline">
-                          Nueva Cirugía
-                        </button>
+                        <div className="flex gap-2">
+                            <span className="text-[10px] text-indigo-500 font-bold bg-white/50 px-2 py-1 rounded flex items-center gap-1">
+                                <PenLine size={10}/> EDITABLE
+                            </span>
+                            <button onClick={() => setGeneratedReport(null)} className="text-xs text-indigo-600 font-bold hover:underline">
+                            Nueva Cirugía
+                            </button>
+                        </div>
                       </div>
-                      <div className="p-8 prose dark:prose-invert max-w-none">
-                        <FormattedText content={generatedReport} />
+                      
+                      {/* ✅ CAMBIO CLAVE: TEXTAREA EDITABLE EN LUGAR DE SOLO LECTURA */}
+                      <div className="p-0">
+                        <textarea 
+                            className="w-full h-[500px] p-8 bg-transparent text-slate-700 dark:text-slate-300 leading-relaxed outline-none resize-none font-medium focus:bg-slate-50 dark:focus:bg-slate-800/50 transition-colors"
+                            value={generatedReport || ''}
+                            onChange={(e) => setGeneratedReport(e.target.value)}
+                            spellCheck="false"
+                        />
                       </div>
                       
                       {/* PIE DE PÁGINA CON ADVERTENCIA LEGAL */}
@@ -450,7 +461,7 @@ export const SurgicalReportView: React.FC<SurgicalReportViewProps> = ({ doctor, 
 
                           <div className="flex flex-wrap justify-end gap-3">
                             <button onClick={() => setGeneratedReport(null)} className="text-slate-500 font-bold text-sm px-4 hover:text-slate-700">
-                                Editar / Reintentar
+                                Descartar / Reintentar
                             </button>
                             
                             <button 
