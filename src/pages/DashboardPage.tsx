@@ -7,7 +7,8 @@ import {
   Clock, UserPlus, Activity, Search, ArrowRight,
   CalendarX, Repeat, Ban, PlayCircle, PenLine, Calculator, Sparkles,
   BarChart3, FileSignature, Microscope, StickyNote, FileCheck, Printer,
-  Sunrise, Sunset, MoonStar, Send, Trash2, CalendarClock, HelpCircle 
+  Sunrise, Sunset, MoonStar, Send, Trash2, CalendarClock, HelpCircle,
+  Zap // ✅ ICONO AGREGADO
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { format, isToday, isTomorrow, parseISO, startOfDay, endOfDay, addDays, isPast } from 'date-fns';
@@ -26,6 +27,7 @@ import { MedicalCalculators } from '../components/MedicalCalculators';
 import { QuickDocModal } from '../components/QuickDocModal';
 import { FastAdmitModal } from '../components/FastAdmitModal';
 import { UserGuideModal } from '../components/UserGuideModal';
+import { QuickNoteModal } from '../components/QuickNoteModal'; // ✅ IMPORTACIÓN DE NOTA RÁPIDA
 
 import { ImpactMetrics } from '../components/ImpactMetrics';
 import SmartBriefingWidget from '../components/SmartBriefingWidget'; 
@@ -88,7 +90,7 @@ const AtomicClock = ({ location }: { location: string }) => {
     );
 };
 
-// --- Assistant Modal REFORZADO (MODIFICADO: SOLO CONSULTA Y NAVEGACIÓN) ---
+// --- Assistant Modal REFORZADO ---
 const AssistantModal = ({ isOpen, onClose, onActionComplete, initialQuery }: { isOpen: boolean; onClose: () => void; onActionComplete: () => void; initialQuery?: string | null }) => {
   const { isListening, transcript, startListening, stopListening, resetTranscript } = useSpeechRecognition();
   
@@ -160,7 +162,6 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete, initialQuery }: { i
       stopListening();
       setStatus('processing');
 
-      // Aumentado el timeout para consultas RAG complejas
       const timeoutPromise = new Promise((_, reject) => 
           setTimeout(() => reject(new Error("Tiempo agotado")), 15000)
       );
@@ -169,10 +170,6 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete, initialQuery }: { i
           const executeLogic = async () => {
               const lowerText = textToProcess.toLowerCase();
               
-              // --- LÓGICA REVISADA: SOLO NAVEGACIÓN Y CONSULTA CLÍNICA ---
-              // (Se eliminó el bloque de 'CREATE_APPOINTMENT' por seguridad del producto)
-              
-              // 1. Detección de Navegación Explícita
               if (lowerText.includes('ir a') || lowerText.includes('navegar') || lowerText.includes('abrir') || lowerText.includes('ver pantalla')) {
                   
                   setAiResponse({ 
@@ -184,11 +181,8 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete, initialQuery }: { i
                   });
                   setStatus('answering');
 
-              // 2. DETECCIÓN DE CONSULTA RAG (PACIENTE ESPECÍFICO)
-              // Interceptamos preguntas sobre dosis, historial o pacientes
               } else if (lowerText.includes('paciente') || lowerText.includes('toma') || lowerText.includes('dosis') || lowerText.includes('diagnóstico') || lowerText.includes('historia') || lowerText.includes('recet') || lowerText.includes('medicamento')) {
                   
-                  // A. Extracción de Nombre para búsqueda
                   const namePrompt = `
                       Tu misión es identificar al paciente para una búsqueda SQL exacta.
                       Frase: "${textToProcess}"
@@ -204,10 +198,8 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete, initialQuery }: { i
                   const patientName = cleanMarkdown(patientNameRaw).replace(/["']/g, "").trim();
 
                   if (patientName && patientName !== "NULL") {
-                      // B. Búsqueda en Supabase (RAG)
                       const realClinicalData = await GeminiMedicalService.getPatientClinicalContext(patientName);
                       
-                      // C. Respuesta con Contexto Real
                       const finalAnswer = await GeminiMedicalService.chatWithContext(
                           realClinicalData, 
                           textToProcess
@@ -225,21 +217,16 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete, initialQuery }: { i
                       setStatus('answering');
                       if(!manualText) speakResponse(cleanAnswer); 
                   } else {
-                      // Si no hay nombre, pasamos al fallback genérico
                       throw new Error("Pase a fallback"); 
                   }
-
-              // 3. FALLBACK CLINICO: Consulta Genérica (Sin paciente específico)
               } else {
                   throw new Error("Pase a fallback");
               }
           };
 
-          // Wrapper para capturar el "throw" y ejecutar el fallback
           try {
             await Promise.race([executeLogic(), timeoutPromise]);
           } catch (internalError) {
-             // Fallback Logic
              const rawAnswer = await GeminiMedicalService.chatWithContext(
                  "Contexto: El médico está en el Dashboard principal. Eres un Copiloto Clínico Senior. Si el usuario intenta AGENDAR una cita, responde amablemente que esa función está deshabilitada por seguridad y deben usar la agenda manual. Para cualquier duda médica, responde directo y conciso.", 
                  textToProcess
@@ -277,8 +264,6 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete, initialQuery }: { i
     setIsExecuting(true); 
 
     switch (aiResponse.intent) {
-      // NOTA: Se eliminó el case 'CREATE_APPOINTMENT' para evitar errores de fechas.
-      
       case 'NAVIGATION':
         const dest = aiResponse.data.destination?.toLowerCase() || '';
         onClose();
@@ -430,7 +415,6 @@ const QuickDocs = ({ openModal }: { openModal: (type: 'justificante' | 'certific
 );
 
 // --- COMPONENTE ACTION RADAR (ACTUALIZADO) ---
-// Ahora acepta funciones para reprogramar y cancelar
 const ActionRadar = ({ 
     items, 
     onItemClick,
@@ -513,8 +497,11 @@ const Dashboard: React.FC = () => {
   const [isDocModalOpen, setIsDocModalOpen] = useState(false);
   const [docType, setDocType] = useState<'justificante' | 'certificado' | 'receta'>('justificante');
   const [toolsTab, setToolsTab] = useState<'notes' | 'calc'>('notes');
-  const [isFastAdmitOpen, setIsFastAdmitOpen] = useState(false); // <--- CAMBIO 2: NUEVO ESTADO
-  const [isGuideOpen, setIsGuideOpen] = useState(false); // <--- CAMBIO: ESTADO NUEVO PARA GUÍA
+  const [isFastAdmitOpen, setIsFastAdmitOpen] = useState(false); 
+  const [isGuideOpen, setIsGuideOpen] = useState(false);
+  
+  // ✅ NUEVO ESTADO PARA NOTA RÁPIDA
+  const [isQuickNoteOpen, setIsQuickNoteOpen] = useState(false);
   
   const [searchInput, setSearchInput] = useState('');
 
@@ -638,7 +625,7 @@ const Dashboard: React.FC = () => {
   };
 
   const handleCancelAppointment = async (e: React.MouseEvent, aptId: string) => {
-      e.stopPropagation(); // Evitar que se abra la consulta al hacer clic en borrar
+      e.stopPropagation(); 
       
       if (!confirm("¿Desea cancelar esta cita? El registro se ocultará de la agenda.")) return;
 
@@ -651,14 +638,10 @@ const Dashboard: React.FC = () => {
 
           if (error) throw error;
 
-          // Actualización optimista del estado local (Inmediata)
           setAppointments(prev => prev.filter(a => a.id !== aptId));
-          // [MEJORA] Limpiar también del Radar instantáneamente
           setPendingItems(prev => prev.filter(i => i.id !== aptId));
 
           toast.success("Cita cancelada correctamente", { id: toastId });
-          
-          // Recalcular métricas en segundo plano
           fetchData(true);
 
       } catch (err) {
@@ -672,12 +655,10 @@ const Dashboard: React.FC = () => {
       e.stopPropagation();
       setRescheduleTarget({ id: apt.id, title: apt.title });
       
-      // Convertir hora de cita a formato local para input (datetime-local)
-      // Truco: restar offset para que toISOString no convierta a UTC visual
       const currentIso = new Date(apt.start_time);
       const localIso = new Date(currentIso.getTime() - (currentIso.getTimezoneOffset() * 60000))
-                        .toISOString()
-                        .slice(0, 16); // Formato YYYY-MM-DDTHH:mm
+                            .toISOString()
+                            .slice(0, 16); 
       setNewDateInput(localIso);
   };
 
@@ -686,7 +667,6 @@ const Dashboard: React.FC = () => {
       
       const toastId = toast.loading("Moviendo cita...");
       try {
-          // Convertir input local de vuelta a ISO UTC
           const newDate = new Date(newDateInput).toISOString();
           
           const { error } = await supabase
@@ -698,11 +678,9 @@ const Dashboard: React.FC = () => {
           
           toast.success(`Cita movida correctamente`, { id: toastId });
           
-          // [MEJORA] Limpieza optimista del radar (si se movió al futuro, ya no es pendiente vencido)
           setPendingItems(prev => prev.filter(i => i.id !== rescheduleTarget.id));
           
           setRescheduleTarget(null);
-          // Recargar datos para reordenar la lista
           fetchData(); 
 
       } catch (err) {
@@ -732,11 +710,7 @@ const Dashboard: React.FC = () => {
   const appointmentsToday = appointments.filter(a => isToday(parseISO(a.start_time))).length;
   const totalDailyLoad = completedTodayCount + appointmentsToday;
 
-  // NUEVO: Mensaje de garantía de privacidad (PC y Tablets solamente)
   useEffect(() => {
-    // FILTRO DE DISPOSITIVO: 
-    // < 480px = Celulares (No sale)
-    // >= 480px = Tablets y PC (Sí sale)
     if (window.innerWidth < 480) return;
 
     const hasSeenThisLogin = sessionStorage.getItem('login_notice_shown');
@@ -861,9 +835,7 @@ const Dashboard: React.FC = () => {
                                             <div className="w-1 h-8 bg-indigo-200 rounded-full group-hover:bg-indigo-500 transition-colors"></div>
                                             <div className="flex-1"><p className="font-bold text-slate-800 dark:text-white text-sm truncate">{apt.title}</p></div>
                                             
-                                            {/* --- [NUEVO] GRUPO DE BOTONES DE ACCIÓN --- */}
                                             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                {/* Botón Reprogramar (Azul) */}
                                                 <button 
                                                     onClick={(e) => openRescheduleModal(e, apt)}
                                                     className="p-1.5 text-indigo-300 hover:text-indigo-600 hover:bg-indigo-50 rounded-full transition-all"
@@ -871,7 +843,6 @@ const Dashboard: React.FC = () => {
                                                 >
                                                     <CalendarClock size={16} />
                                                 </button>
-                                                {/* Botón Cancelar (Rojo) */}
                                                 <button 
                                                     onClick={(e) => handleCancelAppointment(e, apt.id)}
                                                     className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-full transition-all"
@@ -895,13 +866,11 @@ const Dashboard: React.FC = () => {
              </div>
 
              <div className="xl:col-span-4 flex flex-col gap-8">
-                 {/* IMPLEMENTACIÓN DEL RADAR ACTIVO */}
                  <ActionRadar 
                    items={pendingItems} 
                    onItemClick={handleRadarClick}
                    onCancel={(e, item) => handleCancelAppointment(e, item.id)}
                    onReschedule={(e, item) => {
-                       // Reconstrucción del objeto para el modal (Adapter)
                        const realName = item.subtitle.split('•')[0].trim();
                        const mockApt = { 
                            id: item.id, 
@@ -922,8 +891,21 @@ const Dashboard: React.FC = () => {
                           {toolsTab === 'notes' ? <div className="absolute inset-0 p-2"><QuickNotes userId={doctorProfile?.id} /></div> : <div className="absolute inset-0 p-2 overflow-y-auto"><MedicalCalculators /></div>}
                       </div>
                  </div>
+                 
+                 {/* ✅ ZONA DE BOTONES DE ACCIÓN RÁPIDA (ACTUALIZADA CON NOTA RÁPIDA) */}
                  <div className="grid grid-cols-2 gap-4">
-                     <button onClick={() => setIsFastAdmitOpen(true)} className="p-4 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-2xl font-bold text-xs flex flex-col items-center gap-2 border border-indigo-100 dark:bg-indigo-900/20 dark:border-indigo-800 dark:text-indigo-300"><UserPlus size={20}/> Nuevo Paciente</button> {/* <--- CAMBIO 3: CONEXIÓN DEL BOTÓN */}
+                     {/* BOTÓN 1: NOTA RÁPIDA (Nuevo) */}
+                     <button 
+                        onClick={() => setIsQuickNoteOpen(true)}
+                        className="col-span-2 p-4 bg-gradient-to-r from-amber-400 to-orange-500 text-white rounded-2xl font-bold text-sm flex items-center justify-center gap-2 shadow-lg hover:shadow-orange-500/30 transition-all hover:scale-[1.02]"
+                     >
+                        <Zap size={20} fill="currentColor"/> NOTA RÁPIDA DE PASILLO
+                     </button>
+
+                     {/* BOTÓN 2: NUEVO PACIENTE */}
+                     <button onClick={() => setIsFastAdmitOpen(true)} className="p-4 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-2xl font-bold text-xs flex flex-col items-center gap-2 border border-indigo-100 dark:bg-indigo-900/20 dark:border-indigo-800 dark:text-indigo-300"><UserPlus size={20}/> Nuevo Paciente</button>
+                     
+                     {/* BOTÓN 3: SUBIR ARCHIVOS */}
                      <button onClick={() => setIsUploadModalOpen(true)} className="p-4 bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-2xl font-bold text-xs flex flex-col items-center gap-2 border border-slate-200 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300"><Upload size={20}/> Subir Archivos</button>
                  </div>
              </div>
@@ -941,7 +923,6 @@ const Dashboard: React.FC = () => {
         </div>
       )}
 
-      {/* --- [NUEVO] MICRO-MODAL RECALENDARIZACIÓN --- */}
       {rescheduleTarget && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/30 backdrop-blur-sm p-4 animate-in fade-in">
             <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-2xl w-full max-w-sm border border-indigo-100 dark:border-slate-800">
@@ -973,10 +954,16 @@ const Dashboard: React.FC = () => {
         </div>
       )}
 
-      {/* --- BOTÓN FLOTANTE DE AYUDA (POSICIÓN CORREGIDA WEB) --- */}
+      {/* ✅ RENDERIZADO DEL NUEVO MODAL DE NOTA RÁPIDA */}
+      {isQuickNoteOpen && (
+          <QuickNoteModal 
+            onClose={() => setIsQuickNoteOpen(false)}
+            doctorProfile={doctorProfile}
+          />
+      )}
+
       <button
         onClick={() => setIsGuideOpen(true)}
-        // CAMBIO TÉCNICO: 'md:bottom-6' -> 'md:bottom-24' para evitar solapamiento con el widget de prueba
         className="fixed z-50 bg-indigo-600 text-white rounded-full shadow-2xl font-bold flex items-center justify-center gap-2 transition-transform hover:scale-105 hover:shadow-indigo-500/50 bottom-24 right-4 w-14 h-14 p-0 md:bottom-24 md:right-6 md:w-auto md:h-auto md:px-5 md:py-3"
       >
         <HelpCircle size={24} /> 
