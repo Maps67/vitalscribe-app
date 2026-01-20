@@ -21,6 +21,10 @@ export const QuickNoteModal: React.FC<QuickNoteModalProps> = ({ onClose, doctorP
   const [selectedPatient, setSelectedPatient] = useState<PatientSearchResult | null>(null);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  
+  // Refs para lógica Push-to-Talk
+  const pressStartTime = useRef<number>(0);
+  const isLongPress = useRef<boolean>(false);
 
   const { 
     isListening, 
@@ -31,12 +35,41 @@ export const QuickNoteModal: React.FC<QuickNoteModalProps> = ({ onClose, doctorP
     resetTranscript 
   } = useSpeechRecognition();
 
-  // Auto-scroll mejorado
+  // Auto-scroll
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.scrollTop = textareaRef.current.scrollHeight;
     }
   }, [transcript, generatedNote]);
+
+  // --- LÓGICA DEL BOTÓN INTELIGENTE (HÍBRIDO) ---
+  const handleMicDown = (e: React.PointerEvent) => {
+    e.preventDefault(); 
+    pressStartTime.current = Date.now();
+    isLongPress.current = false;
+
+    if (isListening) {
+        stopListening();
+    } else {
+        startListening();
+    }
+  };
+
+  const handleMicUp = (e: React.PointerEvent) => {
+    e.preventDefault();
+    const duration = Date.now() - pressStartTime.current;
+
+    // Si duró más de 500ms, es soltar para dejar de grabar
+    if (duration > 500 && isListening) {
+        stopListening();
+    } 
+  };
+
+  const handleMicLeave = (e: React.PointerEvent) => {
+     if (isListening && (Date.now() - pressStartTime.current > 500)) {
+         stopListening();
+     }
+  };
 
   const handleGenerateDraft = async () => {
     if (!transcript || transcript.length < 5) {
@@ -148,17 +181,15 @@ export const QuickNoteModal: React.FC<QuickNoteModalProps> = ({ onClose, doctorP
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
       
-      {/* 🔥 CORRECCIÓN RESPONSIVA AQUÍ 🔥 */}
       <div className="bg-white dark:bg-slate-900 rounded-xl md:rounded-2xl shadow-2xl overflow-hidden flex flex-col w-[95%] md:w-full md:max-w-2xl h-[92vh] md:h-auto md:max-h-[90vh] md:min-h-[500px]">
         
-        {/* HEADER */}
         <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-950 shrink-0">
           <div>
             <h2 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
               <span className="bg-amber-400 text-amber-900 p-1 rounded-md"><Sparkles size={16}/></span>
               Nota Rápida
             </h2>
-            <p className="text-xs text-slate-500 hidden md:block"> {/* Ocultamos instrucciones en móvil muy pequeño */}
+            <p className="text-xs text-slate-500 hidden md:block">
               {step === 'capture' && "1. Dicte o escriba la nota"}
               {step === 'assign' && "2. Asigne un paciente"}
               {step === 'saving' && "Guardando..."}
@@ -172,7 +203,6 @@ export const QuickNoteModal: React.FC<QuickNoteModalProps> = ({ onClose, doctorP
         <div className="flex-1 overflow-hidden relative flex flex-col">
           
           {step === 'capture' && (
-            // Ajuste de padding para móvil (p-4) vs escritorio (md:p-6)
             <div className="flex-1 p-4 md:p-6 flex flex-col gap-4 animate-fade-in h-full overflow-hidden">
               
               <div className="flex-1 relative bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden min-h-[200px]">
@@ -196,20 +226,28 @@ export const QuickNoteModal: React.FC<QuickNoteModalProps> = ({ onClose, doctorP
                      className="absolute inset-0 w-full h-full bg-transparent resize-none outline-none text-slate-700 dark:text-slate-300 text-lg md:text-xl leading-relaxed placeholder:text-slate-400 custom-scrollbar p-4 md:p-6"
                      value={transcript}
                      onChange={(e) => setTranscript(e.target.value)}
-                     placeholder="Empiece a dictar..."
+                     placeholder="Mantenga presionado para dictar (o toque para bloquear)..."
                    />
                 )}
               </div>
 
               <div className="flex flex-wrap items-center justify-between gap-3 mt-auto shrink-0">
                 <div className="flex gap-2">
+                   {/* 🔥 BOTÓN CORREGIDO: USANDO CLASES TAILWIND 🔥 */}
                    <button
-                     onClick={isListening ? stopListening : startListening}
-                     className={`p-3 md:p-4 rounded-full transition-all shadow-lg flex items-center justify-center ${isListening ? 'bg-red-500 text-white hover:bg-red-600 scale-110' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}
-                     title={isListening ? "Detener" : "Dictar"}
+                     onPointerDown={handleMicDown}
+                     onPointerUp={handleMicUp}
+                     onPointerLeave={handleMicLeave}
+                     className={`p-3 md:p-4 rounded-full transition-all shadow-lg flex items-center justify-center select-none active:scale-95 touch-none ${isListening ? 'bg-red-500 text-white hover:bg-red-600 scale-110 ring-4 ring-red-200 dark:ring-red-900' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}
+                     title={isListening ? "Soltar para detener" : "Mantener para hablar"}
+                     style={{ WebkitTapHighlightColor: 'transparent' }} 
                    >
-                     {isListening ? <Square size={20} md:size={24}/> : <Mic size={20} md:size={24}/>}
+                     {isListening ? 
+                        <Square className="w-5 h-5 md:w-6 md:h-6" /> : 
+                        <Mic className="w-5 h-5 md:w-6 md:h-6" />
+                     }
                    </button>
+                   
                    {(transcript || generatedNote) && (
                      <button 
                        onClick={() => { resetTranscript(); setGeneratedNote(''); }}
@@ -268,6 +306,7 @@ export const QuickNoteModal: React.FC<QuickNoteModalProps> = ({ onClose, doctorP
                <div className="w-16 h-16 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"/>
                <div className="text-center">
                  <h3 className="text-lg font-bold text-slate-800 dark:text-white">Guardando...</h3>
+                 <p className="text-sm text-slate-500">Asignando a {selectedPatient?.name}...</p>
                </div>
             </div>
           )}
