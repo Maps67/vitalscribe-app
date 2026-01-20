@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { 
   Upload, Mic, FileText, X, CheckCircle, ShieldAlert, 
   Scissors, AlertTriangle, Save, RefreshCw, Square, 
-  User, Download, Activity, CalendarDays 
+  User, Download, Activity, CalendarDays, FileImage, Music 
 } from 'lucide-react'; 
 import { toast } from 'sonner';
 import { GeminiMedicalService } from '../services/GeminiMedicalService';
@@ -34,7 +34,10 @@ export const SurgicalReportView: React.FC<SurgicalReportViewProps> = ({ doctor, 
   const [generatedReport, setGeneratedReport] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  
+  // ✅ REFERENCIAS SEPARADAS PARA MEJOR UX MÓVIL
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const audioInputRef = useRef<HTMLInputElement>(null);
 
   const { 
     isListening, 
@@ -50,14 +53,18 @@ export const SurgicalReportView: React.FC<SurgicalReportViewProps> = ({ doctor, 
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
       const allowedTypes = [
-        'audio/mpeg', 'audio/wav', 'audio/x-m4a', 'audio/ogg', 
+        'audio/mpeg', 'audio/wav', 'audio/x-m4a', 'audio/ogg', 'audio/mp4', 'audio/webm',
         'application/pdf', 'text/plain', 'image/jpeg', 'image/png'
       ];
 
-      if (!allowedTypes.includes(file.type)) {
+      // Validación laxa para tipos de audio que a veces varían por dispositivo
+      const isAudio = file.type.startsWith('audio/');
+      
+      if (!allowedTypes.includes(file.type) && !isAudio) {
         toast.error("Formato no soportado. Use Audio, PDF o Imagen.");
         return;
       }
+      
       if (file.size > 25 * 1024 * 1024) {
         toast.error("El archivo es demasiado grande (Máx 25MB).");
         return;
@@ -117,6 +124,7 @@ export const SurgicalReportView: React.FC<SurgicalReportViewProps> = ({ doctor, 
       setGeneratedReport(report);
       setUploadedFile(null); 
       if(fileInputRef.current) fileInputRef.current.value = "";
+      if(audioInputRef.current) audioInputRef.current.value = "";
       
       toast.success("Reporte Qx generado con éxito.");
 
@@ -276,47 +284,70 @@ export const SurgicalReportView: React.FC<SurgicalReportViewProps> = ({ doctor, 
                     </button>
                   </div>
 
-                  {/* AREA DE CARGA (UPLOAD) */}
+                  {/* AREA DE CARGA (UPLOAD) - MODIFICADA PARA AUDIO */}
                   {activeTab === 'upload' && (
                     <div className="animate-fade-in-up">
-                      <div 
-                        onClick={() => !isProcessing && fileInputRef.current?.click()}
-                        className={`border-2 border-dashed rounded-2xl p-12 flex flex-col items-center justify-center cursor-pointer transition-all h-64 ${uploadedFile ? 'border-green-400 bg-green-50 dark:bg-green-900/10' : 'border-slate-300 hover:border-indigo-400 hover:bg-indigo-50/50 dark:border-slate-700'}`}
-                      >
-                        <input 
-                          type="file" 
-                          ref={fileInputRef} 
-                          className="hidden" 
-                          accept=".mp3,.wav,.m4a,.ogg,.pdf,.txt,.jpg,.png" 
-                          onChange={handleFileChange}
-                        />
                         
                         {!uploadedFile ? (
-                          <>
-                            <div className="bg-indigo-100 dark:bg-indigo-900/30 p-4 rounded-full text-indigo-600 mb-4">
-                              <Upload size={32} />
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 h-64">
+                                {/* BOTÓN DE AUDIO */}
+                                <div 
+                                    onClick={() => !isProcessing && audioInputRef.current?.click()}
+                                    className="border-2 border-dashed border-indigo-200 dark:border-indigo-900 bg-indigo-50/50 dark:bg-indigo-900/10 rounded-2xl p-6 flex flex-col items-center justify-center cursor-pointer hover:bg-indigo-100/50 dark:hover:bg-indigo-900/20 transition-all group"
+                                >
+                                    <input 
+                                        type="file" 
+                                        ref={audioInputRef} 
+                                        className="hidden" 
+                                        accept="audio/*" // ✅ ESTO FILTRA SOLO AUDIOS
+                                        onChange={handleFileChange}
+                                    />
+                                    <div className="bg-white dark:bg-slate-800 p-4 rounded-full text-indigo-600 shadow-sm group-hover:scale-110 transition-transform mb-3">
+                                        <Music size={28} />
+                                    </div>
+                                    <h3 className="font-bold text-slate-700 dark:text-slate-200 text-center">Anexar Audio</h3>
+                                    <p className="text-xs text-slate-400 text-center mt-1">Grabaciones, notas de voz</p>
+                                </div>
+
+                                {/* BOTÓN DE DOCUMENTOS */}
+                                <div 
+                                    onClick={() => !isProcessing && fileInputRef.current?.click()}
+                                    className="border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-2xl p-6 flex flex-col items-center justify-center cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 transition-all group"
+                                >
+                                    <input 
+                                        type="file" 
+                                        ref={fileInputRef} 
+                                        className="hidden" 
+                                        accept=".pdf,.txt,.jpg,.jpeg,.png" // ✅ ESTO FILTRA DOCS
+                                        onChange={handleFileChange}
+                                    />
+                                    <div className="bg-slate-100 dark:bg-slate-800 p-4 rounded-full text-slate-500 shadow-sm group-hover:scale-110 transition-transform mb-3">
+                                        <FileImage size={28} />
+                                    </div>
+                                    <h3 className="font-bold text-slate-700 dark:text-slate-200 text-center">Foto / Documento</h3>
+                                    <p className="text-xs text-slate-400 text-center mt-1">PDF, Imágenes, Texto</p>
+                                </div>
                             </div>
-                            <h3 className="font-bold text-lg text-slate-700 dark:text-slate-200">Arrastra nota de voz o foto</h3>
-                            <p className="text-slate-400 text-xs mt-2 text-center max-w-xs">
-                              Se procesará en RAM y se eliminará inmediatamente.
-                            </p>
-                          </>
                         ) : (
-                          <div className="flex flex-col items-center">
-                              <div className="bg-green-100 p-4 rounded-full text-green-600 mb-4 animate-bounce">
-                              <CheckCircle size={32} />
+                            // VISTA DE ARCHIVO CARGADO
+                            <div className="border-2 border-dashed border-green-400 bg-green-50 dark:bg-green-900/10 rounded-2xl p-12 flex flex-col items-center justify-center h-64">
+                                <div className="bg-green-100 p-4 rounded-full text-green-600 mb-4 animate-bounce">
+                                    <CheckCircle size={32} />
+                                </div>
+                                <p className="font-bold text-lg text-slate-800 dark:text-white text-center break-all">{uploadedFile.name}</p>
+                                <p className="text-xs text-slate-500 mt-1 uppercase font-bold">{uploadedFile.type || "Archivo Detectado"}</p>
+                                <button 
+                                    onClick={(e) => { e.stopPropagation(); setUploadedFile(null); }}
+                                    className="mt-4 text-red-500 text-xs font-bold hover:underline flex items-center gap-1"
+                                >
+                                    <X size={12}/> Eliminar / Cambiar
+                                </button>
                             </div>
-                            <p className="font-bold text-lg text-slate-800 dark:text-white">{uploadedFile.name}</p>
-                            <p className="text-xs text-slate-500 mt-1">Evidencia lista para análisis</p>
-                            <button 
-                              onClick={(e) => { e.stopPropagation(); setUploadedFile(null); }}
-                              className="mt-4 text-red-500 text-xs font-bold hover:underline flex items-center gap-1"
-                            >
-                              <X size={12}/> Eliminar
-                            </button>
-                          </div>
                         )}
-                      </div>
+                        
+                        <p className="text-center text-[10px] text-slate-400 mt-4">
+                            Los archivos se procesan en memoria volátil y no se guardan permanentemente hasta generar el reporte.
+                        </p>
                     </div>
                   )}
 
