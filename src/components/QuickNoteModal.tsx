@@ -31,7 +31,7 @@ export const QuickNoteModal: React.FC<QuickNoteModalProps> = ({ onClose, doctorP
     resetTranscript 
   } = useSpeechRecognition();
 
-  // Auto-scroll (Mantenido para el área de texto interna)
+  // Auto-scroll
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.scrollTop = textareaRef.current.scrollHeight;
@@ -162,15 +162,13 @@ export const QuickNoteModal: React.FC<QuickNoteModalProps> = ({ onClose, doctorP
   };
 
   return (
+    // Se mantiene el padding 'p-4' en el contenedor padre
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
       
-      {/* 🔥 ARQUITECTURA BLINDADA: CSS GRID + DVH 🔥 
-          - h-[100dvh]: Altura dinámica real del celular (ignora barra URL).
-          - grid grid-rows-[auto_1fr_auto]: 3 filas estrictas (Header, Contenido, Footer).
-      */}
-      <div className="bg-white dark:bg-slate-900 rounded-xl md:rounded-2xl shadow-2xl overflow-hidden w-[95%] md:w-full md:max-w-2xl h-[95dvh] md:h-auto md:max-h-[90vh] md:min-h-[500px] grid grid-rows-[auto_1fr_auto]">
+      {/* 🔥 AJUSTE VISUAL: Cambiamos 'w-[95%]' por 'w-full' para que respete el padding del padre 🔥 */}
+      <div className="bg-white dark:bg-slate-900 rounded-xl md:rounded-2xl shadow-2xl overflow-hidden w-full md:max-w-2xl h-[95dvh] md:h-auto md:max-h-[90vh] md:min-h-[500px] grid grid-rows-[auto_1fr_auto]">
         
-        {/* FILA 1: HEADER (Fijo arriba) */}
+        {/* FILA 1: HEADER */}
         <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-950 z-10">
           <div>
             <h2 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
@@ -188,12 +186,11 @@ export const QuickNoteModal: React.FC<QuickNoteModalProps> = ({ onClose, doctorP
           </button>
         </div>
 
-        {/* FILA 2: CONTENIDO SCROLLABLE (El único que se mueve) */}
+        {/* FILA 2: CONTENIDO CENTRAL */}
         <div className="overflow-hidden relative bg-white dark:bg-slate-900">
           
           {step === 'capture' && (
             <div className="absolute inset-0 p-4 md:p-6 flex flex-col h-full">
-              {/* Contenedor del Textarea */}
               <div className="flex-1 relative bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden shadow-inner">
                 {isListening && (
                   <div className="absolute top-3 right-3 flex items-center gap-2 px-2 py-1 bg-red-100 text-red-600 rounded-full text-xs font-bold animate-pulse z-20 pointer-events-none shadow-sm">
@@ -201,7 +198,6 @@ export const QuickNoteModal: React.FC<QuickNoteModalProps> = ({ onClose, doctorP
                   </div>
                 )}
                 
-                {/* El textarea llena este contenedor, el scroll ocurre AQUÍ dentro */}
                 {generatedNote ? (
                    <textarea
                      ref={textareaRef}
@@ -225,7 +221,6 @@ export const QuickNoteModal: React.FC<QuickNoteModalProps> = ({ onClose, doctorP
 
           {step === 'assign' && (
             <div className="absolute inset-0 flex flex-col animate-slide-in-right">
-               {/* Reutilizamos estructura interna para buscador */}
                <div className="flex-1 overflow-hidden relative">
                  <PatientSearch 
                     onSelect={handleFinalSave}
@@ -246,7 +241,7 @@ export const QuickNoteModal: React.FC<QuickNoteModalProps> = ({ onClose, doctorP
           )}
         </div>
 
-        {/* FILA 3: FOOTER DE ACCIONES (Fijo abajo, inmune al scroll) */}
+        {/* FILA 3: FOOTER */}
         {step === 'capture' && (
             <div className="p-4 md:p-6 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950 z-10 flex items-center justify-between gap-3">
                 <div className="flex gap-2">
@@ -297,7 +292,6 @@ export const QuickNoteModal: React.FC<QuickNoteModalProps> = ({ onClose, doctorP
             </div>
         )}
         
-        {/* Footer vacío para otros pasos si se requiere mantener layout, o null */}
         {step !== 'capture' && <div className="hidden"></div>}
 
       </div>
