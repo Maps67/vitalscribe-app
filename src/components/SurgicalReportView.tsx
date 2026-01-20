@@ -51,14 +51,14 @@ export const SurgicalReportView: React.FC<SurgicalReportViewProps> = ({ doctor, 
     resetTranscript 
   } = useSpeechRecognition();
 
-  // Sincronización de dictado con cuadro de texto
+  // Sincronización de dictado
   useEffect(() => {
       if (transcript) {
           setTextContent(transcript);
       }
   }, [transcript]);
 
-  // Autoscroll al final del texto durante dictado
+  // Autoscroll para evitar desbordamiento visual durante el dictado
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -86,7 +86,6 @@ export const SurgicalReportView: React.FC<SurgicalReportViewProps> = ({ doctor, 
     if (isListening) stopListening();
   };
 
-  // --- PROCESAMIENTO CON IA ---
   const handleProcessLog = async () => {
     if (!textContent && !uploadedFile) {
         return toast.error("Por favor, proporcione dictado o evidencia.");
@@ -130,7 +129,6 @@ export const SurgicalReportView: React.FC<SurgicalReportViewProps> = ({ doctor, 
     }
   };
 
-  // --- GUARDADO COMPLETO EN HISTORIAL ---
   const handleSaveLog = async () => {
       if (!surgicalLog || !patient) return;
       setIsSaving(true);
@@ -193,11 +191,12 @@ export const SurgicalReportView: React.FC<SurgicalReportViewProps> = ({ doctor, 
   };
 
   return (
-    // 🥪 RESPONSIVE SANDWICH LAYOUT (Header, Body, Footer)
-    <div className="bg-slate-50 dark:bg-slate-950 w-full h-[100dvh] grid grid-rows-[auto_1fr_auto] overflow-hidden">
+    // 🥪 ESTRUCTURA CORREGIDA: Eliminamos 'fixed inset-0' para que no tape el menú principal.
+    // Usamos 'relative h-full flex flex-col' para que se adapte al contenedor padre sin desbordar.
+    <div className="relative h-full w-full flex flex-col bg-slate-50 dark:bg-slate-950 overflow-hidden">
       
-      {/* 1. TOP: HEADER ESTÁTICO */}
-      <header className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 p-4 z-20 shadow-sm">
+      {/* 1. TOP: HEADER ESTÁTICO (flex-none para que no se encoja) */}
+      <header className="flex-none bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 p-4 z-20 shadow-sm">
         <div className="flex justify-between items-center mb-3">
             <h2 className="text-lg font-black text-slate-800 dark:text-white flex items-center gap-2 uppercase tracking-tight">
                 <span className="bg-indigo-600 text-white p-1.5 rounded-lg"><ShieldCheck size={20}/></span>
@@ -213,13 +212,13 @@ export const SurgicalReportView: React.FC<SurgicalReportViewProps> = ({ doctor, 
         </div>
       </header>
 
-      {/* 2. MIDDLE: BODY SCROLLABLE */}
-      <main ref={scrollRef} className="overflow-y-auto overflow-x-hidden bg-slate-50 dark:bg-slate-950 p-4 scroll-smooth">
+      {/* 2. MIDDLE: BODY SCROLLABLE (flex-1 para que tome el espacio y overflow-y-auto para el scroll) */}
+      <main ref={scrollRef} className="flex-1 overflow-y-auto overflow-x-hidden p-4 scroll-smooth min-h-0">
         {currentModule === 'op_log' && (
-            <div className="max-w-2xl mx-auto h-full">
+            <div className="max-w-2xl mx-auto min-h-full flex flex-col">
                 {!surgicalLog ? (
-                    <div className="flex flex-col h-full items-center justify-center space-y-6 min-h-[350px]">
-                        <div className="w-full bg-white dark:bg-slate-900 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-800 p-6 relative overflow-hidden flex flex-col min-h-[250px]">
+                    <div className="flex-1 flex flex-col items-center justify-center space-y-6">
+                        <div className="w-full bg-white dark:bg-slate-900 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-800 p-6 relative overflow-hidden flex flex-col min-h-[250px] md:min-h-[350px]">
                             {isListening && <div className="absolute top-0 left-0 w-full h-1 bg-red-500 animate-pulse"/>}
                             
                             <textarea
@@ -232,19 +231,19 @@ export const SurgicalReportView: React.FC<SurgicalReportViewProps> = ({ doctor, 
                             {uploadedFile && (
                                 <div className="mt-4 flex items-center gap-2 bg-indigo-50 dark:bg-indigo-900/30 px-3 py-2 rounded-2xl border border-indigo-100 dark:border-indigo-800">
                                     {uploadedFile.type.includes('audio') ? <Music size={16} className="text-indigo-600"/> : <FileImage size={16} className="text-indigo-600"/>}
-                                    <span className="text-xs font-bold text-indigo-700 dark:text-indigo-300 truncate max-w-[180px]">{uploadedFile.name}</span>
-                                    <button onClick={() => setUploadedFile(null)} className="ml-auto p-1 bg-white dark:bg-slate-800 rounded-full shadow-sm text-red-500"><X size={12}/></button>
+                                    <span className="text-xs font-bold text-indigo-700 dark:text-indigo-300 truncate max-w-[150px]">{uploadedFile.name}</span>
+                                    <button onClick={() => setUploadedFile(null)} className="ml-auto p-1 bg-white dark:bg-slate-800 rounded-full text-red-500"><X size={12}/></button>
                                 </div>
                             )}
                         </div>
 
-                        <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 px-6 py-3 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 rounded-full text-xs font-black shadow-sm border border-slate-200 dark:border-slate-800 uppercase tracking-widest active:scale-95 transition-all">
+                        <button onClick={() => fileInputRef.current?.click()} className="flex-none flex items-center gap-2 px-6 py-3 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 rounded-full text-xs font-black shadow-sm border border-slate-200 dark:border-slate-800 uppercase tracking-widest active:scale-95 transition-all">
                             <Upload size={14} className="text-indigo-600"/> Anexar Evidencia
                         </button>
                         <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileChange} accept="audio/*,image/*,.pdf"/>
                     </div>
                 ) : (
-                    <div className="space-y-4 pb-20 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <div className="space-y-4 pb-10">
                         <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-xl border border-indigo-100 dark:border-indigo-900 overflow-hidden">
                             <div className="bg-indigo-600 p-4 flex justify-between items-center text-white">
                                 <h3 className="font-black text-xs uppercase tracking-widest flex items-center gap-2"><ShieldCheck size={16}/> Reporte Validado</h3>
@@ -258,13 +257,14 @@ export const SurgicalReportView: React.FC<SurgicalReportViewProps> = ({ doctor, 
                                 <DataRow label="Plan de Cuidados" value={surgicalLog.plan} />
                             </div>
                         </div>
+                        <p className="text-center text-[10px] text-slate-400 mt-4 px-4 uppercase tracking-widest font-bold">Copia digital para respaldo médico personal</p>
                     </div>
                 )}
             </div>
         )}
 
         {currentModule === 'leave' && (
-             <div className="max-w-2xl mx-auto h-full animate-in fade-in duration-300">
+             <div className="max-w-2xl mx-auto h-full overflow-y-auto">
                 <SurgicalLeaveGenerator 
                     patientName={patient.name}
                     onClose={() => setCurrentModule('op_log')}
@@ -274,41 +274,34 @@ export const SurgicalReportView: React.FC<SurgicalReportViewProps> = ({ doctor, 
         )}
       </main>
 
-      {/* 3. BOTTOM: FOOTER ESTÁTICO DE ACCIONES */}
-      <footer className="bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 p-4 z-20 shadow-[0_-4px_15px_rgba(0,0,0,0.05)]">
+      {/* 3. BOTTOM: FOOTER ESTÁTICO DE ACCIONES (flex-none para que siempre esté visible) */}
+      <footer className="flex-none bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 p-4 z-20 shadow-[0_-4px_15px_rgba(0,0,0,0.05)]">
         {currentModule === 'op_log' && (
             <div className="max-w-md mx-auto flex justify-between items-center gap-4">
                 {!surgicalLog ? (
                     <>
-                        <button onClick={handleClearAll} className="p-4 text-slate-300 hover:text-red-500 transition-colors" disabled={!textContent && !uploadedFile}><X size={28} /></button>
-                        <button onPointerDown={handleMicStart} onPointerUp={handleMicStop} onPointerLeave={handleMicStop} className={`p-8 rounded-full shadow-2xl transition-all active:scale-90 touch-none ${isListening ? 'bg-red-500 ring-8 ring-red-100 dark:ring-red-900/30 scale-110' : 'bg-indigo-600 hover:bg-indigo-700'}`}>{isListening ? <Square size={32} className="text-white fill-current"/> : <Mic size={32} className="text-white"/>}</button>
-                        <button onClick={handleProcessLog} disabled={( !textContent && !uploadedFile ) || isProcessing} className="p-4 text-indigo-600 disabled:opacity-20 active:scale-95 transition-all">{isProcessing ? <RefreshCw className="animate-spin" size={28}/> : <Zap size={32} fill="currentColor"/>}</button>
+                        <button onClick={handleClearAll} className="p-3 text-slate-300 hover:text-red-500 transition-colors" disabled={!textContent && !uploadedFile}><X size={28} /></button>
+                        <button onPointerDown={handleMicStart} onPointerUp={handleMicStop} onPointerLeave={handleMicStop} className={`p-7 md:p-8 rounded-full shadow-2xl transition-all active:scale-90 touch-none ${isListening ? 'bg-red-500 ring-8 ring-red-100 dark:ring-red-900/30 scale-110' : 'bg-indigo-600 hover:bg-indigo-700'}`}>{isListening ? <Square size={32} className="text-white fill-current"/> : <Mic size={32} className="text-white"/>}</button>
+                        <button onClick={handleProcessLog} disabled={( !textContent && !uploadedFile ) || isProcessing} className="p-3 text-indigo-600 disabled:opacity-20 active:scale-95 transition-all">{isProcessing ? <RefreshCw className="animate-spin" size={28}/> : <Zap size={32} fill="currentColor"/>}</button>
                     </>
                 ) : (
                     <div className="w-full grid grid-cols-2 gap-3">
-                        <button onClick={() => setSurgicalLog(null)} className="py-4 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-black rounded-2xl text-[10px] uppercase tracking-widest active:scale-95 transition-all">Descartar</button>
-                        <button onClick={handleSaveLog} disabled={isSaving} className="py-4 bg-indigo-600 text-white font-black rounded-2xl text-[10px] uppercase tracking-widest shadow-lg shadow-indigo-200 dark:shadow-none flex items-center justify-center gap-2 active:scale-95 transition-all">{isSaving ? <RefreshCw className="animate-spin" size={16}/> : <Save size={16}/>} Guardar en Nube</button>
+                        <button onClick={() => setSurgicalLog(null)} className="py-4 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-black rounded-2xl text-[10px] uppercase tracking-widest active:scale-95">Descartar</button>
+                        <button onClick={handleSaveLog} disabled={isSaving} className="py-4 bg-indigo-600 text-white font-black rounded-2xl text-[10px] uppercase tracking-widest shadow-lg flex items-center justify-center gap-2 active:scale-95 transition-all">{isSaving ? <RefreshCw className="animate-spin" size={16}/> : <Save size={16}/>} Guardar</button>
                     </div>
                 )}
             </div>
         )}
-        {currentModule === 'leave' && (
-            <p className="text-center text-[10px] text-slate-400 font-bold uppercase tracking-widest">Generador de Incapacidad Médica</p>
-        )}
+        {currentModule === 'leave' && <p className="text-center text-[10px] text-slate-400 font-bold uppercase tracking-widest py-2">Generador de Incapacidad Médica</p>}
       </footer>
     </div>
   );
 };
 
-// COMPONENTE DE FILA DE DATOS CON SOPORTE RESPONSIVE
+// COMPONENTE DE FILA DE DATOS
 const DataRow = ({ label, value, highlight = false, alert = false }: any) => (
     <div className={`p-5 transition-colors ${highlight ? 'bg-indigo-50/50 dark:bg-indigo-900/10' : ''} ${alert ? 'bg-red-50 dark:bg-red-900/10' : ''}`}>
-        <p className="text-[9px] uppercase font-black text-slate-400 mb-2 flex items-center justify-between tracking-tighter">
-            {label}
-            {alert && <AlertTriangle size={12} className="text-red-500 animate-bounce"/>}
-        </p>
-        <p className={`text-sm font-semibold leading-relaxed ${alert ? 'text-red-700 dark:text-red-400' : 'text-slate-800 dark:text-slate-200'} select-all`}>
-            {value || "---"}
-        </p>
+        <p className="text-[9px] uppercase font-black text-slate-400 mb-2 flex items-center justify-between tracking-tighter">{label} {alert && <AlertTriangle size={12} className="text-red-500 animate-bounce"/>}</p>
+        <p className={`text-sm font-semibold leading-relaxed ${alert ? 'text-red-700 dark:text-red-400' : 'text-slate-800 dark:text-slate-200'} select-all`}>{value || "---"}</p>
     </div>
 );
