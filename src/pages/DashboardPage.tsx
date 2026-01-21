@@ -53,27 +53,19 @@ interface WeatherState {
     code: number;
 }
 
-// 🌟 BRAND COMPONENT (INTEGRACIÓN REAL)
-// Conectado directamente a los activos de la carpeta /public
+// 🌟 BRAND COMPONENT
 const BrandLogo = ({ className = "" }: { className?: string }) => (
     <img 
         src="/pwa-192x192.png" 
         alt="VitalScribe AI Logo" 
         className={`bg-white object-contain p-0.5 border border-slate-100 ${className}`}
-        onError={(e) => {
-            // Fallback silencioso por si el archivo falta en dev
-            e.currentTarget.src = "/favicon.ico"; 
-        }}
+        onError={(e) => { e.currentTarget.src = "/favicon.ico"; }}
     />
 );
 
-// --- UTILS ---
-const cleanMarkdown = (text: string): string => {
-    if (!text) return "";
-    return text.replace(/[*_#`~]/g, '').replace(/^\s*[-•]\s+/gm, '').replace(/\[.*?\]/g, '').replace(/\n\s*\n/g, '\n').trim();
-};
+// --- UTILS & CLOCK ---
+const cleanMarkdown = (text: string): string => text ? text.replace(/[*_#`~]/g, '').replace(/^\s*[-•]\s+/gm, '').replace(/\[.*?\]/g, '').replace(/\n\s*\n/g, '\n').trim() : "";
 
-// --- CLOCK COMPACTO ---
 const AtomicClock = ({ date, isDesktop = false }: { location: string, date: Date, isDesktop?: boolean }) => {
     return (
         <div className={`flex flex-col ${isDesktop ? 'items-end' : 'justify-center'}`}>
@@ -95,7 +87,6 @@ const AtomicClock = ({ date, isDesktop = false }: { location: string, date: Date
     );
 };
 
-// --- WIDGET DE CLIMA ---
 const WeatherWidget = ({ weather, isDesktop = false }: { weather: WeatherState, isDesktop?: boolean }) => {
     return (
         <div className={`flex flex-col ${isDesktop ? 'justify-end items-end' : 'justify-center items-end'}`}>
@@ -116,27 +107,22 @@ const StatusWidget = ({ totalApts, pendingApts }: { totalApts: number, pendingAp
     
     return (
         <div className="bg-white dark:bg-slate-900 rounded-xl p-4 border border-slate-200 dark:border-slate-800 shadow-sm relative overflow-hidden h-full flex flex-col justify-between">
-             {/* VISTA MÓVIL */}
              <div className="flex md:hidden flex-col justify-center h-full gap-1 shrink">
                  <div className="flex items-center justify-between">
                     <p className="text-[10px] font-bold text-slate-500 uppercase leading-none tracking-wide">Eficiencia</p>
                     <Activity size={14} className="text-blue-600"/>
                  </div>
-                 
                  <div className="flex items-end gap-1 mt-1">
                     <p className="text-4xl font-bold text-slate-900 dark:text-white leading-none tracking-tight">{progress}%</p>
                  </div>
-                 
                  <div className="w-full bg-slate-100 rounded-full h-1.5 mt-2">
                     <div className="bg-blue-600 h-1.5 rounded-full" style={{ width: `${progress}%` }}></div>
                  </div>
-
                  <div className="flex justify-between mt-1.5">
                     <span className="text-[9px] font-semibold text-slate-600">{completed} OK</span>
                     <span className="text-[9px] font-semibold text-slate-400">{pendingApts} Pend</span>
                  </div>
              </div>
-
              {/* VISTA DESKTOP */}
              <div className="hidden md:flex flex-col justify-between h-full relative z-10 text-center">
                  <div className="flex justify-between items-start">
@@ -150,7 +136,6 @@ const StatusWidget = ({ totalApts, pendingApts }: { totalApts: number, pendingAp
                         <Activity size={20} />
                     </div>
                  </div>
-                 
                  <div className="space-y-3 mt-4">
                     <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
                         <div className="bg-gradient-to-r from-blue-600 to-teal-500 h-full rounded-full transition-all duration-1000" style={{ width: `${progress}%` }}></div>
@@ -180,17 +165,12 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete, initialQuery }: { i
     else { stopListening(); window.speechSynthesis.cancel(); }
   }, [isOpen, initialQuery]);
 
-  const handleManualCancel = () => {
-    stopListening();
-    resetTranscript();
-    setStatus('idle');
-  };
+  const handleManualCancel = () => { stopListening(); resetTranscript(); setStatus('idle'); };
 
   const processIntent = async (manualText?: string) => {
       const textToProcess = manualText || transcript;
       if (!textToProcess) { toast.info("No escuché ninguna instrucción."); return; }
-      stopListening(); 
-      setStatus('processing');
+      stopListening(); setStatus('processing');
       try {
           const executeLogic = async () => {
               const lowerText = textToProcess.toLowerCase();
@@ -228,35 +208,20 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete, initialQuery }: { i
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-200">
       <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden border border-white/20 ring-1 ring-black/5">
         <div className="p-6 text-white text-center bg-slate-900 relative">
-          <button onClick={onClose} className="absolute top-4 right-4 text-white/50 hover:text-white transition-colors">
-            <X size={20}/>
-          </button>
+          <button onClick={onClose} className="absolute top-4 right-4 text-white/50 hover:text-white transition-colors"><X size={20}/></button>
           <Bot size={40} className="mx-auto mb-3 text-blue-400" />
           <h3 className="text-xl font-bold">Asistente VitalScribe</h3>
         </div>
         <div className="p-8">
           {(status === 'idle' || status === 'listening' || status === 'processing') && (
             <div className="flex flex-col items-center gap-8">
-                <div className="text-center text-lg font-medium min-h-[3rem] text-slate-700">
-                    "{initialQuery || transcript || (status === 'processing' ? 'Analizando...' : 'Escuchando...')}"
-                </div>
+                <div className="text-center text-lg font-medium min-h-[3rem] text-slate-700">"{initialQuery || transcript || (status === 'processing' ? 'Analizando...' : 'Escuchando...')}"</div>
                 {status === 'processing' ? (
-                  <div className="flex flex-col items-center gap-4">
-                      <Loader2 className="animate-spin text-blue-600" size={48} />
-                      <button onClick={handleManualCancel} className="px-6 py-2 bg-red-50 text-red-600 rounded-full text-sm font-bold hover:bg-red-100 transition-colors border border-red-100">
-                        Cancelar
-                      </button>
-                  </div>
+                  <div className="flex flex-col items-center gap-4"><Loader2 className="animate-spin text-blue-600" size={48} /><button onClick={handleManualCancel} className="px-6 py-2 bg-red-50 text-red-600 rounded-full text-sm font-bold hover:bg-red-100 transition-colors border border-red-100">Cancelar</button></div>
                 ) : (
                   <div className="flex flex-col items-center gap-4">
-                      <button onClick={() => { if (status === 'listening') { processIntent(); } else { resetTranscript(); setStatus('listening'); startListening(); } }} className={`w-20 h-20 rounded-full flex items-center justify-center shadow-lg transition-all transform active:scale-95 ${status === 'listening' ? 'bg-red-500 text-white animate-pulse' : 'bg-slate-100 text-slate-700 border border-slate-200'}`}>
-                        {status === 'listening' ? <Square size={28} fill="currentColor"/> : <Mic size={28} />}
-                      </button>
-                      {status === 'listening' && (
-                          <button onClick={handleManualCancel} className="text-xs font-bold text-slate-400 hover:text-red-500 transition-colors">
-                            Cancelar
-                          </button>
-                      )}
+                      <button onClick={() => { if (status === 'listening') { processIntent(); } else { resetTranscript(); setStatus('listening'); startListening(); } }} className={`w-20 h-20 rounded-full flex items-center justify-center shadow-lg transition-all transform active:scale-95 ${status === 'listening' ? 'bg-red-500 text-white animate-pulse' : 'bg-slate-100 text-slate-700 border border-slate-200'}`}>{status === 'listening' ? <Square size={28} fill="currentColor"/> : <Mic size={28} />}</button>
+                      {status === 'listening' && <button onClick={handleManualCancel} className="text-xs font-bold text-slate-400 hover:text-red-500 transition-colors">Cancelar</button>}
                   </div>
                 )}
             </div>
@@ -310,23 +275,11 @@ const ActionRadar = ({ items, onItemClick }: { items: PendingItem[], onItemClick
 // --- QUICK DOCS ---
 const QuickDocs = ({ openModal }: { openModal: (type: 'justificante' | 'certificado' | 'receta') => void }) => (
     <div className="bg-white rounded-xl p-6 border border-slate-200 shadow-sm h-full">
-        <h3 className="font-bold text-slate-800 flex items-center gap-2 mb-4 text-sm">
-            <div className="p-1.5 bg-slate-100 text-slate-600 rounded-md"><FileCheck size={16}/></div>
-            Documentación Rápida
-        </h3>
+        <h3 className="font-bold text-slate-800 flex items-center gap-2 mb-4 text-sm"><div className="p-1.5 bg-slate-100 text-slate-600 rounded-md"><FileCheck size={16}/></div> Documentación Rápida</h3>
         <div className="grid grid-cols-2 gap-3">
-            <button onClick={() => openModal('justificante')} className="p-3 bg-white border border-slate-200 hover:border-blue-300 hover:shadow-md rounded-lg text-left transition-all group">
-                <FileText size={18} className="text-slate-400 group-hover:text-blue-500 mb-2 transition-colors"/>
-                <p className="text-xs font-bold text-slate-600 group-hover:text-slate-800">Justificante</p>
-            </button>
-            <button onClick={() => openModal('certificado')} className="p-3 bg-white border border-slate-200 hover:border-blue-300 hover:shadow-md rounded-lg text-left transition-all group">
-                <FileSignature size={18} className="text-slate-400 group-hover:text-blue-500 mb-2 transition-colors"/>
-                <p className="text-xs font-bold text-slate-600 group-hover:text-slate-800">Certificado</p>
-            </button>
-            <button onClick={() => openModal('receta')} className="col-span-2 p-3 bg-white border border-slate-200 hover:border-blue-300 hover:shadow-md rounded-lg text-left flex items-center gap-3 transition-all group">
-                <Printer size={18} className="text-slate-400 group-hover:text-blue-500 transition-colors"/>
-                <p className="text-xs font-bold text-slate-600 group-hover:text-slate-800">Receta Simple</p>
-            </button>
+            <button onClick={() => openModal('justificante')} className="p-3 bg-white border border-slate-200 hover:border-blue-300 hover:shadow-md rounded-lg text-left transition-all group"><FileText size={18} className="text-slate-400 group-hover:text-blue-500 mb-2 transition-colors"/><p className="text-xs font-bold text-slate-600 group-hover:text-slate-800">Justificante</p></button>
+            <button onClick={() => openModal('certificado')} className="p-3 bg-white border border-slate-200 hover:border-blue-300 hover:shadow-md rounded-lg text-left transition-all group"><FileSignature size={18} className="text-slate-400 group-hover:text-blue-500 mb-2 transition-colors"/><p className="text-xs font-bold text-slate-600 group-hover:text-slate-800">Certificado</p></button>
+            <button onClick={() => openModal('receta')} className="col-span-2 p-3 bg-white border border-slate-200 hover:border-blue-300 hover:shadow-md rounded-lg text-left flex items-center gap-3 transition-all group"><Printer size={18} className="text-slate-400 group-hover:text-blue-500 transition-colors"/><p className="text-xs font-bold text-slate-600 group-hover:text-slate-800">Receta Simple</p></button>
         </div>
     </div>
 );
@@ -367,7 +320,6 @@ const Dashboard: React.FC = () => {
     return /^(Dr\.|Dra\.)/i.test(raw) ? raw : `Dr. ${raw}`;
   }, [doctorProfile]);
 
-  // 🛡️ REFACTOR v8.2: Greeting Logic Decoupling
   const greetingText = useMemo(() => {
     const hour = parseInt(format(now, 'H'));
     if (hour >= 5 && hour < 12) return 'Buenos días';
@@ -444,9 +396,7 @@ const Dashboard: React.FC = () => {
     const cachedLocation = localStorage.getItem('last_known_location');
     if (cachedLocation) { setLocationName(cachedLocation); }
     
-    const pollingInterval = setInterval(() => { 
-        if (document.visibilityState === 'visible') fetchData(true); 
-    }, 120000);
+    const pollingInterval = setInterval(() => { if (document.visibilityState === 'visible') fetchData(true); }, 120000);
     
     const handleVisibilityChange = () => {
         if (document.visibilityState === 'visible') {
@@ -459,13 +409,7 @@ const Dashboard: React.FC = () => {
 
     const realtimeChannel = supabase
         .channel('dashboard-updates')
-        .on(
-            'postgres_changes', 
-            { event: '*', schema: 'public', table: 'appointments' }, 
-            (payload) => {
-                fetchData(true);
-            }
-        )
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'appointments' }, () => { fetchData(true); })
         .subscribe();
 
     let weatherInterval: NodeJS.Timeout | null = null;
@@ -483,7 +427,6 @@ const Dashboard: React.FC = () => {
             weatherInterval = setInterval(() => { updateWeather(latitude, longitude); }, 30 * 60 * 1000); 
         }, () => { if(!cachedLocation) setLocationName("Ubicación n/a"); });
     }
-    
     return () => { 
         clearInterval(pollingInterval); 
         if (weatherInterval) clearInterval(weatherInterval);
@@ -522,17 +465,11 @@ const Dashboard: React.FC = () => {
       } catch (err) { toast.error("Error al cancelar"); } 
   };
 
-  const handleSearchSubmit = (e?: React.FormEvent) => { 
-      if(e) e.preventDefault(); 
-      if(!searchInput.trim()) return; 
-      setInitialAssistantQuery(searchInput); 
-      setIsAssistantOpen(true); 
-      setSearchInput(''); 
-  };
+  const handleSearchSubmit = (e?: React.FormEvent) => { if(e) e.preventDefault(); if(!searchInput.trim()) return; setInitialAssistantQuery(searchInput); setIsAssistantOpen(true); setSearchInput(''); };
 
   // --- RENDER PRINCIPAL ---
   return (
-    <div className="md:h-auto min-h-screen bg-slate-50 dark:bg-slate-950 font-sans w-full relative">
+    <div className="md:h-auto h-screen w-full bg-slate-50 dark:bg-slate-950 font-sans relative overflow-hidden md:overflow-y-auto">
       <style>{`
         @keyframes fadeIn { from { opacity: 0; transform: translateY(1rem); } to { opacity: 1; transform: translateY(0); } }
         @keyframes slideInTop { from { opacity: 0; transform: translateY(-1rem); } to { opacity: 1; transform: translateY(0); } }
@@ -542,18 +479,17 @@ const Dashboard: React.FC = () => {
         .delay-300 { animation-delay: 300ms; }
       `}</style>
       
-      {/* 📱 VISTA MÓVIL ESTRICTA (v8.4 - BRAND IDENTITY) */}
-      <div className="md:hidden h-[100dvh] max-h-[100dvh] w-full flex flex-col justify-between overflow-hidden bg-slate-50 p-4 pb-20">
-        <div className="shrink-0 bg-white rounded-xl p-4 shadow-sm border border-slate-200 relative overflow-hidden animate-slide-top">
-            
-            {/* ENCABEZADO MÓVIL */}
+      {/* 📱 VISTA MÓVIL (v8.5 - FIXED LAYOUT BLOCKED) */}
+      {/* 🛡️ PROTOCOLO GLASS FIXED: Posicionamiento absoluto y bloqueo de scroll en el padre */}
+      <div className="md:hidden fixed inset-0 z-0 flex flex-col bg-slate-50 p-4 pb-24 overflow-hidden overscroll-none">
+        
+        {/* HEADER (No Scroll) */}
+        <div className="shrink-0 bg-white rounded-xl p-4 shadow-sm border border-slate-200 relative animate-slide-top z-10">
             <div className="flex flex-col gap-2 mb-2">
                 <div className="flex justify-between items-center w-full">
                     <div className="flex items-center gap-2">
-                        {/* 🌟 LOGOTIPO OFICIAL (Integrado desde /public) */}
+                        {/* 🌟 LOGOTIPO OFICIAL */}
                         <BrandLogo className="h-9 w-9 rounded-xl shadow-[0_2px_4px_rgba(0,0,0,0.06)]" />
-                        
-                        {/* Saludo limpio */}
                         <p className="text-sm font-medium text-slate-500">{greetingText},</p>
                     </div>
                     <div className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200 shrink-0">
@@ -572,8 +508,6 @@ const Dashboard: React.FC = () => {
                     </h1>
                 </div>
             </div>
-            
-            {/* BOTONES DE ACCIÓN */}
             <div className="grid grid-cols-2 gap-2 mt-4 pt-3 border-t border-slate-100">
                 <button onClick={() => { setInitialAssistantQuery(null); setIsAssistantOpen(true); }} className="bg-white p-3 rounded-lg flex items-center justify-center gap-2 active:scale-95 transition-transform border border-slate-200 shadow-sm">
                     <Bot size={18} className="text-blue-600"/>
@@ -586,8 +520,8 @@ const Dashboard: React.FC = () => {
             </div>
         </div>
 
-        {/* LISTA DE AGENDA (TARJETAS INDEPENDIENTES) */}
-        <div className="flex-1 min-h-0 bg-transparent flex flex-col my-2 animate-fade-in delay-150">
+        {/* LISTA AGENDA (Scroll Interno Habilitado) */}
+        <div className="flex-1 min-h-0 flex flex-col my-2 animate-fade-in delay-150 relative z-0">
             <div className="flex justify-between items-center mb-2 px-1 shrink-0">
                 <h3 className="font-bold text-slate-700 text-xs flex items-center gap-1.5"><Calendar size={14} className="text-slate-500"/> Agenda de Hoy</h3>
                 <div className="flex items-center gap-2">
@@ -604,19 +538,9 @@ const Dashboard: React.FC = () => {
                     </div>
                 ) : (
                     appointments.map((apt, index) => (
-                        <div 
-                            key={apt.id} 
-                            onClick={() => handleStartConsultation(apt)} 
-                            className={`
-                                relative overflow-hidden p-4 rounded-xl shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-slate-100/60
-                                flex items-center gap-4 active:scale-[0.98] transition-all shrink-0
-                                ${index % 2 === 0 ? 'bg-white' : 'bg-slate-50/80'} 
-                            `}
-                        >
+                        <div key={apt.id} onClick={() => handleStartConsultation(apt)} className={`relative overflow-hidden p-4 rounded-xl shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-slate-100/60 flex items-center gap-4 active:scale-[0.98] transition-all shrink-0 ${index % 2 === 0 ? 'bg-white' : 'bg-slate-50/80'}`}>
                              <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-500"></div>
-                             <div className="font-bold text-slate-500 text-xs min-w-[35px] text-center bg-slate-100 rounded-md py-1 px-1.5">
-                                {format(parseISO(apt.start_time), 'HH:mm')}
-                             </div>
+                             <div className="font-bold text-slate-500 text-xs min-w-[35px] text-center bg-slate-100 rounded-md py-1 px-1.5">{format(parseISO(apt.start_time), 'HH:mm')}</div>
                              <div className="flex-1 min-w-0">
                                 <p className="font-bold text-slate-800 text-sm truncate leading-tight">{apt.title}</p>
                                 <div className="flex items-center gap-1.5 mt-0.5">
@@ -631,51 +555,25 @@ const Dashboard: React.FC = () => {
             </div>
         </div>
 
-        {/* IMMERSIVE CARDS & FOOTER */}
-        <div className="shrink-0 flex flex-col gap-2 animate-fade-in delay-300">
+        {/* FOOTER CARDS (No Scroll) */}
+        <div className="shrink-0 flex flex-col gap-2 animate-fade-in delay-300 relative z-10">
             <div className="grid grid-cols-2 gap-2 h-24">
                 <StatusWidget totalApts={totalDailyLoad} pendingApts={appointmentsToday} />
-                <button 
-                  onClick={() => setIsFastAdmitOpen(true)} 
-                  className="relative w-full h-full bg-gradient-to-br from-blue-600 to-indigo-700 rounded-xl p-3 shadow-lg overflow-hidden group text-left flex flex-col justify-between transition-all hover:scale-[1.02]"
-                >
-                  <div className="absolute -right-4 -bottom-4 text-white opacity-10 group-hover:opacity-20 transition-all duration-500 rotate-12 scale-125">
-                    <UserPlus size={70} strokeWidth={1.5} />
-                  </div>
-                  <div className="absolute top-0 right-0 w-20 h-20 bg-white opacity-5 rounded-full blur-xl -mr-6 -mt-6"></div>
-                  
-                  <div className="relative z-10 bg-white/20 w-8 h-8 flex items-center justify-center rounded-lg backdrop-blur-sm">
-                    <UserPlus className="text-white" size={16} />
-                  </div>
-                  <div className="relative z-10">
-                    <h3 className="text-white font-bold text-xs leading-tight">Consulta<br/>Rápida</h3>
-                  </div>
+                <button onClick={() => setIsFastAdmitOpen(true)} className="relative w-full h-full bg-gradient-to-br from-blue-600 to-indigo-700 rounded-xl p-3 shadow-lg overflow-hidden group text-left flex flex-col justify-between transition-all hover:scale-[1.02]">
+                  <div className="absolute -right-4 -bottom-4 text-white opacity-10 group-hover:opacity-20 transition-all duration-500 rotate-12 scale-125"><UserPlus size={70} strokeWidth={1.5} /></div>
+                  <div className="relative z-10 bg-white/20 w-8 h-8 flex items-center justify-center rounded-lg backdrop-blur-sm"><UserPlus className="text-white" size={16} /></div>
+                  <div className="relative z-10"><h3 className="text-white font-bold text-xs leading-tight">Consulta<br/>Rápida</h3></div>
                 </button>
             </div>
-            
             <div className="grid grid-cols-2 gap-2 h-20">
-                 <button onClick={() => setIsDocModalOpen(true)} className="bg-white rounded-xl p-2 shadow-sm border border-slate-200 flex flex-col justify-center items-center gap-1 active:scale-95 transition-transform">
-                    <div className="p-1.5 bg-slate-100 rounded-lg text-slate-500"><FileCheck size={16}/></div>
-                    <span className="text-[10px] font-bold text-slate-600">Docs</span>
-                 </button>
-                 <button 
-                    onClick={() => setIsUploadModalOpen(true)} 
-                    className="relative bg-white rounded-xl p-2 shadow-sm border border-slate-200 overflow-hidden group flex flex-col justify-center items-center gap-1 active:scale-95 transition-transform hover:border-teal-400"
-                 >
-                    <div className="absolute -right-2 -bottom-2 text-teal-50 opacity-0 group-hover:opacity-100 transition-all duration-500 rotate-12 scale-125">
-                        <FolderUp size={50} />
-                    </div>
-                    <div className="relative z-10 p-1.5 bg-slate-100 group-hover:bg-teal-50 rounded-lg text-slate-500 group-hover:text-teal-600 transition-colors">
-                        <FolderUp size={16}/>
-                    </div>
+                 <button onClick={() => setIsDocModalOpen(true)} className="bg-white rounded-xl p-2 shadow-sm border border-slate-200 flex flex-col justify-center items-center gap-1 active:scale-95 transition-transform"><div className="p-1.5 bg-slate-100 rounded-lg text-slate-500"><FileCheck size={16}/></div><span className="text-[10px] font-bold text-slate-600">Docs</span></button>
+                 <button onClick={() => setIsUploadModalOpen(true)} className="relative bg-white rounded-xl p-2 shadow-sm border border-slate-200 overflow-hidden group flex flex-col justify-center items-center gap-1 active:scale-95 transition-transform hover:border-teal-400">
+                    <div className="absolute -right-2 -bottom-2 text-teal-50 opacity-0 group-hover:opacity-100 transition-all duration-500 rotate-12 scale-125"><FolderUp size={50} /></div>
+                    <div className="relative z-10 p-1.5 bg-slate-100 group-hover:bg-teal-50 rounded-lg text-slate-500 group-hover:text-teal-600 transition-colors"><FolderUp size={16}/></div>
                     <span className="relative z-10 text-[10px] font-bold text-slate-600 group-hover:text-teal-700 transition-colors">Subir</span>
                  </button>
             </div>
-            
-            <button onClick={() => setIsChallengeModalOpen(true)} className="w-full bg-gradient-to-r from-blue-600 to-teal-500 rounded-xl p-3 shadow-md active:scale-95 text-white flex items-center justify-center gap-2">
-                <BrainCircuit size={16}/>
-                <span className="text-xs font-bold uppercase tracking-wide">Reto Clínico</span>
-            </button>
+            <button onClick={() => setIsChallengeModalOpen(true)} className="w-full bg-gradient-to-r from-blue-600 to-teal-500 rounded-xl p-3 shadow-md active:scale-95 text-white flex items-center justify-center gap-2"><BrainCircuit size={16}/><span className="text-xs font-bold uppercase tracking-wide">Reto Clínico</span></button>
         </div>
       </div>
 
@@ -684,24 +582,14 @@ const Dashboard: React.FC = () => {
          <div className="max-w-[1800px] mx-auto">
              <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-10 gap-6 animate-slide-top">
                  <div className="flex items-center gap-6">
-                     {/* 🌟 LOGOTIPO DE ESCRITORIO */}
                      <BrandLogo className="h-16 w-16 rounded-2xl shadow-md border-2 border-white" />
                      <div>
-                         <h1 className="text-4xl font-black text-slate-900 tracking-tight leading-tight">
-                             {formattedDocName}
-                         </h1>
-                         <p className="text-slate-500 font-medium text-lg mt-1 flex items-center gap-2">
-                             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                             Panel de Control Clínico
-                         </p>
+                         <h1 className="text-4xl font-black text-slate-900 tracking-tight leading-tight">{formattedDocName}</h1>
+                         <p className="text-slate-500 font-medium text-lg mt-1 flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Panel de Control Clínico</p>
                      </div>
                      <div className="flex gap-2 ml-4">
-                        <button onClick={() => setIsAssistantOpen(true)} className="p-3 bg-white border border-slate-200 text-slate-700 rounded-xl shadow-sm hover:shadow-md transition-all flex items-center gap-2">
-                            <Bot size={20} className="text-blue-600"/> <span className="text-sm font-bold">Asistente</span>
-                        </button>
-                        <button onClick={() => setIsQuickNoteOpen(true)} className="p-3 bg-white border border-slate-200 text-slate-700 rounded-xl shadow-sm hover:shadow-md transition-all flex items-center gap-2">
-                            <Zap size={20} className="text-amber-500"/> <span className="text-sm font-bold">Nota Flash</span>
-                        </button>
+                        <button onClick={() => setIsAssistantOpen(true)} className="p-3 bg-white border border-slate-200 text-slate-700 rounded-xl shadow-sm hover:shadow-md transition-all flex items-center gap-2"><Bot size={20} className="text-blue-600"/> <span className="text-sm font-bold">Asistente</span></button>
+                        <button onClick={() => setIsQuickNoteOpen(true)} className="p-3 bg-white border border-slate-200 text-slate-700 rounded-xl shadow-sm hover:shadow-md transition-all flex items-center gap-2"><Zap size={20} className="text-amber-500"/> <span className="text-sm font-bold">Nota Flash</span></button>
                      </div>
                  </div>
                  <div className="flex items-center gap-8 bg-white px-8 py-4 rounded-xl border border-slate-200 shadow-sm">
@@ -713,140 +601,62 @@ const Dashboard: React.FC = () => {
 
              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-6 h-auto animate-fade-in delay-150">
                  <div className="lg:col-span-3 flex flex-col gap-6">
-                     <div className="h-64">
-                        <StatusWidget totalApts={totalDailyLoad} pendingApts={appointmentsToday} />
-                     </div>
+                     <div className="h-64"><StatusWidget totalApts={totalDailyLoad} pendingApts={appointmentsToday} /></div>
                      <ActionRadar items={pendingItems} onItemClick={handleRadarClick} />
                  </div>
-
                  <div className="lg:col-span-6 flex flex-col gap-6">
                      <div className="bg-white rounded-xl p-8 border border-slate-200 shadow-sm relative overflow-hidden min-h-[280px] flex flex-col justify-between">
                         <div className="flex justify-between items-start mb-4">
-                            <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide border ${nextPatient ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-slate-50 text-slate-500 border-slate-200'}`}>
-                                {nextPatient ? 'En Espera' : 'Sala Libre'}
-                            </span>
+                            <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide border ${nextPatient ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-slate-50 text-slate-500 border-slate-200'}`}>{nextPatient ? 'En Espera' : 'Sala Libre'}</span>
                             {nextPatient && <span className="text-2xl font-bold text-slate-800">{format(parseISO(nextPatient.start_time), 'h:mm a')}</span>}
                         </div>
                         <div className="mb-6">
-                            <h2 className="text-3xl font-black text-slate-900 truncate mb-2">
-                                {nextPatient ? nextPatient.title : 'Sin pacientes'}
-                            </h2>
-                            <p className="text-slate-500 text-lg">
-                                {nextPatient ? (nextPatient.patient ? 'Expediente Activo • Consulta Programada' : 'Primera Vez') : 'Agenda despejada.'}
-                            </p>
+                            <h2 className="text-3xl font-black text-slate-900 truncate mb-2">{nextPatient ? nextPatient.title : 'Sin pacientes'}</h2>
+                            <p className="text-slate-500 text-lg">{nextPatient ? (nextPatient.patient ? 'Expediente Activo • Consulta Programada' : 'Primera Vez') : 'Agenda despejada.'}</p>
                         </div>
-                        {nextPatient && (
-                            <button onClick={() => handleStartConsultation(nextPatient)} className="w-full py-4 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold text-sm shadow-md flex items-center justify-center gap-2 transition-colors">
-                                <Stethoscope size={18} /> INICIAR CONSULTA
-                            </button>
-                        )}
+                        {nextPatient && <button onClick={() => handleStartConsultation(nextPatient)} className="w-full py-4 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold text-sm shadow-md flex items-center justify-center gap-2 transition-colors"><Stethoscope size={18} /> INICIAR CONSULTA</button>}
                      </div>
-
                      <div className="bg-white rounded-xl p-8 border border-slate-200 shadow-sm min-h-[400px]">
-                        <div className="flex justify-between items-center mb-6">
-                            <h3 className="font-bold text-slate-800 text-lg flex items-center gap-2"><Calendar size={20} className="text-slate-400"/> Agenda del Día</h3>
-                        </div>
-                        
-                        {/* LISTA ESCRITORIO CON TARJETAS (CARDS & GAPS) */}
+                        <div className="flex justify-between items-center mb-6"><h3 className="font-bold text-slate-800 text-lg flex items-center gap-2"><Calendar size={20} className="text-slate-400"/> Agenda del Día</h3></div>
                         <div className="space-y-3">
-                            {appointments.length === 0 ? (
-                                <p className="text-center text-slate-400 py-10">No hay más citas programadas.</p>
-                            ) : (
-                                appointments.map((apt, index) => (
-                                    <div 
-                                        key={apt.id} 
-                                        className={`
-                                            flex items-center gap-4 p-4 rounded-xl group cursor-pointer 
-                                            border border-slate-100 shadow-sm hover:shadow-md hover:border-blue-200 transition-all
-                                            ${index % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}
-                                        `} 
-                                        onClick={() => handleStartConsultation(apt)}
-                                    >
-                                        <div className="font-bold text-slate-500 text-sm w-12 text-right">{format(parseISO(apt.start_time), 'HH:mm')}</div>
-                                        <div className="w-1.5 h-10 bg-slate-200 rounded-full group-hover:bg-blue-500 transition-colors"></div>
-                                        <div className="flex-1 min-w-0">
-                                            <p className="font-bold text-slate-800 text-base truncate">{apt.title}</p>
-                                        </div>
-                                        <ChevronRight size={20} className="text-slate-300 group-hover:text-blue-600"/>
-                                    </div>
-                                ))
-                            )}
+                            {appointments.length === 0 ? <p className="text-center text-slate-400 py-10">No hay más citas programadas.</p> : appointments.map((apt, index) => (
+                                <div key={apt.id} className={`flex items-center gap-4 p-4 rounded-xl group cursor-pointer border border-slate-100 shadow-sm hover:shadow-md hover:border-blue-200 transition-all ${index % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}`} onClick={() => handleStartConsultation(apt)}>
+                                    <div className="font-bold text-slate-500 text-sm w-12 text-right">{format(parseISO(apt.start_time), 'HH:mm')}</div>
+                                    <div className="w-1.5 h-10 bg-slate-200 rounded-full group-hover:bg-blue-500 transition-colors"></div>
+                                    <div className="flex-1 min-w-0"><p className="font-bold text-slate-800 text-base truncate">{apt.title}</p></div>
+                                    <ChevronRight size={20} className="text-slate-300 group-hover:text-blue-600"/>
+                                </div>
+                            ))}
                         </div>
                      </div>
                  </div>
-
                  <div className="lg:col-span-3 flex flex-col gap-6">
-                     {/* SIDEBAR CARDS */}
                      <div className="grid grid-cols-2 gap-4">
-                        <button 
-                          onClick={() => setIsFastAdmitOpen(true)} 
-                          className="relative w-full h-full bg-gradient-to-br from-blue-600 to-indigo-700 rounded-xl p-4 shadow-lg overflow-hidden group text-left flex flex-col justify-between transition-all hover:scale-[1.02]"
-                        >
-                          <div className="absolute -right-6 -bottom-6 text-white opacity-10 group-hover:opacity-20 group-hover:scale-110 transition-all duration-500 rotate-12">
-                            <UserPlus size={120} strokeWidth={1} />
-                          </div>
+                        <button onClick={() => setIsFastAdmitOpen(true)} className="relative w-full h-full bg-gradient-to-br from-blue-600 to-indigo-700 rounded-xl p-4 shadow-lg overflow-hidden group text-left flex flex-col justify-between transition-all hover:scale-[1.02]">
+                          <div className="absolute -right-6 -bottom-6 text-white opacity-10 group-hover:opacity-20 group-hover:scale-110 transition-all duration-500 rotate-12"><UserPlus size={120} strokeWidth={1} /></div>
                           <div className="absolute top-0 right-0 w-32 h-32 bg-white opacity-5 rounded-full blur-2xl -mr-10 -mt-10"></div>
-                          <div className="relative z-10 bg-white/20 w-fit p-2 rounded-lg backdrop-blur-sm mb-2">
-                            <UserPlus className="text-white" size={24} />
-                          </div>
-                          <div className="relative z-10">
-                            <h3 className="text-white font-bold text-lg leading-tight">Consulta<br/>Rápida</h3>
-                            <p className="text-blue-100 text-[10px] mt-1 opacity-80">Ingreso Express</p>
-                          </div>
+                          <div className="relative z-10 bg-white/20 w-fit p-2 rounded-lg backdrop-blur-sm mb-2"><UserPlus className="text-white" size={24} /></div>
+                          <div className="relative z-10"><h3 className="text-white font-bold text-lg leading-tight">Consulta<br/>Rápida</h3><p className="text-blue-100 text-[10px] mt-1 opacity-80">Ingreso Express</p></div>
                         </button>
-
-                        <button 
-                          onClick={() => setIsUploadModalOpen(true)} 
-                          className="relative w-full h-full bg-white border border-slate-200 rounded-xl p-4 shadow-sm overflow-hidden group text-left flex flex-col justify-between transition-all hover:border-teal-400 hover:shadow-md"
-                        >
-                          <div className="absolute -right-4 -bottom-4 text-teal-50 opacity-0 group-hover:opacity-100 transition-all duration-500 scale-150">
-                            <FolderUp size={100} />
-                          </div>
+                        <button onClick={() => setIsUploadModalOpen(true)} className="relative w-full h-full bg-white border border-slate-200 rounded-xl p-4 shadow-sm overflow-hidden group text-left flex flex-col justify-between transition-all hover:border-teal-400 hover:shadow-md">
+                          <div className="absolute -right-4 -bottom-4 text-teal-50 opacity-0 group-hover:opacity-100 transition-all duration-500 scale-150"><FolderUp size={100} /></div>
                           <div className="absolute top-0 right-0 w-20 h-20 bg-teal-50 rounded-bl-full opacity-50 transition-all group-hover:bg-teal-100"></div>
-                          <div className="relative z-10 bg-teal-50 w-fit p-2 rounded-lg group-hover:bg-teal-600 group-hover:text-white transition-colors mb-2">
-                            <FolderUp size={24} className="text-teal-600 group-hover:text-white" />
-                          </div>
-                          <div className="relative z-10">
-                            <h3 className="text-slate-700 font-bold text-lg leading-tight group-hover:text-teal-700">Subir<br/>Archivo</h3>
-                            <p className="text-slate-400 text-[10px] mt-1 group-hover:text-teal-600">Digitalización</p>
-                          </div>
+                          <div className="relative z-10 bg-teal-50 w-fit p-2 rounded-lg group-hover:bg-teal-600 group-hover:text-white transition-colors mb-2"><FolderUp size={24} className="text-teal-600 group-hover:text-white" /></div>
+                          <div className="relative z-10"><h3 className="text-slate-700 font-bold text-lg leading-tight group-hover:text-teal-700">Subir<br/>Archivo</h3><p className="text-slate-400 text-[10px] mt-1 group-hover:text-teal-600">Digitalización</p></div>
                         </button>
                      </div>
-
-                     <div className="flex-none">
-                        <QuickDocs openModal={openDocModal} />
-                     </div>
-
+                     <div className="flex-none"><QuickDocs openModal={openDocModal} /></div>
                      <div className="bg-gradient-to-br from-blue-600 to-teal-600 rounded-xl p-6 shadow-md text-white flex flex-col gap-3">
-                        <div className="flex items-center gap-2 font-bold text-blue-50">
-                            <BrainCircuit size={20}/> <span>Reto Diario</span>
-                        </div>
-                        <p className="text-blue-50 text-sm leading-relaxed italic">
-                            ¿Sabes identificar el signo de Leser-Trélat en un paciente adulto?
-                        </p>
-                        <button onClick={() => setIsChallengeModalOpen(true)} className="w-full py-3 bg-white/10 hover:bg-white/20 text-white border border-white/20 rounded-lg font-bold text-xs transition-colors">
-                            REVISAR CASO
-                        </button>
+                        <div className="flex items-center gap-2 font-bold text-blue-50"><BrainCircuit size={20}/> <span>Reto Diario</span></div>
+                        <p className="text-blue-50 text-sm leading-relaxed italic">¿Sabes identificar el signo de Leser-Trélat en un paciente adulto?</p>
+                        <button onClick={() => setIsChallengeModalOpen(true)} className="w-full py-3 bg-white/10 hover:bg-white/20 text-white border border-white/20 rounded-lg font-bold text-xs transition-colors">REVISAR CASO</button>
                      </div>
                  </div>
              </div>
          </div>
       </div>
 
-      {/* MODALES & UTILS */}
-      {isChallengeModalOpen && (
-          <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/80 backdrop-blur-sm p-4 animate-fade-in">
-              <div className="w-full max-w-md bg-transparent relative">
-                  <button onClick={() => setIsChallengeModalOpen(false)} className="absolute -top-12 right-0 text-white p-2 bg-white/20 rounded-full backdrop-blur-md">
-                      <X size={24}/>
-                  </button>
-                  <div className="h-[400px]">
-                      <DailyChallengeCard specialty={doctorProfile?.specialty || 'General'} />
-                  </div>
-              </div>
-          </div>
-      )}
-
+      {isChallengeModalOpen && <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/80 backdrop-blur-sm p-4 animate-fade-in"><div className="w-full max-w-md bg-transparent relative"><button onClick={() => setIsChallengeModalOpen(false)} className="absolute -top-12 right-0 text-white p-2 bg-white/20 rounded-full backdrop-blur-md"><X size={24}/></button><div className="h-[400px]"><DailyChallengeCard specialty={doctorProfile?.specialty || 'General'} /></div></div></div>}
       {isUploadModalOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4"><div className="bg-white w-full max-w-md rounded-2xl p-6 shadow-xl relative"><button onClick={() => setIsUploadModalOpen(false)} className="absolute top-4 right-4"><X size={16}/></button><UploadMedico onUploadComplete={() => {}}/><div className="mt-4 pt-4 border-t"><DoctorFileGallery /></div></div></div>}
       {rescheduleTarget && <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/30 p-4"><div className="bg-white p-6 rounded-2xl shadow-xl w-full max-w-sm"><h3 className="font-bold text-lg mb-2">Reprogramar</h3><input type="datetime-local" className="w-full p-3 border rounded-xl mb-4" value={newDateInput} onChange={(e) => setNewDateInput(e.target.value)}/><div className="flex justify-end gap-2"><button onClick={() => setRescheduleTarget(null)} className="px-4 py-2 text-slate-500 text-sm">Cancelar</button><button onClick={confirmReschedule} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm">Confirmar</button></div></div></div>}
       {isQuickNoteOpen && <QuickNoteModal onClose={() => setIsQuickNoteOpen(false)} doctorProfile={doctorProfile!}/>}
