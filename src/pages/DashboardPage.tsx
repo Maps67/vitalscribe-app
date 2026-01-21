@@ -1,11 +1,11 @@
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Calendar, Sun, Moon, Cloud, 
   Upload, X, Bot, Mic, Square, Loader2, CheckCircle2,
   Stethoscope, AlertTriangle, FileText,
   UserPlus, Activity, ChevronRight,
-  CalendarX, FileSignature, Printer, FileCheck, // ✅ CORRECCIÓN: FileCheck reincorporado
+  CalendarX, FileSignature, Printer, FileCheck,
   HelpCircle, Zap, FolderUp, BrainCircuit 
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -151,7 +151,7 @@ const StatusWidget = ({ totalApts, pendingApts }: { totalApts: number, pendingAp
     );
 };
 
-// --- ASISTENTE MODAL (Estilo Neutro) ---
+// --- ASISTENTE MODAL (Con Lógica de Cancelación) ---
 const AssistantModal = ({ isOpen, onClose, onActionComplete, initialQuery }: { isOpen: boolean; onClose: () => void; onActionComplete: () => void; initialQuery?: string | null }) => {
   const { isListening, transcript, startListening, stopListening, resetTranscript } = useSpeechRecognition();
   const [status, setStatus] = useState<'idle' | 'listening' | 'processing' | 'answering'>('idle');
@@ -166,10 +166,20 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete, initialQuery }: { i
     else { stopListening(); window.speechSynthesis.cancel(); }
   }, [isOpen, initialQuery]);
 
+  // Lógica de Aborto Manual (UX Fix)
+  const handleManualCancel = () => {
+    stopListening();
+    resetTranscript();
+    setStatus('idle');
+    // En el futuro aquí se puede añadir un AbortController para peticiones fetch
+  };
+
   const processIntent = async (manualText?: string) => {
       const textToProcess = manualText || transcript;
       if (!textToProcess) { toast.info("No escuché ninguna instrucción."); return; }
-      stopListening(); setStatus('processing');
+      stopListening(); 
+      setStatus('processing');
+      
       try {
           const executeLogic = async () => {
               const lowerText = textToProcess.toLowerCase();
@@ -206,18 +216,46 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete, initialQuery }: { i
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-200">
       <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden border border-white/20 ring-1 ring-black/5">
-        <div className="p-6 text-white text-center bg-slate-900">
+        <div className="p-6 text-white text-center bg-slate-900 relative">
+          <button onClick={onClose} className="absolute top-4 right-4 text-white/50 hover:text-white transition-colors">
+            <X size={20}/>
+          </button>
           <Bot size={40} className="mx-auto mb-3 text-blue-400" />
           <h3 className="text-xl font-bold">Asistente VitalScribe</h3>
         </div>
         <div className="p-8">
           {(status === 'idle' || status === 'listening' || status === 'processing') && (
             <div className="flex flex-col items-center gap-8">
-                <div className="text-center text-lg font-medium min-h-[3rem] text-slate-700">"{initialQuery || transcript || 'Escuchando...'}"</div>
-                {status === 'processing' ? <Loader2 className="animate-spin text-blue-600" /> : (
-                  <button onClick={() => { if (status === 'listening') { processIntent(); } else { resetTranscript(); setStatus('listening'); startListening(); } }} className={`w-20 h-20 rounded-full flex items-center justify-center shadow-lg transition-all transform active:scale-95 ${status === 'listening' ? 'bg-red-500 text-white animate-pulse' : 'bg-slate-100 text-slate-700 border border-slate-200'}`}>
-                    {status === 'listening' ? <Square size={28} fill="currentColor"/> : <Mic size={28} />}
-                  </button>
+                <div className="text-center text-lg font-medium min-h-[3rem] text-slate-700">
+                    "{initialQuery || transcript || (status === 'processing' ? 'Analizando...' : 'Escuchando...')}"
+                </div>
+                
+                {status === 'processing' ? (
+                  <div className="flex flex-col items-center gap-4">
+                      <Loader2 className="animate-spin text-blue-600" size={48} />
+                      {/* Botón de Cancelación durante Procesamiento */}
+                      <button 
+                        onClick={handleManualCancel}
+                        className="px-6 py-2 bg-red-50 text-red-600 rounded-full text-sm font-bold hover:bg-red-100 transition-colors border border-red-100"
+                      >
+                        Cancelar
+                      </button>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center gap-4">
+                      <button onClick={() => { if (status === 'listening') { processIntent(); } else { resetTranscript(); setStatus('listening'); startListening(); } }} className={`w-20 h-20 rounded-full flex items-center justify-center shadow-lg transition-all transform active:scale-95 ${status === 'listening' ? 'bg-red-500 text-white animate-pulse' : 'bg-slate-100 text-slate-700 border border-slate-200'}`}>
+                        {status === 'listening' ? <Square size={28} fill="currentColor"/> : <Mic size={28} />}
+                      </button>
+                      
+                      {status === 'listening' && (
+                          <button 
+                            onClick={handleManualCancel}
+                            className="text-xs font-bold text-slate-400 hover:text-red-500 transition-colors"
+                          >
+                            Cancelar
+                          </button>
+                      )}
+                  </div>
                 )}
             </div>
           )}
@@ -447,6 +485,14 @@ const Dashboard: React.FC = () => {
       } catch (err) { toast.error("Error al cancelar"); } 
   };
 
+  const handleSearchSubmit = (e?: React.FormEvent) => { 
+      if(e) e.preventDefault(); 
+      if(!searchInput.trim()) return; 
+      setInitialAssistantQuery(searchInput); 
+      setIsAssistantOpen(true); 
+      setSearchInput(''); 
+  };
+
   // --- RENDER PRINCIPAL ---
   return (
     <div className="md:h-auto min-h-screen bg-slate-50 dark:bg-slate-950 font-sans w-full relative">
@@ -459,7 +505,7 @@ const Dashboard: React.FC = () => {
         .delay-300 { animation-delay: 300ms; }
       `}</style>
       
-      {/* 📱 VISTA MÓVIL ESTRICTA (v7.0 - CLINICAL CLEAN + FIXED LAYOUT) */}
+      {/* 📱 VISTA MÓVIL ESTRICTA (v7.1 - CONTROL TOTAL + UX) */}
       <div className="md:hidden h-[100dvh] max-h-[100dvh] w-full flex flex-col justify-between overflow-hidden bg-slate-50 p-4 pb-20">
         <div className="shrink-0 bg-white rounded-xl p-4 shadow-sm border border-slate-200 relative overflow-hidden animate-slide-top">
             
