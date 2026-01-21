@@ -4,7 +4,7 @@ import {
   Stethoscope, Search, X, Calendar, UserPlus, ChevronUp, 
   ChevronDown, Activity, AlertCircle, ShieldCheck, Check, 
   Sparkles, Paperclip, User, CornerDownLeft, Download, Loader2,
-  Lock, Microscope // [NUEVOS ICONOS]
+  Lock, Microscope 
 } from 'lucide-react';
 import { VitalSnapshotCard } from './VitalSnapshotCard';
 import { UploadMedico } from './UploadMedico';
@@ -61,8 +61,6 @@ interface ConsultationSidebarProps {
   setIsAttachmentsOpen: (isOpen: boolean) => void;
   doctorProfile: DoctorProfile | null;
   onDownloadRecord: () => void;
-  
-  // [NUEVO] Prop para disparar la interconsulta desde el selector
   onTriggerInterconsultation?: (specialty: string) => void;
 }
 
@@ -109,12 +107,11 @@ export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
   setIsAttachmentsOpen,
   doctorProfile,
   onDownloadRecord,
-  onTriggerInterconsultation // Recepción de la nueva prop
+  onTriggerInterconsultation 
 }) => {
   const [isMobileContextExpanded, setIsMobileContextExpanded] = useState(false);
   const [isCreatingPatient, setIsCreatingPatient] = useState(false);
 
-  // Wrapper para creación asíncrona
   const onTriggerCreatePatient = async () => {
     if (!searchTerm.trim()) return;
     try {
@@ -127,19 +124,10 @@ export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
     }
   };
 
-  // --- LÓGICA DE BLINDAJE DEL SELECTOR ---
   const handleSpecialtyChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
       const newSpecialty = e.target.value;
-      
-      // 1. Verificamos si intenta cambiar a algo que NO es su perfil real
       if (doctorProfile && newSpecialty !== doctorProfile.specialty) {
-          
-          // BLOQUEO DE ACCIÓN: No actualizamos selectedSpecialty
-          // El selector visualmente se queda (o regresa) a la especialidad del doctor.
-          // Forzamos el valor por si el evento nativo intentó cambiarlo
           e.target.value = doctorProfile.specialty; 
-
-          // DESVIACIÓN DE FLUJO: Abrimos Interconsulta
           if (onTriggerInterconsultation) {
               toast.info(`Abriendo Interconsulta de ${newSpecialty}...`, { icon: <Microscope size={16}/> });
               onTriggerInterconsultation(newSpecialty);
@@ -147,15 +135,19 @@ export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
               toast.warning("Modo Interconsulta no configurado en esta vista.");
           }
       } else {
-          // Si selecciona su propia especialidad (o no hay perfil cargado), comportamiento normal
           setSelectedSpecialty(newSpecialty);
       }
+  };
+
+  // 🍎 MANEJADOR SEGURO APPLE (Habilitación de Micrófono)
+  const handleMicPointerDown = (e: React.PointerEvent) => {
+    if (e.pointerType === 'touch') e.preventDefault();
+    handleToggleRecording();
   };
 
   return (
     <div className={`w-full md:w-1/4 p-4 flex flex-col gap-2 border-r dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden overscroll-contain h-full ${generatedNote ? 'hidden md:flex' : 'flex'}`}>
       
-      {/* --- HEADER --- */}
       <div className="flex-none flex flex-col gap-2">
           <div className="flex justify-between items-center">
             <h2 className="text-xl font-bold dark:text-white flex items-center gap-2">
@@ -170,13 +162,11 @@ export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
             </div>
           </div>
 
-          {/* --- SELECTOR BLINDADO --- */}
           <div className="bg-indigo-50 dark:bg-slate-800 p-3 rounded-lg border border-indigo-100 dark:border-slate-700 relative group">
             <div className="flex justify-between items-center mb-1">
               <label className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase flex gap-1 items-center">
                   <ShieldCheck size={12}/> Perfil Activo
               </label>
-              {/* Indicador Visual de Identidad Verificada */}
               <div className="flex items-center gap-1 text-[9px] font-bold text-green-600 bg-green-100 dark:bg-green-900/30 px-2 py-0.5 rounded-full">
                   <Lock size={8} /> VERIFICADO
               </div>
@@ -185,18 +175,14 @@ export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
             <div className="relative">
                 <select 
                     value={selectedSpecialty} 
-                    onChange={handleSpecialtyChange} // <--- INTERCEPTOR ACTIVADO
+                    onChange={handleSpecialtyChange} 
                     className="w-full bg-transparent border-b border-indigo-200 dark:border-slate-600 outline-none py-1 pl-6 pr-4 text-sm font-bold text-slate-800 dark:text-white cursor-pointer appearance-none hover:text-indigo-600 transition-colors"
                 >
                   {specialties.map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
-                
-                {/* Iconos Decorativos */}
                 <Stethoscope size={14} className="absolute left-0 top-1/2 -translate-y-1/2 text-indigo-400 pointer-events-none"/>
                 <ChevronDown size={14} className="absolute right-0 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"/>
             </div>
-
-            {/* Tooltip informativo al pasar el mouse (Eliminación de Ambigüedad) */}
             <div className="absolute top-full left-0 mt-1 w-full bg-slate-800 text-white text-[10px] p-2 rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-20">
                 Seleccionar otra especialidad abrirá el modo <strong>Interconsulta</strong> (Solo lectura).
             </div>
@@ -257,9 +243,7 @@ export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
           </div>
       </div>
 
-      {/* --- AREA CENTRAL (Scrollable) --- */}
       <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar overscroll-contain flex flex-col gap-2 pr-1">
-          {/* Vital Snapshot */}
           <div className="w-full transition-all duration-300 ease-in-out shrink-0">
             {vitalSnapshot && (
               <div className="md:hidden flex justify-between items-center mb-2 px-1">
@@ -287,7 +271,6 @@ export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
             )}
           </div>
 
-          {/* Tarjeta Amarilla (Antecedentes) */}
           {activeMedicalContext && !generatedNote && (
             <div className="relative z-30 group shrink-0" onClick={() => setIsMobileContextExpanded(!isMobileContextExpanded)}>
               <div className={`bg-amber-50 dark:bg-amber-900/20 p-3 rounded-lg border border-amber-200 dark:border-amber-800 text-xs shadow-sm cursor-help transition-opacity duration-200 ${isMobileContextExpanded ? 'opacity-0' : 'opacity-100 md:group-hover:opacity-0'}`}>
@@ -329,7 +312,6 @@ export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
                 </div>
               </div>
 
-              {/* Hover/Expandido */}
               <div className={`absolute top-0 left-0 w-full transition-all duration-200 ease-out z-50 pointer-events-none group-hover:pointer-events-auto ${isMobileContextExpanded ? 'opacity-100 visible' : 'opacity-0 invisible md:group-hover:opacity-100 md:group-hover:visible'}`}>
                 <div className="bg-amber-50 dark:bg-slate-800 p-4 rounded-xl border-2 border-amber-300 dark:border-amber-600 text-xs shadow-2xl scale-100 origin-top">
                   <div className="flex items-center gap-2 mb-2 text-amber-700 dark:text-amber-400 font-bold border-b border-amber-200 dark:border-amber-800 pb-1">
@@ -393,7 +375,6 @@ export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
             </div>
           )}
 
-          {/* Consentimiento */}
           <div onClick={() => setConsentGiven(!consentGiven)} className="flex items-center gap-2 p-3 rounded-lg border cursor-pointer select-none dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 shrink-0">
             <div className={`w-5 h-5 rounded border flex items-center justify-center ${consentGiven ? 'bg-green-500 border-green-500 text-white' : 'bg-white dark:bg-slate-700'}`}>
               {consentGiven && <Check size={14}/>}
@@ -401,7 +382,6 @@ export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
             <label className="text-xs dark:text-white cursor-pointer">Consentimiento otorgado.</label>
           </div>
 
-          {/* Chat */}
           <div className={`flex-1 min-h-[150px] flex flex-col p-2 overflow-hidden border rounded-xl bg-slate-50 dark:bg-slate-900/50 dark:border-slate-800`}>
             {segments.length === 0 ? (
               <div className="flex-1 flex flex-col items-center justify-center text-slate-400 opacity-50 text-xs">
@@ -426,7 +406,6 @@ export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
           </div>
       </div>
 
-      {/* --- FOOTER --- */}
       <div className={`
           flex-none flex flex-col gap-2 border-t dark:border-slate-800 pt-3 pb-1 mt-auto bg-white dark:bg-slate-900 z-20
           ${(vitalSnapshot && isMobileSnapshotVisible) ? 'hidden md:flex' : 'flex'}
@@ -454,7 +433,11 @@ export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
         </div>
 
         <div className="flex w-full gap-2 shrink-0">
-          <button onClick={handleToggleRecording} disabled={!consentGiven || (!isAPISupported && !isListening)} className={`flex-1 py-3 rounded-xl font-bold flex justify-center gap-2 text-white shadow-lg text-sm transition-all ${!isOnline ? 'bg-slate-300 dark:bg-slate-700 cursor-not-allowed text-slate-500' : isListening ? 'bg-amber-500 hover:bg-amber-600' : isPaused ? 'bg-red-600 hover:bg-red-700' : 'bg-slate-900 hover:bg-slate-800'}`}>
+          <button 
+              onPointerDown={handleMicPointerDown}
+              disabled={!consentGiven || (!isAPISupported && !isListening)} 
+              className={`flex-1 py-3 rounded-xl font-bold flex justify-center gap-2 text-white shadow-lg text-sm transition-all ${!isOnline ? 'bg-slate-300 dark:bg-slate-700 cursor-not-allowed text-slate-500' : isListening ? 'bg-amber-500 hover:bg-amber-600' : isPaused ? 'bg-red-600 hover:bg-red-700' : 'bg-slate-900 hover:bg-slate-800'}`}
+          >
             {isListening ? <><Pause size={16} fill="currentColor"/> Pausar</> : isPaused ? <><Play size={16} fill="currentColor"/> Reanudar</> : <><Mic size={16}/> Grabar</>}
           </button>
           <button onClick={isListening || isPaused ? handleFinishRecording : handleGenerate} disabled={(!transcript && segments.length === 0) || isProcessing} className={`flex-1 text-white py-3 rounded-xl font-bold shadow-lg flex justify-center gap-2 disabled:opacity-50 text-sm transition-all ${!isOnline ? 'bg-amber-500 hover:bg-amber-600' : (isListening || isPaused) ? 'bg-green-600 hover:bg-green-700' : `bg-brand-teal hover:bg-teal-600 ${isReadyToGenerate ? 'animate-pulse ring-2 ring-teal-300 ring-offset-2 shadow-xl shadow-teal-500/40' : ''}`}`}>
@@ -480,14 +463,12 @@ export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
                     <button onClick={() => setIsAttachmentsOpen(false)} className="p-2 hover:bg-slate-100 dark:bg-slate-800 rounded-full transition-colors"><X size={20} className="text-slate-500"/></button>
                 </div>
                 <div className="flex-1 overflow-y-auto flex flex-col gap-4">
-                    <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-lg"><p className="text-xs font-bold text-slate-500 mb-2 uppercase">Agregar archivo:</p><UploadMedico preSelectedPatient={selectedPatient} onUploadComplete={() => { /* toast.success manejado en componente */ }} /></div>
-                    
+                    <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-lg"><p className="text-xs font-bold text-slate-500 mb-2 uppercase">Agregar archivo:</p><UploadMedico preSelectedPatient={selectedPatient} onUploadComplete={() => {}} /></div>
                     {doctorProfile && (
                         <div className="mt-4">
                              <SpecialtyVault patientId={selectedPatient.id} specialty={doctorProfile.specialty} />
                         </div>
                     )}
-
                     <div className="flex-1"><p className="text-xs font-bold text-slate-500 mb-2 uppercase">Historial:</p><DoctorFileGallery patientId={selectedPatient.id} /></div>
                 </div>
             </div>

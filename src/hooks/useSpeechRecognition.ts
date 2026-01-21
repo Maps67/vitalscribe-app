@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { toast } from 'sonner';
 
 // Interfaz para extender Window y evitar errores de TS con la API de voz
 interface IWindow extends Window {
@@ -6,7 +7,7 @@ interface IWindow extends Window {
   SpeechRecognition: any;
 }
 
-// --- ALGORITMO ANTI-ECO ---
+// --- ALGORITMO ANTI-ECO (PRESERVADO) ---
 function getOverlapLength(a: string, b: string) {
   if (b.length === 0 || a.length === 0) return 0;
   const maxCheck = Math.min(a.length, b.length, 50); 
@@ -25,6 +26,11 @@ export const useSpeechRecognition = () => {
   const [isDetectingSpeech, setIsDetectingSpeech] = useState(false);
   
   const isMobile = useRef(/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent));
+  // 🍎 DETECTOR APPLE (iPadOS 13+ / iPhone)
+  const isApple = useRef(
+    /iPhone|iPad|iPod/i.test(navigator.userAgent) || 
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+  );
 
   const [isAPISupported] = useState(() => {
     if (typeof window === 'undefined') return false;
@@ -36,12 +42,11 @@ export const useSpeechRecognition = () => {
   const isUserInitiatedStop = useRef(false);
   const wakeLockRef = useRef<any>(null); 
   
-  // Timer para "suavizar" el indicador visual y que no parpadee
+  // Timer para "suavizar" el indicador visual
   const speechActivityTimer = useRef<any>(null);
-  
   const finalTranscriptRef = useRef('');
 
-  // --- WAKE LOCK ---
+  // --- WAKE LOCK (PRESERVADO) ---
   const requestWakeLock = useCallback(async () => {
     if ('wakeLock' in navigator) {
       try { wakeLockRef.current = await (navigator as any).wakeLock.request('screen'); } 
@@ -56,13 +61,10 @@ export const useSpeechRecognition = () => {
     }
   }, []);
 
-  // Función auxiliar para activar la señal visual "Detectando..." sin depender del texto
+  // Función visual "Detectando..." (PRESERVADA)
   const triggerSpeechActivity = useCallback(() => {
       setIsDetectingSpeech(true);
       if (speechActivityTimer.current) clearTimeout(speechActivityTimer.current);
-      
-      // Mantenemos el estado "Detectando" activo por 1.5s después del último ruido
-      // Esto evita el parpadeo cuando hablas bajito o haces pausas cortas.
       speechActivityTimer.current = setTimeout(() => {
           setIsDetectingSpeech(false);
       }, 1500);
@@ -78,35 +80,31 @@ export const useSpeechRecognition = () => {
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [requestWakeLock]);
 
-  // --- LÓGICA CORE ---
+  // --- LÓGICA CORE (REFORZADA PARA APPLE) ---
   const startListening = useCallback(() => {
     if (!isAPISupported) return;
 
+    // PROTOCOLO DE LIMPIEZA AGRESIVA PARA IPAD (Evita colisiones de instancia)
     if (recognitionRef.current) {
-       try { recognitionRef.current.stop(); } catch(e) {}
+       try { 
+         recognitionRef.current.onend = null; 
+         recognitionRef.current.stop(); 
+       } catch(e) {}
     }
 
     const { webkitSpeechRecognition, SpeechRecognition } = window as unknown as IWindow;
     const SpeechAPI = SpeechRecognition || webkitSpeechRecognition;
     const recognition = new SpeechAPI();
 
-    recognition.continuous = !isMobile.current; 
+    // 🍎 AJUSTE CRÍTICO: Apple requiere continuous=true para no cortarse tras 2 segundos
+    recognition.continuous = isApple.current ? true : !isMobile.current; 
     recognition.interimResults = true;
     recognition.lang = 'es-MX';
     recognition.maxAlternatives = 1;
 
-    // --- EVENTOS NATIVOS DE AUDIO (LA SOLUCIÓN DE SENSIBILIDAD) ---
-    // Estos eventos ocurren ANTES de que haya texto.
-    
-    // 1. onsoundstart: El micrófono detectó CUALQUIER ruido (incluso respiración fuerte)
-    recognition.onsoundstart = () => {
-        triggerSpeechActivity();
-    };
-
-    // 2. onspeechstart: El navegador detectó algo que parece voz humana
-    recognition.onspeechstart = () => {
-        triggerSpeechActivity();
-    };
+    // Eventos Nativos de Audio (PRESERVADOS)
+    recognition.onsoundstart = () => triggerSpeechActivity();
+    recognition.onspeechstart = () => triggerSpeechActivity();
 
     recognition.onstart = () => {
       setIsListening(true);
@@ -117,7 +115,6 @@ export const useSpeechRecognition = () => {
     };
 
     recognition.onresult = (event: any) => {
-      // Reforzamos la actividad visual (por si acaso los eventos de audio fallaron)
       triggerSpeechActivity();
 
       let interimChunk = '';
@@ -134,7 +131,7 @@ export const useSpeechRecognition = () => {
         }
       }
 
-      // --- LOGICA DE FORMATO v5.3 (Puntuación y Saltos) ---
+      // --- LOGICA DE FORMATO v5.3 (Puntuación y Saltos - PRESERVADA) ---
       if (finalChunk) {
         const cleanFinal = finalChunk.trim();
         const currentFinal = finalTranscriptRef.current.trim();
@@ -163,13 +160,14 @@ export const useSpeechRecognition = () => {
     };
 
     recognition.onerror = (event: any) => {
-      if (event.error === 'no-speech') {
-          // No hacemos nada, es normal que haya silencio.
-          // El timer se encargará de apagar el "Detectando voz" suavemente.
-          return; 
-      }
+      if (event.error === 'no-speech') return; 
       
       console.warn('Speech Error:', event.error);
+      // Feedback específico para bloqueos de hardware en Apple
+      if (event.error === 'not-allowed') {
+        toast.error("Micrófono bloqueado. Verifique permisos en Safari/Ajustes.");
+      }
+
       if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
         setIsListening(false);
         setIsPaused(false);
@@ -179,16 +177,16 @@ export const useSpeechRecognition = () => {
     };
 
     recognition.onend = () => {
-      // Al terminar, forzamos apagado visual
       if (speechActivityTimer.current) clearTimeout(speechActivityTimer.current);
       setIsDetectingSpeech(false);
 
       if (!isUserInitiatedStop.current) {
+          // Intento de recuperación (Apple Safe)
           setTimeout(() => {
               if (!isUserInitiatedStop.current) {
                   try { recognition.start(); } catch(e) {}
               }
-          }, 50);
+          }, 100);
       } else {
         setIsListening(false);
         releaseWakeLock();
@@ -197,7 +195,12 @@ export const useSpeechRecognition = () => {
     };
 
     recognitionRef.current = recognition;
-    try { recognition.start(); } catch (e) { setIsListening(false); }
+    try { 
+        recognition.start(); 
+    } catch (e) { 
+        console.error("Fallo de arranque de API:", e);
+        setIsListening(false); 
+    }
   }, [isAPISupported, requestWakeLock, releaseWakeLock, triggerSpeechActivity]);
 
   const pauseListening = useCallback(() => {
@@ -235,7 +238,10 @@ export const useSpeechRecognition = () => {
   useEffect(() => {
     return () => {
         isUserInitiatedStop.current = true;
-        if (recognitionRef.current) try { recognitionRef.current.stop(); } catch(e) {}
+        if (recognitionRef.current) try { 
+            recognitionRef.current.onend = null;
+            recognitionRef.current.stop(); 
+        } catch(e) {}
         if (speechActivityTimer.current) clearTimeout(speechActivityTimer.current);
         releaseWakeLock();
     };
