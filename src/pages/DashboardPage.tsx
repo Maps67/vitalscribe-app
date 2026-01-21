@@ -6,7 +6,7 @@ import {
   Stethoscope, AlertTriangle, FileText,
   UserPlus, Activity, ChevronRight,
   CalendarX, FileSignature, Printer, FileCheck,
-  HelpCircle, Zap, FolderUp, BrainCircuit, Clock 
+  HelpCircle, Zap, FolderUp, BrainCircuit, Clock, RefreshCcw 
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { format, isToday, parseISO, startOfDay, endOfDay, addDays } from 'date-fns';
@@ -353,6 +353,19 @@ const Dashboard: React.FC = () => {
     return /^(Dr\.|Dra\.)/i.test(raw) ? raw : `Dr. ${raw}`;
   }, [doctorProfile]);
 
+  // 🛡️ HOTFIX CRÍTICO: Extracción segura del texto del saludo
+  // El error era que 'greetingData' es un objeto {greeting, message}, no un string.
+  // Ahora extraemos .greeting si es necesario.
+  const greetingText = useMemo(() => {
+    const data = getTimeOfDayGreeting(formattedDocName || '');
+    // Si la función devuelve objeto (como parece ser), usamos .greeting
+    // Si devuelve string (versiones antiguas), lo usamos directo.
+    if (typeof data === 'object' && data !== null && 'greeting' in data) {
+        return (data as any).greeting;
+    }
+    return data; // Fallback por si es string
+  }, [formattedDocName, now]); // Dependencia 'now' para reactividad
+
   const openDocModal = (type: 'justificante' | 'certificado' | 'receta') => { setDocType(type); setIsDocModalOpen(true); };
   
   const nextPatient = useMemo(() => appointments.find(a => a.status === 'scheduled') || null, [appointments]);
@@ -421,7 +434,34 @@ const Dashboard: React.FC = () => {
     fetchData(); 
     const cachedLocation = localStorage.getItem('last_known_location');
     if (cachedLocation) { setLocationName(cachedLocation); }
-    const pollingInterval = setInterval(() => { if (document.visibilityState === 'visible') fetchData(true); }, 120000);
+    
+    // Polling de respaldo (cada 2 min)
+    const pollingInterval = setInterval(() => { 
+        if (document.visibilityState === 'visible') fetchData(true); 
+    }, 120000);
+    
+    // LISTENER DE CICLO DE VIDA (MÓVIL)
+    const handleVisibilityChange = () => {
+        if (document.visibilityState === 'visible') {
+            setNow(new Date()); 
+            fetchData(true);    
+        }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleVisibilityChange); 
+
+    // SUSCRIPCIÓN REALTIME
+    const realtimeChannel = supabase
+        .channel('dashboard-updates')
+        .on(
+            'postgres_changes', 
+            { event: '*', schema: 'public', table: 'appointments' }, 
+            (payload) => {
+                fetchData(true);
+            }
+        )
+        .subscribe();
+
     let weatherInterval: NodeJS.Timeout | null = null;
     if ("geolocation" in navigator) {
         navigator.geolocation.getCurrentPosition(async (position) => {
@@ -437,7 +477,14 @@ const Dashboard: React.FC = () => {
             weatherInterval = setInterval(() => { updateWeather(latitude, longitude); }, 30 * 60 * 1000); 
         }, () => { if(!cachedLocation) setLocationName("Ubicación n/a"); });
     }
-    return () => { clearInterval(pollingInterval); if (weatherInterval) clearInterval(weatherInterval); };
+    
+    return () => { 
+        clearInterval(pollingInterval); 
+        if (weatherInterval) clearInterval(weatherInterval);
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+        window.removeEventListener('focus', handleVisibilityChange);
+        supabase.removeChannel(realtimeChannel);
+    };
   }, [fetchData, updateWeather]);
 
   const handleStartConsultation = (apt: DashboardAppointment) => { 
@@ -500,7 +547,8 @@ const Dashboard: React.FC = () => {
                         <div className="h-9 w-9 bg-slate-100 text-slate-600 rounded-full flex items-center justify-center font-bold text-sm border border-slate-200 shrink-0">
                             {formattedDocName ? formattedDocName.charAt(0) : 'D'}
                         </div>
-                        <p className="text-sm font-medium text-slate-500">Buenas noches,</p>
+                        {/* 🛠️ FIX RENDER: Usamos el string extraído, no el objeto */}
+                        <p className="text-sm font-medium text-slate-500">{greetingText},</p>
                     </div>
                     <div className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200 shrink-0">
                         <div className="flex items-center gap-1">
@@ -536,7 +584,10 @@ const Dashboard: React.FC = () => {
         <div className="flex-1 min-h-0 bg-transparent flex flex-col my-2 animate-fade-in delay-150">
             <div className="flex justify-between items-center mb-2 px-1 shrink-0">
                 <h3 className="font-bold text-slate-700 text-xs flex items-center gap-1.5"><Calendar size={14} className="text-slate-500"/> Agenda de Hoy</h3>
-                <span className="bg-slate-100 text-slate-600 text-[9px] px-2 py-0.5 rounded-full font-bold border border-slate-200">{appointments.length} Citas</span>
+                <div className="flex items-center gap-2">
+                    <button onClick={() => fetchData(true)} className="p-1 text-slate-400 hover:text-blue-600 active:rotate-180 transition-all"><RefreshCcw size={12}/></button>
+                    <span className="bg-slate-100 text-slate-600 text-[9px] px-2 py-0.5 rounded-full font-bold border border-slate-200">{appointments.length} Citas</span>
+                </div>
             </div>
             
             {/* CONTENEDOR DE TARJETAS FLOTANTES (GAPS) */}
