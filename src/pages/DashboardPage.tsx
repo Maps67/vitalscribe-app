@@ -53,6 +53,20 @@ interface WeatherState {
     code: number;
 }
 
+// 🌟 BRAND COMPONENT (INTEGRACIÓN REAL)
+// Conectado directamente a los activos de la carpeta /public
+const BrandLogo = ({ className = "" }: { className?: string }) => (
+    <img 
+        src="/pwa-192x192.png" 
+        alt="VitalScribe AI Logo" 
+        className={`bg-white object-contain p-0.5 border border-slate-100 ${className}`}
+        onError={(e) => {
+            // Fallback silencioso por si el archivo falta en dev
+            e.currentTarget.src = "/favicon.ico"; 
+        }}
+    />
+);
+
 // --- UTILS ---
 const cleanMarkdown = (text: string): string => {
     if (!text) return "";
@@ -353,18 +367,13 @@ const Dashboard: React.FC = () => {
     return /^(Dr\.|Dra\.)/i.test(raw) ? raw : `Dr. ${raw}`;
   }, [doctorProfile]);
 
-  // 🛡️ HOTFIX CRÍTICO: Extracción segura del texto del saludo
-  // El error era que 'greetingData' es un objeto {greeting, message}, no un string.
-  // Ahora extraemos .greeting si es necesario.
+  // 🛡️ REFACTOR v8.2: Greeting Logic Decoupling
   const greetingText = useMemo(() => {
-    const data = getTimeOfDayGreeting(formattedDocName || '');
-    // Si la función devuelve objeto (como parece ser), usamos .greeting
-    // Si devuelve string (versiones antiguas), lo usamos directo.
-    if (typeof data === 'object' && data !== null && 'greeting' in data) {
-        return (data as any).greeting;
-    }
-    return data; // Fallback por si es string
-  }, [formattedDocName, now]); // Dependencia 'now' para reactividad
+    const hour = parseInt(format(now, 'H'));
+    if (hour >= 5 && hour < 12) return 'Buenos días';
+    if (hour >= 12 && hour < 20) return 'Buenas tardes';
+    return 'Buenas noches';
+  }, [now]);
 
   const openDocModal = (type: 'justificante' | 'certificado' | 'receta') => { setDocType(type); setIsDocModalOpen(true); };
   
@@ -435,12 +444,10 @@ const Dashboard: React.FC = () => {
     const cachedLocation = localStorage.getItem('last_known_location');
     if (cachedLocation) { setLocationName(cachedLocation); }
     
-    // Polling de respaldo (cada 2 min)
     const pollingInterval = setInterval(() => { 
         if (document.visibilityState === 'visible') fetchData(true); 
     }, 120000);
     
-    // LISTENER DE CICLO DE VIDA (MÓVIL)
     const handleVisibilityChange = () => {
         if (document.visibilityState === 'visible') {
             setNow(new Date()); 
@@ -450,7 +457,6 @@ const Dashboard: React.FC = () => {
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('focus', handleVisibilityChange); 
 
-    // SUSCRIPCIÓN REALTIME
     const realtimeChannel = supabase
         .channel('dashboard-updates')
         .on(
@@ -536,7 +542,7 @@ const Dashboard: React.FC = () => {
         .delay-300 { animation-delay: 300ms; }
       `}</style>
       
-      {/* 📱 VISTA MÓVIL ESTRICTA (v8.1 - CARDS & GAPS) */}
+      {/* 📱 VISTA MÓVIL ESTRICTA (v8.4 - BRAND IDENTITY) */}
       <div className="md:hidden h-[100dvh] max-h-[100dvh] w-full flex flex-col justify-between overflow-hidden bg-slate-50 p-4 pb-20">
         <div className="shrink-0 bg-white rounded-xl p-4 shadow-sm border border-slate-200 relative overflow-hidden animate-slide-top">
             
@@ -544,10 +550,10 @@ const Dashboard: React.FC = () => {
             <div className="flex flex-col gap-2 mb-2">
                 <div className="flex justify-between items-center w-full">
                     <div className="flex items-center gap-2">
-                        <div className="h-9 w-9 bg-slate-100 text-slate-600 rounded-full flex items-center justify-center font-bold text-sm border border-slate-200 shrink-0">
-                            {formattedDocName ? formattedDocName.charAt(0) : 'D'}
-                        </div>
-                        {/* 🛠️ FIX RENDER: Usamos el string extraído, no el objeto */}
+                        {/* 🌟 LOGOTIPO OFICIAL (Integrado desde /public) */}
+                        <BrandLogo className="h-9 w-9 rounded-xl shadow-[0_2px_4px_rgba(0,0,0,0.06)]" />
+                        
+                        {/* Saludo limpio */}
                         <p className="text-sm font-medium text-slate-500">{greetingText},</p>
                     </div>
                     <div className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200 shrink-0">
@@ -580,7 +586,7 @@ const Dashboard: React.FC = () => {
             </div>
         </div>
 
-        {/* LISTA DE AGENDA (TARJETAS INDEPENDIENTES v8.1) */}
+        {/* LISTA DE AGENDA (TARJETAS INDEPENDIENTES) */}
         <div className="flex-1 min-h-0 bg-transparent flex flex-col my-2 animate-fade-in delay-150">
             <div className="flex justify-between items-center mb-2 px-1 shrink-0">
                 <h3 className="font-bold text-slate-700 text-xs flex items-center gap-1.5"><Calendar size={14} className="text-slate-500"/> Agenda de Hoy</h3>
@@ -590,7 +596,6 @@ const Dashboard: React.FC = () => {
                 </div>
             </div>
             
-            {/* CONTENEDOR DE TARJETAS FLOTANTES (GAPS) */}
             <div className="flex-1 overflow-y-auto custom-scrollbar space-y-3 pr-1 pb-2">
                 {appointments.length === 0 ? (
                     <div className="h-full flex flex-col items-center justify-center text-center opacity-40 bg-white/50 rounded-xl border border-slate-100 border-dashed">
@@ -608,13 +613,10 @@ const Dashboard: React.FC = () => {
                                 ${index % 2 === 0 ? 'bg-white' : 'bg-slate-50/80'} 
                             `}
                         >
-                             {/* Indicador de Estado (Barra Lateral) */}
                              <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-500"></div>
-
                              <div className="font-bold text-slate-500 text-xs min-w-[35px] text-center bg-slate-100 rounded-md py-1 px-1.5">
                                 {format(parseISO(apt.start_time), 'HH:mm')}
                              </div>
-                             
                              <div className="flex-1 min-w-0">
                                 <p className="font-bold text-slate-800 text-sm truncate leading-tight">{apt.title}</p>
                                 <div className="flex items-center gap-1.5 mt-0.5">
@@ -622,7 +624,6 @@ const Dashboard: React.FC = () => {
                                     <p className="text-[10px] text-slate-500 truncate">{apt.patient ? 'Expediente Activo' : 'Primera Vez'}</p>
                                 </div>
                              </div>
-                             
                              <ChevronRight size={16} className="text-slate-300"/>
                         </div>
                     ))
@@ -678,11 +679,13 @@ const Dashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* 🖥️ VISTA ESCRITORIO (v8.1 - CARDS & GAPS) */}
+      {/* 🖥️ VISTA ESCRITORIO (v8.4 - BRAND IDENTITY) */}
       <div className="hidden md:block min-h-screen bg-slate-50 p-8 pb-12 w-full">
          <div className="max-w-[1800px] mx-auto">
              <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-10 gap-6 animate-slide-top">
                  <div className="flex items-center gap-6">
+                     {/* 🌟 LOGOTIPO DE ESCRITORIO */}
+                     <BrandLogo className="h-16 w-16 rounded-2xl shadow-md border-2 border-white" />
                      <div>
                          <h1 className="text-4xl font-black text-slate-900 tracking-tight leading-tight">
                              {formattedDocName}
