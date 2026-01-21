@@ -420,7 +420,7 @@ const Dashboard: React.FC = () => {
   return (
     <div className="md:h-auto min-h-screen bg-slate-50 dark:bg-slate-950 font-sans w-full relative">
       
-      {/* 🚀 VISTA MÓVIL ESTRICTA (v6.5) - INTEGRACIÓN DE MINI-PÍLDORA GLASS */}
+      {/* 🚀 VISTA MÓVIL ESTRICTA (v6.6) - TEXTO CONSULTA RÁPIDA ✅ */}
       <div className="md:hidden h-[100dvh] max-h-[100dvh] w-full flex flex-col justify-between overflow-hidden bg-gradient-to-b from-[#FDFBF7] via-[#F4F7FB] to-[#E2E8F0] p-4 pb-20">
         <div className="shrink-0 bg-white rounded-2xl p-4 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-50 relative overflow-hidden">
             <div className="flex justify-between items-start mb-1">
@@ -432,7 +432,7 @@ const Dashboard: React.FC = () => {
                     </div>
                 </div>
 
-                {/* ✅ NUEVA MINI-PÍLDORA HORIZONTAL (ESTILO ESCRITORIO PARA MÓVIL) */}
+                {/* ✅ MINI-PÍLDORA HORIZONTAL ESTILO ESCRITORIO */}
                 <div className="flex items-center gap-2 bg-slate-100/50 backdrop-blur-sm px-3 py-1.5 rounded-full border border-white/40 shadow-sm shrink-0">
                     <div className="flex items-center gap-1">
                         <span className="text-xs font-bold text-slate-700">{weather.temp}°</span>
@@ -494,7 +494,8 @@ const Dashboard: React.FC = () => {
                 <button onClick={() => setIsFastAdmitOpen(true)} className="bg-white rounded-2xl p-3 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] border border-slate-50 flex flex-col justify-center items-center gap-1 active:scale-95 transition-transform relative overflow-hidden group">
                      <div className="absolute top-0 right-0 w-16 h-16 bg-gradient-to-br from-indigo-50 to-transparent rounded-bl-full opacity-50"></div>
                      <div className="p-2.5 bg-indigo-50 rounded-full text-indigo-600 group-hover:scale-110 transition-transform"><UserPlus size={18}/></div>
-                     <span className="text-xs font-bold text-slate-700 leading-tight text-center">Nuevo<br/>Paciente</span>
+                     {/* ✅ CAMBIO DE TEXTO: CONSULTA RÁPIDA */}
+                     <span className="text-xs font-bold text-slate-700 leading-tight text-center">Consulta<br/>Rápida</span>
                 </button>
             </div>
             <div className="grid grid-cols-2 gap-2 h-20">
@@ -514,7 +515,7 @@ const Dashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* 🖥️ VISTA DE ESCRITORIO & TABLET (v6.5) - INTACTA */}
+      {/* 🖥️ VISTA DE ESCRITORIO & TABLET - CORREGIDA */}
       <div className="hidden md:block min-h-screen bg-gradient-to-br from-[#FDFBF7] to-[#E2E8F0] p-8 pb-12 w-full">
          <div className="max-w-[1800px] mx-auto">
              <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-10 gap-6">
