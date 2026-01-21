@@ -62,7 +62,7 @@ const cleanMarkdown = (text: string): string => {
     return text.replace(/[*_#`~]/g, '').replace(/^\s*[-•]\s+/gm, '').replace(/\[.*?\]/g, '').replace(/\n\s*\n/g, '\n').trim();
 };
 
-// --- CLOCK COMPACTO (Optimizado) ---
+// --- CLOCK COMPACTO ---
 const AtomicClock = ({ location, date, isDesktop = false }: { location: string, date: Date, isDesktop?: boolean }) => {
     return (
         <div className={`flex flex-col ${isDesktop ? 'items-end' : 'justify-center'}`}>
@@ -532,37 +532,46 @@ const Dashboard: React.FC = () => {
         .delay-300 { animation-delay: 300ms; }
       `}</style>
       
-      {/* 🚀 VISTA MÓVIL ESTRICTA (v6.7) - BOLD HEADER INTEGRATED */}
+      {/* 🚀 VISTA MÓVIL ESTRICTA (v6.8) - FULL FIX: NOMBRE ABAJO Y PÍLDORA COMPLETA */}
       <div className="md:hidden h-[100dvh] max-h-[100dvh] w-full flex flex-col justify-between overflow-hidden bg-gradient-to-b from-[#FDFBF7] via-[#F4F7FB] to-[#E2E8F0] p-4 pb-20">
         <div className="shrink-0 bg-white rounded-2xl p-4 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-50 relative overflow-hidden animate-slide-top">
-            {/* ENCABEZADO MÓVIL: ESTRUCTURA "STACKED" & BOLD PILL */}
-            <div className="flex justify-between items-start mb-1">
-                <div className="flex items-center gap-3 flex-1 min-w-0 pr-2"> 
-                    <div className="h-10 w-10 bg-teal-50 text-teal-600 rounded-full flex items-center justify-center font-bold text-base border border-teal-100 shrink-0">{formattedDocName ? formattedDocName.charAt(0) : 'D'}</div>
-                    <div className="flex flex-col min-w-0">
-                        <p className="text-sm font-medium text-slate-500 mb-0.5 leading-none">Buenas noches,</p>
-                        <h1 className="text-lg font-bold text-slate-900 leading-tight break-words truncate">{formattedDocName}</h1>
+            {/* ENCABEZADO MÓVIL OPTIMIZADO (2 PISOS) */}
+            <div className="flex flex-col gap-2 mb-2">
+                
+                {/* PISO 1: META-INFORMACIÓN (Avatar + Saludo + Píldora) */}
+                <div className="flex justify-between items-center w-full">
+                    {/* IZQUIERDA: Contexto */}
+                    <div className="flex items-center gap-2">
+                        <div className="h-9 w-9 bg-teal-50 text-teal-600 rounded-full flex items-center justify-center font-bold text-sm border border-teal-100 shrink-0">
+                            {formattedDocName ? formattedDocName.charAt(0) : 'D'}
+                        </div>
+                        <p className="text-sm font-medium text-slate-500">Buenas noches,</p>
                     </div>
-                </div>
 
-                {/* PÍLDORA BOLD: High-Contrast Clinical Capsule */}
-                <div className="flex items-center gap-2.5 bg-white px-3.5 py-2 rounded-2xl border border-slate-100 shadow-[0_4px_12px_rgba(0,0,0,0.08)] shrink-0">
-                    <div className="flex items-center gap-1.5">
-                        <span className="text-sm font-black text-slate-700 tracking-tight">{weather.temp}°</span>
-                        {weather.code < 3 
-                            ? <Sun size={16} className="text-amber-500 fill-amber-500/20" strokeWidth={2.5}/> 
-                            : <Cloud size={16} className="text-slate-400 fill-slate-200" strokeWidth={2.5}/>
-                        }
-                    </div>
-                    <div className="w-0.5 h-4 bg-slate-200 mx-0.5 rounded-full"></div>
-                    <div className="flex items-baseline gap-0.5 text-slate-800">
-                        <span className="text-base font-black tracking-tighter tabular-nums leading-none">
+                    {/* DERECHA: PÍLDORA 'BOLD' (Ahora tiene espacio propio) */}
+                    <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-xl border border-slate-100 shadow-[0_2px_8px_rgba(0,0,0,0.06)] shrink-0">
+                        <div className="flex items-center gap-1">
+                            <span className="text-xs font-black text-slate-700">{weather.temp}°</span>
+                            {weather.code < 3 
+                                ? <Sun size={14} className="text-amber-500 fill-amber-500/20" strokeWidth={2.5}/> 
+                                : <Cloud size={14} className="text-slate-400 fill-slate-200" strokeWidth={2.5}/>
+                            }
+                        </div>
+                        <div className="w-px h-3 bg-slate-200 mx-0.5"></div>
+                        <span className="text-sm font-black text-slate-800 tracking-tight tabular-nums">
                             {format(now, 'h:mm')}
                         </span>
-                        <span className="text-[9px] font-bold text-slate-400 uppercase bg-slate-100 px-1 rounded-[4px] ml-0.5">
+                        <span className="text-[9px] font-bold text-slate-400 uppercase">
                             {format(now, 'a')}
                         </span>
                     </div>
+                </div>
+
+                {/* PISO 2: IDENTIDAD (Nombre Completo - Ancho Total) */}
+                <div className="w-full pl-1">
+                    <h1 className="text-2xl font-black text-slate-900 leading-tight break-words tracking-tight">
+                        {formattedDocName}
+                    </h1>
                 </div>
             </div>
             
