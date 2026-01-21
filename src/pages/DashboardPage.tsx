@@ -307,16 +307,26 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete, initialQuery }: { i
                  </div>
                ) : (
                  <button 
-                   onClick={status === 'listening' ? () => processIntent() : () => { resetTranscript(); setStatus('listening'); startListening(); }} 
-                   // 🔥 BLINDAJE MÓVIL APLICADO: Previene menú contextual y feedback nativo del OS
-                   onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                   style={{ WebkitTouchCallout: 'none', userSelect: 'none', touchAction: 'none' }}
+                   // ✅ INTERACCIÓN TOGGLE: Clic 1 = Grabar / Clic 2 = Procesar
+                   onClick={() => {
+                     if (status === 'listening') {
+                       processIntent(); // Detener y procesar
+                     } else {
+                       resetTranscript(); 
+                       setStatus('listening'); 
+                       startListening(); // Iniciar grabación
+                     }
+                   }} 
                    className={`w-24 h-24 rounded-full flex items-center justify-center shadow-2xl transition-all transform active:scale-95 ${status === 'listening' ? 'bg-red-500 text-white animate-pulse ring-8 ring-red-100 scale-110' : 'bg-slate-900 text-white hover:bg-black hover:scale-105'}`}
                  >
                    {status === 'listening' ? <Square size={32} fill="currentColor"/> : <Mic size={32} />}
                  </button>
                )}
-               {status === 'listening' && <p className="text-xs text-slate-400 animate-pulse">Toca para detener y procesar</p>}
+               {status === 'listening' ? (
+                 <p className="text-xs text-red-500 font-bold animate-pulse">Grabando... Toca para finalizar</p>
+               ) : (
+                 <p className="text-xs text-slate-400">Toca para hablar</p>
+               )}
             </div>
           )}
           {status === 'answering' && aiResponse && (
