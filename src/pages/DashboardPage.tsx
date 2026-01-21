@@ -30,7 +30,7 @@ import { UserGuideModal } from '../components/UserGuideModal';
 import { QuickNoteModal } from '../components/QuickNoteModal'; 
 import { ImpactMetrics } from '../components/ImpactMetrics';
 
-// Tipos del Sistema (Importados o Redefinidos para consistencia local si faltan imports directos)
+// Tipos del Sistema
 import { DoctorProfile, Patient } from '../types'; 
 
 // --- TYPES LOCALES ---
@@ -62,7 +62,7 @@ const cleanMarkdown = (text: string): string => {
     return text.replace(/[*_#`~]/g, '').replace(/^\s*[-•]\s+/gm, '').replace(/\[.*?\]/g, '').replace(/\n\s*\n/g, '\n').trim();
 };
 
-// --- CLOCK COMPACTO (Optimizado: Recibe props, no tiene estado interno) ---
+// --- CLOCK COMPACTO (Optimizado) ---
 const AtomicClock = ({ location, date, isDesktop = false }: { location: string, date: Date, isDesktop?: boolean }) => {
     return (
         <div className={`flex flex-col ${isDesktop ? 'items-end' : 'justify-center'}`}>
@@ -532,21 +532,21 @@ const Dashboard: React.FC = () => {
         .delay-300 { animation-delay: 300ms; }
       `}</style>
       
-      {/* 🚀 VISTA MÓVIL ESTRICTA (v6.6) ✅ */}
+      {/* 🚀 VISTA MÓVIL ESTRICTA (v6.7) - BOLD HEADER INTEGRATED */}
       <div className="md:hidden h-[100dvh] max-h-[100dvh] w-full flex flex-col justify-between overflow-hidden bg-gradient-to-b from-[#FDFBF7] via-[#F4F7FB] to-[#E2E8F0] p-4 pb-20">
         <div className="shrink-0 bg-white rounded-2xl p-4 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-50 relative overflow-hidden animate-slide-top">
+            {/* ENCABEZADO MÓVIL: ESTRUCTURA "STACKED" & BOLD PILL */}
             <div className="flex justify-between items-start mb-1">
                 <div className="flex items-center gap-3 flex-1 min-w-0 pr-2"> 
                     <div className="h-10 w-10 bg-teal-50 text-teal-600 rounded-full flex items-center justify-center font-bold text-base border border-teal-100 shrink-0">{formattedDocName ? formattedDocName.charAt(0) : 'D'}</div>
                     <div className="flex flex-col min-w-0">
-                        <p className="text-sm font-medium text-slate-500 mb-0.5">Buenas noches,</p>
-                        <h1 className="text-lg font-bold text-slate-900 leading-tight break-words">{formattedDocName}</h1>
+                        <p className="text-sm font-medium text-slate-500 mb-0.5 leading-none">Buenas noches,</p>
+                        <h1 className="text-lg font-bold text-slate-900 leading-tight break-words truncate">{formattedDocName}</h1>
                     </div>
                 </div>
 
-                {/* PÍLDORA BOLD: High-Contrast Clinical Capsule (Reemplazo v6.7) */}
+                {/* PÍLDORA BOLD: High-Contrast Clinical Capsule */}
                 <div className="flex items-center gap-2.5 bg-white px-3.5 py-2 rounded-2xl border border-slate-100 shadow-[0_4px_12px_rgba(0,0,0,0.08)] shrink-0">
-                    {/* Clima con más peso visual */}
                     <div className="flex items-center gap-1.5">
                         <span className="text-sm font-black text-slate-700 tracking-tight">{weather.temp}°</span>
                         {weather.code < 3 
@@ -554,11 +554,7 @@ const Dashboard: React.FC = () => {
                             : <Cloud size={16} className="text-slate-400 fill-slate-200" strokeWidth={2.5}/>
                         }
                     </div>
-                    
-                    {/* Separador más marcado */}
                     <div className="w-0.5 h-4 bg-slate-200 mx-0.5 rounded-full"></div>
-                    
-                    {/* Hora más grande y legible */}
                     <div className="flex items-baseline gap-0.5 text-slate-800">
                         <span className="text-base font-black tracking-tighter tabular-nums leading-none">
                             {format(now, 'h:mm')}
