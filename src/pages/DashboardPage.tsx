@@ -46,9 +46,6 @@ interface PendingItem {
    id: string; type: 'note' | 'lab' | 'appt'; title: string; subtitle: string; date: string;
 }
 
-// --- ESTILOS GLASSMORPHISM (Solo para móvil) ---
-const glassStyle = "bg-white/10 backdrop-blur-md border border-white/20 shadow-xl";
-
 // --- CLOCK COMPACTO ---
 const AtomicClock = ({ location }: { location: string }) => {
     const [date, setDate] = useState(new Date());
@@ -86,30 +83,32 @@ const WeatherWidget = ({ weather }: any) => {
     );
 };
 
-// ✅ WIDGET DE EFICIENCIA
+// ✅ WIDGET DE EFICIENCIA (Polimórfico: Grid Cuadrado en Móvil / Full en Desktop)
 const StatusWidget = ({ totalApts, pendingApts }: any) => {
     const completed = totalApts - pendingApts;
     const progress = totalApts > 0 ? Math.round((completed / totalApts) * 100) : 0;
     
     return (
-        <div className="bg-white dark:bg-slate-900 rounded-2xl md:rounded-[2rem] p-3 md:p-6 border border-slate-100 dark:border-slate-800 shadow-sm relative overflow-hidden group w-full h-full flex flex-col justify-between">
+        <div className="bg-white/60 dark:bg-slate-900/60 md:bg-white md:dark:bg-slate-900 backdrop-blur-xl md:backdrop-blur-none rounded-2xl md:rounded-[2rem] p-3 md:p-6 border border-white/20 md:border-slate-100 dark:border-slate-800 shadow-sm relative overflow-hidden group w-full h-full flex flex-col justify-between">
+             {/* Decoración Desktop */}
              <div className="hidden md:block absolute -right-4 -bottom-4 opacity-5 group-hover:opacity-10 transition-opacity rotate-12">
                 <Activity size={120} className="text-indigo-600 dark:text-indigo-400"/>
              </div>
 
-             {/* VISTA MÓVIL: CUADRO COMPACTO GLASS */}
+             {/* VISTA MÓVIL: CUADRO COMPACTO (Grid Glassmorphism) */}
              <div className="flex md:hidden flex-col items-center justify-center h-full gap-1">
                  <div className="relative">
-                    <Activity size={24} className="text-white opacity-20 absolute top-0 left-0 animate-pulse"/>
-                    <p className="text-3xl font-black text-white leading-none">{progress}%</p>
+                    <Activity size={24} className="text-indigo-600 dark:text-indigo-400 opacity-20 absolute top-0 left-0 animate-pulse"/>
+                    <p className="text-3xl font-black text-slate-800 dark:text-white leading-none">{progress}%</p>
                  </div>
-                 <p className="text-[9px] font-bold text-white/60 uppercase leading-none">Eficiencia</p>
+                 <p className="text-[9px] font-bold text-slate-400 uppercase leading-none">Eficiencia</p>
                  <div className="flex gap-2 mt-1">
-                    <span className="text-[9px] bg-white/20 text-white px-1.5 py-0.5 rounded font-bold">{completed} OK</span>
+                    <span className="text-[9px] bg-emerald-50/80 text-emerald-700 px-1.5 py-0.5 rounded font-bold backdrop-blur-sm border border-emerald-100/50">{completed} OK</span>
+                    <span className="text-[9px] bg-indigo-50/80 text-indigo-700 px-1.5 py-0.5 rounded font-bold backdrop-blur-sm border border-indigo-100/50">{pendingApts} Cola</span>
                  </div>
              </div>
 
-             {/* VISTA DESKTOP */}
+             {/* VISTA DESKTOP: COMPLETA */}
              <div className="hidden md:block relative z-10 text-center">
                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Eficiencia Diaria</p>
                  <div className="flex items-baseline justify-center gap-1 mb-5">
@@ -189,7 +188,7 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete, initialQuery }: { i
   
   if (!isOpen) return null;
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-200">
       <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-[2rem] shadow-2xl overflow-hidden border border-white/20 ring-1 ring-black/5">
         <div className="p-8 text-white text-center bg-gradient-to-br from-indigo-600 to-purple-700">
           <Bot size={48} className="mx-auto mb-3" />
@@ -198,7 +197,7 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete, initialQuery }: { i
         <div className="p-8">
           {(status === 'idle' || status === 'listening' || status === 'processing') && (
             <div className="flex flex-col items-center gap-8">
-               <div className="text-center text-xl font-medium min-h-[3rem] dark:text-white">"{initialQuery || transcript || 'Escuchando...'}"</div>
+               <div className="text-center text-xl font-medium min-h-[3rem]">"{initialQuery || transcript || 'Escuchando...'}"</div>
                {status === 'processing' ? <Loader2 className="animate-spin text-indigo-600" /> : (
                  <button onClick={() => { if (status === 'listening') { processIntent(); } else { resetTranscript(); setStatus('listening'); startListening(); } }} className={`w-24 h-24 rounded-full flex items-center justify-center shadow-2xl transition-all transform active:scale-95 ${status === 'listening' ? 'bg-red-500 text-white animate-pulse' : 'bg-slate-900 text-white'}`}>
                    {status === 'listening' ? <Square size={32} fill="currentColor"/> : <Mic size={32} />}
@@ -208,10 +207,10 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete, initialQuery }: { i
           )}
           {status === 'answering' && aiResponse && (
             <div className="animate-in slide-in-from-bottom-4 fade-in">
-              <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-2xl p-5 mb-6 max-h-60 overflow-y-auto custom-scrollbar"><p className="text-slate-700 dark:text-slate-200 text-sm leading-relaxed">{medicalAnswer || aiResponse.message}</p></div>
+              <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-2xl p-5 mb-6 max-h-60 overflow-y-auto"><p className="text-slate-700 dark:text-slate-200 text-sm">{medicalAnswer || aiResponse.message}</p></div>
               <div className="flex gap-3">
-                <button onClick={() => { setStatus('idle'); resetTranscript(); }} className="flex-1 py-3.5 text-slate-500 font-bold hover:bg-slate-100 rounded-xl transition-colors">Nueva</button>
-                <button onClick={handleExecuteAction} className="flex-1 py-3.5 bg-indigo-600 text-white font-bold rounded-xl shadow-lg hover:bg-indigo-700 active:scale-95 transition-all">{aiResponse.intent === 'MEDICAL_QUERY' ? 'Cerrar' : 'Ejecutar'}</button>
+                <button onClick={() => { setStatus('idle'); resetTranscript(); }} className="flex-1 py-3.5 text-slate-500 font-bold hover:bg-slate-100 rounded-xl">Nueva</button>
+                <button onClick={handleExecuteAction} className="flex-1 py-3.5 bg-indigo-600 text-white font-bold rounded-xl shadow-lg">{aiResponse.intent === 'MEDICAL_QUERY' ? 'Cerrar' : 'Ejecutar'}</button>
               </div>
             </div>
           )}
@@ -221,10 +220,11 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete, initialQuery }: { i
   );
 };
 
-// --- COMPONENTE RADAR ---
+// --- COMPONENTE RADAR (Invisible en móvil si no es urgente) ---
 const ActionRadar = ({ items, onItemClick }: any) => {
+    // EN MÓVIL: Ocultamos si no hay nada crítico para ahorrar espacio
     if (items.length === 0) return (
-        <div className="hidden md:flex bg-gradient-to-br from-white to-amber-50/50 dark:from-slate-900 dark:to-slate-900 rounded-2xl md:rounded-[2rem] p-4 md:p-6 border border-slate-100 dark:border-slate-800 shadow-sm flex flex-col items-center justify-center text-center h-20 md:h-48">
+        <div className="hidden md:flex bg-gradient-to-br from-white to-amber-50/50 dark:from-slate-900 dark:to-slate-900 rounded-2xl md:rounded-[2rem] p-4 md:p-6 border border-slate-100 dark:border-slate-800 shadow-sm flex-col items-center justify-center text-center h-20 md:h-48">
             <CheckCircle2 size={24} className="text-green-500 mb-1 opacity-50"/>
             <p className="font-bold text-slate-600 dark:text-slate-300 text-xs md:text-base">Todo en orden</p>
         </div>
@@ -297,6 +297,8 @@ const Dashboard: React.FC = () => {
   const [searchInput, setSearchInput] = useState('');
   const [rescheduleTarget, setRescheduleTarget] = useState<{id: string, title: string} | null>(null);
   const [newDateInput, setNewDateInput] = useState('');
+
+  // ✅ NUEVO ESTADO: Modal de Reto Diario
   const [isChallengeModalOpen, setIsChallengeModalOpen] = useState(false);
 
   const formattedDocName = useMemo(() => {
@@ -306,12 +308,15 @@ const Dashboard: React.FC = () => {
   }, [doctorProfile]);
 
   const dynamicGreeting = useMemo(() => getTimeOfDayGreeting(formattedDocName || ''), [formattedDocName]);
+
   const openDocModal = (type: 'justificante' | 'certificado' | 'receta') => { setDocType(type); setIsDocModalOpen(true); };
+  
   const nextPatient = useMemo(() => appointments.find(a => a.status === 'scheduled') || null, [appointments]);
   const groupedAppointments = useMemo(() => appointments.reduce((acc, apt) => {
     const day = isToday(parseISO(apt.start_time)) ? 'Hoy' : format(parseISO(apt.start_time), 'EEEE d', { locale: es });
     if (!acc[day]) acc[day] = []; acc[day].push(apt); return acc;
   }, {} as Record<string, DashboardAppointment[]>), [appointments]);
+
   const appointmentsToday = appointments.filter(a => isToday(parseISO(a.start_time))).length;
   const totalDailyLoad = completedTodayCount + appointmentsToday;
 
@@ -324,15 +329,22 @@ const Dashboard: React.FC = () => {
               setSystemStatus(true);
               const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single();
               setDoctorProfile(profile);
+              
               const todayStart = startOfDay(new Date()); 
               const nextWeekEnd = endOfDay(addDays(new Date(), 7));
+              
               const { data: aptsData } = await supabase.from('appointments').select(`id, title, start_time, status, patient:patients (id, name, history)`).eq('doctor_id', user.id).gte('start_time', todayStart.toISOString()).lte('start_time', nextWeekEnd.toISOString()).neq('status', 'cancelled').neq('status', 'completed').order('start_time', { ascending: true }).limit(10);
+              
               if (aptsData) {
-                  const formattedApts: DashboardAppointment[] = aptsData.map((item: any) => ({ id: item.id, title: item.title, start_time: item.start_time, status: item.status, patient: item.patient, criticalAlert: null }));
+                  const formattedApts: DashboardAppointment[] = aptsData.map((item: any) => ({
+                      id: item.id, title: item.title, start_time: item.start_time, status: item.status, patient: item.patient, criticalAlert: null 
+                  }));
                   setAppointments(formattedApts);
               }
+
               const { count: completedCount } = await supabase.from('appointments').select('*', { count: 'exact', head: true }).eq('doctor_id', user.id).eq('status', 'completed').gte('start_time', todayStart.toISOString()).lte('start_time', endOfDay(new Date()).toISOString());
               setCompletedTodayCount(completedCount || 0);
+
               const radar: PendingItem[] = [];
               const { data: openConsults } = await supabase.from('consultations').select('id, created_at, patient_name').eq('doctor_id', user.id).eq('status', 'in_progress').limit(3);
               if (openConsults) { openConsults.forEach(c => radar.push({ id: c.id, type: 'note', title: 'Nota Incompleta', subtitle: `${c.patient_name || 'Sin nombre'} • ${format(parseISO(c.created_at), 'dd/MM')}`, date: c.created_at })); }
@@ -382,81 +394,104 @@ const Dashboard: React.FC = () => {
   const handleCancelAppointment = async (e: React.MouseEvent, aptId: string) => { e.stopPropagation(); if (!confirm("¿Cancelar cita?")) return; try { await supabase.from('appointments').update({ status: 'cancelled' }).eq('id', aptId); setAppointments(prev => prev.filter(a => a.id !== aptId)); toast.success("Cita cancelada"); } catch (err) { toast.error("Error al cancelar"); } };
   const handleSearchSubmit = (e?: React.FormEvent) => { if(e) e.preventDefault(); if(!searchInput.trim()) return; setInitialAssistantQuery(searchInput); setIsAssistantOpen(true); setSearchInput(''); };
 
+  // --- RENDER PRINCIPAL ---
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 font-sans w-full pb-32 md:pb-8 relative overflow-x-hidden">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 font-sans w-full pb-32 md:pb-8 relative overflow-hidden">
       
-      {/* FONDO MESH GRADIENT SOLO MÓVIL */}
-      <div className="md:hidden fixed inset-0 z-0 bg-gradient-to-tr from-indigo-900 via-slate-950 to-purple-900 opacity-90">
-         <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-indigo-500/10 rounded-full blur-[100px] animate-pulse"></div>
-      </div>
-
-      {/* 🚀 VISTA MÓVIL (GRID ASIMÉTRICO GLASS) */}
-      <div className="md:hidden relative z-10 p-3 space-y-3">
-        {/* Header integrado Glass */}
-        <div className={`p-4 rounded-[2rem] flex justify-between items-center ${glassStyle}`}>
-            <div className="flex items-center gap-3">
-                <div className="h-10 w-10 bg-gradient-to-tr from-indigo-500 to-purple-500 rounded-full flex items-center justify-center font-black text-white shadow-lg">{formattedDocName.charAt(0) || 'D'}</div>
-                <div>
-                    <p className="text-[10px] font-bold text-white/60 uppercase tracking-tighter leading-none mb-1">{dynamicGreeting.greeting}</p>
-                    <h1 className="text-white font-black text-sm truncate max-w-[120px]">{formattedDocName}</h1>
+      {/* 🚀 VISTA MÓVIL: ZERO SCROLL STRATEGY (High Density Grid con Mesh Gradient) */}
+      <div className="md:hidden p-3 space-y-3 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-indigo-200 via-slate-100 to-indigo-100 dark:from-slate-950 dark:via-indigo-950/20 dark:to-slate-950 min-h-screen">
+        
+        {/* 1. HEADER INTEGRADO: Saludo + Reloj + Botones de Acción */}
+        <div className="bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl rounded-2xl p-4 shadow-sm border border-white/20 dark:border-slate-800">
+            <div className="flex justify-between items-start mb-3">
+                <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center font-bold text-sm">{formattedDocName ? formattedDocName.charAt(0) : 'D'}</div>
+                    <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none mb-1">{dynamicGreeting.greeting}</p>
+                        <h1 className="text-sm font-black text-slate-800 dark:text-white leading-tight max-w-[150px] truncate">{formattedDocName}</h1>
+                    </div>
+                </div>
+                <div className="text-right">
+                    <AtomicClock location="" />
+                    <div className="mt-1 opacity-70 scale-90 origin-right"><WeatherWidget weather={weather} /></div>
                 </div>
             </div>
-            <div className="text-right text-white">
-                <AtomicClock location="" />
-                <div className="mt-1 opacity-70 scale-90 origin-right"><WeatherWidget weather={weather} /></div>
+            {/* Botones de Acción Integrados (Embedded) */}
+            <div className="grid grid-cols-2 gap-2 mt-2 pt-3 border-t border-slate-50/20 dark:border-slate-800/20">
+                <button onClick={() => { setInitialAssistantQuery(null); setIsAssistantOpen(true); }} className="bg-indigo-50/50 dark:bg-indigo-900/20 p-2 rounded-xl flex items-center justify-center gap-2 active:scale-95 transition-transform">
+                    <Bot size={16} className="text-indigo-600"/>
+                    <span className="text-xs font-bold text-indigo-700 dark:text-indigo-300">Asistente</span>
+                </button>
+                <button onClick={() => setIsQuickNoteOpen(true)} className="bg-amber-50/50 dark:bg-amber-900/20 p-2 rounded-xl flex items-center justify-center gap-2 active:scale-95 transition-transform">
+                    <Zap size={16} className="text-amber-600"/>
+                    <span className="text-xs font-bold text-amber-700 dark:text-amber-300">Nota Flash</span>
+                </button>
             </div>
         </div>
 
-        {/* Botones IA Glass */}
-        <div className="grid grid-cols-2 gap-2">
-            <button onClick={() => { setInitialAssistantQuery(null); setIsAssistantOpen(true); }} className="bg-white/10 backdrop-blur-sm border border-white/10 p-2 rounded-xl flex items-center justify-center gap-2 active:scale-95 transition-transform">
-                <Bot size={16} className="text-indigo-400"/><span className="text-xs font-bold text-white uppercase tracking-tighter">Asistente</span>
-            </button>
-            <button onClick={() => setIsQuickNoteOpen(true)} className="bg-white/10 backdrop-blur-sm border border-white/10 p-2 rounded-xl flex items-center justify-center gap-2 active:scale-95 transition-transform">
-                <Zap size={16} className="text-amber-400"/><span className="text-xs font-bold text-white uppercase tracking-tighter">Nota Flash</span>
-            </button>
-        </div>
-
-        {/* Grid Asimétrico (Nuevo Paciente + Agenda) */}
-        <div className="grid grid-cols-12 gap-3 h-44">
-            <button onClick={() => setIsFastAdmitOpen(true)} className={`col-span-4 rounded-[2rem] flex flex-col items-center justify-center gap-2 ${glassStyle} active:scale-95 transition-transform`}>
-                <div className="p-3 bg-indigo-500/20 rounded-full text-indigo-400"><UserPlus size={24} /></div>
-                <span className="text-white text-[10px] font-black uppercase tracking-tighter text-center leading-tight">Nuevo<br/>Paciente</span>
-            </button>
-            <div className={`col-span-8 rounded-[2rem] p-4 flex flex-col ${glassStyle}`}>
-                <span className="text-white font-black text-[10px] uppercase tracking-widest mb-2">Agenda</span>
-                <div className="flex-1 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
-                    {appointments.slice(0, 3).map(apt => (
-                        <div key={apt.id} onClick={() => handleStartConsultation(apt)} className="bg-white/5 p-2 rounded-xl border border-white/5 flex justify-between items-center">
-                            <p className="text-white font-bold text-[10px] truncate max-w-[80px]">{apt.title}</p>
-                            <p className="text-indigo-400 text-[9px] font-black">{format(parseISO(apt.start_time), 'HH:mm')}</p>
+        {/* 2. GRID PRINCIPAL DE WIDGETS (2x2 Layout) */}
+        <div className="grid grid-cols-2 gap-3 h-[calc(100vh-280px)] max-h-[400px]">
+            
+            {/* A. Widget Agenda (Mini Cuadro Glass) */}
+            <div className="bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl rounded-2xl p-3 border border-white/20 dark:border-slate-800 shadow-sm flex flex-col h-full overflow-hidden">
+                <div className="flex justify-between items-center mb-2">
+                    <h3 className="font-bold text-slate-800 text-xs flex items-center gap-1"><Calendar size={14} className="text-indigo-600"/> Agenda</h3>
+                    <span className="bg-slate-100 text-slate-500 text-[9px] px-1.5 py-0.5 rounded font-bold">{appointments.length}</span>
+                </div>
+                <div className="flex-1 overflow-y-auto custom-scrollbar space-y-2">
+                    {appointments.length === 0 ? (
+                        <div className="h-full flex flex-col items-center justify-center text-center opacity-50">
+                            <CalendarX size={20} className="text-slate-300 mb-1"/>
+                            <p className="text-[10px] text-slate-400">Libre</p>
                         </div>
-                    ))}
+                    ) : (
+                        appointments.map(apt => (
+                            <div key={apt.id} onClick={() => handleStartConsultation(apt)} className="bg-slate-50/80 dark:bg-slate-800/80 backdrop-blur-sm p-2 rounded-lg border-l-2 border-indigo-500">
+                                <p className="font-bold text-slate-800 text-[10px] truncate">{apt.title}</p>
+                                <p className="text-[9px] text-slate-500">{format(parseISO(apt.start_time), 'HH:mm')}</p>
+                            </div>
+                        ))
+                    )}
                 </div>
             </div>
-        </div>
 
-        {/* Widgets 2x2 Glass */}
-        <div className="grid grid-cols-2 gap-3">
-            <button onClick={() => setIsChallengeModalOpen(true)} className={`p-4 rounded-[2rem] flex flex-col items-center justify-center gap-2 ${glassStyle} relative overflow-hidden`}>
-                <BrainCircuit className="text-purple-400" size={28} />
-                <span className="text-white font-black text-[11px] uppercase tracking-tighter">Reto Diario</span>
-            </button>
-            <StatusWidget totalApts={totalDailyLoad} pendingApts={appointmentsToday} />
-            <button onClick={() => setIsDocModalOpen(true)} className={`p-4 rounded-[2rem] flex flex-col items-center justify-center gap-2 ${glassStyle}`}>
-                <FileCheck className="text-pink-400" size={28} />
-                <span className="text-white font-black text-[11px] uppercase tracking-tighter">Docs Rápidos</span>
-            </button>
-            <button onClick={() => setIsUploadModalOpen(true)} className={`p-4 rounded-[2rem] flex flex-col items-center justify-center gap-2 ${glassStyle}`}>
-                <FolderUp className="text-sky-400" size={28} />
-                <span className="text-white font-black text-[11px] uppercase tracking-tighter">Archivos</span>
-            </button>
+            {/* B. Widget Status (Cuadro Eficiencia Glass) */}
+            <div className="h-full">
+                <StatusWidget totalApts={totalDailyLoad} pendingApts={appointmentsToday} />
+            </div>
+
+            {/* C. Botones Funcionales (Reto + Docs) */}
+            <div className="grid grid-rows-2 gap-3 h-full">
+                 <button onClick={() => setIsChallengeModalOpen(true)} className="bg-gradient-to-br from-indigo-600 to-purple-600 rounded-2xl p-3 shadow-md active:scale-95 transition-transform flex flex-col items-center justify-center text-white relative overflow-hidden">
+                    <div className="absolute top-0 right-0 p-2 opacity-20"><BrainCircuit size={40}/></div>
+                    <BrainCircuit size={20} className="mb-1"/>
+                    <span className="text-xs font-black uppercase tracking-wide">Reto Diario</span>
+                 </button>
+                 <button onClick={() => setIsDocModalOpen(true)} className="bg-white/60 backdrop-blur-xl border border-white/20 rounded-2xl p-3 shadow-sm active:scale-95 transition-transform flex flex-col items-center justify-center relative overflow-hidden">
+                    <FileCheck size={20} className="text-pink-500 mb-1"/>
+                    <span className="text-xs font-bold text-slate-700">Docs Rápidos</span>
+                 </button>
+            </div>
+
+            {/* D. Acciones Finales (Nuevo + Subir) */}
+            <div className="grid grid-rows-2 gap-3 h-full">
+                <button onClick={() => setIsFastAdmitOpen(true)} className="bg-white/60 backdrop-blur-xl border border-white/20 rounded-2xl p-2 flex items-center justify-center gap-2 shadow-sm active:scale-95">
+                    <UserPlus size={18} className="text-indigo-600"/>
+                    <span className="text-[10px] font-bold text-slate-700 leading-tight">Nuevo<br/>Paciente</span>
+                </button>
+                <button onClick={() => setIsUploadModalOpen(true)} className="bg-white/60 backdrop-blur-xl border border-white/20 rounded-2xl p-2 flex items-center justify-center gap-2 shadow-sm active:scale-95">
+                    <FolderUp size={18} className="text-slate-600"/>
+                    <span className="text-[10px] font-bold text-slate-700 leading-tight">Subir<br/>Archivo</span>
+                </button>
+            </div>
+
         </div>
       </div>
 
-      {/* 🖥️ VISTA ESCRITORIO (ESTRUCTURA ORIGINAL 100% FUNCIONAL) */}
-      <div className="hidden md:block px-8 pt-8 max-w-[1600px] mx-auto w-full relative z-10">
-         {/* Layout Desktop Bento ORIGINAL */}
+      {/* 🖥️ VISTA DE ESCRITORIO (Preservada Intacta con 'hidden md:block') */}
+      <div className="hidden md:block px-8 pt-8 max-w-[1600px] mx-auto w-full">
+         
+         {/* HEADER BENTO ORIGINAL */}
          <div className="grid grid-cols-4 gap-6 mb-8">
              <div className="bg-white dark:bg-slate-900 rounded-[2rem] p-6 shadow-sm border border-slate-100 dark:border-slate-800 flex flex-col justify-between min-h-[180px] col-span-1">
                  <div className="flex justify-between items-start">
@@ -470,6 +505,7 @@ const Dashboard: React.FC = () => {
                      <AtomicClock location={locationName} />
                  </div>
              </div>
+
              <div className="col-span-1 flex flex-col gap-3">
                  <div className="flex gap-2 h-full">
                     <button onClick={() => { setInitialAssistantQuery(null); setIsAssistantOpen(true); }} className="flex-1 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-3 flex flex-col items-center justify-center gap-1 shadow-sm active:scale-95 transition-transform">
@@ -482,12 +518,13 @@ const Dashboard: React.FC = () => {
                     </button>
                  </div>
                  <form onSubmit={handleSearchSubmit}>
-                    <div className="bg-white dark:bg-slate-900 rounded-xl p-1.5 shadow-sm border border-slate-200 flex items-center gap-2 group focus-within:ring-2 focus-within:ring-indigo-500/20 transition-all">
+                    <div className="bg-white dark:bg-slate-900 rounded-xl p-1.5 shadow-sm border border-slate-200 flex items-center gap-2">
                         <div className="p-1.5 bg-indigo-50 rounded-lg text-indigo-600"><Search size={16} /></div>
                         <input type="text" value={searchInput} onChange={(e) => setSearchInput(e.target.value)} placeholder="Buscar..." className="flex-1 bg-transparent border-none outline-none text-sm h-8 px-1" />
                     </div>
                  </form>
              </div>
+
              <div className="col-span-2 min-h-[180px]">
                  <DailyChallengeCard specialty={doctorProfile?.specialty} />
              </div>
@@ -506,7 +543,7 @@ const Dashboard: React.FC = () => {
                             <h2 className="text-3xl font-black text-slate-800 dark:text-white leading-tight truncate">{nextPatient ? nextPatient.title : 'Agenda Libre'}</h2>
                             <p className="text-xs text-slate-500 truncate">{nextPatient ? 'Expediente Activo' : 'Sin pacientes en cola.'}</p>
                         </div>
-                        {nextPatient && <button onClick={() => handleStartConsultation(nextPatient)} className="mt-3 w-full py-2 bg-slate-900 text-white rounded-xl font-bold text-xs">INICIAR CONSULTA</button>}
+                        {nextPatient && <button onClick={() => handleStartConsultation(nextPatient)} className="mt-3 w-full py-2 bg-slate-900 text-white rounded-xl font-bold text-xs">INICIAR</button>}
                      </div>
                  </div>
 
@@ -517,7 +554,7 @@ const Dashboard: React.FC = () => {
                     </div>
                     <div className="h-auto min-h-[200px] overflow-y-auto custom-scrollbar space-y-2 pr-1">
                         {appointments.length === 0 ? (
-                            <div className="text-center py-8 text-slate-400 text-xs">Sin citas programadas hoy.</div>
+                            <div className="text-center py-8 text-slate-400 text-xs">Sin citas.</div>
                         ) : (
                             appointments.map(apt => (
                                 <div key={apt.id} className="flex items-center gap-3 p-2 hover:bg-slate-50 rounded-lg group cursor-pointer" onClick={() => handleStartConsultation(apt)}>
@@ -539,40 +576,48 @@ const Dashboard: React.FC = () => {
                  <ActionRadar items={pendingItems} onItemClick={handleRadarClick} />
                  <div className="grid grid-cols-2 gap-3">
                      <button onClick={() => setIsFastAdmitOpen(true)} className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-3 shadow-sm hover:shadow-md flex flex-col justify-between h-auto aspect-square group relative overflow-hidden">
-                        <div className="absolute top-2 right-2 opacity-10 group-hover:opacity-20 transition-opacity"><UserPlus size={40} className="text-indigo-600"/></div>
-                        <div className="bg-indigo-50 p-2 w-fit rounded-lg transition-transform group-hover:scale-110"><UserPlus size={20} className="text-indigo-600"/></div>
+                        <div className="absolute top-2 right-2 opacity-10 group-hover:opacity-20"><UserPlus size={40} className="text-indigo-600"/></div>
+                        <div className="bg-indigo-50 p-2 w-fit rounded-lg"><UserPlus size={20} className="text-indigo-600"/></div>
                         <span className="font-bold text-slate-800 text-lg leading-tight">Nuevo<br/>Paciente</span>
                      </button>
                      <button onClick={() => setIsUploadModalOpen(true)} className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-3 shadow-sm hover:shadow-md flex flex-col justify-between h-auto aspect-square group relative overflow-hidden">
-                        <div className="absolute top-2 right-2 opacity-10 group-hover:opacity-20 transition-opacity"><FolderUp size={40} className="text-slate-600"/></div>
-                        <div className="bg-slate-50 p-2 w-fit rounded-lg transition-transform group-hover:scale-110"><FolderUp size={20} className="text-slate-600"/></div>
+                        <div className="absolute top-2 right-2 opacity-10 group-hover:opacity-20"><FolderUp size={40} className="text-slate-600"/></div>
+                        <div className="bg-slate-50 p-2 w-fit rounded-lg"><FolderUp size={20} className="text-slate-600"/></div>
                         <span className="font-bold text-slate-800 text-lg leading-tight">Subir<br/>Archivo</span>
                      </button>
-                     <div className="col-span-2 h-auto"><QuickDocs openModal={openDocModal} /></div>
+                     <div className="col-span-2 h-auto">
+                        <QuickDocs openModal={openDocModal} />
+                     </div>
                  </div>
              </div>
          </div>
       </div>
 
-      {/* MODALES Y BOTÓN FLOTANTE (RESTAURADOS) */}
+      {/* ✅ NUEVO MODAL: RETO DIARIO (Solo aparece al hacer click en el botón móvil) */}
       {isChallengeModalOpen && (
-          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-2xl">
-              <div className="w-full max-w-md relative animate-fade-in">
-                  <button onClick={() => setIsChallengeModalOpen(false)} className="absolute -top-16 right-0 text-white p-3 bg-white/10 rounded-full"><X size={32}/></button>
-                  <DailyChallengeCard specialty={doctorProfile?.specialty} />
+          <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/80 backdrop-blur-sm p-4 animate-fade-in">
+              <div className="w-full max-w-md bg-transparent relative">
+                  <button onClick={() => setIsChallengeModalOpen(false)} className="absolute -top-12 right-0 text-white p-2 bg-white/20 rounded-full backdrop-blur-md">
+                      <X size={24}/>
+                  </button>
+                  <div className="h-[400px]">
+                      {/* Reutilizamos el componente existente sin alterar su código */}
+                      <DailyChallengeCard specialty={doctorProfile?.specialty} />
+                  </div>
               </div>
           </div>
       )}
 
-      {isUploadModalOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4"><div className="bg-white w-full max-w-md rounded-2xl p-6 shadow-xl relative"><button onClick={() => setIsUploadModalOpen(false)} className="absolute top-4 right-4"><X size={16}/></button><UploadMedico onUploadComplete={() => {fetchData(true); setIsUploadModalOpen(false);}}/><div className="mt-4 pt-4 border-t"><DoctorFileGallery /></div></div></div>}
+      {/* OTROS MODALES Y ELEMENTOS FLOTANTES */}
+      {isUploadModalOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4"><div className="bg-white w-full max-w-md rounded-2xl p-6 shadow-xl relative"><button onClick={() => setIsUploadModalOpen(false)} className="absolute top-4 right-4"><X size={16}/></button><UploadMedico onUploadComplete={() => {}}/><div className="mt-4 pt-4 border-t"><DoctorFileGallery /></div></div></div>}
       {rescheduleTarget && <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/30 p-4"><div className="bg-white p-6 rounded-2xl shadow-xl w-full max-w-sm"><h3 className="font-bold text-lg mb-2">Reprogramar</h3><input type="datetime-local" className="w-full p-3 border rounded-xl mb-4" value={newDateInput} onChange={(e) => setNewDateInput(e.target.value)}/><div className="flex justify-end gap-2"><button onClick={() => setRescheduleTarget(null)} className="px-4 py-2 text-slate-500 text-sm">Cancelar</button><button onClick={confirmReschedule} className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm">Confirmar</button></div></div></div>}
-      
       {isQuickNoteOpen && <QuickNoteModal onClose={() => setIsQuickNoteOpen(false)} doctorProfile={doctorProfile}/>}
       <QuickDocModal isOpen={isDocModalOpen} onClose={() => setIsDocModalOpen(false)} doctorProfile={doctorProfile} defaultType={docType} />
       <AssistantModal isOpen={isAssistantOpen} onClose={() => setIsAssistantOpen(false)} onActionComplete={fetchData} initialQuery={initialAssistantQuery} />
       <FastAdmitModal isOpen={isFastAdmitOpen} onClose={() => setIsFastAdmitOpen(false)} /> 
       <UserGuideModal isOpen={isGuideOpen} onClose={() => setIsGuideOpen(false)} />
-
+      
+      {/* Botón Flotante Guía */}
       <button onClick={() => setIsGuideOpen(true)} className="fixed z-50 bg-indigo-600 text-white rounded-full shadow-2xl font-bold flex items-center justify-center gap-2 transition-transform hover:scale-105 hover:shadow-indigo-500/50 bottom-24 right-4 w-14 h-14 p-0 md:bottom-24 md:right-6 md:w-auto md:h-auto md:px-5 md:py-3">
         <HelpCircle size={24} /> <span className="hidden md:inline">¿Cómo funciona?</span>
       </button>
