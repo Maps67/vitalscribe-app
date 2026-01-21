@@ -3,13 +3,12 @@ import {
   Sun, Moon, Sunrise, Sunset, MoonStar, 
   Clock, AlertTriangle, Activity, Bot, 
   BrainCircuit, Zap, ChevronRight, RefreshCw,
-  RotateCw, CheckCircle2 // ✅ CORRECCIÓN: Se agrega CheckCircle2 que faltaba
+  RotateCw, CheckCircle2 
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { GeminiMedicalService } from '../services/GeminiMedicalService'; 
 
-// Definir interfaz de Props
 interface SmartBriefingProps {
   greeting: string;
   weather: { temp: string; code: number };
@@ -25,7 +24,6 @@ interface SmartBriefingProps {
   };
 }
 
-// Respaldo local por si falla la IA o no hay internet
 const BACKUP_CHALLENGES = [
   { category: "Cardiología", question: "¿Fármaco de elección en HTA con Diabetes?", answer: "IECA / ARA-II" },
   { category: "Urgencias", question: "Triada de Cushing (HTIC)", answer: "HTA, Bradicardia, Alt. Resp." },
@@ -44,15 +42,11 @@ const SmartBriefingWidget: React.FC<SmartBriefingProps> = ({
 }) => {
   const [hour, setHour] = useState(new Date().getHours());
   const [challenge, setChallenge] = useState(BACKUP_CHALLENGES[0]);
-  
-  // ✅ NUEVO ESTADO: Controla si la tarjeta está volteada (true = viendo respuesta)
   const [isFlipped, setIsFlipped] = useState(false);
   const [loadingChallenge, setLoadingChallenge] = useState(false);
 
-  // --- LÓGICA DEL CEREBRO DE RETOS (IA + PERSISTENCIA) ---
   useEffect(() => {
     setHour(new Date().getHours());
-    // Resetear el flip al cambiar de especialidad para mostrar siempre la pregunta primero
     setIsFlipped(false); 
     loadDailyChallenge();
   }, [specialty]);
@@ -62,7 +56,6 @@ const SmartBriefingWidget: React.FC<SmartBriefingProps> = ({
     const storedData = localStorage.getItem('med_daily_challenge_data');
     const storedDate = localStorage.getItem('med_daily_challenge_date');
 
-    // 1. Si ya existe un reto HOY, úsalo (Ahorra tokens y carga instantánea)
     if (storedDate === todayKey && storedData) {
       try {
         setChallenge(JSON.parse(storedData));
@@ -72,27 +65,22 @@ const SmartBriefingWidget: React.FC<SmartBriefingProps> = ({
       }
     }
 
-    // 2. Si es un nuevo día, llama a la IA
     setLoadingChallenge(true);
     try {
       const newChallenge = await GeminiMedicalService.getDailyChallenge(specialty);
-      
       if (newChallenge) {
         setChallenge(newChallenge);
-        // Guardar en caché para el resto del día
         localStorage.setItem('med_daily_challenge_data', JSON.stringify(newChallenge));
         localStorage.setItem('med_daily_challenge_date', todayKey);
       }
     } catch (error) {
-      console.warn("Usando reto de respaldo debido a error de red/IA");
-      // Fallback aleatorio de la lista local
+      console.warn("Usando respaldo local");
       setChallenge(BACKUP_CHALLENGES[Math.floor(Math.random() * BACKUP_CHALLENGES.length)]);
     } finally {
       setLoadingChallenge(false);
     }
   };
 
-  // --- TEMA VISUAL ---
   let theme = { 
     gradient: "from-orange-400 via-amber-500 to-yellow-500", 
     icon: Sunrise, label: "Buenos Días", shadow: "shadow-orange-200/50", accent: "bg-white/20"
@@ -106,7 +94,6 @@ const SmartBriefingWidget: React.FC<SmartBriefingProps> = ({
     theme = { gradient: "from-slate-900 via-slate-800 to-blue-950", icon: MoonStar, label: "Guardia Nocturna", shadow: "shadow-slate-800/50", accent: "bg-slate-700/50" };
   }
 
-  // SKELETON LOADING (Estado de carga inicial del dashboard)
   if (isLoading) {
     return (
       <div className="relative w-full rounded-[2.5rem] bg-slate-200 dark:bg-slate-800/80 p-8 mb-8 overflow-hidden h-[300px] border-2 border-slate-300 dark:border-slate-700 shadow-xl">
@@ -117,11 +104,6 @@ const SmartBriefingWidget: React.FC<SmartBriefingProps> = ({
 
   return (
     <div className={`relative w-full rounded-[2.5rem] bg-gradient-to-r ${theme.gradient} p-8 shadow-2xl ${theme.shadow} dark:shadow-none text-white overflow-hidden mb-8 transition-all duration-1000 ease-in-out group`}>
-      
-      {/* 🚀 OPTIMIZACIÓN DE RENDIMIENTO: TEXTURA NATIVA CSS (SIN IMÁGENES EXTERNAS) 
-          Reemplazamos el PNG 'cubes.png' por un patrón de puntos radiales generado por la GPU.
-          Cero latencia de red, carga instantánea.
-      */}
       <div 
         className="absolute inset-0 opacity-10" 
         style={{ 
@@ -129,8 +111,6 @@ const SmartBriefingWidget: React.FC<SmartBriefingProps> = ({
           backgroundSize: '24px 24px' 
         }}
       ></div>
-      
-      {/* Luz ambiental dinámica adicional */}
       <div className="absolute -right-20 -top-20 w-96 h-96 bg-white/10 rounded-full blur-[100px] animate-pulse"></div>
       
       <div className="relative z-10 flex flex-col xl:flex-row justify-between items-center xl:items-end gap-8">
@@ -191,19 +171,26 @@ const SmartBriefingWidget: React.FC<SmartBriefingProps> = ({
           </div>
         </div>
 
-        {/* COLUMNA CENTRAL: Reto Diario IA (REDISEÑO FLASHCARD 3D) */}
-        {/* ✅ AJUSTE CRÍTICO: Cambio de xl:max-w-sm a xl:max-w-2xl para expandir a la izquierda */}
-        <div className="w-full xl:max-w-2xl perspective-[1000px] h-[220px]"> 
+        {/* COLUMNA CENTRAL: Reto Diario IA (REDISEÑO RESPONSIVO GRID STACK) */}
+        {/* ✅ FIX UX: Grid unicelular permite que la tarjeta crezca según el contenido más alto sin romperse */}
+        <div className="w-full xl:max-w-2xl perspective-[1000px] group/card">
           
           <div 
-            className={`relative w-full h-full transition-all duration-700 [transform-style:preserve-3d] cursor-pointer ${isFlipped ? '[transform:rotateY(180deg)]' : ''}`}
+            className="relative w-full grid grid-cols-1 grid-rows-1 cursor-pointer"
             onClick={() => !loadingChallenge && setIsFlipped(!isFlipped)}
           >
              
              {/* --- CARA FRONTAL (PREGUNTA) --- */}
-             <div className="absolute inset-0 bg-white/10 border border-white/20 rounded-[2rem] p-6 backdrop-blur-md shadow-xl flex flex-col justify-between [backface-visibility:hidden]">
+             <div 
+                className={`
+                    col-start-1 row-start-1 min-h-[220px] 
+                    [backface-visibility:hidden] transition-all duration-700 ease-[cubic-bezier(0.4,0,0.2,1)] [transform-style:preserve-3d]
+                    bg-white/10 border border-white/20 rounded-[2rem] p-6 backdrop-blur-md shadow-xl flex flex-col justify-between
+                    ${isFlipped ? '[transform:rotateY(180deg)]' : '[transform:rotateY(0deg)]'}
+                `}
+             >
                 {loadingChallenge ? (
-                    <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-black/10 backdrop-blur-sm rounded-[2rem]">
+                    <div className="flex-1 flex flex-col items-center justify-center gap-3">
                         <RefreshCw className="animate-spin text-white" size={32}/>
                         <span className="text-xs font-bold uppercase tracking-widest animate-pulse">Generando Reto...</span>
                     </div>
@@ -220,7 +207,7 @@ const SmartBriefingWidget: React.FC<SmartBriefingProps> = ({
                              </div>
                         </div>
 
-                        <div className="flex-1 flex flex-col justify-center py-2">
+                        <div className="flex-1 flex flex-col justify-center py-4">
                             <h3 className="font-bold text-lg md:text-xl leading-snug text-white drop-shadow-sm">
                                 {challenge.question}
                             </h3>
@@ -242,17 +229,24 @@ const SmartBriefingWidget: React.FC<SmartBriefingProps> = ({
              </div>
 
              {/* --- CARA TRASERA (RESPUESTA) --- */}
-             <div className="absolute inset-0 bg-indigo-900/80 border border-indigo-400/30 rounded-[2rem] p-6 backdrop-blur-xl shadow-2xl flex flex-col justify-between [backface-visibility:hidden] [transform:rotateY(180deg)] overflow-hidden">
-                 <div className="absolute top-0 right-0 p-4 opacity-10">
+             <div 
+                className={`
+                    col-start-1 row-start-1 min-h-[220px]
+                    [backface-visibility:hidden] transition-all duration-700 ease-[cubic-bezier(0.4,0,0.2,1)] [transform-style:preserve-3d]
+                    bg-indigo-900/90 border border-indigo-400/30 rounded-[2rem] p-6 backdrop-blur-xl shadow-2xl flex flex-col justify-between
+                    ${isFlipped ? '[transform:rotateY(360deg)]' : '[transform:rotateY(180deg)]'}
+                `}
+             >
+                 <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">
                      <Zap size={100} className="text-white"/>
                  </div>
                  
-                 <div className="relative z-10 flex-1 flex flex-col justify-center items-center text-center">
+                 <div className="relative z-10 flex-1 flex flex-col justify-center items-center text-center py-2">
                      <div className="bg-green-500/20 p-3 rounded-full mb-3 ring-1 ring-green-400/50">
-                         {/* ✅ ICONO AHORA CORRECTAMENTE IMPORTADO */}
                          <CheckCircle2 size={32} className="text-green-300"/>
                      </div>
-                     <h3 className="font-black text-xl md:text-2xl text-white leading-tight mb-2">
+                     {/* ✅ FIX UX: Texto adaptable que empuja el contenedor si es largo */}
+                     <h3 className="font-black text-xl md:text-2xl text-white leading-tight mb-2 break-words w-full">
                          {challenge.answer}
                      </h3>
                      <p className="text-[10px] text-indigo-200 uppercase tracking-widest font-bold">
@@ -260,7 +254,7 @@ const SmartBriefingWidget: React.FC<SmartBriefingProps> = ({
                      </p>
                  </div>
 
-                 <div className="relative z-10 pt-4 border-t border-white/10 text-center">
+                 <div className="relative z-10 pt-4 border-t border-white/10 text-center mt-auto">
                      <p className="text-[9px] text-indigo-300/60 mb-2">
                         * Evidencia generada por IA. Verifica clínicamente.
                      </p>
