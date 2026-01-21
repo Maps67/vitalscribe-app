@@ -544,18 +544,26 @@ const Dashboard: React.FC = () => {
                     </div>
                 </div>
 
-                {/* MINI-PÍLDORA HORIZONTAL ESTILO ESCRITORIO */}
-                <div className="flex items-center gap-2 bg-slate-100/50 backdrop-blur-sm px-3 py-1.5 rounded-full border border-white/40 shadow-sm shrink-0">
-                    <div className="flex items-center gap-1">
-                        <span className="text-xs font-bold text-slate-700">{weather.temp}°</span>
-                        {weather.code < 3 ? <Sun size={12} className="text-amber-500"/> : <Cloud size={12} className="text-slate-400"/>}
+                {/* PÍLDORA BOLD: High-Contrast Clinical Capsule (Reemplazo v6.7) */}
+                <div className="flex items-center gap-2.5 bg-white px-3.5 py-2 rounded-2xl border border-slate-100 shadow-[0_4px_12px_rgba(0,0,0,0.08)] shrink-0">
+                    {/* Clima con más peso visual */}
+                    <div className="flex items-center gap-1.5">
+                        <span className="text-sm font-black text-slate-700 tracking-tight">{weather.temp}°</span>
+                        {weather.code < 3 
+                            ? <Sun size={16} className="text-amber-500 fill-amber-500/20" strokeWidth={2.5}/> 
+                            : <Cloud size={16} className="text-slate-400 fill-slate-200" strokeWidth={2.5}/>
+                        }
                     </div>
-                    <div className="w-px h-3 bg-slate-300 mx-0.5"></div>
+                    
+                    {/* Separador más marcado */}
+                    <div className="w-0.5 h-4 bg-slate-200 mx-0.5 rounded-full"></div>
+                    
+                    {/* Hora más grande y legible */}
                     <div className="flex items-baseline gap-0.5 text-slate-800">
-                        <span className="text-sm font-bold tracking-tighter tabular-nums">
+                        <span className="text-base font-black tracking-tighter tabular-nums leading-none">
                             {format(now, 'h:mm')}
                         </span>
-                        <span className="text-[8px] font-medium text-slate-400 uppercase">
+                        <span className="text-[9px] font-bold text-slate-400 uppercase bg-slate-100 px-1 rounded-[4px] ml-0.5">
                             {format(now, 'a')}
                         </span>
                     </div>
