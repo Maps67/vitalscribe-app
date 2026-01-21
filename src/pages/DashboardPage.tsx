@@ -7,12 +7,11 @@ import {
   UserPlus, Activity, ChevronRight,
   CalendarX, FileSignature, Printer, FileCheck,
   HelpCircle, Zap, FolderUp, BrainCircuit, Clock, RefreshCcw,
-  Scissors // ✨ NUEVO: Icono para Incapacidades
+  Scissors, Volume2 // ✨ Icono de Audio
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { format, isToday, parseISO, startOfDay, endOfDay, addDays } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { getTimeOfDayGreeting } from '../utils/greetingUtils';
 import { toast } from 'sonner';
 
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
@@ -151,7 +150,7 @@ const StatusWidget = ({ totalApts, pendingApts }: { totalApts: number, pendingAp
     );
 };
 
-// --- ASISTENTE MODAL ---
+// --- ASISTENTE MODAL (REPARADO: TTS ACTIVADO) ---
 const AssistantModal = ({ isOpen, onClose, onActionComplete, initialQuery }: { isOpen: boolean; onClose: () => void; onActionComplete: () => void; initialQuery?: string | null }) => {
   const { isListening, transcript, startListening, stopListening, resetTranscript } = useSpeechRecognition();
   const [status, setStatus] = useState<'idle' | 'listening' | 'processing' | 'answering'>('idle');
@@ -160,13 +159,26 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete, initialQuery }: { i
   const [isExecuting, setIsExecuting] = useState(false); 
   const navigate = useNavigate(); 
   
+  // 🔊 TTS HELPER: Motor de Voz
+  const speakResponse = (text: string) => {
+      window.speechSynthesis.cancel(); // Detener cualquier audio previo
+      const cleanText = cleanMarkdown(text); // Limpiar MD para no leer asteriscos
+      const utterance = new SpeechSynthesisUtterance(cleanText);
+      utterance.lang = 'es-MX'; // Forzar Español Latino
+      utterance.rate = 1.0; // Velocidad normal
+      window.speechSynthesis.speak(utterance);
+  };
+
   useEffect(() => {
     if (isOpen && initialQuery) { setStatus('processing'); processIntent(initialQuery); } 
     else if (isOpen) { resetTranscript(); setStatus('listening'); startListening(); setAiResponse(null); setMedicalAnswer(null); setIsExecuting(false); } 
-    else { stopListening(); window.speechSynthesis.cancel(); }
+    else { 
+        stopListening(); 
+        window.speechSynthesis.cancel(); // 🔇 Mute al cerrar
+    }
   }, [isOpen, initialQuery]);
 
-  const handleManualCancel = () => { stopListening(); resetTranscript(); setStatus('idle'); };
+  const handleManualCancel = () => { stopListening(); resetTranscript(); setStatus('idle'); window.speechSynthesis.cancel(); };
 
   const processIntent = async (manualText?: string) => {
       const textToProcess = manualText || transcript;
@@ -176,13 +188,16 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete, initialQuery }: { i
           const executeLogic = async () => {
               const lowerText = textToProcess.toLowerCase();
               if (lowerText.includes('ir a') || lowerText.includes('navegar')) {
-                  setAiResponse({ intent: 'NAVIGATION', data: { destination: textToProcess }, message: `Navegar a ${textToProcess}`, originalText: textToProcess, confidence: 1.0 });
+                  const msg = `Navegando a ${textToProcess}`;
+                  setAiResponse({ intent: 'NAVIGATION', data: { destination: textToProcess }, message: msg, originalText: textToProcess, confidence: 1.0 });
                   setStatus('answering');
+                  speakResponse(msg); // 🔊 TRIGGER AUDIO
               } else {
                   const rawAnswer = await GeminiMedicalService.chatWithContext("Contexto: Dashboard Médico.", textToProcess);
                   setMedicalAnswer(cleanMarkdown(rawAnswer));
                   setAiResponse({ intent: 'MEDICAL_QUERY', data: {}, message: 'Consulta Clínica', originalText: textToProcess, confidence: 1.0 });
                   setStatus('answering');
+                  speakResponse(rawAnswer); // 🔊 TRIGGER AUDIO
               }
           };
           await executeLogic();
@@ -229,9 +244,15 @@ const AssistantModal = ({ isOpen, onClose, onActionComplete, initialQuery }: { i
           )}
           {status === 'answering' && aiResponse && (
             <div className="animate-in slide-in-from-bottom-4 fade-in">
+              {/* Indicador de Audio Activo */}
+              <div className="flex justify-center mb-4">
+                  <div className="flex items-center gap-2 px-3 py-1 bg-blue-50 text-blue-600 rounded-full text-[10px] font-bold uppercase tracking-widest animate-pulse">
+                      <Volume2 size={12}/> Reproduciendo respuesta
+                  </div>
+              </div>
               <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 mb-6 max-h-60 overflow-y-auto"><p className="text-slate-700 text-sm leading-relaxed">{medicalAnswer || aiResponse.message}</p></div>
               <div className="flex gap-3">
-                <button onClick={() => { setStatus('idle'); resetTranscript(); }} className="flex-1 py-3 text-slate-600 font-bold hover:bg-slate-100 rounded-lg border border-slate-200">Nueva</button>
+                <button onClick={() => { setStatus('idle'); resetTranscript(); window.speechSynthesis.cancel(); }} className="flex-1 py-3 text-slate-600 font-bold hover:bg-slate-100 rounded-lg border border-slate-200">Nueva</button>
                 <button onClick={handleExecuteAction} className="flex-1 py-3 bg-blue-600 text-white font-bold rounded-lg shadow-md hover:bg-blue-700">{aiResponse.intent === 'MEDICAL_QUERY' ? 'Cerrar' : 'Ejecutar'}</button>
               </div>
             </div>
@@ -320,7 +341,6 @@ const Dashboard: React.FC = () => {
   const [isAssistantOpen, setIsAssistantOpen] = useState(false);
   const [initialAssistantQuery, setInitialAssistantQuery] = useState<string | null>(null);
   const [isDocModalOpen, setIsDocModalOpen] = useState(false);
-  // ✨ UPDATE TYPE: Añadido 'incapacidad'
   const [docType, setDocType] = useState<'justificante' | 'certificado' | 'receta' | 'incapacidad'>('justificante');
   const [isFastAdmitOpen, setIsFastAdmitOpen] = useState(false); 
   const [isGuideOpen, setIsGuideOpen] = useState(false);
