@@ -587,8 +587,8 @@ const Dashboard: React.FC = () => {
         </div>
 
         <div className="shrink-0 flex flex-col gap-2 animate-fade-in delay-300 relative z-10">
-            <div className="grid grid-cols-2 gap-2 h-24">
-                {/* StatusWidget actualizado para usar realPendingCount - MÓVIL ✅ */}
+            {/* CORRECCIÓN MÓVIL: Altura aumentada a h-44 para evitar desbordamiento */}
+            <div className="grid grid-cols-2 gap-2 h-44">
                 <ImpactMetrics 
                     dailyTotal={totalDailyLoad} 
                     dailyCompleted={completedTodayCount} 
