@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 // 🛡️ CORRECCIÓN: Importamos la instancia ÚNICA de Supabase
 import { supabase } from '../lib/supabase';
 import imageCompression from 'browser-image-compression';
-import { Search, UserPlus, Upload, X, Loader2 } from 'lucide-react';
+// ✅ CORRECCIÓN: Agregado 'UploadCloud' a los imports
+import { Search, UserPlus, Upload, X, Loader2, Camera, FileImage, Paperclip, UploadCloud } from 'lucide-react';
 import { PatientService } from '../services/PatientService';
 import { Patient } from '../types';
 import { toast } from 'sonner';
@@ -25,15 +26,22 @@ export const UploadMedico: React.FC<UploadMedicoProps> = ({ preSelectedPatient, 
   const [isCreatingPatient, setIsCreatingPatient] = useState(false);
   const [currentDoctorId, setCurrentDoctorId] = useState<string | null>(null);
 
+  // Refs para control granular de inputs (Fix iOS)
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const isMounted = useRef(true);
+
   // Inicialización: Obtener ID del Doctor actual para operaciones seguras (RLS)
   useEffect(() => {
+    isMounted.current = true;
     const fetchUser = async () => {
       const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
+      if (user && isMounted.current) {
         setCurrentDoctorId(user.id);
       }
     };
     fetchUser();
+    return () => { isMounted.current = false; };
   }, []);
 
   // Sincronizar si cambia el paciente preseleccionado (ej. navegando en consultas)
@@ -49,9 +57,9 @@ export const UploadMedico: React.FC<UploadMedicoProps> = ({ preSelectedPatient, 
     const delayDebounceFn = setTimeout(async () => {
       if (searchTerm && !selectedPatient) {
         const results = await PatientService.searchPatients(searchTerm);
-        setPatientsFound(results);
+        if (isMounted.current) setPatientsFound(results);
       } else {
-        setPatientsFound([]);
+        if (isMounted.current) setPatientsFound([]);
       }
     }, 300);
 
@@ -69,7 +77,7 @@ export const UploadMedico: React.FC<UploadMedicoProps> = ({ preSelectedPatient, 
     try {
       // Se pasa el ID del doctor explícitamente para cumplir RLS
       const newPatient = await PatientService.createQuickPatient(searchTerm, currentDoctorId);
-      if (newPatient) {
+      if (newPatient && isMounted.current) {
         setSelectedPatient(newPatient);
         setPatientsFound([]);
         toast.success(`Paciente "${newPatient.name}" registrado.`);
@@ -77,10 +85,11 @@ export const UploadMedico: React.FC<UploadMedicoProps> = ({ preSelectedPatient, 
     } catch (error) {
       toast.error("Error al registrar paciente.");
     } finally {
-      setIsCreatingPatient(false);
+      if (isMounted.current) setIsCreatingPatient(false);
     }
   };
 
+  // Lógica Central de Carga (Unificada para Archivo y Cámara)
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -99,7 +108,7 @@ export const UploadMedico: React.FC<UploadMedicoProps> = ({ preSelectedPatient, 
       // 1. Compresión (Solo imágenes) para ahorrar espacio
       if (file.type.startsWith('image/')) {
         const options = {
-          maxSizeMB: 0.2,
+          maxSizeMB: 0.8, // Optimizado para documentos legibles
           maxWidthOrHeight: 1920,
           useWebWorker: true,
         };
@@ -112,8 +121,7 @@ export const UploadMedico: React.FC<UploadMedicoProps> = ({ preSelectedPatient, 
 
       // 2. Subida a Ruta Específica del Paciente
       // RUTA CLAVE: {PATIENT_ID}/{TIMESTAMP}_{FILENAME}
-      // Esto asegura que el archivo pertenezca solo a este paciente
-      const filePath = `${selectedPatient.id}/${Date.now()}_${file.name}`;
+      const filePath = `${selectedPatient.id}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
 
       const { error } = await supabase.storage
         .from(BUCKET_NAME)
@@ -128,12 +136,23 @@ export const UploadMedico: React.FC<UploadMedicoProps> = ({ preSelectedPatient, 
       if (onUploadComplete) onUploadComplete();
 
     } catch (error: any) {
+      console.error("Upload error:", error);
       toast.error(error.message || "Error al subir archivo");
     } finally {
-      setUploading(false);
-      event.target.value = '';
+      // 🛠️ FIX iOS/SAFARI: Usar setTimeout para liberar el hilo del navegador
+      // antes de resetear el estado y el input. Evita bloqueos de UI.
+      setTimeout(() => {
+        if (isMounted.current) {
+            setUploading(false);
+            if (event.target) event.target.value = ''; 
+        }
+      }, 100);
     }
   };
+
+  // Disparadores manuales para los inputs ocultos
+  const triggerFileSelect = () => fileInputRef.current?.click();
+  const triggerCamera = () => cameraInputRef.current?.click();
 
   return (
     <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-200 dark:border-slate-700">
@@ -201,34 +220,74 @@ export const UploadMedico: React.FC<UploadMedicoProps> = ({ preSelectedPatient, 
         </div>
       )}
 
-      {/* 2. ZONA DE SUBIDA */}
-      <div className="relative">
-        <label className={`flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-xl cursor-pointer transition-all ${
-          !selectedPatient ? 'opacity-50 cursor-not-allowed bg-slate-100 border-slate-300' :
-          uploading ? 'bg-slate-50 border-slate-300' : 'border-brand-teal bg-teal-50/30 hover:bg-teal-50 dark:hover:bg-teal-900/10'
-        }`}>
-          <div className="flex flex-col items-center justify-center pt-5 pb-6">
-            {uploading ? (
-              <div className="flex flex-col items-center text-brand-teal animate-pulse">
-                <Loader2 className="animate-spin mb-2" size={24} />
-                <p className="text-xs font-bold">Procesando...</p>
-              </div>
-            ) : (
-              <>
-                <Upload className={`w-8 h-8 mb-2 ${selectedPatient ? 'text-brand-teal' : 'text-slate-400'}`} />
-                <p className="text-xs text-slate-500 font-medium">Clic para adjuntar</p>
-              </>
-            )}
+      {/* 2. ZONA DE SUBIDA HÍBRIDA (CAMARA + ARCHIVO) */}
+      <div className="flex gap-3">
+          
+          {/* Botón A: Subir Archivo (Estándar) */}
+          <div 
+            onClick={!uploading && selectedPatient ? triggerFileSelect : undefined}
+            className={`flex-1 border-2 border-dashed rounded-xl h-24 flex flex-col items-center justify-center gap-2 transition-all group ${
+                !selectedPatient ? 'opacity-50 cursor-not-allowed border-slate-300' :
+                uploading ? 'bg-slate-100 border-slate-300' : 
+                'border-slate-300 bg-white dark:bg-slate-800/30 hover:border-brand-teal hover:bg-teal-50 dark:hover:bg-teal-900/10 cursor-pointer'
+            }`}
+          >
+             {uploading ? (
+                 <Loader2 className="animate-spin text-slate-400" size={24}/>
+             ) : (
+                 <>
+                    <UploadCloud className="text-slate-400 group-hover:text-brand-teal transition-colors" size={24}/>
+                    <span className="text-[10px] font-bold text-slate-500 uppercase">Adjuntar</span>
+                 </>
+             )}
           </div>
-          <input
-            type="file"
-            className="hidden"
-            onChange={handleFileChange}
-            disabled={uploading || !selectedPatient}
-            accept="image/*,application/pdf"
-          />
-        </label>
+
+          {/* Botón B: Cámara Directa (Capture API) */}
+          <div 
+            onClick={!uploading && selectedPatient ? triggerCamera : undefined}
+            className={`flex-1 border-2 border-dashed rounded-xl h-24 flex flex-col items-center justify-center gap-2 transition-all group ${
+                !selectedPatient ? 'opacity-50 cursor-not-allowed border-slate-300' :
+                uploading ? 'bg-slate-100 border-slate-300' : 
+                'border-indigo-300 bg-indigo-50/30 dark:bg-indigo-900/10 hover:border-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 cursor-pointer'
+            }`}
+          >
+             {uploading ? (
+                 <Loader2 className="animate-spin text-indigo-400" size={24}/>
+             ) : (
+                 <>
+                    <Camera className="text-indigo-400 group-hover:text-indigo-600 transition-colors" size={24}/>
+                    <span className="text-[10px] font-bold text-indigo-500 uppercase">Tomar Foto</span>
+                 </>
+             )}
+          </div>
+
       </div>
+
+      {/* INPUTS OCULTOS DE CONTROL */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        className="hidden"
+        onChange={handleFileChange}
+        disabled={uploading || !selectedPatient}
+        accept="image/*,application/pdf,.doc,.docx"
+      />
+      
+      {/* Input Especial para Cámara Móvil */}
+      <input
+        ref={cameraInputRef}
+        type="file"
+        className="hidden"
+        onChange={handleFileChange}
+        disabled={uploading || !selectedPatient}
+        accept="image/*"
+        capture="environment" 
+      />
+
+      <div className="text-center mt-2">
+         {uploading && <p className="text-xs font-bold text-brand-teal animate-pulse">Procesando y encriptando...</p>}
+      </div>
+
     </div>
   );
 };
