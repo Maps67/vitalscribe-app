@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, memo } from 'react';
 import { supabase } from '../lib/supabase';
 import { Loader2, UserCircle, BarChart3, TrendingUp } from 'lucide-react';
 
@@ -9,12 +9,13 @@ interface ImpactMetricsProps {
     refreshTrigger?: number;  
 }
 
-export const ImpactMetrics = ({ dailyTotal = 0, dailyCompleted = 0, refreshTrigger = 0 }: ImpactMetricsProps) => {
+// ✅ OPTIMIZACIÓN V5.4: Uso de 'memo' para evitar re-renderizados en cascada
+export const ImpactMetrics = memo(({ dailyTotal = 0, dailyCompleted = 0, refreshTrigger = 0 }: ImpactMetricsProps) => {
     // Estado local solo para datos HISTÓRICOS
     const [metrics, setMetrics] = useState({ totalPatients: 0, monthConsultations: 0 });
     const [isLoading, setIsLoading] = useState(true);
 
-    // CÁLCULO DE EFICIENCIA (Métrica en tiempo real)
+    // CÁLCULO DE EFICIENCIA (Métrica en tiempo real - cálculo ligero)
     const efficiencyPercent = dailyTotal > 0 
         ? Math.round((dailyCompleted / dailyTotal) * 100) 
         : 0;
@@ -24,8 +25,9 @@ export const ImpactMetrics = ({ dailyTotal = 0, dailyCompleted = 0, refreshTrigg
         
         const loadHistoricalMetrics = async () => {
             try {
-                // Priorizamos getSession para mayor velocidad en móviles
+                // ✅ BLINDAJE: Verificación de sesión antes de fetch
                 const { data: { session } } = await supabase.auth.getSession();
+                
                 if (!session?.user) {
                     if (isMounted) setIsLoading(false);
                     return;
@@ -41,13 +43,13 @@ export const ImpactMetrics = ({ dailyTotal = 0, dailyCompleted = 0, refreshTrigg
 
                 // 2. Actividad del Mes
                 const now = new Date();
-                const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+                const startOfCurrentMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
                 
                 const { count: month } = await supabase
                     .from('consultations')
                     .select('*', { count: 'exact', head: true })
                     .eq('doctor_id', user.id)
-                    .gte('created_at', startOfMonth)
+                    .gte('created_at', startOfCurrentMonth)
                     .neq('status', 'cancelled');
 
                 if (isMounted) {
@@ -57,7 +59,7 @@ export const ImpactMetrics = ({ dailyTotal = 0, dailyCompleted = 0, refreshTrigg
                     });
                 }
             } catch (e) {
-                console.error("Error métricas históricas:", e);
+                console.error("Error métricas históricas móvil:", e);
             } finally {
                 if (isMounted) setIsLoading(false);
             }
@@ -65,16 +67,13 @@ export const ImpactMetrics = ({ dailyTotal = 0, dailyCompleted = 0, refreshTrigg
 
         loadHistoricalMetrics();
 
-        // Listener de Auth para re-hidratar si la sesión tarda en móviles
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-            if (event === 'SIGNED_IN') loadHistoricalMetrics();
-        });
-
+        // ❌ ELIMINADO: Listener de Auth duplicado. 
+        // Ahora este componente reacciona SOLO a 'refreshTrigger' del padre.
+        
         return () => { 
             isMounted = false; 
-            subscription.unsubscribe();
         };
-    }, [refreshTrigger]);
+    }, [refreshTrigger]); // ✅ Única dependencia real para recarga
 
     return (
         <div className="bg-gradient-to-br from-white to-blue-50/50 dark:from-slate-900 dark:to-slate-900 rounded-[1.5rem] md:rounded-[2rem] p-3 md:p-6 border border-slate-100 dark:border-slate-800 shadow-sm h-full flex flex-col justify-between transition-colors relative overflow-hidden">
@@ -135,4 +134,4 @@ export const ImpactMetrics = ({ dailyTotal = 0, dailyCompleted = 0, refreshTrigg
             )}
         </div>
     );
-};
+});
