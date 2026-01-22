@@ -10,7 +10,8 @@ import {
   Scissors, Volume2 
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { format, isToday, parseISO, startOfDay, endOfDay, addDays } from 'date-fns';
+// ✅ IMPORT ACTUALIZADO: Agregado startOfMonth y endOfMonth
+import { format, isToday, parseISO, startOfDay, endOfDay, addDays, startOfMonth, endOfMonth } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { toast } from 'sonner';
 
@@ -22,6 +23,7 @@ import { DoctorFileGallery } from '../components/DoctorFileGallery';
 
 // Componentes modulares
 import { DailyChallengeCard } from '../components/DailyChallengeCard';
+import { ImpactMetrics } from '../components/ImpactMetrics';
 import { QuickDocModal } from '../components/QuickDocModal';
 import { FastAdmitModal } from '../components/FastAdmitModal';
 import { UserGuideModal } from '../components/UserGuideModal';
@@ -96,62 +98,6 @@ const WeatherWidget = ({ weather, isDesktop = false }: { weather: WeatherState, 
                     {weather.code < 3 ? <Sun size={isDesktop ? 24 : 16} className="text-amber-500" strokeWidth={2}/> : <Cloud size={isDesktop ? 24 : 16} className="text-slate-400" strokeWidth={2}/>}
                 </div>
             </div>
-        </div>
-    );
-};
-
-// ✅ WIDGET DE EFICIENCIA (MODIFICADO: FONDO AZUL MÓVIL)
-const StatusWidget = ({ totalApts, pendingApts }: { totalApts: number, pendingApts: number }) => {
-    const completed = totalApts - pendingApts;
-    const progress = totalApts > 0 ? Math.round((completed / totalApts) * 100) : 0;
-    
-    return (
-        <div className="bg-[#E3F2FD] md:bg-white dark:bg-slate-900 rounded-xl p-4 border border-blue-100 md:border-slate-200 dark:border-slate-800 shadow-sm relative overflow-hidden h-full flex flex-col justify-between transition-colors">
-             {/* VISTA MÓVIL */}
-             <div className="flex md:hidden flex-col justify-center h-full gap-1 shrink">
-                 <div className="flex items-center justify-between">
-                    <p className="text-[10px] font-bold text-blue-900/60 uppercase leading-none tracking-wide">Eficiencia</p>
-                    <Activity size={14} className="text-blue-600"/>
-                 </div>
-                 
-                 <div className="flex items-end gap-1 mt-1">
-                    <p className="text-4xl font-bold text-blue-900 dark:text-white leading-none tracking-tight">{progress}%</p>
-                 </div>
-                 
-                 <div className="w-full bg-white rounded-full h-1.5 mt-2">
-                    <div className="bg-blue-600 h-1.5 rounded-full" style={{ width: `${progress}%` }}></div>
-                 </div>
-
-                 <div className="flex justify-between mt-1.5">
-                    <span className="text-[9px] font-semibold text-blue-800">{completed} OK</span>
-                    <span className="text-[9px] font-semibold text-blue-600/70">{pendingApts} Pend</span>
-                 </div>
-             </div>
-
-             {/* VISTA DESKTOP */}
-             <div className="hidden md:flex flex-col justify-between h-full relative z-10 text-center">
-                 <div className="flex justify-between items-start">
-                    <div className="text-left">
-                        <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Rendimiento</p>
-                        <span className="text-5xl font-bold text-slate-900 dark:text-white tracking-tighter leading-none">
-                            {progress}<span className="text-3xl text-slate-400">%</span>
-                        </span>
-                    </div>
-                    <div className="bg-blue-50 text-blue-600 p-2 rounded-lg">
-                        <Activity size={20} />
-                    </div>
-                 </div>
-                 
-                 <div className="space-y-3 mt-4">
-                    <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                        <div className="bg-gradient-to-r from-blue-600 to-teal-500 h-full rounded-full transition-all duration-1000" style={{ width: `${progress}%` }}></div>
-                    </div>
-                    <div className="flex justify-between items-center text-sm">
-                        <span className="text-slate-500 font-medium">Pacientes Atendidos</span>
-                        <span className="font-bold text-slate-900">{completed} / {totalApts}</span>
-                    </div>
-                 </div>
-             </div>
         </div>
     );
 };
@@ -332,6 +278,7 @@ const Dashboard: React.FC = () => {
   const [doctorProfile, setDoctorProfile] = useState<DoctorProfile | null>(null); 
   const [appointments, setAppointments] = useState<DashboardAppointment[]>([]);
   const [completedTodayCount, setCompletedTodayCount] = useState(0);
+  const [realPendingCount, setRealPendingCount] = useState(0); // ✅ MÉTRICA REAL INYECTADA
   const [pendingItems, setPendingItems] = useState<PendingItem[]>([]); 
   const [weather, setWeather] = useState<WeatherState>({ temp: '--', code: 0 });
   const [locationName, setLocationName] = useState('Localizando...');
@@ -374,7 +321,7 @@ const Dashboard: React.FC = () => {
   
   const nextPatient = useMemo(() => appointments.find(a => a.status === 'scheduled') || null, [appointments]);
   
-  // ✅ REEMPLAZO DE BLOQUE: fetchData corregido para sincronización real
+  // ✅ REEMPLAZO DE BLOQUE: fetchData con auditoría de integridad de métricas
   const fetchData = useCallback(async (isBackgroundRefresh = false) => {
       try {
           if (!isBackgroundRefresh) setIsLoading(true);
@@ -390,10 +337,13 @@ const Dashboard: React.FC = () => {
           // 2. Definición de rangos de tiempo
           const nowRef = new Date();
           const todayStart = startOfDay(nowRef); 
-          const todayEnd = endOfDay(nowRef);
           const nextWeekEnd = endOfDay(addDays(nowRef, 7));
           
-          // 3. Citas Pendientes/Agendadas
+          // ✅ NUEVOS RANGOS MENSUALES PARA MÉTRICAS
+          const monthStart = startOfMonth(nowRef);
+          const monthEnd = endOfMonth(nowRef);
+          
+          // 3.A Citas Pendientes/Agendadas (LISTA VISUAL - Mantiene agenda próxima)
           const { data: aptsData } = await supabase
             .from('appointments')
             .select(`id, title, start_time, status, patient:patients (id, name, history)`)
@@ -403,7 +353,7 @@ const Dashboard: React.FC = () => {
             .neq('status', 'cancelled')
             .neq('status', 'completed')
             .order('start_time', { ascending: true })
-            .limit(10);
+            .limit(10); 
           
           if (aptsData) {
               setAppointments(aptsData.map((item: any) => ({
@@ -412,18 +362,32 @@ const Dashboard: React.FC = () => {
               })));
           }
 
-          // ✅ CORRECCIÓN CRÍTICA: Conteo real de pacientes atendidos hoy
+          // 3.B Conteo real de pacientes atendidos (AHORA MENSUAL)
           const { count: completedCount, error: countError } = await supabase
             .from('appointments')
             .select('*', { count: 'exact', head: true })
             .eq('doctor_id', user.id)
             .eq('status', 'completed')
-            .gte('start_time', todayStart.toISOString())
-            .lte('start_time', todayEnd.toISOString());
+            .gte('start_time', monthStart.toISOString()) // Inicio Mes
+            .lte('start_time', monthEnd.toISOString()); // Fin Mes
 
           if (!countError) {
               setCompletedTodayCount(completedCount || 0);
           }
+
+          // 3.C Conteo real de pacientes pendientes (AHORA MENSUAL)
+          const { count: pendingCount, error: pendingError } = await supabase
+            .from('appointments')
+            .select('*', { count: 'exact', head: true })
+            .eq('doctor_id', user.id)
+            .neq('status', 'cancelled')
+            .neq('status', 'completed')
+            .gte('start_time', monthStart.toISOString()) // Inicio Mes
+            .lte('start_time', monthEnd.toISOString()); // Fin Mes
+
+           if (!pendingError) {
+              setRealPendingCount(pendingCount || 0);
+           }
 
           // 4. Radar de Pendientes
           const radar: PendingItem[] = [];
@@ -450,14 +414,11 @@ const Dashboard: React.FC = () => {
       }
   }, []);
 
-  // ✅ BLOQUE AGREGADO: Variables calculadas para el Widget de Eficiencia
-  const appointmentsScheduledToday = useMemo(() => 
-    appointments.filter(a => isToday(parseISO(a.start_time))).length
-  , [appointments]);
-
+  // ✅ BLOQUE ACTUALIZADO: Variables calculadas con datos reales de la BD
+  // Ya no dependen del array visual limitado
   const totalDailyLoad = useMemo(() => 
-    completedTodayCount + appointmentsScheduledToday
-  , [completedTodayCount, appointmentsScheduledToday]);
+    completedTodayCount + realPendingCount
+  , [completedTodayCount, realPendingCount]);
 
   const updateWeather = useCallback(async (latitude: number, longitude: number) => {
       try {
@@ -627,8 +588,12 @@ const Dashboard: React.FC = () => {
 
         <div className="shrink-0 flex flex-col gap-2 animate-fade-in delay-300 relative z-10">
             <div className="grid grid-cols-2 gap-2 h-24">
-                {/* StatusWidget actualizado */}
-                <StatusWidget totalApts={totalDailyLoad} pendingApts={appointmentsScheduledToday} />
+                {/* StatusWidget actualizado para usar realPendingCount - MÓVIL ✅ */}
+                <ImpactMetrics 
+                    dailyTotal={totalDailyLoad} 
+                    dailyCompleted={completedTodayCount} 
+                    refreshTrigger={appointments.length} 
+                />
                 <button onClick={() => setIsFastAdmitOpen(true)} className="relative w-full h-full bg-gradient-to-br from-blue-600 to-indigo-700 rounded-xl p-3 shadow-lg overflow-hidden group text-left flex flex-col justify-between transition-all hover:scale-[1.02]">
                   <div className="absolute -right-4 -bottom-4 text-white opacity-10 group-hover:opacity-20 transition-all duration-500 rotate-12 scale-125"><UserPlus size={70} strokeWidth={1.5} /></div>
                   <div className="relative z-10 bg-white/20 w-8 h-8 flex items-center justify-center rounded-lg backdrop-blur-sm"><UserPlus className="text-white" size={16} /></div>
@@ -671,8 +636,14 @@ const Dashboard: React.FC = () => {
 
              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-6 h-auto animate-fade-in delay-150">
                  <div className="lg:col-span-3 flex flex-col gap-6">
-                     {/* StatusWidget Desktop actualizado */}
-                     <div className="h-64"><StatusWidget totalApts={totalDailyLoad} pendingApts={appointmentsScheduledToday} /></div>
+                     {/* ImpactMetrics (Antes StatusWidget) - ESCRITORIO CORREGIDO ✅ */}
+                     <div className="h-64">
+                        <ImpactMetrics 
+                            dailyTotal={totalDailyLoad} 
+                            dailyCompleted={completedTodayCount} 
+                            refreshTrigger={appointments.length} 
+                        />
+                     </div>
                      <ActionRadar items={pendingItems} onItemClick={handleRadarClick} />
                  </div>
                  <div className="lg:col-span-6 flex flex-col gap-6">
