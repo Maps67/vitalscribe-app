@@ -1,16 +1,16 @@
 import React, { useMemo, useEffect, useState } from 'react';
-// import { useNavigate } from 'react-router-dom'; // 🚫 ELIMINADO: Ya no se requiere navegación para editar
+// import { useNavigate } from 'react-router-dom'; // 🚫 ELIMINADO
 import { 
   X, AlertTriangle, Activity, Calendar, FileText, User, 
   ShieldAlert, Clock, Loader2, ChevronDown, ChevronUp,
   Stethoscope, ShieldCheck, Lock, Trash2, Edit2, RefreshCw, Check, XCircle,
-  Paperclip, UploadCloud // ✅ ICONOS NUEVOS PARA ARCHIVOS
+  Paperclip, UploadCloud 
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner'; 
 // 1. IMPORTAMOS LA BÓVEDA
 import { SpecialtyVault } from './SpecialtyVault';
-// 2. ✅ IMPORTAMOS COMPONENTES DE ARCHIVOS (RECUPERACIÓN DE ACTIVOS)
+// 2. COMPONENTES DE ARCHIVOS
 import { DoctorFileGallery } from './DoctorFileGallery';
 import { UploadMedico } from './UploadMedico';
 
@@ -22,7 +22,7 @@ interface Patient {
   email?: string;
   phone?: string;
   gender?: string;
-  history?: string;
+  history?: string; 
   doctor_id: string; 
 }
 
@@ -40,11 +40,9 @@ interface PatientDashboardProps {
   specialty?: string; 
 }
 
-// TIPO PARA LAS PESTAÑAS INTERNAS
 type DashboardView = 'timeline' | 'files';
 
 export default function PatientDashboard({ patient, onClose, specialty: propSpecialty }: PatientDashboardProps) {
-  // const navigate = useNavigate(); // 🚫 ELIMINADO
   const [historyTimeline, setHistoryTimeline] = useState<Consultation[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   
@@ -211,10 +209,8 @@ export default function PatientDashboard({ patient, onClose, specialty: propSpec
       }
   };
 
-  // ✅ REFRESCAR GALERÍA (Callback simple para UploadMedico)
+  // ✅ REFRESCAR GALERÍA
   const handleUploadComplete = () => {
-      // Forzar re-render de la galería si fuera necesario, 
-      // aunque DoctorFileGallery debería escuchar cambios o volver a montar al cambiar tab.
       toast.success("Archivo subido al expediente.");
   };
 
@@ -222,9 +218,13 @@ export default function PatientDashboard({ patient, onClose, specialty: propSpec
     <div className="fixed inset-0 z-50 flex justify-end animate-in slide-in-from-right duration-300">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
       
-      <div className="relative w-full max-w-2xl bg-white dark:bg-slate-900 h-full shadow-2xl border-l border-slate-200 dark:border-slate-800 flex flex-col">
+      {/* MODIFICACIÓN UX: Contenedor Maestro Adaptativo 
+          Móvil: w-full (Pantalla completa)
+          Desktop: max-w-6xl (Panel expandido para 2 columnas)
+      */}
+      <div className="relative w-full lg:max-w-6xl bg-white dark:bg-slate-900 h-full shadow-2xl border-l border-slate-200 dark:border-slate-800 flex flex-col">
         
-        {/* CABECERA DE PACIENTE */}
+        {/* HEADER */}
         <div className="p-6 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50">
           <div className="flex justify-between items-start mb-4">
             <div className="flex gap-4">
@@ -252,8 +252,8 @@ export default function PatientDashboard({ patient, onClose, specialty: propSpec
             </button>
           </div>
 
-          {/* --- TABS DE NAVEGACIÓN (Timeline vs Archivos) --- */}
-          <div className="flex gap-2 bg-white dark:bg-slate-900 p-1 rounded-xl border border-slate-200 dark:border-slate-800">
+          {/* TABS DE NAVEGACIÓN */}
+          <div className="flex gap-2 bg-white dark:bg-slate-900 p-1 rounded-xl border border-slate-200 dark:border-slate-800 max-w-md">
               <button 
                   onClick={() => setActiveView('timeline')}
                   className={`flex-1 py-2 px-4 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-all ${
@@ -262,7 +262,7 @@ export default function PatientDashboard({ patient, onClose, specialty: propSpec
                       : 'text-slate-400 hover:text-slate-600'
                   }`}
               >
-                  <Clock size={16}/> Historial Clínico
+                  <Clock size={16}/> Historial
               </button>
               <button 
                   onClick={() => setActiveView('files')}
@@ -272,209 +272,198 @@ export default function PatientDashboard({ patient, onClose, specialty: propSpec
                       : 'text-slate-400 hover:text-slate-600'
                   }`}
               >
-                  <Paperclip size={16}/> Archivos y Adjuntos
+                  <Paperclip size={16}/> Archivos
               </button>
           </div>
-
-          {/* SEMÁFORO DE RIESGOS (Solo visible en Timeline) */}
-          {activeView === 'timeline' && !isLoading && riskAnalysis.length > 0 && (
-            <div className="mt-4 space-y-2">
-              {riskAnalysis.map((risk, idx) => (
-                <div key={idx} className={`px-4 py-3 rounded-lg flex items-center gap-3 text-sm font-bold shadow-sm animate-in fade-in slide-in-from-left-2 ${
-                  risk.includes("⚠️") 
-                    ? "bg-red-50 text-red-700 border border-red-200 dark:bg-red-900/20 dark:text-red-300 dark:border-red-800" 
-                    : "bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-800"
-                }`}>
-                  {risk.includes("⚠️") ? <ShieldAlert size={18} className="shrink-0"/> : <Activity size={18} className="shrink-0"/>}
-                  {risk}
-                </div>
-              ))}
-            </div>
-          )}
         </div>
 
-        {/* CUERPO DEL EXPEDIENTE (CONTENIDO DINÁMICO) */}
-        <div className="flex-1 overflow-y-auto p-6 bg-slate-50/50 dark:bg-slate-950">
-          
-          {/* SECCIÓN DE SEGURIDAD (Siempre visible para contexto) */}
-          <div className="bg-gradient-to-r from-indigo-50 to-white dark:from-indigo-900/20 dark:to-slate-900 p-4 rounded-xl border border-indigo-100 dark:border-indigo-800 mb-8 shadow-sm">
-            <div className="flex justify-between items-center mb-2">
-              <label className="text-[10px] font-bold text-slate-400 uppercase flex gap-1 items-center tracking-wider">
-                <ShieldCheck size={12}/> Protocolo Adaptativo Activo
-              </label>
-              <div className="flex items-center gap-1 text-[10px] text-green-600 bg-green-50 dark:bg-green-900/20 px-2 py-0.5 rounded-full border border-green-100 dark:border-green-800">
-                <Lock size={10} /> Sincronizado
-              </div>
-            </div>
-            <div className="flex items-center gap-2 text-indigo-700 dark:text-indigo-300 font-bold text-base">
-              <Stethoscope size={18} className="shrink-0 text-indigo-500"/>
-              <span>{detectedSpecialty}</span>
-            </div>
-            <p className="text-[9px] text-slate-400 mt-2 italic">
-              La IA ha calibrado sus diccionarios y alertas según el estándar de esta especialidad médica.
-            </p>
-          </div>
-
-          {/* === VISTA 1: LÍNEA DE TIEMPO === */}
-          {activeView === 'timeline' && (
-            <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
-                {/* BÓVEDA DE DATOS ESTRUCTURADOS */}
-                <div className="mb-10">
-                    <SpecialtyVault 
-                    patientId={patient.id} 
-                    specialty={detectedSpecialty} 
-                    />
-                </div>
+        {/* CUERPO PRINCIPAL (GRID SYSTEM) */}
+        <div className="flex-1 overflow-y-auto bg-slate-50/50 dark:bg-slate-950">
+            <div className="p-6 lg:p-8 h-full">
                 
-                {/* LÍNEA DE TIEMPO DE CONSULTAS */}
-                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-2">
-                    <Clock size={14}/> Historial Clínico ({historyTimeline.length})
-                </h3>
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 h-full">
+                    
+                    {/* COLUMNA IZQUIERDA (CONTENIDO PRINCIPAL - 8/12) */}
+                    <div className="lg:col-span-8 space-y-6">
+                        
+                        {/* VISTA TIMELINE */}
+                        {activeView === 'timeline' && (
+                            <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+                                
+                                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-2">
+                                    <Clock size={14}/> Línea de Tiempo ({historyTimeline.length} Notas)
+                                </h3>
 
-                {isLoading ? (
-                    <div className="flex flex-col items-center justify-center py-20 text-slate-400 gap-3">
-                    <Loader2 className="animate-spin h-8 w-8 text-indigo-500" />
-                    <p className="text-sm font-medium">Sincronizando expediente...</p>
-                    </div>
-                ) : historyTimeline.length === 0 ? (
-                    <div className="text-center py-12 text-slate-400 italic border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50 dark:bg-slate-900/50">
-                    <FileText className="h-10 w-10 mx-auto mb-2 opacity-20"/>
-                    No hay notas registradas para este paciente.
-                    </div>
-                ) : (
-                    <div className="space-y-8 relative before:absolute before:inset-0 before:ml-5 before:h-full before:w-0.5 before:bg-slate-200 dark:before:bg-slate-800">
-                    {historyTimeline.map((consulta) => {
-                        const isEditing = editingId === consulta.id;
-                        const isExpanded = expandedCards.has(consulta.id) || isEditing; 
-                        const isLongText = (consulta.summary || "").length > 250;
-                        const isDeleting = isDeletingId === consulta.id;
+                                {isLoading ? (
+                                    <div className="flex flex-col items-center justify-center py-20 text-slate-400 gap-3">
+                                        <Loader2 className="animate-spin h-8 w-8 text-indigo-500" />
+                                        <p className="text-sm font-medium">Sincronizando expediente...</p>
+                                    </div>
+                                ) : historyTimeline.length === 0 ? (
+                                    <div className="text-center py-12 text-slate-400 italic border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50 dark:bg-slate-900/50">
+                                        <FileText className="h-10 w-10 mx-auto mb-2 opacity-20"/>
+                                        No hay notas registradas para este paciente.
+                                    </div>
+                                ) : (
+                                    <div className="space-y-8 relative before:absolute before:inset-0 before:ml-5 before:h-full before:w-0.5 before:bg-slate-200 dark:before:bg-slate-800">
+                                        {historyTimeline.map((consulta) => {
+                                            const isEditing = editingId === consulta.id;
+                                            const isExpanded = expandedCards.has(consulta.id) || isEditing; 
+                                            const isLongText = (consulta.summary || "").length > 250;
+                                            const isDeleting = isDeletingId === consulta.id;
 
-                        return (
-                        <div key={consulta.id} className={`relative flex items-start gap-4 group animate-in fade-in slide-in-from-bottom-4 transition-opacity ${isDeleting ? 'opacity-50 pointer-events-none' : ''}`}>
-                            
-                            {/* Indicador Temporal */}
-                            <div className={`flex items-center justify-center w-10 h-10 rounded-full border-4 border-white dark:border-slate-950 text-white shadow-sm shrink-0 z-10 transition-colors ${isEditing ? 'bg-indigo-600' : 'bg-indigo-500'}`}>
-                            {isEditing ? <Edit2 size={16} /> : <FileText size={16}/>}
+                                            return (
+                                            <div key={consulta.id} className={`relative flex items-start gap-4 group animate-in fade-in slide-in-from-bottom-4 transition-opacity ${isDeleting ? 'opacity-50 pointer-events-none' : ''}`}>
+                                                
+                                                {/* Indicador Temporal */}
+                                                <div className={`flex items-center justify-center w-10 h-10 rounded-full border-4 border-white dark:border-slate-950 text-white shadow-sm shrink-0 z-10 transition-colors ${isEditing ? 'bg-indigo-600' : 'bg-indigo-500'}`}>
+                                                    {isEditing ? <Edit2 size={16} /> : <FileText size={16}/>}
+                                                </div>
+                                                
+                                                {/* Card de Consulta */}
+                                                <div className={`flex-1 bg-white dark:bg-slate-900 p-5 rounded-xl shadow-sm border transition-all ${isEditing ? 'border-indigo-400 ring-1 ring-indigo-400 dark:border-indigo-600' : 'border-slate-200 dark:border-slate-800 hover:border-indigo-200 dark:hover:border-indigo-800'}`}>
+                                                
+                                                    {/* Header Card */}
+                                                    <div className="flex items-center justify-between mb-3 border-b border-slate-50 dark:border-slate-800 pb-2">
+                                                        <div className="flex flex-col">
+                                                            <time className="font-bold text-sm text-slate-800 dark:text-white">
+                                                                {new Date(consulta.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}
+                                                            </time>
+                                                            <span className="text-[10px] text-slate-400 font-mono">
+                                                                {new Date(consulta.created_at).toLocaleTimeString(undefined, { hour: '2-digit', minute:'2-digit' })}
+                                                            </span>
+                                                        </div>
+                                                        
+                                                        {/* Acciones */}
+                                                        {!isEditing && (
+                                                            <div className="flex gap-1 ml-2 pl-2">
+                                                                <button 
+                                                                    onClick={() => handleStartEdit(consulta)}
+                                                                    className="p-1.5 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                                                                    title="Editar Nota"
+                                                                >
+                                                                    <Edit2 size={14}/>
+                                                                </button>
+                                                                <button 
+                                                                    onClick={() => handleDeleteNote(consulta.id)}
+                                                                    className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                                                                    title="Eliminar Nota"
+                                                                >
+                                                                    {isDeleting ? <RefreshCw size={14} className="animate-spin"/> : <Trash2 size={14}/>}
+                                                                </button>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                    
+                                                    {/* Contenido */}
+                                                    {isEditing ? (
+                                                        <div className="animate-in fade-in">
+                                                            <textarea 
+                                                                className="w-full min-h-[200px] p-3 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-mono text-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-indigo-500 resize-y"
+                                                                value={editText}
+                                                                onChange={(e) => setEditText(e.target.value)}
+                                                                placeholder="Escriba la nota clínica..."
+                                                                autoFocus
+                                                            />
+                                                            <div className="flex justify-end gap-2 mt-3">
+                                                                <button onClick={handleCancelEdit} disabled={isSavingEdit} className="px-3 py-1.5 text-xs font-bold text-slate-500 hover:bg-slate-100 rounded-lg flex items-center gap-1 transition-colors"><XCircle size={14}/> Cancelar</button>
+                                                                <button onClick={() => handleSaveEdit(consulta.id)} disabled={isSavingEdit} className="px-3 py-1.5 text-xs font-bold bg-indigo-600 text-white hover:bg-indigo-700 rounded-lg flex items-center gap-1 transition-colors">{isSavingEdit ? <RefreshCw size={14} className="animate-spin"/> : <Check size={14}/>} Guardar</button>
+                                                            </div>
+                                                        </div>
+                                                    ) : (
+                                                        <>
+                                                            <div className={`text-sm text-slate-600 dark:text-slate-300 whitespace-pre-line leading-relaxed transition-all duration-300 ${!isExpanded ? 'line-clamp-4' : ''}`}>
+                                                                {consulta.summary}
+                                                            </div>
+                                                            {isLongText && (
+                                                                <button onClick={() => toggleCard(consulta.id)} className="mt-3 text-xs font-bold text-indigo-600 dark:text-indigo-400 flex items-center gap-1 hover:underline">
+                                                                    {isExpanded ? <>Ver menos <ChevronUp size={12}/></> : <>Leer nota completa <ChevronDown size={12}/></>}
+                                                                </button>
+                                                            )}
+                                                        </>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
                             </div>
+                        )}
+
+                        {/* VISTA ARCHIVOS */}
+                        {activeView === 'files' && (
+                            <div className="animate-in fade-in slide-in-from-right-4 duration-300">
+                                <div className="mb-6 bg-indigo-50 dark:bg-indigo-900/20 p-4 rounded-xl border border-indigo-100 dark:border-indigo-800">
+                                    <h4 className="text-sm font-bold text-indigo-800 dark:text-indigo-300 mb-2 flex items-center gap-2">
+                                        <UploadCloud size={16}/> Subir Nuevo Archivo
+                                    </h4>
+                                    <UploadMedico preSelectedPatient={patient} onUploadComplete={handleUploadComplete} />
+                                </div>
+                                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                    <Paperclip size={14}/> Archivos en Expediente
+                                </h3>
+                                <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-1 min-h-[300px]">
+                                    <DoctorFileGallery patientId={patient.id} />
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* COLUMNA DERECHA (PANEL DE GESTIÓN - 4/12) */}
+                    {/* Se oculta en móvil y se muestra en lg+ como Sticky Panel */}
+                    <div className="hidden lg:block lg:col-span-4">
+                        <div className="sticky top-0 space-y-6">
                             
-                            {/* Card de Consulta */}
-                            <div className={`flex-1 bg-white dark:bg-slate-900 p-5 rounded-xl shadow-sm border transition-all ${isEditing ? 'border-indigo-400 ring-1 ring-indigo-400 dark:border-indigo-600' : 'border-slate-200 dark:border-slate-800 hover:border-indigo-200 dark:hover:border-indigo-800'}`}>
-                            
-                            {/* Header de la Card */}
-                            <div className="flex items-center justify-between mb-3 border-b border-slate-50 dark:border-slate-800 pb-2">
-                                <time className="font-bold text-sm text-slate-800 dark:text-white">
-                                {new Date(consulta.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}
-                                </time>
-                                <div className="flex items-center gap-2">
-                                    <span className="text-[10px] text-slate-400 font-mono bg-slate-50 dark:bg-slate-800 px-2 py-1 rounded">
-                                    {new Date(consulta.created_at).toLocaleTimeString(undefined, { hour: '2-digit', minute:'2-digit' })}
-                                    </span>
-                                    
-                                    {/* 🔥 BOTONES DE ACCIÓN (Si no se está editando) 🔥 */}
-                                    {!isEditing && (
-                                        <div className="flex gap-1 ml-2 pl-2 border-l border-slate-100 dark:border-slate-700">
-                                            <button 
-                                                onClick={() => handleStartEdit(consulta)}
-                                                className="p-1.5 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
-                                                title="Editar Nota"
-                                            >
-                                                <Edit2 size={14}/>
-                                            </button>
-                                            <button 
-                                                onClick={() => handleDeleteNote(consulta.id)}
-                                                className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                                                title="Eliminar Nota"
-                                            >
-                                                {isDeleting ? <RefreshCw size={14} className="animate-spin"/> : <Trash2 size={14}/>}
-                                            </button>
+                            {/* 1. SECCIÓN DE SEGURIDAD */}
+                            <div className="bg-gradient-to-r from-indigo-50 to-white dark:from-indigo-900/20 dark:to-slate-900 p-4 rounded-xl border border-indigo-100 dark:border-indigo-800 shadow-sm">
+                                <div className="flex justify-between items-center mb-2">
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase flex gap-1 items-center tracking-wider">
+                                        <ShieldCheck size={12}/> Protocolo Activo
+                                    </label>
+                                    <div className="flex items-center gap-1 text-[10px] text-green-600 bg-green-50 dark:bg-green-900/20 px-2 py-0.5 rounded-full border border-green-100 dark:border-green-800">
+                                        <Lock size={10} /> Sincronizado
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2 text-indigo-700 dark:text-indigo-300 font-bold text-base">
+                                    <Stethoscope size={18} className="shrink-0 text-indigo-500"/>
+                                    <span>{detectedSpecialty}</span>
+                                </div>
+                            </div>
+
+                            {/* 2. SEMÁFORO DE RIESGOS (Siempre visible en Desktop) */}
+                            {!isLoading && riskAnalysis.length > 0 && (
+                                <div className="space-y-2">
+                                    <h4 className="text-xs font-bold text-slate-400 uppercase">Alertas Activas</h4>
+                                    {riskAnalysis.map((risk, idx) => (
+                                        <div key={idx} className={`px-4 py-3 rounded-lg flex items-center gap-3 text-sm font-bold shadow-sm ${
+                                            risk.includes("⚠️") 
+                                            ? "bg-red-50 text-red-700 border border-red-200" 
+                                            : "bg-blue-50 text-blue-700 border border-blue-200"
+                                        }`}>
+                                            {risk.includes("⚠️") ? <ShieldAlert size={18} className="shrink-0"/> : <Activity size={18} className="shrink-0"/>}
+                                            {risk}
                                         </div>
-                                    )}
+                                    ))}
                                 </div>
-                            </div>
-                            
-                            {/* CONTENIDO (LECTURA vs EDICIÓN) */}
-                            {isEditing ? (
-                                <div className="animate-in fade-in">
-                                    <textarea 
-                                        className="w-full min-h-[200px] p-3 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-mono text-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-indigo-500 resize-y"
-                                        value={editText}
-                                        onChange={(e) => setEditText(e.target.value)}
-                                        placeholder="Escriba la nota clínica..."
-                                        autoFocus
-                                    />
-                                    <div className="flex justify-end gap-2 mt-3">
-                                        <button 
-                                            onClick={handleCancelEdit}
-                                            className="px-3 py-1.5 text-xs font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg flex items-center gap-1 transition-colors"
-                                            disabled={isSavingEdit}
-                                        >
-                                            <XCircle size={14}/> Cancelar
-                                        </button>
-                                        <button 
-                                            onClick={() => handleSaveEdit(consulta.id)}
-                                            className="px-3 py-1.5 text-xs font-bold bg-indigo-600 text-white hover:bg-indigo-700 rounded-lg flex items-center gap-1 transition-colors disabled:opacity-50"
-                                            disabled={isSavingEdit}
-                                        >
-                                            {isSavingEdit ? <RefreshCw size={14} className="animate-spin"/> : <Check size={14}/>} 
-                                            Guardar Cambios
-                                        </button>
-                                    </div>
-                                </div>
-                            ) : (
-                                <>
-                                    <div className={`text-sm text-slate-600 dark:text-slate-300 whitespace-pre-line leading-relaxed transition-all duration-300 ${!isExpanded ? 'line-clamp-4' : ''}`}>
-                                        {consulta.summary}
-                                    </div>
-
-                                    {isLongText && (
-                                        <button 
-                                        onClick={() => toggleCard(consulta.id)}
-                                        className="mt-3 text-xs font-bold text-indigo-600 dark:text-indigo-400 flex items-center gap-1 hover:underline"
-                                        >
-                                        {isExpanded ? <>Ver menos <ChevronUp size={12}/></> : <>Leer nota completa <ChevronDown size={12}/></>}
-                                        </button>
-                                    )}
-                                </>
                             )}
+
+                            {/* 3. BÓVEDA RÁPIDA (Siempre visible en Desktop) */}
+                            <div>
+                                <h4 className="text-xs font-bold text-slate-400 uppercase mb-2">Datos Estructurados</h4>
+                                <SpecialtyVault patientId={patient.id} specialty={detectedSpecialty} />
                             </div>
 
                         </div>
-                        );
-                    })}
                     </div>
-                )}
+
+                </div>
             </div>
-          )}
-
-          {/* === VISTA 2: ARCHIVOS Y ADJUNTOS === */}
-          {activeView === 'files' && (
-              <div className="animate-in fade-in slide-in-from-right-4 duration-300">
-                  <div className="mb-6 bg-indigo-50 dark:bg-indigo-900/20 p-4 rounded-xl border border-indigo-100 dark:border-indigo-800">
-                      <h4 className="text-sm font-bold text-indigo-800 dark:text-indigo-300 mb-2 flex items-center gap-2">
-                          <UploadCloud size={16}/> Subir Nuevo Archivo
-                      </h4>
-                      <UploadMedico 
-                          preSelectedPatient={patient} 
-                          onUploadComplete={handleUploadComplete} 
-                      />
-                  </div>
-
-                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                      <Paperclip size={14}/> Archivos en Expediente
-                  </h3>
-                  
-                  {/* COMPONENTE REUTILIZADO DE LA CONSULTA */}
-                  <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-1 min-h-[300px]">
-                      <DoctorFileGallery patientId={patient.id} />
-                  </div>
-              </div>
-          )}
-
         </div>
 
         {/* FOOTER ACCIONES */}
         <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex justify-end gap-3">
-          <button onClick={onClose} className="w-full py-3 bg-slate-900 dark:bg-indigo-600 text-white font-bold rounded-xl hover:bg-slate-800 dark:hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-900/10">
+          <button onClick={onClose} className="w-full lg:w-auto px-8 py-3 bg-slate-900 dark:bg-indigo-600 text-white font-bold rounded-xl hover:bg-slate-800 dark:hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-900/10">
             <Activity size={18}/> Cerrar Expediente
           </button>
         </div>
