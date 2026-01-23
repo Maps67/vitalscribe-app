@@ -541,7 +541,7 @@ const Dashboard: React.FC = () => {
                 <div className="flex justify-between items-center w-full">
                     <div className="flex items-center gap-2">
                         <BrandLogo className="h-9 w-9 rounded-xl shadow-[0_2px_4px_rgba(0,0,0,0.06)]" />
-                        <p className="text-sm font-medium text-slate-500">{greetingText}, (v5.7)</p>
+                        <p className="text-sm font-medium text-slate-500">{greetingText},</p>
                     </div>
                     <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 shrink-0">
                         <div className="flex items-center gap-1">
@@ -657,7 +657,10 @@ const Dashboard: React.FC = () => {
                      <BrandLogo className="h-16 w-16 rounded-2xl shadow-md border-2 border-white dark:border-slate-800" />
                      <div>
                          <h1 className="text-4xl font-black text-slate-900 dark:text-white tracking-tight leading-tight">{formattedDocName}</h1>
-                         <p className="text-slate-500 font-medium text-lg mt-1 flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Panel de Control Clínico (v5.7)</p>
+                         <p className="text-slate-500 font-medium text-lg mt-1 flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                            Panel de Control Clínico
+                         </p>
                      </div>
                      <div className="flex gap-2 ml-4">
                         <button onClick={() => setIsAssistantOpen(true)} className="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 rounded-xl shadow-sm hover:shadow-md transition-all flex items-center gap-2"><Bot size={20} className="text-blue-600"/> <span className="text-sm font-bold">Asistente</span></button>
