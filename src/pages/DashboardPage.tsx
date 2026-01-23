@@ -530,7 +530,7 @@ const Dashboard: React.FC = () => {
                 <div className="flex justify-between items-center w-full">
                     <div className="flex items-center gap-2">
                         <BrandLogo className="h-9 w-9 rounded-xl shadow-[0_2px_4px_rgba(0,0,0,0.06)]" />
-                        <p className="text-sm font-medium text-slate-500">{greetingText},</p>
+                        <p className="text-sm font-medium text-slate-500">{greetingText}, (v5.6)</p>
                     </div>
                     <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 shrink-0">
                         <div className="flex items-center gap-1">
