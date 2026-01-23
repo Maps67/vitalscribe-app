@@ -1,6 +1,5 @@
 import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-// ✅ IMPORTACIONES CORRECTAS (INCLUYENDO HelpCircle)
 import { 
   Calendar, Sun, Moon, Cloud, 
   Upload, X, Bot, Mic, Square, Loader2, CheckCircle2,
@@ -436,7 +435,7 @@ const Dashboard: React.FC = () => {
     
     const handleVisibilityChange = () => {
         if (document.visibilityState === 'visible') {
-            setCurrentTimeHour(new Date().getHours()); // ✅ CORREGIDO: ERA setCurrentTimeTime
+            setCurrentTimeHour(new Date().getHours()); 
             fetchData(true);    
         }
     };
@@ -581,7 +580,8 @@ const Dashboard: React.FC = () => {
         </section>
 
         <footer className="shrink-0 flex flex-col gap-2 animate-fade-in delay-300 pb-2">
-            <div className="grid grid-cols-2 gap-2 h-40">
+            {/* ⚠️ AQUI ESTA LA CORRECCION DE ALTURA PARA MÓVIL (h-40 -> h-48) */}
+            <div className="grid grid-cols-2 gap-2 h-48">
                 <ImpactMetrics 
                     dailyTotal={totalDailyLoad} 
                     dailyCompleted={completedTodayCount} 
@@ -734,7 +734,6 @@ const Dashboard: React.FC = () => {
       <UserGuideModal isOpen={isGuideOpen} onClose={() => setIsGuideOpen(false)} />
       
       <button onClick={() => setIsGuideOpen(true)} className="fixed z-50 bg-slate-900 text-white rounded-full shadow-2xl font-bold flex items-center justify-center gap-2 bottom-24 right-4 w-14 h-14 md:bottom-24 md:right-6 md:w-auto md:h-auto md:px-5 md:py-3 hover:scale-105 active:scale-95 transition-all">
-        {/* 🔥 CONFIRMADO: HelpCircle ESTÁ AQUÍ Y FUE IMPORTADO ARRIBA 🔥 */}
         <HelpCircle size={24} /> <span className="hidden md:inline">¿Cómo funciona?</span>
       </button>
     </div>
