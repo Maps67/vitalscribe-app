@@ -4,6 +4,7 @@ import { useRegisterSW } from 'virtual:pwa-register/react';
 import { RefreshCw, X, Wifi, Download, CheckCircle2 } from 'lucide-react';
 
 const ReloadPrompt: React.FC = () => {
+  // Intervalo base (1 minuto)
   const UPDATE_CHECK_INTERVAL = 60 * 1000; 
 
   const {
@@ -13,30 +14,46 @@ const ReloadPrompt: React.FC = () => {
   } = useRegisterSW({
     onRegisteredSW(swUrl: string, r: ServiceWorkerRegistration) {
       if (r) {
+        // 1. CHEQUEO PERIÓDICO (LATIDO)
         setInterval(async () => {
-          if (!(!r.installing && !r.waiting)) return;
-          if ('connection' in navigator && !(navigator as any).onLine) return;
-
-          try {
-            const resp = await fetch(swUrl, {
-              cache: 'no-store',
-              headers: { 'cache': 'no-store', 'cache-control': 'no-cache' },
-            });
-            if (resp?.status === 200) await r.update();
-          } catch (e) { /* Fallo silencioso */ }
+             checkUpdate(r, swUrl);
         }, UPDATE_CHECK_INTERVAL);
+
+        // 2. CHEQUEO POR ACTIVIDAD (EL DESPERTADOR)
+        // Esto es clave para ESCRITORIO: Revisa al volver a la pestaña.
+        const handleFocus = () => { checkUpdate(r, swUrl); };
+        
+        window.addEventListener('focus', handleFocus);
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') handleFocus();
+        });
       }
     },
   });
+
+  // Función auxiliar segura para chequear actualizaciones
+  const checkUpdate = async (r: ServiceWorkerRegistration, swUrl: string) => {
+    // Si ya sabemos que hay update, no buscar más
+    if (r.waiting || r.installing) return; 
+    if ('connection' in navigator && !(navigator as any).onLine) return;
+
+    try {
+        const resp = await fetch(swUrl, {
+            cache: 'no-store',
+            headers: { 'cache': 'no-store', 'cache-control': 'no-cache' },
+        });
+        
+        if (resp?.status === 200) {
+            await r.update();
+        }
+    } catch (e) { /* Silencio */ }
+  };
 
   const close = () => {
     setOfflineReady(false);
     setNeedRefresh(false);
   };
 
-  // 🧠 LÓGICA INTELIGENTE:
-  // Si solo es el mensaje de "Listo para Offline", ciérralo automáticamente a los 4 segundos.
-  // Si es "Actualizar", déjalo fijo hasta que el usuario decida.
   useEffect(() => {
     if (offlineReady && !needRefresh) {
         const timer = setTimeout(() => setOfflineReady(false), 4000);
@@ -66,7 +83,6 @@ const ReloadPrompt: React.FC = () => {
                     </p>
                 </div>
             </div>
-            {/* Solo mostramos la X si es actualización, el offline se cierra solo */}
             {needRefresh && (
                 <button onClick={close} className="text-slate-400 hover:text-white p-1">
                     <X size={18} />
