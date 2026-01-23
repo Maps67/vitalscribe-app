@@ -4,7 +4,7 @@ import { Session } from '@supabase/supabase-js';
 import { supabase } from './lib/supabase';
 import { Toaster } from 'sonner';
 import { ThemeProvider } from './context/ThemeContext';
-import { Moon, Sun, CloudSun } from 'lucide-react'; 
+import { Moon, Sun, CloudSun, AlertTriangle, RefreshCw, Trash2 } from 'lucide-react'; 
 
 // Components & Pages
 import Sidebar from './components/Sidebar';
@@ -59,7 +59,6 @@ const MainLayout: React.FC<MainLayoutProps> = ({ session, onLogout }) => {
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex flex-col font-sans text-slate-900 dark:text-slate-100 transition-colors duration-300 relative">
       {!isPremium && <TrialMonitor />}
-      
       <div className="flex flex-1 overflow-hidden relative">
           <div className="hidden md:flex z-20 h-full">
             <Sidebar isOpen={true} onClose={() => {}} onLogout={onLogout} />
@@ -98,61 +97,76 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [showSplash, setShowSplash] = useState(true);
   
+  // DIAGNÓSTICO EN PANTALLA (Para ver qué pasa en el móvil)
+  const [debugLog, setDebugLog] = useState<string[]>(['🚀 Arranque v5.5 iniciado...']);
+  const [showPanicButton, setShowPanicButton] = useState(false);
+
   const [isClosing, setIsClosing] = useState(false);
   const [closingName, setClosingName] = useState('');
 
   const isUpdatePasswordRoute = window.location.pathname === '/update-password';
+  
+  const addLog = (msg: string) => setDebugLog(prev => [...prev.slice(-4), msg]);
 
   useEffect(() => {
     let mounted = true;
 
-    // 1. INICIALIZACIÓN SÍNCRONA
     const initSession = async () => {
         try {
-            const { data: { session: initialSession } } = await supabase.auth.getSession();
-            if (mounted) {
-              setSession(initialSession);
-              // Si obtenemos sesión inmediatamente, liberamos el loading
-              if (initialSession) setLoading(false);
+            addLog('📡 Contactando Supabase...');
+            const { data: { session: initialSession }, error } = await supabase.auth.getSession();
+            
+            if (error) {
+                addLog(`❌ Error SB: ${error.message}`);
+                throw error;
             }
-        } catch (error) {
-            console.error("Error crítico inicializando sesión:", error);
-            // En caso de error, liberamos loading para no congelar
+
+            if (mounted) {
+              if (initialSession) {
+                  addLog('✅ Sesión recuperada.');
+                  setSession(initialSession);
+              } else {
+                  addLog('ℹ️ Sin sesión activa.');
+              }
+              setLoading(false);
+            }
+        } catch (error: any) {
+            console.error("Error crítico:", error);
+            addLog(`⚠️ Crash Init: ${error.message || 'Unknown'}`);
             if (mounted) setLoading(false);
         }
     };
     initSession();
 
-    // 2. LISTENER DE CAMBIOS
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, newSession) => {
         if (!mounted) return;
+        
+        // Ignoramos ruido
+        if (event === 'TOKEN_REFRESHED' && !newSession) return;
 
-        if (event !== 'SIGNED_IN' && event !== 'INITIAL_SESSION') {
-           // console.log('🔄 Evento Auth:', event); 
-        }
-
-        if (event === 'TOKEN_REFRESHED' && !newSession) {
-          console.warn('🛡️ Blindaje activado: Ignorando fallo de refresco de token.');
-          return; 
-        }
-
+        addLog(`🔄 Evento: ${event}`);
         setSession(newSession);
-        setLoading(false); // Confirmación de Supabase recibida
+        setLoading(false);
     });
 
-    // 3. UX: SPLASH SCREEN TIMER (Estético)
-    const splashTimer = setTimeout(() => { if (mounted) setShowSplash(false); }, 2500);
+    // Timer estético
+    const splashTimer = setTimeout(() => { 
+        if (mounted) {
+            addLog('⏱️ Timer splash completado');
+            setShowSplash(false); 
+        }
+    }, 2500);
 
-    // 4. 🚨 VÁLVULA DE SEGURIDAD (CRÍTICO PARA MÓVILES)
-    // Si Supabase no responde en 6 segundos (por red lenta o fallo de storage),
-    // forzamos la finalización de la carga para mostrar el Login.
+    // Válvula de Seguridad + Botón de Pánico
     const safetyValve = setTimeout(() => {
-        if (mounted && loading) {
-            console.warn("⚠️ ALERTA: Tiempo de espera de sesión agotado. Forzando UI.");
+        if (mounted && (loading || showSplash)) {
+            addLog('🚨 TIEMPO AGOTADO. Activando modo rescate.');
+            setShowPanicButton(true);
+            // Intentamos forzar la entrada aunque falle
             setLoading(false);
             setShowSplash(false);
         }
-    }, 6000);
+    }, 5000);
 
     return () => { 
         mounted = false; 
@@ -160,7 +174,25 @@ const App: React.FC = () => {
         clearTimeout(splashTimer);
         clearTimeout(safetyValve);
     };
-  }, []); // Dependencia vacía intencional
+  }, []);
+
+  const handlePanicReset = async () => {
+      if (!confirm("Esto borrará la caché local y recargará la app. ¿Continuar?")) return;
+      
+      addLog('🧹 Limpiando almacenamiento...');
+      localStorage.clear();
+      sessionStorage.clear();
+      
+      // Intentar desregistrar Service Workers (PWA)
+      if ('serviceWorker' in navigator) {
+          const registrations = await navigator.serviceWorker.getRegistrations();
+          for (const registration of registrations) {
+              await registration.unregister();
+          }
+      }
+
+      window.location.reload();
+  };
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -178,10 +210,32 @@ const App: React.FC = () => {
     setIsClosing(false);
   };
 
-  // ✅ AUTH GUARD CON SALIDA DE EMERGENCIA
-  // Muestra Splash solo si el usuario quiere verlo (timer < 2.5s) O si está cargando...
-  // ...PERO el 'safetyValve' garantiza que 'loading' se vuelva false a los 6s máximo.
-  if (showSplash || loading) return <ThemeProvider><SplashScreen /></ThemeProvider>;
+  // 🛡️ PANTALLA DE CARGA CON DIAGNÓSTICO (Overlay)
+  if (showSplash || loading) {
+      return (
+        <ThemeProvider>
+            <div className="relative">
+                <SplashScreen />
+                {/* CAPA DE DIAGNÓSTICO (Visible solo si tarda mucho) */}
+                <div className="absolute bottom-10 left-0 right-0 flex flex-col items-center gap-2 z-[9999]">
+                    <div className="bg-black/50 text-white text-[10px] font-mono p-2 rounded max-w-[300px] backdrop-blur-sm border border-white/10">
+                        <p className="font-bold text-yellow-400 border-b border-white/10 mb-1 pb-1">VITALSCRIBE v5.5 (DIAGNOSTIC MODE)</p>
+                        {debugLog.map((log, i) => <div key={i}>{log}</div>)}
+                    </div>
+                    
+                    {showPanicButton && (
+                        <button 
+                            onClick={handlePanicReset}
+                            className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-full font-bold shadow-2xl animate-bounce flex items-center gap-2"
+                        >
+                            <Trash2 size={18}/> REPARAR INICIO
+                        </button>
+                    )}
+                </div>
+            </div>
+        </ThemeProvider>
+      );
+  }
 
   if (isClosing) {
       const greeting = getGreeting();
@@ -212,13 +266,14 @@ const App: React.FC = () => {
   }
 
   // 2. NO LOGUEADO -> PANTALLA DE ACCESO
-  // Si loading=false y session=null (ej. saltó la válvula de seguridad), mostramos Login.
   if (!session) {
     return (
       <ThemeProvider>
         <Toaster richColors position="top-center" />
         <ReloadPrompt />
         <AuthView onLoginSuccess={() => {}} />
+        {/* Debug en Login */}
+        <div className="fixed bottom-2 right-2 text-[9px] text-slate-300 opacity-50 pointer-events-none">v5.5 Active</div>
       </ThemeProvider>
     );
   }
