@@ -1,15 +1,16 @@
-import React, { useState, useMemo } from 'react';
-import { X, Printer, FileText, User, AlignLeft, FileCheck, Scissors, Calendar as CalendarIcon, Hash, Activity } from 'lucide-react';
-import { format, addDays } from 'date-fns';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { X, Printer, FileText, User, AlignLeft, FileCheck, Scissors, Calendar as CalendarIcon, Hash, Activity, Search, Loader2, ChevronRight } from 'lucide-react';
+import { format, addDays, differenceInYears, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { pdf } from '@react-pdf/renderer';
 import { toast } from 'sonner';
+import { supabase } from '../lib/supabase'; 
 
 // Importamos los generadores de PDF
 import PrescriptionPDF from './PrescriptionPDF';
-import SurgicalLeavePDF from './SurgicalLeavePDF'; // 📦 PDF Quirúrgico existente
+import SurgicalLeavePDF from './SurgicalLeavePDF';
 
-// Importamos el Generador de Lógica Quirúrgica (Reutilización Segura)
+// Importamos el Generador de Lógica Quirúrgica
 import SurgicalLeaveGenerator, { GeneratedLeaveData } from './SurgicalLeaveGenerator';
 
 interface QuickDocModalProps {
@@ -19,19 +20,32 @@ interface QuickDocModalProps {
   defaultType?: 'justificante' | 'certificado' | 'receta' | 'incapacidad';
 }
 
+// Interfaz para el tipado estricto de pacientes en búsqueda
+interface PatientSearchResult {
+    id: string;
+    name: string;
+    birth_date?: string;
+    age?: number;
+}
+
 export const QuickDocModal: React.FC<QuickDocModalProps> = ({ isOpen, onClose, doctorProfile, defaultType = 'justificante' }) => {
   const [docType, setDocType] = useState(defaultType);
   
   // --- ESTADOS DE FLUJO ---
-  // Selector para diferenciar el flujo simple del flujo quirúrgico complejo
   const [incapacitySubtype, setIncapacitySubtype] = useState<'general' | 'surgical'>('general');
 
   // Datos Generales
   const [patientName, setPatientName] = useState('');
   const [age, setAge] = useState('');
   const [diagnosis, setDiagnosis] = useState('');
-  const [content, setContent] = useState(''); // Para receta manual
+  const [content, setContent] = useState(''); 
   
+  // --- MOTOR DE BÚSQUEDA PREDICTIVA ---
+  const [suggestions, setSuggestions] = useState<PatientSearchResult[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const searchTimeoutRef = useRef<any>(null); 
+
   // Lógica de Incapacidad General / Justificante
   const [restDays, setRestDays] = useState('1');
   const [insuranceType, setInsuranceType] = useState('Enfermedad General');
@@ -43,7 +57,64 @@ export const QuickDocModal: React.FC<QuickDocModalProps> = ({ isOpen, onClose, d
   const today = new Date();
   const todayLong = format(today, "d 'de' MMMM 'de' yyyy", { locale: es });
 
-  // Cálculo Dinámico de Fechas (Solo para General)
+  // 1. EFECTO DE VINCULACIÓN DE DATOS (BÚSQUEDA EN SUPABASE)
+  useEffect(() => {
+      // 🛡️ CORRECCIÓN CRÍTICA: Validamos que doctorProfile exista antes de buscar
+      // Si doctorProfile es null, detenemos la ejecución para evitar Pantalla Blanca
+      if (!doctorProfile?.id || patientName.length < 2 || !showSuggestions) {
+          setSuggestions([]);
+          return;
+      }
+
+      // Limpiamos el timeout anterior (Anti-Latencia)
+      if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+
+      setIsSearching(true);
+
+      searchTimeoutRef.current = setTimeout(async () => {
+          try {
+              const { data, error } = await supabase
+                  .from('patients')
+                  .select('id, name, birth_date, age')
+                  .eq('doctor_id', doctorProfile.id) // Ahora es seguro leer .id
+                  .ilike('name', `%${patientName}%`) 
+                  .limit(5);
+
+              if (error) throw error;
+              setSuggestions(data || []);
+          } catch (err) {
+              console.error("Error en búsqueda predictiva:", err);
+          } finally {
+              setIsSearching(false);
+          }
+      }, 300); 
+
+      return () => {
+          if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+      };
+  }, [patientName, doctorProfile, showSuggestions]); // Agregamos doctorProfile a dependencias
+
+  // 2. FUNCIÓN DE SELECCIÓN INTELIGENTE
+  const handleSelectPatient = (patient: PatientSearchResult) => {
+      setPatientName(patient.name);
+      
+      if (patient.birth_date) {
+          const calculatedAge = differenceInYears(new Date(), parseISO(patient.birth_date));
+          setAge(calculatedAge.toString());
+      } else if (patient.age) {
+          setAge(patient.age.toString());
+      }
+
+      setShowSuggestions(false); 
+      setSuggestions([]);
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      setPatientName(e.target.value);
+      setShowSuggestions(true); 
+  };
+
+  // Cálculo Dinámico de Fechas
   const dateRangeText = useMemo(() => {
     const days = parseInt(restDays) || 1;
     const endDate = addDays(today, days - 1); 
@@ -53,7 +124,6 @@ export const QuickDocModal: React.FC<QuickDocModalProps> = ({ isOpen, onClose, d
     };
   }, [restDays]);
 
-  // --- HANDLER A: IMPRESIÓN ESTÁNDAR (Justificante, Receta, Incapacidad General) ---
   const handlePrintStandard = async () => {
     if (!patientName) return toast.error("El nombre del paciente es obligatorio");
     
@@ -86,7 +156,6 @@ export const QuickDocModal: React.FC<QuickDocModalProps> = ({ isOpen, onClose, d
             `Se extiende el presente certificado a solicitud del interesado para los usos que estime convenientes.`;
         
         } else if (docType === 'incapacidad') {
-            // LÓGICA DE NEGOCIO: INCAPACIDAD GENERAL (NO QUIRÚRGICA)
             bodyText = `CERTIFICADO DE INCAPACIDAD TEMPORAL PARA EL TRABAJO\n\n` +
             `RAMO DE SEGURO: ${insuranceType.toUpperCase()}\n` +
             `TIPO DE INCAPACIDAD: ${incapacityType.toUpperCase()}\n` +
@@ -136,14 +205,13 @@ export const QuickDocModal: React.FC<QuickDocModalProps> = ({ isOpen, onClose, d
     }
   };
 
-  // --- HANDLER B: IMPRESIÓN QUIRÚRGICA (Invocado por SurgicalLeaveGenerator) ---
   const handleSurgicalPrint = async (data: GeneratedLeaveData) => {
       const loadingToast = toast.loading("Procesando Incapacidad Quirúrgica...");
       try {
         const blob = await pdf(
           <SurgicalLeavePDF 
             doctor={doctorProfile}
-            patientName={patientName || "Paciente"} // Usa el nombre del estado local
+            patientName={patientName || "Paciente"} 
             data={data}
             date={todayLong}
           />
@@ -209,22 +277,61 @@ export const QuickDocModal: React.FC<QuickDocModalProps> = ({ isOpen, onClose, d
           </div>
 
           <div className="space-y-4">
-              {/* CAMPO DE PACIENTE (Solo si NO es incapacidad quirúrgica, ya que el generador Qx tiene su propio header si se requiere, pero aquí lo mantenemos para consistencia inicial) */}
-              {/* Si estamos en modo Qx, ocultamos estos inputs generales para que el Generador Qx tome el control visual, o los pasamos como props */}
+              {/* CAMPO DE PACIENTE CON BUSCADOR PREDICTIVO INTEGRADO */}
               {(docType !== 'incapacidad' || incapacitySubtype === 'general') && (
-                  <div className="grid grid-cols-4 gap-4 animate-fade-in">
-                      <div className="col-span-3">
+                  <div className="grid grid-cols-4 gap-4 animate-fade-in relative z-20"> 
+                      <div className="col-span-3 relative">
                         <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1.5 ml-1">Paciente</label>
-                        <div className="relative">
-                            <User size={16} className="absolute left-3 top-3 text-slate-400"/>
+                        <div className="relative group">
+                            <User size={16} className="absolute left-3 top-3 text-slate-400 group-focus-within:text-teal-500 transition-colors"/>
                             <input 
                                 type="text" 
                                 value={patientName} 
-                                onChange={e => setPatientName(e.target.value)} 
-                                className={`${inputClass} pl-9 pr-4 py-2.5`} 
-                                placeholder="Nombre completo..."
+                                onChange={handleInputChange} 
+                                onFocus={() => patientName.length >= 2 && setShowSuggestions(true)}
+                                className={`${inputClass} pl-9 pr-10 py-2.5 transition-shadow`} 
+                                placeholder="Buscar paciente o escribir nombre..."
+                                autoComplete="off"
                             />
+                            {/* Icono de estado de búsqueda */}
+                            <div className="absolute right-3 top-2.5 pointer-events-none">
+                                {isSearching ? (
+                                    <Loader2 size={16} className="animate-spin text-teal-500" />
+                                ) : (
+                                    <Search size={16} className="text-slate-300" />
+                                )}
+                            </div>
                         </div>
+
+                        {/* LISTA DESPLEGABLE DE RESULTADOS (PREDICTIVA) */}
+                        {showSuggestions && suggestions.length > 0 && (
+                            <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden z-50 animate-in fade-in zoom-in-95 duration-100 max-h-60 overflow-y-auto">
+                                <div className="py-1">
+                                    <div className="px-3 py-1.5 bg-slate-50 border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                                        Resultados encontrados
+                                    </div>
+                                    {suggestions.map((patient) => (
+                                        <button
+                                            key={patient.id}
+                                            onClick={() => handleSelectPatient(patient)}
+                                            className="w-full text-left px-4 py-3 hover:bg-teal-50 transition-colors flex items-center justify-between group border-b border-slate-50 last:border-0"
+                                        >
+                                            <div>
+                                                <p className="text-sm font-bold text-slate-800 group-hover:text-teal-700">{patient.name}</p>
+                                                {patient.birth_date && (
+                                                    <p className="text-xs text-slate-500">
+                                                        Nacimiento: {format(parseISO(patient.birth_date), 'dd/MM/yyyy')} 
+                                                        <span className="mx-1">•</span>
+                                                        {differenceInYears(new Date(), parseISO(patient.birth_date))} años
+                                                    </p>
+                                                )}
+                                            </div>
+                                            <ChevronRight size={14} className="text-slate-300 group-hover:text-teal-500" />
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                       </div>
                       <div className="col-span-1">
                         <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1.5 ml-1">Edad</label>
@@ -241,7 +348,7 @@ export const QuickDocModal: React.FC<QuickDocModalProps> = ({ isOpen, onClose, d
 
               {/* LÓGICA: JUSTIFICANTE */}
               {docType === 'justificante' && (
-                <div className="bg-teal-50/50 p-4 rounded-xl border border-teal-100 grid grid-cols-1 md:grid-cols-2 gap-4 animate-fade-in">
+                <div className="bg-teal-50/50 p-4 rounded-xl border border-teal-100 grid grid-cols-1 md:grid-cols-2 gap-4 animate-fade-in relative z-10">
                   <div>
                     <label className="block text-[10px] font-bold text-teal-700 uppercase mb-1.5 ml-1">Días de Reposo</label>
                     <input 
@@ -266,7 +373,7 @@ export const QuickDocModal: React.FC<QuickDocModalProps> = ({ isOpen, onClose, d
 
               {/* LÓGICA: INCAPACIDAD (HÍBRIDA) */}
               {docType === 'incapacidad' && (
-                <div className="animate-fade-in">
+                <div className="animate-fade-in relative z-10">
                     {/* SELECTOR DE SUBTIPO */}
                     <div className="flex gap-4 mb-4 justify-center">
                         <label className="flex items-center gap-2 cursor-pointer">
@@ -298,26 +405,26 @@ export const QuickDocModal: React.FC<QuickDocModalProps> = ({ isOpen, onClose, d
                                 <div>
                                     <label className="block text-[10px] font-bold text-purple-700 uppercase mb-1.5 ml-1">Ramo de Seguro</label>
                                     <select 
-                                        value={insuranceType} 
-                                        onChange={e => setInsuranceType(e.target.value)}
-                                        className={`${inputClass} px-3 py-2 text-purple-900 bg-white cursor-pointer`}
+                                            value={insuranceType} 
+                                            onChange={e => setInsuranceType(e.target.value)}
+                                            className={`${inputClass} px-3 py-2 text-purple-900 bg-white cursor-pointer`}
                                     >
-                                        <option value="Enfermedad General">Enfermedad General</option>
-                                        <option value="Riesgo de Trabajo">Riesgo de Trabajo</option>
-                                        <option value="Maternidad">Maternidad</option>
-                                        <option value="Licencia 140 Bis">Licencia 140 Bis</option>
+                                            <option value="Enfermedad General">Enfermedad General</option>
+                                            <option value="Riesgo de Trabajo">Riesgo de Trabajo</option>
+                                            <option value="Maternidad">Maternidad</option>
+                                            <option value="Licencia 140 Bis">Licencia 140 Bis</option>
                                     </select>
                                 </div>
                                 <div>
                                     <label className="block text-[10px] font-bold text-purple-700 uppercase mb-1.5 ml-1">Tipo Incapacidad</label>
                                     <select 
-                                        value={incapacityType} 
-                                        onChange={e => setIncapacityType(e.target.value)}
-                                        className={`${inputClass} px-3 py-2 text-purple-900 bg-white cursor-pointer`}
+                                            value={incapacityType} 
+                                            onChange={e => setIncapacityType(e.target.value)}
+                                            className={`${inputClass} px-3 py-2 text-purple-900 bg-white cursor-pointer`}
                                     >
-                                        <option value="Inicial">Inicial</option>
-                                        <option value="Subsecuente">Subsecuente</option>
-                                        <option value="Recaída">Recaída</option>
+                                            <option value="Inicial">Inicial</option>
+                                            <option value="Subsecuente">Subsecuente</option>
+                                            <option value="Recaída">Recaída</option>
                                     </select>
                                 </div>
                             </div>
@@ -372,7 +479,6 @@ export const QuickDocModal: React.FC<QuickDocModalProps> = ({ isOpen, onClose, d
                         </div>
                     ) : (
                         /* --- MODO QUIRÚRGICO (REUTILIZACIÓN SEGURA) --- */
-                        /* Aquí incrustamos el componente existente sin modificar su código fuente */
                         <div className="border border-indigo-100 rounded-xl overflow-hidden animate-fade-in">
                             <div className="bg-indigo-50 px-4 py-2 flex items-center gap-2 text-indigo-700 text-xs font-bold border-b border-indigo-100">
                                 <Activity size={14}/> Módulo Avanzado Post-Qx
@@ -381,8 +487,8 @@ export const QuickDocModal: React.FC<QuickDocModalProps> = ({ isOpen, onClose, d
                                 {patientName ? (
                                     <SurgicalLeaveGenerator 
                                         patientName={patientName}
-                                        onClose={() => {}} // No-op, el control lo tiene el modal padre
-                                        onGenerate={handleSurgicalPrint} // Puenteamos la salida al generador de PDF
+                                        onClose={() => {}} 
+                                        onGenerate={handleSurgicalPrint} 
                                     />
                                 ) : (
                                     <div className="p-8 text-center text-slate-400 text-sm">
@@ -397,23 +503,22 @@ export const QuickDocModal: React.FC<QuickDocModalProps> = ({ isOpen, onClose, d
 
               {/* LÓGICA: RECETA */}
               {docType === 'receta' && (
-                <div className="animate-fade-in">
-                   <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1.5 ml-1"><AlignLeft size={12} className="inline mr-1"/>Prescripción Manual</label>
-                   <textarea 
-                       value={content} 
-                       onChange={e => setContent(e.target.value)} 
-                       className={`${inputClass} w-full p-4 h-40 leading-relaxed resize-none font-mono`} 
-                       placeholder="Escriba medicamentos e indicaciones..."
-                   />
+                <div className="animate-fade-in relative z-10">
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1.5 ml-1"><AlignLeft size={12} className="inline mr-1"/>Prescripción Manual</label>
+                    <textarea 
+                        value={content} 
+                        onChange={e => setContent(e.target.value)} 
+                        className={`${inputClass} w-full p-4 h-40 leading-relaxed resize-none font-mono`} 
+                        placeholder="Escriba medicamentos e indicaciones..."
+                    />
                 </div>
               )}
           </div>
         </div>
 
-        {/* Footer (Solo visible si NO estamos en modo quirúrgico o si es otro docType, 
-            ya que SurgicalLeaveGenerator tiene su propio botón de acción) */}
+        {/* Footer */}
         {(docType !== 'incapacidad' || incapacitySubtype === 'general') && (
-            <div className="p-4 border-t border-slate-200 flex justify-end gap-3 bg-white">
+            <div className="p-4 border-t border-slate-200 flex justify-end gap-3 bg-white relative z-30">
             <button onClick={onClose} className="px-4 py-2.5 text-slate-500 font-bold hover:bg-white hover:shadow-sm rounded-lg transition-all text-xs">Cancelar</button>
             <button 
                     onClick={handlePrintStandard} 
