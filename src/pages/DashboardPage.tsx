@@ -6,8 +6,8 @@ import {
   Stethoscope, AlertTriangle, FileText,
   UserPlus, Activity, ChevronRight,
   CalendarX, FileSignature, Printer, FileCheck,
-  HelpCircle, Zap, FolderUp, BrainCircuit, RefreshCcw,
-  Scissors, Volume2, Play, ArrowUpRight // ✅ NUEVO ICONO IMPORTADO
+  HelpCircle, Zap, FolderUp, BrainCircuit, RefreshCcw, // ✅ AGREGADO HelpCircle AQUÍ
+  Scissors, Volume2, Play, ArrowUpRight
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { format, parseISO, startOfDay, endOfDay, addDays, startOfMonth, endOfMonth } from 'date-fns';
@@ -31,6 +31,7 @@ import { QuickNoteModal } from '../components/QuickNoteModal';
 // Tipos del Sistema
 import { DoctorProfile } from '../types'; 
 
+// --- TYPES LOCALES ---
 interface DashboardAppointment {
   id: string; 
   title: string; 
