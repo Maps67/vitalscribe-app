@@ -7,19 +7,16 @@ export default {
   darkMode: 'class',
   theme: {
     extend: {
+      fontFamily: {
+        // 🎨 Forzamos Inter como la fuente Sans principal
+        sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+      },
+      // ... resto de tu configuración (colores, animaciones, etc.)
       colors: {
         brand: {
-          // --- ZONA DE COMPATIBILIDAD (Lo viejo sigue funcionando) ---
-          teal: '#0d9488',     // Tus botones actuales siguen verdes
-          dark: '#111827',     // Tus fondos actuales siguen oscuros
-          darker: '#0f172a',   // Tus paneles actuales siguen bien
-
-          // --- ZONA PRO (Lo nuevo que uses) ---
-          // Mismo color que teal, pero con nombre "semántico" para el futuro
+          teal: '#0d9488',
           primary: '#0d9488', 
-          'primary-hover': '#0f766e', // Agregamos el hover que faltaba
-          
-          // Unificamos los grises para cuando quieras limpiar el diseño
+          'primary-hover': '#0f766e',
           surface: '#1e293b', 
           background: '#0f172a', 
         }
