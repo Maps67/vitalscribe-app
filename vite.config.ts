@@ -8,20 +8,26 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      // ESTRATEGIA PROMPT: Tu componente ReloadPrompt tendrá el control
-      registerType: 'prompt', 
+      // 🚨 CAMBIO CRÍTICO: 'autoUpdate'
+      // Esto elimina la necesidad del botón "Actualizar".
+      // La app se actualizará sola en cuanto detecte cambios.
+      registerType: 'autoUpdate', 
       
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'mask-icon.svg'],
       
-      // CONFIGURACIÓN WORKBOX + FIX DE TAMAÑO
+      // CONFIGURACIÓN WORKBOX AGRESIVA
       workbox: {
         cleanupOutdatedCaches: true,
         clientsClaim: true,
-        skipWaiting: false, // Mantiene el control en el usuario
+        
+        // 🚨 CAMBIO CRÍTICO: skipWaiting: true
+        // Obliga al Service Worker nuevo a tomar el control INMEDIATAMENTE,
+        // expulsando a la versión vieja (zombi) que causa el congelamiento.
+        skipWaiting: true,
+        
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
         
-        // --- LA SOLUCIÓN AL ERROR DEL BUILD ---
-        // Aumentamos el límite de 2MB a 10MB para que pasen tus imágenes
+        // Mantenemos tu fix de tamaño de imágenes
         maximumFileSizeToCacheInBytes: 10 * 1024 * 1024 
       },
 
