@@ -22,12 +22,8 @@ import SplashScreen from './components/SplashScreen';
 import MobileTabBar from './components/MobileTabBar';
 import TermsOfService from './pages/TermsOfService';
 import { TrialMonitor } from './components/TrialMonitor';
-// NUEVO: Importamos la Presentación
 import Presentation from './components/Presentation';
-// PÁGINA DE RECUPERACIÓN
 import UpdatePassword from './pages/UpdatePassword';
-
-// NOTA: Se ha eliminado la importación del SupportChatWidget para estabilidad del sistema.
 
 interface MainLayoutProps {
   session: Session | null;
@@ -38,7 +34,6 @@ const MainLayout: React.FC<MainLayoutProps> = ({ session, onLogout }) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isPremium, setIsPremium] = useState(false);
 
-  // --- LÓGICA PREMIUM: Verificamos si el médico pagó para ocultar el monitor ---
   useEffect(() => {
     let mounted = true;
     const checkPremiumStatus = async () => {
@@ -63,8 +58,6 @@ const MainLayout: React.FC<MainLayoutProps> = ({ session, onLogout }) => {
   
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex flex-col font-sans text-slate-900 dark:text-slate-100 transition-colors duration-300 relative">
-      
-      {/* MONITOR DE PRUEBA: Se muestra arriba si NO es premium */}
       {!isPremium && <TrialMonitor />}
       
       <div className="flex flex-1 overflow-hidden relative">
@@ -87,7 +80,6 @@ const MainLayout: React.FC<MainLayoutProps> = ({ session, onLogout }) => {
                 <Route path="/settings" element={<SettingsView />} />
                 <Route path="/privacy" element={<PrivacyPolicy />} />
                 <Route path="/terms" element={<TermsOfService />} />
-                {/* RUTA DE PRESENTACIÓN AÑADIDA */}
                 <Route path="/presentacion" element={<Presentation />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
@@ -97,8 +89,6 @@ const MainLayout: React.FC<MainLayoutProps> = ({ session, onLogout }) => {
             </div>
           </main>
       </div>
-      
-      {/* ELIMINADO: El Widget de Soporte ya no se renderiza aquí */}
     </div>
   );
 };
@@ -111,15 +101,17 @@ const App: React.FC = () => {
   const [isClosing, setIsClosing] = useState(false);
   const [closingName, setClosingName] = useState('');
 
-  // DETECCIÓN SÍNCRONA DE RUTA
   const isUpdatePasswordRoute = window.location.pathname === '/update-password';
 
   useEffect(() => {
     let mounted = true;
     const initSession = async () => {
+        // ✅ CRÍTICO: Esperamos la resolución real de Supabase (Local Storage / PKCE)
         const { data: { session: initialSession } } = await supabase.auth.getSession();
         if (mounted) {
           setSession(initialSession);
+          // Nota: No ponemos setLoading(false) aquí inmediatamente para esperar al listener también
+          // si fuera necesario, pero por seguridad lo hacemos:
           setLoading(false);
         }
     };
@@ -128,21 +120,17 @@ const App: React.FC = () => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, newSession) => {
     if (!mounted) return;
 
-    // 1. DIAGNÓSTICO: Muestra en consola qué está pasando (F12)
     if (event !== 'SIGNED_IN' && event !== 'INITIAL_SESSION') {
        console.log('🔄 Evento Auth:', event);
     }
 
-    // 2. BLINDAJE ANTI-PARPADEO
-    // Si Supabase intenta refrescar el token pero falla momentáneamente (devuelve null),
-    // NO sacamos al usuario. Mantenemos la sesión anterior activa.
     if (event === 'TOKEN_REFRESHED' && !newSession) {
       console.warn('🛡️ Blindaje activado: Ignorando fallo de refresco de token.');
       return; 
     }
 
-    // 3. ACTUALIZACIÓN ESTÁNDAR
     setSession(newSession);
+    // ✅ Confirmamos que la carga ha terminado al recibir evento de auth
     setLoading(false);
   });
 
@@ -160,16 +148,16 @@ const App: React.FC = () => {
   const handleGlobalLogout = async (name?: string) => {
     setClosingName(name || 'Doctor(a)');
     setIsClosing(true);
-    
-    // NUEVO: Limpiamos la memoria del mensaje al cerrar sesión
     sessionStorage.removeItem('login_notice_shown'); 
-    
     await new Promise(resolve => setTimeout(resolve, 2000));
     await supabase.auth.signOut();
     setIsClosing(false);
   };
 
-  if (showSplash) return <ThemeProvider><SplashScreen /></ThemeProvider>;
+  // ✅ CORRECCIÓN FINAL (Auth Guard):
+  // El Splash NO desaparece hasta que (Tiempo >= 2.5s) Y (Loading == false).
+  // Esto previene que el Dashboard se monte con sesión "null" en móviles lentos.
+  if (showSplash || loading) return <ThemeProvider><SplashScreen /></ThemeProvider>;
 
   if (isClosing) {
       const greeting = getGreeting();
@@ -190,13 +178,9 @@ const App: React.FC = () => {
       );
   }
 
-  // --- LÓGICA DE RENDERIZADO ---
-  
-  // 1. RUTA DE RECUPERACIÓN (Prioridad)
   if (isUpdatePasswordRoute) {
       return (
         <ThemeProvider>
-            {/* CONFIGURACIÓN ACTUALIZADA: Top-Center */}
             <Toaster richColors position="top-center" />
             <UpdatePassword onSuccess={() => window.location.href = '/'} />
         </ThemeProvider>
@@ -204,10 +188,10 @@ const App: React.FC = () => {
   }
 
   // 2. NO LOGUEADO -> PANTALLA DE ACCESO
+  // Si llegamos aquí, loading es false Y session es null.
   if (!session) {
     return (
       <ThemeProvider>
-        {/* CONFIGURACIÓN ACTUALIZADA: Top-Center */}
         <Toaster richColors position="top-center" />
         <ReloadPrompt />
         <AuthView onLoginSuccess={() => {}} />
@@ -216,10 +200,10 @@ const App: React.FC = () => {
   }
 
   // 3. LOGUEADO -> APP
+  // Si llegamos aquí, loading es false Y session es válida. El Dashboard recibirá el token.
   return (
     <ThemeProvider>
       <BrowserRouter>
-        {/* CONFIGURACIÓN ACTUALIZADA: Top-Center */}
         <Toaster richColors position="top-center" closeButton />
         <ReloadPrompt />
         <MainLayout session={session} onLogout={handleGlobalLogout} />
@@ -229,4 +213,3 @@ const App: React.FC = () => {
 };
 
 export default App;
-// Forzando actualización del visor v2.1

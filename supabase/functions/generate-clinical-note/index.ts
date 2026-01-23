@@ -1,4 +1,4 @@
-// FUERZA DE ACTUALIZACION: VITALSCRIBE v6.0 - [23/12/2025]
+// FUERZA DE ACTUALIZACION: VITALSCRIBE v6.1 - [UNIFICADO]
 // @ts-ignore
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
@@ -7,9 +7,10 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-console.log("🚀 SUPABASE EDGE: MEDICINE AI - FINAL RECOVERY [SCHEMA BLINDED]");
+console.log("🚀 SUPABASE EDGE: MEDICINE AI - OPERATIONAL [COGNITIVE SHIELD ACTIVE]");
 
-// TU LISTA EXACTA
+// LISTA DE MODELOS (Prioridad: Velocidad y Precisión Médica)
+// Se mantiene gemini-2.5-flash como punta de lanza por ser superior al 2.0-exp del respaldo.
 const MODELS_TO_TRY = [
   "gemini-3-flash-preview", 
   "gemini-2.5-flash", 
@@ -18,13 +19,13 @@ const MODELS_TO_TRY = [
 ];
 
 serve(async (req) => {
-  // Manejo de CORS
+  // Manejo de CORS (Pre-flight)
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
 
   try {
-    // 1. Obtener API Key
+    // 1. Obtener API Key de Secrets (Blindaje de Seguridad)
     const API_KEY = Deno.env.get('GOOGLE_GENAI_API_KEY');
     if (!API_KEY) {
       throw new Error("CRITICAL: API Key no encontrada en Secrets.");
@@ -34,22 +35,23 @@ serve(async (req) => {
     const reqBody = await req.json();
     let prompt = reqBody.prompt;
     
-    // Extracción de parámetros de control
+    // Extracción de parámetros de control avanzados (Heredado del Index Normal)
     const useTools = reqBody.useTools || false;
-    const jsonMode = reqBody.jsonMode !== false; // Default a true si no se especifica
+    const jsonMode = reqBody.jsonMode !== false; // Default a true
 
-    // Si no hay prompt directo, buscamos transcript
-    // AQUI ES DONDE APLICAMOS EL BLINDAJE ESTRUCTURAL
+    // --- NÚCLEO COGNITIVO (PRESERVADO) ---
+    // Si no hay prompt directo, construimos el prompt médico estructurado.
+    // ESTA SECCIÓN ES INNEGOCIABLE PARA EL FUNCIONAMIENTO DEL FRONTEND.
     if (!prompt) {
-        const transcript = reqBody.transcript || ""; // Si es undefined, usa ""
+        const transcript = reqBody.transcript || ""; 
         if (!transcript.trim()) {
-           throw new Error("La transcripción está vacía.");
+            throw new Error("La transcripción está vacía.");
         }
         
-        // Construcción segura del prompt (Protocolo VitalScribe v5.4)
         const specialty = reqBody.specialty || "Medicina General";
         const history = reqBody.patientHistory || "No disponible";
 
+        // Prompt de Alta Fidelidad (V5.4 Standard)
         prompt = `
           ROL: Eres un médico especialista en ${specialty}. Redacta con terminología clínica precisa.
           
@@ -61,7 +63,7 @@ serve(async (req) => {
           Genera una estructura JSON válida que coincida con la interfaz del sistema. 
           No incluyas bloques de código markdown (\`\`\`json), solo el objeto raw.
 
-          ESTRUCTURA JSON REQUERIDA:
+          ESTRUCTURA JSON REQUERIDA (NO MODIFICAR CLAVES):
           {
             "clinicalNote": "Nota clínica narrativa completa, profesional y detallada.",
             "soapData": {
@@ -79,28 +81,27 @@ serve(async (req) => {
         `;
     }
 
-    // 3. Ejecución Segura (Sin librerías externas)
+    // 3. Ejecución Segura y Redundante
     let successfulResponse = null;
     let lastError = "";
 
-    console.log(`🧠 Iniciando secuencia... [Tools: ${useTools ? 'ON' : 'OFF'}]`);
+    console.log(`🧠 Iniciando inferencia... [Tools: ${useTools ? 'ON' : 'OFF'}]`);
 
     for (const modelName of MODELS_TO_TRY) {
       try {
-        console.log(`Trying: ${modelName}`);
+        console.log(`Trying Model: ${modelName}`);
         
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${API_KEY}`;
         
-        // Construcción Dinámica del Payload
+        // Payload Dinámico (Soporta Tools del Index Normal)
         const payload: any = {
           contents: [{ parts: [{ text: prompt }] }],
           generationConfig: { 
-            // Si usamos tools (Chat) o jsonMode es false, usamos text/plain. Si no, forzamos JSON.
+            // Ajuste mime-type según necesidad
             response_mime_type: (useTools || !jsonMode) ? "text/plain" : "application/json" 
           }
         };
 
-        // Inyección de Google Search si se solicita
         if (useTools) {
           payload.tools = [{ google_search: {} }];
         }
@@ -115,28 +116,28 @@ serve(async (req) => {
            const errText = await response.text();
            console.warn(`⚠️ Fallo ${modelName}: ${errText}`);
            lastError = errText;
-           continue; 
+           continue; // Intenta el siguiente modelo
         }
 
         const data = await response.json();
         if (data.candidates?.[0]?.content?.parts?.[0]?.text) {
              successfulResponse = data.candidates[0].content.parts[0].text;
-             break; // Éxito
+             break; // Éxito rotundo
         }
 
       } catch (e) {
-        console.warn(`Error red ${modelName}:`, e);
+        console.warn(`Error de red en ${modelName}:`, e);
       }
     }
 
     if (!successfulResponse) {
-      throw new Error(`Todos los modelos fallaron. Último error: ${lastError}`);
+      throw new Error(`Fallo total en cascada de modelos. Último error: ${lastError}`);
     }
 
-    // 4. Limpieza y Retorno
+    // 4. Limpieza y Retorno (Sanitización JSON)
     let clean = successfulResponse.replace(/```json/g, '').replace(/```/g, '');
     
-    // Solo aplicamos recorte estricto de JSON si NO estamos en modo Tools/Chat
+    // Recorte estricto para evitar basura antes/después del JSON (Heredado del Index Normal)
     if (!useTools && jsonMode) {
         const firstCurly = clean.indexOf('{');
         const lastCurly = clean.lastIndexOf('}');
@@ -151,11 +152,10 @@ serve(async (req) => {
     });
 
   } catch (error: any) {
-    console.error("❌ ERROR CRÍTICO:", error);
+    console.error("❌ ERROR CRÍTICO EN EDGE FUNCTION:", error);
     return new Response(JSON.stringify({ error: error.message }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 500,
     });
   }
 });
-// FORCE DEPLOY
