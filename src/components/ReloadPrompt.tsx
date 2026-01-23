@@ -1,12 +1,12 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 // @ts-ignore
 import { useRegisterSW } from 'virtual:pwa-register/react';
 import { RefreshCw, X, Wifi, Download } from 'lucide-react';
 
 const ReloadPrompt: React.FC = () => {
-  // Configuración del intervalo de chequeo (en milisegundos)
-  // 20 segundos para pruebas. En producción puedes ponerle 60*60*1000 (1 hora).
-  const UPDATE_CHECK_INTERVAL = 20 * 1000; 
+  // ⚡ OPTIMIZACIÓN: Intervalo ajustado a 60 segundos
+  // Balance ideal para no saturar la red móvil en consultas largas.
+  const UPDATE_CHECK_INTERVAL = 60 * 1000; 
 
   const {
     offlineReady: [offlineReady, setOfflineReady],
@@ -14,11 +14,12 @@ const ReloadPrompt: React.FC = () => {
     updateServiceWorker,
   } = useRegisterSW({
     onRegisteredSW(swUrl: string, r: ServiceWorkerRegistration) {
-      console.log('SW Registrado en: ' + swUrl);
+      console.log('SW Registrado: ' + swUrl);
       
-      // --- EL "LATIDO" DE ACTUALIZACIÓN ---
+      // --- SISTEMA DE LATIDO (HEARTBEAT) ---
       if (r) {
         setInterval(async () => {
+          // Solo chequeamos si el SW está instalado y no esperando
           if (!(!r.installing && !r.waiting)) return;
           if ('connection' in navigator && !(navigator as any).onLine) return;
 
@@ -35,7 +36,7 @@ const ReloadPrompt: React.FC = () => {
               await r.update();
             }
           } catch (e) {
-            console.log('Error chequeando actualizaciones', e);
+            console.log('Fallo silencioso al buscar actualizaciones', e);
           }
         }, UPDATE_CHECK_INTERVAL);
       }
@@ -56,7 +57,7 @@ const ReloadPrompt: React.FC = () => {
         
         <div className="flex justify-between items-start">
             <div className="flex gap-3">
-                <div className="mt-1 text-brand-teal">
+                <div className="mt-1 text-teal-400">
                     {needRefresh ? <Download size={20} className="animate-bounce"/> : <Wifi size={20}/>}
                 </div>
                 <div>
@@ -65,7 +66,7 @@ const ReloadPrompt: React.FC = () => {
                     </h3>
                     <p className="text-xs text-slate-300 mt-1 leading-relaxed">
                         {needRefresh 
-                            ? 'Se ha detectado una mejora. Actualiza para ver los cambios.' 
+                            ? 'Hay una mejora lista. Actualiza cuando termines tu tarea.' 
                             : 'La aplicación funciona sin internet.'}
                     </p>
                 </div>
@@ -78,7 +79,7 @@ const ReloadPrompt: React.FC = () => {
         {needRefresh && (
             <button 
                 onClick={() => updateServiceWorker(true)}
-                className="w-full bg-brand-teal hover:bg-teal-600 text-white py-2 px-4 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-colors mt-1 shadow-lg"
+                className="w-full bg-teal-600 hover:bg-teal-700 text-white py-2 px-4 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-colors mt-1 shadow-lg"
             >
                 <RefreshCw size={16} /> Actualizar Ahora
             </button>

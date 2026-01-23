@@ -8,26 +8,26 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      // 🚨 CAMBIO CRÍTICO: 'autoUpdate'
-      // Esto elimina la necesidad del botón "Actualizar".
-      // La app se actualizará sola en cuanto detecte cambios.
-      registerType: 'autoUpdate', 
+      // 🛡️ ESTRATEGIA UPDATE-ON-DEMAND (RESTITUIDA)
+      // Cambiamos a 'prompt' para que el Service Worker espere confirmación
+      // antes de tomar el control. Esto evita recargas inesperadas.
+      registerType: 'prompt', 
       
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'mask-icon.svg'],
       
-      // CONFIGURACIÓN WORKBOX AGRESIVA
+      // CONFIGURACIÓN WORKBOX
       workbox: {
         cleanupOutdatedCaches: true,
         clientsClaim: true,
         
-        // 🚨 CAMBIO CRÍTICO: skipWaiting: true
-        // Obliga al Service Worker nuevo a tomar el control INMEDIATAMENTE,
-        // expulsando a la versión vieja (zombi) que causa el congelamiento.
-        skipWaiting: true,
+        // 🛡️ PROTOCOLO ZERO-INTERRUPTION
+        // skipWaiting: false asegura que la nueva versión se instale en segundo plano
+        // pero se quede en estado "waiting" hasta que el usuario pulse "Actualizar".
+        skipWaiting: false,
         
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
         
-        // Mantenemos tu fix de tamaño de imágenes
+        // Mantenemos tu fix de tamaño de imágenes (10MB)
         maximumFileSizeToCacheInBytes: 10 * 1024 * 1024 
       },
 
