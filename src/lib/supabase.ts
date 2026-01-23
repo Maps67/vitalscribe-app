@@ -10,8 +10,8 @@ if (!supabaseUrl || !supabaseAnonKey) {
 }
 
 /**
- * CLIENTE SUPABASE (SINGLETON) - V5.4 MOBILE HARDENED
- * Configurado con PKCE para máxima estabilidad en Android/iOS.
+ * CLIENTE SUPABASE (SINGLETON) - V5.5 MOBILE HARDENED
+ * Configurado con PKCE y Storage Key única para máxima estabilidad.
  */
 export const supabase = createClient(
   supabaseUrl,
@@ -22,22 +22,25 @@ export const supabase = createClient(
       autoRefreshToken: true, // Renueva el token en segundo plano
       detectSessionInUrl: true, // Detecta links de magic link/recovery
       
-      // ✅ CORRECCIÓN CRÍTICA PARA MÓVILES:
-      // Cambiamos de 'implicit' a 'pkce'. Esto previene la pérdida de sesión
-      // durante las redirecciones en redes móviles y navegadores estrictos (Safari iOS).
+      // ✅ PKCE: Vital para iOS y Android
       flowType: 'pkce',
       
-      // ✅ BLINDAJE DE ALMACENAMIENTO:
-      // Verificamos explícitamente la existencia de window para evitar errores en SSR/Build
+      // 🛡️ BLINDAJE DE SESIÓN (NUEVO):
+      // Definimos una llave única. Esto aísla la sesión de esta versión
+      // de cualquier versión antigua corrupta en el caché del navegador.
+      // Nota: Esto pedirá login de nuevo a los usuarios existentes (una sola vez).
+      storageKey: 'vitalscribe-auth-v5', 
+      
+      // Verificamos explícitamente la existencia de window
       storage: typeof window !== 'undefined' ? window.localStorage : undefined,
 
-      // Depuración activa solo en desarrollo para rastrear fallos de conexión
+      // Depuración activa solo en desarrollo
       debug: import.meta.env.DEV,
     },
     global: {
-      // Headers adicionales para evitar caché agresivo en móviles
+      // Headers adicionales para evitar caché agresivo en móviles y trazar versión
       headers: {
-        'x-client-info': 'vitalscribe-mobile-v5.4',
+        'x-client-info': 'vitalscribe-mobile-v5.5',
       },
     },
     db: {
