@@ -64,11 +64,10 @@ const BrandLogo = ({ className = "" }: { className?: string }) => (
     />
 );
 
-// --- UTILS & CLOCK (OPTIMIZADO V5.4: Estado Interno Aislado) ---
+// --- UTILS & CLOCK ---
 const cleanMarkdown = (text: string): string => text ? text.replace(/[*_#`~]/g, '').replace(/^\s*[-•]\s+/gm, '').replace(/\[.*?\]/g, '').replace(/\n\s*\n/g, '\n').trim() : "";
 
 const AtomicClock = ({ location, isDesktop = false }: { location: string, isDesktop?: boolean }) => {
-    // ✅ FIX: El estado del tiempo ahora vive SOLO dentro del reloj
     const [date, setDate] = useState(new Date());
 
     useEffect(() => {
@@ -299,9 +298,6 @@ const Dashboard: React.FC = () => {
   const [isChallengeModalOpen, setIsChallengeModalOpen] = useState(false);
   const [currentTimeHour, setCurrentTimeHour] = useState(new Date().getHours());
 
-  // ✅ CORRECCIÓN 1: Eliminamos el reloj global de estado (setNow)
-  // La hora solo se revisa al montar o al ganar foco para el saludo.
-
   const formattedDocName = useMemo(() => {
     if (!doctorProfile?.full_name) return 'Cargando...';
     const raw = doctorProfile.full_name.trim();
@@ -355,13 +351,12 @@ const Dashboard: React.FC = () => {
           
           if (aptsData) {
               setAppointments(aptsData.map((item: any) => {
-                  // ✅ FIX: Validación de array en patient
                   const patientObj = Array.isArray(item.patient) ? item.patient[0] : item.patient;
                   
                   return {
                       id: item.id, title: item.title, start_time: item.start_time, 
                       status: item.status, 
-                      patient: patientObj, // Usamos el objeto normalizado
+                      patient: patientObj, 
                       criticalAlert: null 
                   };
               }));
@@ -401,12 +396,10 @@ const Dashboard: React.FC = () => {
              if (openConsults) {
                  openConsults.forEach(c => {
                     const knownPatient = aptsData?.find((a: any) => {
-                        // ✅ FIX: Validación robusta al buscar en aptsData
                         const pRef = Array.isArray(a.patient) ? a.patient[0] : a.patient;
                         return pRef?.id === c.patient_id;
                     });
 
-                    // ✅ FIX CRÍTICO: Manejo seguro de arrays/objetos para evitar error de TypeScript
                     const patientObj = Array.isArray(knownPatient?.patient) ? knownPatient.patient[0] : knownPatient?.patient;
                     const patientName = patientObj?.name || `Paciente ${c.patient_id?.slice(0,6) || 'N/A'}`;
                     
@@ -441,7 +434,6 @@ const Dashboard: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    // ✅ AUDITORÍA MÓVIL: Forzamos recuperación de sesión inmediata para evitar race-condition de hidratación
     const checkInitialSession = async () => {
         try {
             const { data: { session } } = await supabase.auth.getSession();
@@ -456,7 +448,6 @@ const Dashboard: React.FC = () => {
     };
     checkInitialSession();
 
-    // Listener reactivo ante refresco de tokens (Crítico para PWAs y Móvil)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
         if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED') {
             if (session) {
@@ -472,12 +463,10 @@ const Dashboard: React.FC = () => {
     const cachedLocation = localStorage.getItem('last_known_location');
     if (cachedLocation) { setLocationName(cachedLocation); }
     
-    // Intervalo de polling más relajado (2 mins) - No bloqueante
     const pollingInterval = setInterval(() => { if (document.visibilityState === 'visible') fetchData(true); }, 120000);
     
     const handleVisibilityChange = () => {
         if (document.visibilityState === 'visible') {
-            // Actualizamos la hora para el saludo solo al volver a ver la app
             setCurrentTimeHour(new Date().getHours()); 
             fetchData(true);    
         }
@@ -491,7 +480,6 @@ const Dashboard: React.FC = () => {
         .subscribe();
 
     if ("geolocation" in navigator) {
-        // Ejecución única, no bloqueante
         navigator.geolocation.getCurrentPosition(async (position) => {
             const { latitude, longitude } = position.coords;
             try {
@@ -531,7 +519,7 @@ const Dashboard: React.FC = () => {
         .animate-slide-top { animation: slideInTop 0.5s ease-out forwards; }
       `}</style>
       
-      {/* 📱 VISTA MÓVIL - CORRECCIÓN DE Z-INDEX Y PERSISTENCIA */}
+      {/* 📱 VISTA MÓVIL */}
       <div className="md:hidden fixed inset-0 z-10 flex flex-col bg-slate-50 dark:bg-slate-950 p-4 pb-24 overflow-hidden overscroll-none">
         <header className="shrink-0 bg-white dark:bg-slate-900 rounded-xl p-4 shadow-sm border border-slate-200 dark:border-slate-800 relative animate-slide-top">
             <div className="flex flex-col gap-2 mb-2">
@@ -546,7 +534,6 @@ const Dashboard: React.FC = () => {
                             {weather.code < 3 ? <Sun size={14} className="text-amber-500" strokeWidth={2}/> : <Cloud size={14} className="text-slate-400" strokeWidth={2}/>}
                         </div>
                         <div className="w-px h-3 bg-slate-300 dark:bg-slate-600 mx-0.5"></div>
-                        {/* ⏰ Reloj optimizado (usa componente interno, no estado global) */}
                         <AtomicClock location={locationName} />
                     </div>
                 </div>
@@ -607,8 +594,8 @@ const Dashboard: React.FC = () => {
             </div>
         </section>
 
-        <footer className="shrink-0 flex flex-col gap-2 animate-fade-in delay-300">
-            <div className="grid grid-cols-2 gap-2 h-44">
+        <footer className="shrink-0 flex flex-col gap-2 animate-fade-in delay-300 pb-2">
+            <div className="grid grid-cols-2 gap-2 h-40">
                 <ImpactMetrics 
                     dailyTotal={totalDailyLoad} 
                     dailyCompleted={completedTodayCount} 
@@ -620,7 +607,30 @@ const Dashboard: React.FC = () => {
                   <div className="relative z-10"><h3 className="text-white font-bold text-xs leading-tight">Consulta<br/>Rápida</h3></div>
                 </button>
             </div>
-            <button onClick={() => setIsChallengeModalOpen(true)} className="w-full bg-gradient-to-r from-blue-600 to-teal-500 rounded-xl p-3 shadow-md active:scale-95 text-white flex items-center justify-center gap-2"><BrainCircuit size={16}/><span className="text-xs font-bold uppercase tracking-wide">Reto Clínico</span></button>
+
+            {/* ✨ BARRA DE ACCIONES COMPACTA (ESTILO ASISTENTE) ✨ */}
+            <div className="grid grid-cols-2 gap-2">
+                <button 
+                    onClick={() => setIsUploadModalOpen(true)} 
+                    className="bg-white dark:bg-slate-800 p-3 rounded-lg flex items-center justify-center gap-2 active:scale-95 transition-transform border border-slate-200 dark:border-slate-700 shadow-sm"
+                >
+                    <FolderUp size={18} className="text-teal-600 dark:text-teal-400"/>
+                    <span className="text-xs font-bold text-slate-700 dark:text-slate-200">Subir Archivo</span>
+                </button>
+
+                <button 
+                    onClick={() => openDocModal('justificante')} 
+                    className="bg-white dark:bg-slate-800 p-3 rounded-lg flex items-center justify-center gap-2 active:scale-95 transition-transform border border-slate-200 dark:border-slate-700 shadow-sm"
+                >
+                    <FileCheck size={18} className="text-indigo-600 dark:text-indigo-400"/>
+                    <span className="text-xs font-bold text-slate-700 dark:text-slate-200">Documentos</span>
+                </button>
+            </div>
+
+            <button onClick={() => setIsChallengeModalOpen(true)} className="w-full bg-gradient-to-r from-blue-600 to-teal-500 rounded-xl p-3 shadow-md active:scale-95 text-white flex items-center justify-center gap-2">
+                <BrainCircuit size={16}/>
+                <span className="text-xs font-bold uppercase tracking-wide">Reto Clínico</span>
+            </button>
         </footer>
       </div>
 
@@ -642,7 +652,6 @@ const Dashboard: React.FC = () => {
                  <div className="flex items-center gap-8 bg-white dark:bg-slate-900 px-8 py-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
                      <WeatherWidget weather={weather} isDesktop />
                      <div className="w-px h-12 bg-slate-200 dark:bg-slate-800"></div>
-                     {/* ⏰ Reloj optimizado (sin pasar props de fecha) */}
                      <AtomicClock location={locationName} isDesktop />
                  </div>
              </header>
