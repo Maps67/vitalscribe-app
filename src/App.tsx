@@ -105,38 +105,62 @@ const App: React.FC = () => {
 
   useEffect(() => {
     let mounted = true;
+
+    // 1. INICIALIZACIÓN SÍNCRONA
     const initSession = async () => {
-        // ✅ CRÍTICO: Esperamos la resolución real de Supabase (Local Storage / PKCE)
-        const { data: { session: initialSession } } = await supabase.auth.getSession();
-        if (mounted) {
-          setSession(initialSession);
-          // Nota: No ponemos setLoading(false) aquí inmediatamente para esperar al listener también
-          // si fuera necesario, pero por seguridad lo hacemos:
-          setLoading(false);
+        try {
+            const { data: { session: initialSession } } = await supabase.auth.getSession();
+            if (mounted) {
+              setSession(initialSession);
+              // Si obtenemos sesión inmediatamente, liberamos el loading
+              if (initialSession) setLoading(false);
+            }
+        } catch (error) {
+            console.error("Error crítico inicializando sesión:", error);
+            // En caso de error, liberamos loading para no congelar
+            if (mounted) setLoading(false);
         }
     };
     initSession();
 
+    // 2. LISTENER DE CAMBIOS
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, newSession) => {
-    if (!mounted) return;
+        if (!mounted) return;
 
-    if (event !== 'SIGNED_IN' && event !== 'INITIAL_SESSION') {
-       console.log('🔄 Evento Auth:', event);
-    }
+        if (event !== 'SIGNED_IN' && event !== 'INITIAL_SESSION') {
+           // console.log('🔄 Evento Auth:', event); 
+        }
 
-    if (event === 'TOKEN_REFRESHED' && !newSession) {
-      console.warn('🛡️ Blindaje activado: Ignorando fallo de refresco de token.');
-      return; 
-    }
+        if (event === 'TOKEN_REFRESHED' && !newSession) {
+          console.warn('🛡️ Blindaje activado: Ignorando fallo de refresco de token.');
+          return; 
+        }
 
-    setSession(newSession);
-    // ✅ Confirmamos que la carga ha terminado al recibir evento de auth
-    setLoading(false);
-  });
+        setSession(newSession);
+        setLoading(false); // Confirmación de Supabase recibida
+    });
 
+    // 3. UX: SPLASH SCREEN TIMER (Estético)
     const splashTimer = setTimeout(() => { if (mounted) setShowSplash(false); }, 2500);
-    return () => { mounted = false; subscription.unsubscribe(); clearTimeout(splashTimer); };
-  }, []);
+
+    // 4. 🚨 VÁLVULA DE SEGURIDAD (CRÍTICO PARA MÓVILES)
+    // Si Supabase no responde en 6 segundos (por red lenta o fallo de storage),
+    // forzamos la finalización de la carga para mostrar el Login.
+    const safetyValve = setTimeout(() => {
+        if (mounted && loading) {
+            console.warn("⚠️ ALERTA: Tiempo de espera de sesión agotado. Forzando UI.");
+            setLoading(false);
+            setShowSplash(false);
+        }
+    }, 6000);
+
+    return () => { 
+        mounted = false; 
+        subscription.unsubscribe(); 
+        clearTimeout(splashTimer);
+        clearTimeout(safetyValve);
+    };
+  }, []); // Dependencia vacía intencional
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -154,9 +178,9 @@ const App: React.FC = () => {
     setIsClosing(false);
   };
 
-  // ✅ CORRECCIÓN FINAL (Auth Guard):
-  // El Splash NO desaparece hasta que (Tiempo >= 2.5s) Y (Loading == false).
-  // Esto previene que el Dashboard se monte con sesión "null" en móviles lentos.
+  // ✅ AUTH GUARD CON SALIDA DE EMERGENCIA
+  // Muestra Splash solo si el usuario quiere verlo (timer < 2.5s) O si está cargando...
+  // ...PERO el 'safetyValve' garantiza que 'loading' se vuelva false a los 6s máximo.
   if (showSplash || loading) return <ThemeProvider><SplashScreen /></ThemeProvider>;
 
   if (isClosing) {
@@ -188,7 +212,7 @@ const App: React.FC = () => {
   }
 
   // 2. NO LOGUEADO -> PANTALLA DE ACCESO
-  // Si llegamos aquí, loading es false Y session es null.
+  // Si loading=false y session=null (ej. saltó la válvula de seguridad), mostramos Login.
   if (!session) {
     return (
       <ThemeProvider>
@@ -200,7 +224,6 @@ const App: React.FC = () => {
   }
 
   // 3. LOGUEADO -> APP
-  // Si llegamos aquí, loading es false Y session es válida. El Dashboard recibirá el token.
   return (
     <ThemeProvider>
       <BrowserRouter>
