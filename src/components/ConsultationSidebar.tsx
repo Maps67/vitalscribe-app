@@ -6,11 +6,10 @@ import {
   Sparkles, Paperclip, User, CornerDownLeft, Download, Loader2,
   Lock, Microscope 
 } from 'lucide-react';
-import { VitalSnapshotCard } from './VitalSnapshotCard';
 import { UploadMedico } from './UploadMedico';
 import { SpecialtyVault } from './SpecialtyVault';
 import { DoctorFileGallery } from './DoctorFileGallery';
-import { Patient, PatientInsight, DoctorProfile } from '../types';
+import { Patient, DoctorProfile } from '../types';
 import { toast } from 'sonner';
 
 interface ConsultationSidebarProps {
@@ -28,10 +27,6 @@ interface ConsultationSidebarProps {
   filteredPatients: any[];
   handleSelectPatient: (patient: any) => void;
   handleCreatePatient: (name: string) => Promise<void>; 
-  vitalSnapshot: PatientInsight | null;
-  isMobileSnapshotVisible: boolean;
-  setIsMobileSnapshotVisible: (visible: boolean) => void;
-  loadingSnapshot: boolean;
   activeMedicalContext: { 
       history: string; 
       allergies: string; 
@@ -79,10 +74,6 @@ export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
   filteredPatients,
   handleSelectPatient,
   handleCreatePatient, 
-  vitalSnapshot,
-  isMobileSnapshotVisible,
-  setIsMobileSnapshotVisible,
-  loadingSnapshot,
   activeMedicalContext,
   consentGiven,
   setConsentGiven,
@@ -94,8 +85,8 @@ export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
   handleGenerate,
   isProcessing,
   isReadyToGenerate,
-  handleLoadInsights,
-  isLoadingInsights,
+  // handleLoadInsights, // Ya no se usa aquí
+  // isLoadingInsights, // Ya no se usa aquí
   generatedNote,
   activeSpeaker,
   handleSpeakerSwitch,
@@ -127,19 +118,21 @@ export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
   const handleSpecialtyChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
       const newSpecialty = e.target.value;
       if (doctorProfile && newSpecialty !== doctorProfile.specialty) {
-          e.target.value = doctorProfile.specialty; 
+          // Ya no forzamos el valor del doctorProfile aquí para permitir la navegación libre
+          // e.target.value = doctorProfile.specialty; <--- DESHABILITADO POR SOLICITUD DE FLEXIBILIDAD
+          
           if (onTriggerInterconsultation) {
-              toast.info(`Abriendo Interconsulta de ${newSpecialty}...`, { icon: <Microscope size={16}/> });
+              toast.info(`Cambiando contexto a ${newSpecialty}...`, { icon: <Microscope size={16}/> });
               onTriggerInterconsultation(newSpecialty);
-          } else {
-              toast.warning("Modo Interconsulta no configurado en esta vista.");
           }
+          // Permitimos el cambio de estado para que la Bóveda se actualice
+          setSelectedSpecialty(newSpecialty);
       } else {
           setSelectedSpecialty(newSpecialty);
       }
   };
 
-  // 🍎 MANEJADOR SEGURO APPLE (Habilitación de Micrófono)
+  // 🍎 MANEJADOR SEGURO APPLE
   const handleMicPointerDown = (e: React.PointerEvent) => {
     if (e.pointerType === 'touch') e.preventDefault();
     handleToggleRecording();
@@ -165,11 +158,17 @@ export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
           <div className="bg-indigo-50 dark:bg-slate-800 p-3 rounded-lg border border-indigo-100 dark:border-slate-700 relative group">
             <div className="flex justify-between items-center mb-1">
               <label className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase flex gap-1 items-center">
-                  <ShieldCheck size={12}/> Perfil Activo
+                  <ShieldCheck size={12}/> Contexto Activo
               </label>
-              <div className="flex items-center gap-1 text-[9px] font-bold text-green-600 bg-green-100 dark:bg-green-900/30 px-2 py-0.5 rounded-full">
-                  <Lock size={8} /> VERIFICADO
-              </div>
+              {doctorProfile?.specialty === selectedSpecialty ? (
+                 <div className="flex items-center gap-1 text-[9px] font-bold text-green-600 bg-green-100 dark:bg-green-900/30 px-2 py-0.5 rounded-full">
+                    <Lock size={8} /> VERIFICADO
+                 </div>
+              ) : (
+                 <div className="flex items-center gap-1 text-[9px] font-bold text-amber-600 bg-amber-100 dark:bg-amber-900/30 px-2 py-0.5 rounded-full">
+                    <Microscope size={8} /> EXPLORACIÓN
+                 </div>
+              )}
             </div>
             
             <div className="relative">
@@ -184,7 +183,7 @@ export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
                 <ChevronDown size={14} className="absolute right-0 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"/>
             </div>
             <div className="absolute top-full left-0 mt-1 w-full bg-slate-800 text-white text-[10px] p-2 rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-20">
-                Seleccionar otra especialidad abrirá el modo <strong>Interconsulta</strong> (Solo lectura).
+                Seleccione una especialidad para filtrar la <strong>Bóveda Clínica</strong> o iniciar Interconsulta.
             </div>
           </div>
 
@@ -222,7 +221,7 @@ export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
                 {filteredPatients.map(p => (
                   <div key={p.id} onClick={() => handleSelectPatient(p)} className="p-3 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer border-b dark:border-slate-700 dark:text-white text-sm flex items-center justify-between">
                     <span>{p.name}</span>
-                    {p.isGhost && <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full flex items-center gap-1"><Calendar size={10}/> Cita sin registro</span>}
+                    {p.isTemporary && <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full flex items-center gap-1"><Calendar size={10}/> Cita sin registro</span>}
                   </div>
                 ))}
                 {filteredPatients.length === 0 && (
@@ -244,32 +243,8 @@ export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar overscroll-contain flex flex-col gap-2 pr-1">
-          <div className="w-full transition-all duration-300 ease-in-out shrink-0">
-            {vitalSnapshot && (
-              <div className="md:hidden flex justify-between items-center mb-2 px-1">
-                  <span className="text-xs font-bold text-slate-500 flex items-center gap-1"><Activity size={12}/> Contexto Vital</span>
-                  <button onClick={() => setIsMobileSnapshotVisible(!isMobileSnapshotVisible)} className="p-1 bg-slate-200 rounded text-slate-600 dark:bg-slate-700 dark:text-slate-300">
-                      {isMobileSnapshotVisible ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}
-                  </button>
-              </div>
-            )}
-            <div className={`${!isMobileSnapshotVisible ? 'hidden' : 'block'} md:block`}>
-              <VitalSnapshotCard 
-                insight={vitalSnapshot ? { ...vitalSnapshot, pending_actions: vitalSnapshot.pending_actions } : null} 
-                isLoading={loadingSnapshot} 
-              />
-              {vitalSnapshot && (
-                <button onClick={() => setIsMobileSnapshotVisible(false)} className="md:hidden w-full mt-2 py-2 bg-slate-100 dark:bg-slate-800 text-slate-500 text-xs font-bold rounded-lg border border-slate-200 dark:border-slate-700 flex items-center justify-center gap-2">
-                  <ChevronUp size={12}/> Ocultar y Ver Micrófono
-                </button>
-              )}
-            </div>
-            {!isMobileSnapshotVisible && vitalSnapshot && (
-              <button onClick={() => setIsMobileSnapshotVisible(true)} className="md:hidden w-full mb-2 py-2 bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-300 rounded-lg text-xs font-bold border border-indigo-100 dark:border-indigo-800 flex items-center justify-center gap-2 animate-in fade-in">
-                <Activity size={12}/> Ver Análisis 360° (Oculto)
-              </button>
-            )}
-          </div>
+          
+          {/* ✅ ZONA LIMPIA: Sin Snapshot, solo contexto y chat */}
 
           {activeMedicalContext && !generatedNote && (
             <div className="relative z-30 group shrink-0" onClick={() => setIsMobileContextExpanded(!isMobileContextExpanded)}>
@@ -408,7 +383,7 @@ export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
 
       <div className={`
           flex-none flex flex-col gap-2 border-t dark:border-slate-800 pt-3 pb-1 mt-auto bg-white dark:bg-slate-900 z-20
-          ${(vitalSnapshot && isMobileSnapshotVisible) ? 'hidden md:flex' : 'flex'}
+          flex
       `}>
         <div className="flex justify-between items-center px-1">
           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Entrada Activa:</span>
@@ -445,13 +420,6 @@ export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
             {isProcessing ? '...' : (isListening || isPaused) ? 'Terminar' : (isOnline ? 'Generar' : 'Guardar')}
           </button>
         </div>
-
-        {selectedPatient && !(selectedPatient as any).isTemporary && (
-          <button onClick={handleLoadInsights} disabled={isLoadingInsights} className={`w-full mt-1 py-3 bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-bold rounded-xl shadow-lg shadow-indigo-200 dark:shadow-none hover:shadow-xl hover:scale-[1.02] transition-all items-center justify-center gap-2 group shrink-0 ${(vitalSnapshot && isMobileSnapshotVisible) ? 'hidden md:flex' : 'flex'}`}>
-            {isLoadingInsights ? <RefreshCw className="animate-spin" size={18}/> : <Sparkles className="text-yellow-300 group-hover:rotate-12 transition-transform" size={18} />}
-            <span>Análisis Clínico 360°</span>
-          </button>
-        )}
       </div>
 
       {isAttachmentsOpen && selectedPatient && (
@@ -464,11 +432,17 @@ export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
                 </div>
                 <div className="flex-1 overflow-y-auto flex flex-col gap-4">
                     <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-lg"><p className="text-xs font-bold text-slate-500 mb-2 uppercase">Agregar archivo:</p><UploadMedico preSelectedPatient={selectedPatient} onUploadComplete={() => {}} /></div>
+                    
+                    {/* ✅ FASE 1: DESVINCULACIÓN COMPLETADA - Ahora la Bóveda obedece al Selector, no al Perfil Fijo */}
                     {doctorProfile && (
                         <div className="mt-4">
-                             <SpecialtyVault patientId={selectedPatient.id} specialty={doctorProfile.specialty} />
+                             <SpecialtyVault 
+                                patientId={selectedPatient.id} 
+                                specialty={selectedSpecialty} 
+                             />
                         </div>
                     )}
+
                     <div className="flex-1"><p className="text-xs font-bold text-slate-500 mb-2 uppercase">Historial:</p><DoctorFileGallery patientId={selectedPatient.id} /></div>
                 </div>
             </div>

@@ -31,7 +31,8 @@ export const InsightsPanel: React.FC<InsightsPanelProps> = ({ insights, isOpen, 
           <div>
             <h3 className="font-bold text-xl text-slate-900 dark:text-white flex items-center gap-2">
               <TrendingUp className="text-brand-teal" size={24} />
-              Balance Clínico 360°
+              {/* ✅ CAMBIO: Título genérico para eliminar referencia a la herramienta vieja */}
+              Análisis Clínico
             </h3>
             <p className="text-xs text-slate-500 mt-1">Análisis de evolución para: <span className="font-bold">{patientName}</span></p>
           </div>

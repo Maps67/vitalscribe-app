@@ -7,7 +7,7 @@ import {
   Scissors // ✅ Icono de Cirugía importado
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { Patient, DoctorProfile, PatientInsight } from '../types';
+import { Patient, DoctorProfile } from '../types'; // Removido PatientInsight
 import { toast } from 'sonner';
 import QuickRxModal from './QuickRxModal';
 import FormattedText from './FormattedText'; 
@@ -17,9 +17,9 @@ import MedicalRecordPDF from './MedicalRecordPDF';
 import ClinicalHistoryPDF from './ClinicalHistoryPDF'; 
 import { DoctorFileGallery } from './DoctorFileGallery';
 import { PatientWizard } from './PatientWizard';
-import { InsightsPanel } from './InsightsPanel'; 
+// Removido InsightsPanel (Vieja herramienta)
 import PatientDashboard from './PatientDashboard'; 
-import { GeminiMedicalService } from '../services/GeminiMedicalService'; 
+// Removido GeminiMedicalService (Ya no se usa aquí)
 import { MedicalDataService } from '../services/MedicalDataService';
 import DataExportModal from './DataExportModal'; 
 // ✅ IMPORTACIÓN DEL HUB QUIRÚRGICO (Para acceso directo independiente)
@@ -78,10 +78,7 @@ const PatientsView: React.FC = () => {
 
   const [expandedPatientId, setExpandedPatientId] = useState<string | null>(null);
 
-  const [isInsightsOpen, setIsInsightsOpen] = useState(false);
-  const [patientInsights, setPatientInsights] = useState<PatientInsight | null>(null);
-  const [isLoadingInsights, setIsLoadingInsights] = useState(false);
-  const [analyzingPatientName, setAnalyzingPatientName] = useState('');
+  // --- LIMPIEZA REALIZADA: Estados de la vieja herramienta 360 eliminados ---
 
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
@@ -232,37 +229,7 @@ const PatientsView: React.FC = () => {
       }
   };
 
-  const handleLoadInsights = async (patient: PatientData) => {
-      setAnalyzingPatientName(patient.name);
-      setIsInsightsOpen(true);
-      setPatientInsights(null); 
-      setIsLoadingInsights(true);
-
-      try {
-          const { data: history } = await supabase
-            .from('consultations')
-            .select('summary, created_at')
-            .eq('patient_id', patient.id)
-            .order('created_at', { ascending: false })
-            .limit(5);
-          
-          const consultationsText = history?.map(h => `[Fecha: ${new Date(h.created_at).toLocaleDateString()}] ${h.summary}`) || [];
-          
-          const analysis = await GeminiMedicalService.generatePatient360Analysis(
-              patient.name, 
-              patient.history || "No registrado", 
-              consultationsText
-          );
-          
-          setPatientInsights(analysis);
-      } catch (error) {
-          toast.error("Error analizando historial.");
-          console.error(error);
-          setIsInsightsOpen(false);
-      } finally {
-          setIsLoadingInsights(false);
-      }
-  };
+  // --- LIMPIEZA REALIZADA: Función handleLoadInsights eliminada ---
 
   const handleViewHistory = (patient: PatientData) => {
       setSelectedDashboardPatient({
@@ -471,7 +438,7 @@ const PatientsView: React.FC = () => {
                               </button>
                           )}
 
-                          <button onClick={() => handleLoadInsights(patient)} className="p-2 text-indigo-500 hover:bg-indigo-50 rounded-lg transition-colors" title="Balance 360°"><Sparkles size={18}/></button>
+                          {/* 🔴 LIMPIEZA REALIZADA: Botón "Balance 360" eliminado de aquí */}
                           
                           {/* BOTÓN DESCARGA (ESCRITORIO) */}
                           <button onClick={() => handleDownloadRecord(patient)} className="p-2 text-slate-600 hover:bg-slate-100 hover:text-brand-teal rounded-lg transition-colors" title="Descargar Expediente PDF (NOM-004)"><Download size={18}/></button>
@@ -538,12 +505,7 @@ const PatientsView: React.FC = () => {
                                 </button>
                             )}
 
-                            <button 
-                                onClick={(e) => { e.stopPropagation(); handleLoadInsights(patient); }}
-                                className="w-full mb-2 py-2 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-800 rounded-xl text-xs font-bold flex items-center justify-center gap-2 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors"
-                            >
-                                <Sparkles size={16} /> Ver Balance Clínico 360°
-                            </button>
+                            {/* 🔴 LIMPIEZA REALIZADA: Botón "Ver Balance Clínico 360" eliminado de aquí */}
 
                             {/* GRID DE ACCIONES MÓVIL */}
                             <div className="grid grid-cols-5 gap-2 mb-3">
@@ -663,13 +625,7 @@ const PatientsView: React.FC = () => {
           />
       )}
 
-      <InsightsPanel 
-        isOpen={isInsightsOpen} 
-        onClose={() => setIsInsightsOpen(false)} 
-        insights={patientInsights} 
-        isLoading={isLoadingInsights}
-        patientName={analyzingPatientName}
-      />
+      {/* 🔴 LIMPIEZA: InsightsPanel eliminado de la renderización */}
       
       {selectedPatientForRx && doctorProfile && <QuickRxModal isOpen={!!selectedPatientForRx} onClose={() => setSelectedPatientForRx(null)} initialTranscript="" patientName={selectedPatientForRx.name} patientId={selectedPatientForRx.id} doctorProfile={doctorProfile} />}
     
