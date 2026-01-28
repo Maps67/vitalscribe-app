@@ -14,6 +14,7 @@ export interface DoctorProfile {
   logo_url: string | null;
   signature_url: string | null;
   qr_code_url?: string | null; // <--- NUEVO CAMPO AGREGADO (QR INDEPENDIENTE)
+  avatar_url?: string | null;  // <--- ✅ CORRECCIÓN CRÍTICA: CAMPO FALTANTE AGREGADO
   website_url?: string | null;
   updated_at?: string | null; // Mantenido del viejo
 }

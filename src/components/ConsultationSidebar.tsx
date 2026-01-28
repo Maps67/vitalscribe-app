@@ -57,6 +57,12 @@ interface ConsultationSidebarProps {
   doctorProfile: DoctorProfile | null;
   onDownloadRecord: () => void;
   onTriggerInterconsultation?: (specialty: string) => void;
+  
+  // ✅ CORRECCIÓN INTEGRAL: Se agregan TODAS las propiedades faltantes
+  vitalSnapshot?: any; 
+  isMobileSnapshotVisible?: boolean;
+  setIsMobileSnapshotVisible?: (visible: boolean) => void;
+  loadingSnapshot?: boolean;
 }
 
 export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
@@ -96,7 +102,12 @@ export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
   setIsAttachmentsOpen,
   doctorProfile,
   onDownloadRecord,
-  onTriggerInterconsultation 
+  onTriggerInterconsultation,
+  // Desestructuración segura de las nuevas props (opcionales)
+  vitalSnapshot,
+  isMobileSnapshotVisible,
+  setIsMobileSnapshotVisible,
+  loadingSnapshot
 }) => {
   const [isMobileContextExpanded, setIsMobileContextExpanded] = useState(false);
   const [isCreatingPatient, setIsCreatingPatient] = useState(false);
@@ -347,9 +358,9 @@ export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
       </div>
 
       {/* --- FOOTER CONTROLS --- */}
+      {/* ✅ CORRECCIÓN CSS: Se elimina 'flex' duplicado del className */}
       <div className={`
           flex-none flex flex-col gap-2 border-t dark:border-slate-800 pt-3 pb-1 mt-auto bg-white dark:bg-slate-900 z-20
-          flex
       `}>
         <div className="flex justify-between items-center px-1">
           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Entrada Activa:</span>

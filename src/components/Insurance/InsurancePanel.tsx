@@ -58,7 +58,9 @@ const InsurancePanel: React.FC<InsurancePanelProps> = ({
 
       const pdfBytes = await InsurancePDFService.generateReport(provider, reportData);
 
-      const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+      // ✅ CORRECCIÓN CRÍTICA: Type Assertion para desbloquear descarga
+      const blob = new Blob([pdfBytes as any], { type: 'application/pdf' });
+      
       const link = document.createElement('a');
       link.href = window.URL.createObjectURL(blob);
       link.download = `Informe_${provider}_${patientName.replace(/\s+/g, '_')}.pdf`;
