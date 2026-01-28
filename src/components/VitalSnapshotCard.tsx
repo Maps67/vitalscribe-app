@@ -8,6 +8,7 @@ interface VitalSnapshotProps {
 }
 
 export const VitalSnapshotCard: React.FC<VitalSnapshotProps> = ({ insight, isLoading }) => {
+  // 1. Manejo de carga (Loading State)
   if (isLoading) {
     return (
       <div className="bg-amber-50 border-l-4 border-amber-400 p-4 rounded-md shadow-sm animate-pulse">
@@ -20,13 +21,20 @@ export const VitalSnapshotCard: React.FC<VitalSnapshotProps> = ({ insight, isLoa
     );
   }
 
+  // 2. Si no hay insight, no renderizamos nada (pero no explotamos)
   if (!insight) return null;
 
-  // Determinar severidad visual basada en riesgos
-  const hasRisks = insight.risk_flags.length > 0;
+  // 🛡️ BLINDAJE 1: Acceso seguro a risk_flags con valor por defecto
+  // Si risk_flags es undefined, usamos un array vacío [] para que .length sea 0
+  const riskFlags = insight?.risk_flags || [];
+  const hasRisks = riskFlags.length > 0;
+  
   const containerClass = hasRisks 
     ? "bg-amber-50 border-amber-500" 
     : "bg-blue-50 border-blue-500";
+
+  // 🛡️ BLINDAJE 2: Acceso seguro a pending_actions
+  const pendingActions = insight?.pending_actions || [];
 
   return (
     <div className={`border-l-4 rounded-r-md shadow-sm p-4 mb-6 ${containerClass}`}>
@@ -39,7 +47,8 @@ export const VitalSnapshotCard: React.FC<VitalSnapshotProps> = ({ insight, isLoa
             Vital Snapshot (Contexto Inmediato)
           </h3>
           <p className="mt-1 text-lg font-semibold text-gray-800 leading-snug">
-            {insight.evolution}
+            {/* 🛡️ BLINDAJE 3: Texto de evolución seguro */}
+            {insight?.evolution || "Sin evolución registrada"}
           </p>
         </div>
       </div>
@@ -54,7 +63,8 @@ export const VitalSnapshotCard: React.FC<VitalSnapshotProps> = ({ insight, isLoa
                 <AlertTriangle className="w-3 h-3" /> BANDERAS ROJAS
               </h4>
               <ul className="list-disc list-inside text-sm text-red-800">
-                {insight.risk_flags.map((flag, idx) => (
+                {/* Iteramos sobre la variable segura riskFlags, no sobre insight directament */}
+                {riskFlags.map((flag, idx) => (
                   <li key={idx}>{flag}</li>
                 ))}
               </ul>
@@ -64,7 +74,7 @@ export const VitalSnapshotCard: React.FC<VitalSnapshotProps> = ({ insight, isLoa
           <div>
             <h4 className="text-xs font-bold text-gray-500 mb-1">AUDITORÍA FARMACOLÓGICA</h4>
             <p className="text-sm text-gray-700 italic">
-              "{insight.medication_audit}"
+              "{insight?.medication_audit || "Sin auditoría disponible"}"
             </p>
           </div>
         </div>
@@ -74,9 +84,10 @@ export const VitalSnapshotCard: React.FC<VitalSnapshotProps> = ({ insight, isLoa
           <h4 className="text-xs font-bold text-gray-500 flex items-center gap-1 mb-2">
             <ClipboardList className="w-3 h-3" /> PLAN DE ACCIÓN / PENDIENTES
           </h4>
-          {insight.pending_actions.length > 0 ? (
+          {pendingActions.length > 0 ? (
             <ul className="space-y-2">
-              {insight.pending_actions.map((action, idx) => (
+              {/* Iteramos sobre la variable segura pendingActions */}
+              {pendingActions.map((action, idx) => (
                 <li key={idx} className="flex items-start gap-2 text-sm text-gray-700 bg-white/60 p-1 rounded">
                   <CheckSquare className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
                   <span>{action}</span>
