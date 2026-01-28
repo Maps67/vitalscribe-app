@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { GoogleGenerativeAI } from "@google/generative-ai";
 // Importamos los tipos definidos en la arquitectura v5.2
 import { 
   GeminiResponse, 
@@ -407,42 +408,54 @@ export const GeminiMedicalService = {
     }
   },
 
-  // --- C. BALANCE 360 (MODO COMPARATIVO LITERAL) ---
-  async generatePatient360Analysis(patientName: string, historySummary: string, consultations: string[]): Promise<PatientInsight> {
+  // --- C. BALANCE 360 (VERSIÓN FINAL PARA LIBRERÍA 0.24.1+) ---
+  async generatePatient360Analysis(patientName: string, history: string, consultations: string[]): Promise<PatientInsight> {
     try {
-      const contextText = consultations.length > 0 
-          ? consultations.join("\n\n--- CONSULTA PREVIA (CRONOLÓGICO) ---\n\n") 
-          : "Sin historial previo en plataforma (Primera Vez).";
+        // 1. Validar API KEY
+        const apiKey = import.meta.env.VITE_GOOGLE_AI_KEY || 
+                       import.meta.env.VITE_GEMINI_API_KEY || 
+                       import.meta.env.VITE_GEMINI_KEY || 
+                       import.meta.env.VITE_GOOGLE_API_KEY;
 
-      const prompt = `
-          ACTÚA COMO: Auditor de Seguridad Clínica.
-          OBJETIVO: Validar la congruencia del historial y detectar iatrogenia o falta de tratamiento.
+        if (!apiKey) throw new Error("No se encontró la API KEY en .env");
 
-          PACIENTE: "${patientName}"
-          ANTECEDENTES BASE: ${historySummary || "No registrado"}
+        // 2. Preparar datos
+        const safeHistory = (history && history.length > 5) ? history : "No hay antecedentes patológicos registrados.";
+        const safeConsultations = (consultations && consultations.length > 0) 
+            ? consultations.join("\n---\n") 
+            : "No existen consultas previas.";
 
-          HISTORIAL DE CONSULTAS (Analiza tendencias):
-          ${contextText}
+        // 3. Conexión (Usando la librería actualizada)
+        const client = new GoogleGenerativeAI(apiKey);
+        
+        // 🚀 MODELO FLASH (Ahora sí funcionará porque tienes la v0.24.1)
+        const model = client.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-          FORMATO DE SALIDA JSON (PatientInsight):
-          {
-            "evolution": "Texto narrativo forense.",
-            "medication_audit": "Auditoría de hechos.",
-            "risk_flags": ["Alertas de seguridad"],
-            "pending_actions": ["Pendientes"]
-          }
-      `;
+        const prompt = `
+          ACTÚA COMO: Auditor Médico.
+          PACIENTE: ${patientName}
+          HISTORIAL: ${safeHistory}
+          EVOLUCIÓN: ${safeConsultations}
+          
+          Genera un JSON con: evolution, risk_flags (array), medication_audit, pending_actions (array).
+          Responde SOLO JSON.
+        `;
 
-      const rawText = await generateWithFailover(prompt, true);
-      return JSON.parse(cleanJSON(rawText));
-    } catch (e) {
-      console.warn("Error generando insights 360:", e);
-      return { 
-        evolution: "No hay suficientes datos.", 
-        medication_audit: "Sin auditoría.", 
-        risk_flags: [], 
-        pending_actions: [] 
-      };
+        const result = await model.generateContent(prompt);
+        const response = result.response;
+        const text = response.text();
+        
+        const cleanJson = text.replace(/```json/g, '').replace(/```/g, '').trim();
+        return JSON.parse(cleanJson);
+
+    } catch (error: any) {
+        console.error("🔥 Error Balance 360:", error);
+        return {
+            evolution: `Error: ${error.message}. (Si ves esto, reinicia el servidor con npm run dev)`,
+            risk_flags: ["⚠️ Error de Sistema"],
+            medication_audit: "No disponible.",
+            pending_actions: ["Reiniciar servidor local"]
+        };
     }
   },
 
