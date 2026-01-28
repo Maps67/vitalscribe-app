@@ -85,8 +85,6 @@ export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
   handleGenerate,
   isProcessing,
   isReadyToGenerate,
-  // handleLoadInsights, // Ya no se usa aquí
-  // isLoadingInsights, // Ya no se usa aquí
   generatedNote,
   activeSpeaker,
   handleSpeakerSwitch,
@@ -118,21 +116,18 @@ export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
   const handleSpecialtyChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
       const newSpecialty = e.target.value;
       if (doctorProfile && newSpecialty !== doctorProfile.specialty) {
-          // Ya no forzamos el valor del doctorProfile aquí para permitir la navegación libre
-          // e.target.value = doctorProfile.specialty; <--- DESHABILITADO POR SOLICITUD DE FLEXIBILIDAD
-          
+          e.target.value = doctorProfile.specialty; 
           if (onTriggerInterconsultation) {
-              toast.info(`Cambiando contexto a ${newSpecialty}...`, { icon: <Microscope size={16}/> });
+              toast.info(`Abriendo Interconsulta de ${newSpecialty}...`, { icon: <Microscope size={16}/> });
               onTriggerInterconsultation(newSpecialty);
+          } else {
+              toast.warning("Modo Interconsulta no configurado en esta vista.");
           }
-          // Permitimos el cambio de estado para que la Bóveda se actualice
-          setSelectedSpecialty(newSpecialty);
       } else {
           setSelectedSpecialty(newSpecialty);
       }
   };
 
-  // 🍎 MANEJADOR SEGURO APPLE
   const handleMicPointerDown = (e: React.PointerEvent) => {
     if (e.pointerType === 'touch') e.preventDefault();
     handleToggleRecording();
@@ -141,6 +136,7 @@ export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
   return (
     <div className={`w-full md:w-1/4 p-4 flex flex-col gap-2 border-r dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden overscroll-contain h-full ${generatedNote ? 'hidden md:flex' : 'flex'}`}>
       
+      {/* --- HEADER --- */}
       <div className="flex-none flex flex-col gap-2">
           <div className="flex justify-between items-center">
             <h2 className="text-xl font-bold dark:text-white flex items-center gap-2">
@@ -158,17 +154,11 @@ export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
           <div className="bg-indigo-50 dark:bg-slate-800 p-3 rounded-lg border border-indigo-100 dark:border-slate-700 relative group">
             <div className="flex justify-between items-center mb-1">
               <label className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase flex gap-1 items-center">
-                  <ShieldCheck size={12}/> Contexto Activo
+                  <ShieldCheck size={12}/> Perfil Activo
               </label>
-              {doctorProfile?.specialty === selectedSpecialty ? (
-                 <div className="flex items-center gap-1 text-[9px] font-bold text-green-600 bg-green-100 dark:bg-green-900/30 px-2 py-0.5 rounded-full">
-                    <Lock size={8} /> VERIFICADO
-                 </div>
-              ) : (
-                 <div className="flex items-center gap-1 text-[9px] font-bold text-amber-600 bg-amber-100 dark:bg-amber-900/30 px-2 py-0.5 rounded-full">
-                    <Microscope size={8} /> EXPLORACIÓN
-                 </div>
-              )}
+              <div className="flex items-center gap-1 text-[9px] font-bold text-green-600 bg-green-100 dark:bg-green-900/30 px-2 py-0.5 rounded-full">
+                  <Lock size={8} /> VERIFICADO
+              </div>
             </div>
             
             <div className="relative">
@@ -183,7 +173,7 @@ export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
                 <ChevronDown size={14} className="absolute right-0 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"/>
             </div>
             <div className="absolute top-full left-0 mt-1 w-full bg-slate-800 text-white text-[10px] p-2 rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-20">
-                Seleccione una especialidad para filtrar la <strong>Bóveda Clínica</strong> o iniciar Interconsulta.
+                Seleccionar otra especialidad abrirá el modo <strong>Interconsulta</strong> (Solo lectura).
             </div>
           </div>
 
@@ -221,7 +211,7 @@ export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
                 {filteredPatients.map(p => (
                   <div key={p.id} onClick={() => handleSelectPatient(p)} className="p-3 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer border-b dark:border-slate-700 dark:text-white text-sm flex items-center justify-between">
                     <span>{p.name}</span>
-                    {p.isTemporary && <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full flex items-center gap-1"><Calendar size={10}/> Cita sin registro</span>}
+                    {p.isGhost && <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full flex items-center gap-1"><Calendar size={10}/> Cita sin registro</span>}
                   </div>
                 ))}
                 {filteredPatients.length === 0 && (
@@ -242,10 +232,10 @@ export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
           </div>
       </div>
 
+      {/* --- CONTEXT & CHAT AREA --- */}
       <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar overscroll-contain flex flex-col gap-2 pr-1">
           
-          {/* ✅ ZONA LIMPIA: Sin Snapshot, solo contexto y chat */}
-
+          {/* Active Context Card */}
           {activeMedicalContext && !generatedNote && (
             <div className="relative z-30 group shrink-0" onClick={() => setIsMobileContextExpanded(!isMobileContextExpanded)}>
               <div className={`bg-amber-50 dark:bg-amber-900/20 p-3 rounded-lg border border-amber-200 dark:border-amber-800 text-xs shadow-sm cursor-help transition-opacity duration-200 ${isMobileContextExpanded ? 'opacity-0' : 'opacity-100 md:group-hover:opacity-0'}`}>
@@ -287,6 +277,7 @@ export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
                 </div>
               </div>
 
+              {/* Hover/Expanded Detail */}
               <div className={`absolute top-0 left-0 w-full transition-all duration-200 ease-out z-50 pointer-events-none group-hover:pointer-events-auto ${isMobileContextExpanded ? 'opacity-100 visible' : 'opacity-0 invisible md:group-hover:opacity-100 md:group-hover:visible'}`}>
                 <div className="bg-amber-50 dark:bg-slate-800 p-4 rounded-xl border-2 border-amber-300 dark:border-amber-600 text-xs shadow-2xl scale-100 origin-top">
                   <div className="flex items-center gap-2 mb-2 text-amber-700 dark:text-amber-400 font-bold border-b border-amber-200 dark:border-amber-800 pb-1">
@@ -313,34 +304,6 @@ export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
                                     <p className="italic opacity-80 text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed line-clamp-6 font-light">
                                         {activeMedicalContext.lastConsultation.summary}
                                     </p>
-                                    {activeMedicalContext.lastConsultation.summary.length > 300 && (
-                                        <span className="text-[9px] text-indigo-500 mt-1 block font-bold text-right cursor-pointer">
-                                            Ver detalle completo en Historial...
-                                        </span>
-                                    )}
-                              </div>
-                          </div>
-                      )}
-                      {activeMedicalContext.insurance && (
-                          <div className="mt-2 pt-2 border-t border-amber-200 dark:border-amber-800/50">
-                              <span className="font-bold text-[10px] uppercase text-emerald-600 mb-1 flex items-center gap-1">
-                                  <ShieldCheck size={12} /> Último Trámite de Seguro Registrado
-                              </span>
-                              <div className="p-2 bg-emerald-50 dark:bg-emerald-900/10 rounded border border-emerald-200 dark:border-emerald-800">
-                                  <div className="grid grid-cols-2 gap-2 text-slate-700 dark:text-slate-300">
-                                      <div>
-                                          <span className="block font-bold text-emerald-700 dark:text-emerald-400">Aseguradora</span>
-                                          {activeMedicalContext.insurance.provider}
-                                      </div>
-                                      <div>
-                                          <span className="block font-bold text-emerald-700 dark:text-emerald-400">Póliza</span>
-                                          {activeMedicalContext.insurance.policyNumber || "No registrada"}
-                                      </div>
-                                      <div className="col-span-2">
-                                          <span className="block font-bold text-emerald-700 dark:text-emerald-400">Fecha Siniestro</span>
-                                          {activeMedicalContext.insurance.accidentDate}
-                                      </div>
-                                  </div>
                               </div>
                           </div>
                       )}
@@ -350,6 +313,7 @@ export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
             </div>
           )}
 
+          {/* Consent Checkbox */}
           <div onClick={() => setConsentGiven(!consentGiven)} className="flex items-center gap-2 p-3 rounded-lg border cursor-pointer select-none dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 shrink-0">
             <div className={`w-5 h-5 rounded border flex items-center justify-center ${consentGiven ? 'bg-green-500 border-green-500 text-white' : 'bg-white dark:bg-slate-700'}`}>
               {consentGiven && <Check size={14}/>}
@@ -357,6 +321,7 @@ export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
             <label className="text-xs dark:text-white cursor-pointer">Consentimiento otorgado.</label>
           </div>
 
+          {/* Transcript Area */}
           <div className={`flex-1 min-h-[150px] flex flex-col p-2 overflow-hidden border rounded-xl bg-slate-50 dark:bg-slate-900/50 dark:border-slate-800`}>
             {segments.length === 0 ? (
               <div className="flex-1 flex flex-col items-center justify-center text-slate-400 opacity-50 text-xs">
@@ -381,6 +346,7 @@ export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
           </div>
       </div>
 
+      {/* --- FOOTER CONTROLS --- */}
       <div className={`
           flex-none flex flex-col gap-2 border-t dark:border-slate-800 pt-3 pb-1 mt-auto bg-white dark:bg-slate-900 z-20
           flex
@@ -433,13 +399,9 @@ export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
                 <div className="flex-1 overflow-y-auto flex flex-col gap-4">
                     <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-lg"><p className="text-xs font-bold text-slate-500 mb-2 uppercase">Agregar archivo:</p><UploadMedico preSelectedPatient={selectedPatient} onUploadComplete={() => {}} /></div>
                     
-                    {/* ✅ FASE 1: DESVINCULACIÓN COMPLETADA - Ahora la Bóveda obedece al Selector, no al Perfil Fijo */}
                     {doctorProfile && (
                         <div className="mt-4">
-                             <SpecialtyVault 
-                                patientId={selectedPatient.id} 
-                                specialty={selectedSpecialty} 
-                             />
+                             <SpecialtyVault patientId={selectedPatient.id} specialty={doctorProfile.specialty} />
                         </div>
                     )}
 
