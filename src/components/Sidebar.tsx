@@ -19,7 +19,8 @@ interface SidebarProps {
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, onLogout }) => {
-  const [profile, setProfile] = useState({ name: 'Doctor(a)', specialty: '' });
+  // Estado expandido para incluir avatarUrl
+  const [profile, setProfile] = useState({ name: 'Doctor(a)', specialty: '', avatarUrl: '' });
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   
@@ -32,11 +33,18 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, onLogout }) => {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (user && mounted) {
-          const { data } = await supabase.from('profiles').select('full_name, specialty').eq('id', user.id).single();
+          // SELECCIÓN AMPLIADA: Se agrega avatar_url a la consulta
+          const { data } = await supabase
+            .from('profiles')
+            .select('full_name, specialty, avatar_url')
+            .eq('id', user.id)
+            .single();
+
           if (data && mounted) {
             setProfile({ 
               name: data.full_name || 'Doctor(a)', 
-              specialty: data.specialty || 'Medicina General' 
+              specialty: data.specialty || 'Medicina General',
+              avatarUrl: data.avatar_url || '' // Mapeo de la imagen
             });
           }
         }
@@ -121,9 +129,20 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, onLogout }) => {
 
         <div className="p-4 border-t border-slate-100 dark:border-slate-800 shrink-0 bg-white dark:bg-slate-900 z-10 md:mt-auto">
           <div className="flex items-center p-3 mb-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-sm">
-              <div className="w-8 h-8 rounded-full bg-teal-100 dark:bg-teal-900 flex items-center justify-center text-brand-teal font-bold text-xs shrink-0 uppercase">
-                {profile.name.substring(0, 2)}
-              </div>
+              
+              {/* LÓGICA CONDICIONAL DE AVATAR */}
+              {profile.avatarUrl ? (
+                <img 
+                  src={profile.avatarUrl} 
+                  alt="Perfil" 
+                  className="w-8 h-8 rounded-full object-cover border border-slate-200 dark:border-slate-600 shadow-sm shrink-0 bg-white"
+                />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-teal-100 dark:bg-teal-900 flex items-center justify-center text-brand-teal font-bold text-xs shrink-0 uppercase">
+                  {profile.name.substring(0, 2)}
+                </div>
+              )}
+
               <div className="ml-3 overflow-hidden">
                   <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">{profile.name}</p>
                   <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate uppercase tracking-wide">{profile.specialty}</p>

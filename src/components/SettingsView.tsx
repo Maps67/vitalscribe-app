@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Save, User, Stethoscope, Hash, Phone, MapPin, BookOpen, Download, FileSpreadsheet, ShieldCheck, Database, QrCode, PenTool, Image as ImageIcon, Lock } from 'lucide-react';
+import { Save, User, Stethoscope, Hash, Phone, MapPin, BookOpen, Download, FileSpreadsheet, ShieldCheck, Database, QrCode, PenTool, Image as ImageIcon, Lock, Camera } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { MedicalDataService } from '../services/MedicalDataService';
 import { toast } from 'sonner';
@@ -35,6 +35,7 @@ const SettingsView: React.FC = () => {
   const [logoUrl, setLogoUrl] = useState('');
   const [signatureUrl, setSignatureUrl] = useState('');
   const [qrCodeUrl, setQrCodeUrl] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState('');
 
   useEffect(() => {
     getProfile();
@@ -63,6 +64,7 @@ const SettingsView: React.FC = () => {
         setLogoUrl(data.logo_url || '');
         setSignatureUrl(data.signature_url || '');
         setQrCodeUrl(data.qr_code_url || '');
+        setAvatarUrl(data.avatar_url || '');
       }
     } catch (error) {
       console.error('Error cargando perfil:', error);
@@ -72,7 +74,7 @@ const SettingsView: React.FC = () => {
     }
   };
 
-  const handleSmartUpload = async (file: File, type: 'logo' | 'signature' | 'qr') => {
+  const handleSmartUpload = async (file: File, type: 'logo' | 'signature' | 'qr' | 'avatar') => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("No hay sesión de usuario");
@@ -93,6 +95,7 @@ const SettingsView: React.FC = () => {
       if (type === 'logo') setLogoUrl(publicUrl);
       else if (type === 'signature') setSignatureUrl(publicUrl);
       else if (type === 'qr') setQrCodeUrl(publicUrl);
+      else if (type === 'avatar') setAvatarUrl(publicUrl);
 
       toast.success("Imagen cargada. Recuerde 'Guardar Cambios' para confirmar.");
 
@@ -121,6 +124,7 @@ const SettingsView: React.FC = () => {
         logo_url: logoUrl,
         signature_url: signatureUrl,
         qr_code_url: qrCodeUrl,
+        avatar_url: avatarUrl,
         updated_at: new Date(),
       };
 
@@ -293,9 +297,19 @@ const SettingsView: React.FC = () => {
                 <ImageIcon size={20} className="text-brand-teal" /> Activos Digitales para Recetas y Documentos
             </h3>
             
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 
-                {/* 1. LOGO */}
+                {/* 1. FOTO DE PERFIL / AVATAR */}
+                <ImageUploader 
+                    label="Foto de Perfil"
+                    imageSrc={avatarUrl}
+                    onUpload={(file) => handleSmartUpload(file, 'avatar')}
+                    helperText="Aparecerá en su Dashboard."
+                    aspectRatio="square"
+                    icon={<Camera size={18} className="text-brand-teal"/>}
+                />
+
+                {/* 2. LOGO */}
                 <ImageUploader 
                     label="Logo Clínica"
                     imageSrc={logoUrl}
@@ -304,17 +318,17 @@ const SettingsView: React.FC = () => {
                     icon={<ImageIcon size={18} className="text-brand-teal"/>}
                 />
 
-                {/* 2. FIRMA */}
+                {/* 3. FIRMA */}
                 <ImageUploader 
                     label="Firma Digital"
                     imageSrc={signatureUrl}
                     onUpload={(file) => handleSmartUpload(file, 'signature')}
-                    helperText="Firma en tinta negra sobre papel blanco."
+                    helperText="Firma en tinta negra fondo blanco."
                     aspectRatio="wide"
                     icon={<PenTool size={18} className="text-brand-teal"/>}
                 />
 
-                {/* 3. CÓDIGO QR */}
+                {/* 4. CÓDIGO QR */}
                 <ImageUploader 
                     label="Código QR Receta"
                     imageSrc={qrCodeUrl}

@@ -493,7 +493,16 @@ const Dashboard: React.FC = () => {
             <div className="flex flex-col gap-2 mb-2">
                 <div className="flex justify-between items-center w-full">
                     <div className="flex items-center gap-2">
-                        <BrandLogo className="h-9 w-9 rounded-xl shadow-[0_2px_4px_rgba(0,0,0,0.06)]" />
+                        {/* ⚠️ MODIFICACIÓN: Avatar Dinámico Móvil */}
+                        {doctorProfile?.avatar_url ? (
+                            <img 
+                                src={doctorProfile.avatar_url} 
+                                alt="Perfil" 
+                                className="h-9 w-9 rounded-xl shadow-[0_2px_4px_rgba(0,0,0,0.06)] object-cover bg-white border border-slate-100" 
+                            />
+                        ) : (
+                            <BrandLogo className="h-9 w-9 rounded-xl shadow-[0_2px_4px_rgba(0,0,0,0.06)]" />
+                        )}
                         <p className="text-sm font-medium text-slate-500">{greetingText},</p>
                     </div>
                     <div className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200 shrink-0">
@@ -614,7 +623,16 @@ const Dashboard: React.FC = () => {
          <div className="max-w-[1800px] mx-auto">
              <header className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-10 gap-6 animate-slide-top">
                  <div className="flex items-center gap-6">
-                     <BrandLogo className="h-16 w-16 rounded-2xl shadow-md border-2 border-white" />
+                     {/* ⚠️ MODIFICACIÓN: Avatar Dinámico Escritorio */}
+                     {doctorProfile?.avatar_url ? (
+                        <img 
+                            src={doctorProfile.avatar_url} 
+                            alt="Perfil" 
+                            className="h-16 w-16 rounded-2xl shadow-md border-2 border-white object-cover bg-white" 
+                        />
+                     ) : (
+                        <BrandLogo className="h-16 w-16 rounded-2xl shadow-md border-2 border-white" />
+                     )}
                      <div>
                          <h1 className="text-4xl font-black text-slate-900 tracking-tight leading-tight">{formattedDocName}</h1>
                          <p className="text-slate-500 font-medium text-lg mt-1 flex items-center gap-2">
