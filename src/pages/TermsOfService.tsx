@@ -3,7 +3,8 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Shield, Scale, FileText, Download, CheckCircle, 
-  AlertTriangle, Lock, Server, FileJson, ChevronLeft
+  AlertTriangle, Lock, Server, FileJson, ChevronLeft,
+  Activity // ✅ IMPORTANTE: Agregado para el icono de la nueva sección
 } from 'lucide-react';
 
 const TermsOfService = () => {
@@ -114,8 +115,8 @@ const TermsOfService = () => {
             <div className="grid md:grid-cols-2 gap-6">
                 <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
                   <div className="flex items-center gap-2 mb-3">
-                     <Server size={20} className="text-indigo-500"/>
-                     <h4 className="font-bold text-slate-700 text-sm uppercase tracking-wider">Procesamiento IA Privado</h4>
+                      <Server size={20} className="text-indigo-500"/>
+                      <h4 className="font-bold text-slate-700 text-sm uppercase tracking-wider">Procesamiento IA Privado</h4>
                   </div>
                   <p className="text-xs text-slate-500 leading-relaxed">
                     Utilizamos <strong>Google Vertex AI</strong> con nodos privados. Sus datos no son compartidos con modelos públicos ni se utilizan para el entrenamiento de algoritmos externos, preservando el secreto profesional médico en todo momento.
@@ -124,8 +125,8 @@ const TermsOfService = () => {
 
                 <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
                   <div className="flex items-center gap-2 mb-3">
-                     <FileJson size={20} className="text-orange-500"/>
-                     <h4 className="font-bold text-slate-700 text-sm uppercase tracking-wider">Portabilidad y Soberanía</h4>
+                      <FileJson size={20} className="text-orange-500"/>
+                      <h4 className="font-bold text-slate-700 text-sm uppercase tracking-wider">Portabilidad y Soberanía</h4>
                   </div>
                   <p className="text-xs text-slate-500 leading-relaxed">
                     Garantizamos la propiedad del médico sobre sus datos. Exportación disponible en <strong>JSON y PDF estructurado</strong> para facilitar la migración de expedientes o auditorías clínicas externas.
@@ -159,7 +160,7 @@ const TermsOfService = () => {
                 <p>El médico debe obtener el consentimiento verbal del paciente antes de utilizar la función de escucha activa. El software genera un "borrador" que debe ser supervisado por el ojo humano antes de ser legalizado.</p>
               </section>
 
-              {/* CLÁUSULA DE PROPIEDAD INTELECTUAL INYECTADA */}
+              {/* CLÁUSULA 3: PROPIEDAD INTELECTUAL */}
               <section className="p-4 bg-indigo-50 rounded-xl border border-indigo-100">
                 <h4 className="font-bold text-indigo-900 mb-2 flex items-center gap-2">
                   <FileText size={18}/> 3. Propiedad Intelectual y Uso de IA
@@ -184,6 +185,28 @@ const TermsOfService = () => {
                     en el expediente clínico o emitir una receta, liberando a VitalScribe AI™ de 
                     responsabilidad por decisiones médicas basadas en dichas sugerencias automatizadas.
                   </p>
+                </div>
+              </section>
+
+              {/* ✅ CLÁUSULA 4: CALCULADORAS DE RIESGO (NUEVO BLINDAJE LEGAL) */}
+              <section className="p-4 bg-emerald-50 rounded-xl border border-emerald-100">
+                <h4 className="font-bold text-emerald-900 mb-2 flex items-center gap-2">
+                  <Activity size={18}/> 4. Calculadoras de Riesgo y Algoritmos Clínicos
+                </h4>
+                <div className="space-y-3 text-emerald-900/80">
+                  <p>
+                    VitalScribe AI™ incluye herramientas de cálculo automatizado (como Gupta MICA, RCRI, entre otros) 
+                    basadas estrictamente en fórmulas publicadas en literatura científica revisada por pares.
+                  </p>
+                  <div className="text-xs font-mono bg-white/50 p-3 rounded border border-emerald-200/50">
+                    <p className="font-bold mb-1">LIMITACIÓN DE RESPONSABILIDAD ESPECÍFICA:</p>
+                    <ul className="list-disc pl-4 space-y-1">
+                      <li>Estas herramientas son auxiliares para la estratificación de riesgo y <strong>NO constituyen un pronóstico de certeza</strong>.</li>
+                      <li>Los resultados son estimaciones estadísticas poblacionales y pueden no reflejar la fisiología única de un paciente individual.</li>
+                      <li><strong>El médico usuario es responsable de verificar que los datos de entrada (inputs) sean correctos</strong> antes de tomar decisiones quirúrgicas.</li>
+                      <li>VitalScribe AI™ no asume responsabilidad por eventos adversos, complicaciones o desenlaces clínicos derivados del uso de estos puntajes.</li>
+                    </ul>
+                  </div>
                 </div>
               </section>
 
