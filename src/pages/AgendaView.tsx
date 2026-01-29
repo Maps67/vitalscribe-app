@@ -34,15 +34,17 @@ import {
   Download,
   ExternalLink,
   AlignJustify,
-  Grid
+  Grid,
+  Globe // Icono para eventos externos
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
-// ✅ INYECCIÓN 1: Servicio de Blindaje
 import { PatientService } from '../services/PatientService';
+// ✅ IMPORTACIÓN DEL SERVICIO EXTERNO
+import { ExternalCalendarService } from '../services/ExternalCalendarService';
 
 // --- TIPOS ---
-type AppointmentType = 'consulta' | 'urgencia' | 'seguimiento';
+type AppointmentType = 'consulta' | 'urgencia' | 'seguimiento' | 'externo';
 type CalendarProvider = 'google' | 'outlook' | 'apple';
 type ViewType = 'month' | 'week' | 'day';
 
@@ -54,6 +56,8 @@ interface Appointment {
   type: AppointmentType;
   notes?: string;
   duration_minutes: number;
+  // ✅ CAMPO NUEVO: Origen del dato
+  source?: 'internal' | 'external';
 }
 
 interface Patient {
@@ -222,14 +226,12 @@ const AppointmentModal = ({ isOpen, onClose, onSave, onDelete, initialDate, exis
     const dateTimeString = `${dateStr}T${timeStr}:00`;
     const finalDate = new Date(dateTimeString); 
     
-    // NOTA: La lógica de guardado real ocurre en 'onSave' (AgendaView),
-    // aquí solo preparamos los datos para enviarlos hacia arriba.
     let titleToSave = isManual ? formData.manual_name : (patients.find((p:any) => p.id === formData.patient_id)?.name || 'Cita');
 
     onSave({
       id: existingAppt?.id,
       patient_id: isManual ? null : formData.patient_id,
-      manual_name: isManual ? formData.manual_name : null, // Pasamos el nombre manual explícitamente
+      manual_name: isManual ? formData.manual_name : null, 
       start_time: finalDate.toISOString(),
       title: titleToSave,
       status: 'scheduled',
@@ -338,6 +340,9 @@ const AppointmentModal = ({ isOpen, onClose, onSave, onDelete, initialDate, exis
 const AgendaView = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [appointments, setAppointments] = useState<Appointment[]>([]);
+  // ✅ ESTADO NUEVO: Eventos Externos
+  const [externalEvents, setExternalEvents] = useState<Appointment[]>([]);
+  
   const [patients, setPatients] = useState<Patient[]>([]);
   const [view, setView] = useState<ViewType>('month');
   const [isLoading, setIsLoading] = useState(true);
@@ -358,9 +363,11 @@ const AgendaView = () => {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
 
+        // 1. Cargar Pacientes
         const { data: patientsData } = await supabase.from('patients').select('id, name').eq('doctor_id', user.id);
         if (patientsData) setPatients(patientsData);
 
+        // 2. Definir rangos de fecha
         let start, end;
         if (view === 'day') {
             start = new Date(currentDate); start.setHours(0,0,0,0);
@@ -373,6 +380,7 @@ const AgendaView = () => {
             end = endOfMonth(addMonths(currentDate, 1));
         }
 
+        // 3. Cargar Citas Locales
         const { data: apptsData } = await supabase
             .from('appointments')
             .select(`id, start_time, duration_minutes, notes, status, title, patient:patients (name, id)`)
@@ -388,10 +396,26 @@ const AgendaView = () => {
                 date_time: a.start_time,
                 type: (a.title?.toLowerCase().includes('urgencia') ? 'urgencia' : 'consulta') as AppointmentType,
                 notes: a.notes,
-                duration_minutes: a.duration_minutes
+                duration_minutes: a.duration_minutes,
+                source: 'internal' // Origen interno
             }));
             setAppointments(mappedAppts);
         }
+
+        // 4. ✅ CARGAR CITAS EXTERNAS
+        const extData = await ExternalCalendarService.fetchExternalEvents(user.id);
+        // Mapeamos los datos del servicio a la estructura de Appointment local
+        const mappedExternal: Appointment[] = extData.map(evt => ({
+            id: evt.id,
+            patient_name: evt.title,
+            date_time: evt.start.toISOString(),
+            type: 'externo', // Tipo especial para color
+            duration_minutes: (evt.end.getTime() - evt.start.getTime()) / 60000,
+            notes: evt.description,
+            source: 'external' // Origen externo
+        }));
+        setExternalEvents(mappedExternal);
+
     } catch (e) { console.error(e); } finally { setIsLoading(false); }
   };
 
@@ -399,17 +423,63 @@ const AgendaView = () => {
   const handleNext = () => setCurrentDate(view === 'day' ? addDays(currentDate, 1) : view === 'week' ? addDays(currentDate, 7) : addMonths(currentDate, 1));
   
   const handleDayClick = (day: Date) => { setSelectedDate(day); setEditingAppt(null); setIsModalOpen(true); };
-  const handleApptClick = (e: React.MouseEvent, appt: Appointment) => { e.stopPropagation(); setSelectedDate(parseISO(appt.date_time)); setEditingAppt(appt); setIsModalOpen(true); };
+  
+  const handleApptClick = (e: React.MouseEvent, appt: Appointment) => { 
+      e.stopPropagation(); 
+      
+      // ✅ LÓGICA DE IMPORTACIÓN CON "AUTO-MATCH" (Inteligencia de Datos)
+      if (appt.source === 'external') {
+        
+        // 1. Limpiamos el nombre que viene de Google (quitamos espacios extra)
+        const incomingName = (appt.patient_name || '').trim();
+
+        // 2. BUSCAMOS EN TU BASE DE DATOS LOCAL
+        // Comparamos nombres ignorando mayúsculas/minúsculas para encontrar coincidencia
+        const existingPatient = patients.find(p => 
+            p.name.toLowerCase().trim() === incomingName.toLowerCase()
+        );
+
+        // 3. Preparamos la plantilla
+        const importTemplate = {
+            ...appt,
+            id: '', // Siempre vacío para crear nueva cita
+            // 🎯 AQUÍ ESTÁ LA MAGIA:
+            // Si lo encontramos, ponemos su ID real. Si no, dejamos vacío para crear uno nuevo.
+            patient_id: existingPatient ? existingPatient.id : '',
+            manual_name: existingPatient ? '' : incomingName, // Solo llenar manual si no existe
+            
+            notes: `[Importado de Google]\n${appt.notes || ''}`
+        };
+
+        setSelectedDate(parseISO(appt.date_time)); 
+        setEditingAppt(importTemplate); 
+        setIsModalOpen(true); 
+        
+        // 4. Feedback Inteligente al Médico
+        if (existingPatient) {
+            toast.success("Paciente Identificado", {
+                description: `Se vinculó automáticamente con el expediente de ${existingPatient.name}.`
+            });
+        } else {
+            toast.info("Paciente Nuevo Detectado", {
+                description: "Se creará un registro temporal al guardar."
+            });
+        }
+        return;
+      }
+
+      // Flujo normal (Interno)
+      setSelectedDate(parseISO(appt.date_time)); 
+      setEditingAppt(appt); 
+      setIsModalOpen(true); 
+  };
 
   const saveAppointment = async (apptData: any) => {
     setIsSaving(true);
     try {
         const { data: { user } } = await supabase.auth.getUser();
         
-        // ✅ INYECCIÓN 2: Lógica de Blindaje "Materializar Paciente"
         let finalPatientId = apptData.patient_id;
-
-        // Si viene un nombre manual y no hay ID (o es nulo), creamos el paciente
         if (!finalPatientId && apptData.manual_name) {
             finalPatientId = await PatientService.ensurePatientId({
                 id: `temp_${Date.now()}`,
@@ -425,7 +495,7 @@ const AgendaView = () => {
             status: apptData.status,
             notes: apptData.notes,
             duration_minutes: apptData.duration_minutes,
-            patient_id: finalPatientId || null // Usamos el ID seguro
+            patient_id: finalPatientId || null 
         };
 
         if (apptData.id) await supabase.from('appointments').update(payload).eq('id', apptData.id);
@@ -443,10 +513,13 @@ const AgendaView = () => {
     setIsModalOpen(false);
   };
 
+  // ✅ FUSIÓN DE AGENDAS PARA RENDERIZADO
+  const allAppointments = [...appointments, ...externalEvents];
+
   const renderView = () => {
     // VISTA DÍA
     if (view === 'day') {
-        const sortedAppts = [...appointments].sort((a, b) => new Date(a.date_time).getTime() - new Date(b.date_time).getTime());
+        const sortedAppts = [...allAppointments].sort((a, b) => new Date(a.date_time).getTime() - new Date(b.date_time).getTime());
         return (
             <div className="flex-1 overflow-y-auto p-4 bg-white min-h-[500px]">
                 {sortedAppts.length === 0 ? (
@@ -457,18 +530,34 @@ const AgendaView = () => {
                     </div>
                 ) : (
                     <div className="space-y-3">
-                        {sortedAppts.map(appt => (
-                            <div key={appt.id} onClick={(e) => handleApptClick(e, appt)} className="flex items-center p-4 bg-slate-50 hover:bg-white border border-slate-200 rounded-xl shadow-sm cursor-pointer transition-all hover:shadow-md hover:border-teal-200">
-                                <div className="w-20 text-center border-r border-slate-200 pr-4 mr-4">
-                                    <span className="block text-lg font-bold text-slate-700">{format(parseISO(appt.date_time), 'HH:mm')}</span>
-                                    <span className="text-xs text-slate-400">{appt.duration_minutes} min</span>
+                        {sortedAppts.map(appt => {
+                            // Estilo Fantasma
+                            const isExternal = appt.source === 'external';
+                            return (
+                                <div key={appt.id} onClick={(e) => handleApptClick(e, appt)} 
+                                    className={`flex items-center p-4 border rounded-xl shadow-sm cursor-pointer transition-all 
+                                    ${isExternal 
+                                        ? 'bg-slate-50 border-dashed border-slate-300 opacity-80 hover:bg-slate-100' // Estilo Externo
+                                        : 'bg-slate-50 hover:bg-white border-slate-200 hover:shadow-md hover:border-teal-200' // Estilo Interno
+                                    }`}>
+                                    <div className="w-20 text-center border-r border-slate-200 pr-4 mr-4">
+                                        <span className="block text-lg font-bold text-slate-700">{format(parseISO(appt.date_time), 'HH:mm')}</span>
+                                        <span className="text-xs text-slate-400">{appt.duration_minutes} min</span>
+                                    </div>
+                                    <div className="flex-1">
+                                        <h4 className={`font-bold ${isExternal ? 'text-slate-500 flex items-center gap-2' : 'text-slate-800'}`}>
+                                            {isExternal && <Globe size={14} />} {appt.patient_name}
+                                        </h4>
+                                        <span className={`text-xs px-2 py-0.5 rounded-full uppercase font-bold 
+                                            ${appt.type === 'urgencia' ? 'bg-red-100 text-red-600' : 
+                                              appt.type === 'externo' ? 'bg-slate-200 text-slate-600' : 
+                                              'bg-blue-100 text-blue-600'}`}>
+                                            {appt.type}
+                                        </span>
+                                    </div>
                                 </div>
-                                <div>
-                                    <h4 className="font-bold text-slate-800">{appt.patient_name}</h4>
-                                    <span className={`text-xs px-2 py-0.5 rounded-full uppercase font-bold ${appt.type === 'urgencia' ? 'bg-red-100 text-red-600' : 'bg-blue-100 text-blue-600'}`}>{appt.type}</span>
-                                </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 )}
             </div>
@@ -480,7 +569,8 @@ const AgendaView = () => {
         return (
             <div className="flex-1 grid grid-cols-7 min-h-[500px] bg-white divide-x divide-slate-100">
                 {days.map(day => {
-                    const dayAppts = appointments.filter(a => isSameDay(parseISO(a.date_time), day));
+                    // Usamos allAppointments en lugar de appointments
+                    const dayAppts = allAppointments.filter(a => isSameDay(parseISO(a.date_time), day));
                     return (
                         <div key={day.toString()} className={`flex flex-col ${isToday(day) ? 'bg-teal-50/30' : ''}`}>
                             <div className="p-2 text-center border-b border-slate-100">
@@ -488,12 +578,22 @@ const AgendaView = () => {
                                 <span className={`block text-lg font-bold ${isToday(day) ? 'text-teal-600' : 'text-slate-700'}`}>{format(day, 'd')}</span>
                             </div>
                             <div className="flex-1 p-1 space-y-1 overflow-y-auto" onClick={() => handleDayClick(day)}>
-                                {dayAppts.map(appt => (
-                                    <div key={appt.id} onClick={(e) => handleApptClick(e, appt)} className="p-1.5 bg-white border border-slate-200 rounded-lg shadow-sm text-[10px] cursor-pointer hover:border-teal-400">
-                                        <div className="font-bold text-slate-700">{format(parseISO(appt.date_time), 'HH:mm')}</div>
-                                        <div className="truncate text-slate-500">{appt.patient_name}</div>
-                                    </div>
-                                ))}
+                                {dayAppts.map(appt => {
+                                    const isExternal = appt.source === 'external';
+                                    return (
+                                        <div key={appt.id} onClick={(e) => handleApptClick(e, appt)} 
+                                            className={`p-1.5 rounded-lg shadow-sm text-[10px] cursor-pointer border truncate
+                                            ${isExternal 
+                                                ? 'bg-slate-100 border-dashed border-slate-300 text-slate-500' 
+                                                : 'bg-white border-slate-200 hover:border-teal-400 text-slate-700'}`}>
+                                            <div className="font-bold flex items-center gap-1">
+                                                {format(parseISO(appt.date_time), 'HH:mm')}
+                                                {isExternal && <Globe size={8} />}
+                                            </div>
+                                            <div className="truncate">{appt.patient_name}</div>
+                                        </div>
+                                    );
+                                })}
                             </div>
                         </div>
                     );
@@ -501,7 +601,7 @@ const AgendaView = () => {
             </div>
         );
     }
-    // VISTA MES (Con Mejora Móvil: DOTS)
+    // VISTA MES
     const firstDay = startOfMonth(currentDate);
     const startDayIndex = getDay(firstDay) === 0 ? 6 : getDay(firstDay) - 1;
     const daysInMonth = eachDayOfInterval({ start: firstDay, end: endOfMonth(currentDate) });
@@ -514,7 +614,8 @@ const AgendaView = () => {
             <div className="grid grid-cols-7 auto-rows-fr flex-1 bg-slate-50/20 overflow-y-auto">
                 {Array.from({ length: startDayIndex }).map((_, i) => <div key={`empty-${i}`} className="bg-slate-50/50 border-b border-r border-slate-100/50" />)}
                 {daysInMonth.map(day => {
-                    const dayAppts = appointments.filter(a => isSameDay(parseISO(a.date_time), day));
+                    // Usamos allAppointments
+                    const dayAppts = allAppointments.filter(a => isSameDay(parseISO(a.date_time), day));
                     return (
                     <div key={day.toString()} onClick={() => handleDayClick(day)} className={`relative min-h-[100px] p-2 border-b border-r border-slate-100 hover:bg-white transition-all group cursor-pointer ${isToday(day) ? 'bg-teal-50/30' : ''}`}>
                         <div className="flex justify-between items-start mb-2">
@@ -522,24 +623,33 @@ const AgendaView = () => {
                             <button className="opacity-0 group-hover:opacity-100 text-teal-500"><Plus size={16} /></button>
                         </div>
                         
-                        {/* --- MEJORA UX MÓVIL: DOTS INDICATORS --- */}
+                        {/* --- DOTS INDICATORS --- */}
                         <div className="md:hidden flex flex-wrap gap-1 mt-1 justify-center">
                             {dayAppts.slice(0, 5).map(app => (
                                 <div 
                                     key={app.id} 
-                                    className={`w-1.5 h-1.5 rounded-full ${app.type === 'urgencia' ? 'bg-red-500' : 'bg-teal-500'}`}
+                                    className={`w-1.5 h-1.5 rounded-full 
+                                    ${app.source === 'external' ? 'bg-slate-400' : 
+                                      app.type === 'urgencia' ? 'bg-red-500' : 'bg-teal-500'}`}
                                 />
                             ))}
                             {dayAppts.length > 5 && <span className="text-[8px] text-slate-400 leading-none">+</span>}
                         </div>
 
-                        {/* --- VISTA ESCRITORIO: LISTA DETALLADA --- */}
+                        {/* --- LISTA DETALLADA ESCRITORIO --- */}
                         <div className="hidden md:flex flex-col gap-1 overflow-y-auto max-h-[80px] custom-scrollbar">
-                            {dayAppts.map(app => (
-                                <div key={app.id} onClick={(e) => handleApptClick(e, app)} className={`px-2 py-1 text-[10px] rounded border truncate ${app.type === 'urgencia' ? 'bg-red-50 border-red-100 text-red-700' : 'bg-teal-50 border-teal-100 text-teal-700'}`}>
+                            {dayAppts.map(app => {
+                                const isExternal = app.source === 'external';
+                                return (
+                                <div key={app.id} onClick={(e) => handleApptClick(e, app)} 
+                                    className={`px-2 py-1 text-[10px] rounded border truncate 
+                                    ${isExternal 
+                                        ? 'bg-slate-100 border-dashed border-slate-300 text-slate-500' 
+                                        : app.type === 'urgencia' ? 'bg-red-50 border-red-100 text-red-700' : 'bg-teal-50 border-teal-100 text-teal-700'}`}>
                                     <b>{format(parseISO(app.date_time), 'HH:mm')}</b> {app.patient_name}
                                 </div>
-                            ))}
+                                )
+                            })}
                         </div>
                     </div>
                     )

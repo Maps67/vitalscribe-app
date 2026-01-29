@@ -4,16 +4,16 @@ import { format, parse, startOfWeek, getDay } from 'date-fns';
 import { es } from 'date-fns/locale';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
 import { AppointmentService } from '../services/AppointmentService';
+import { ExternalCalendarService } from '../services/ExternalCalendarService'; // <--- IMPORTACIÓN NUEVA
 import { Appointment, Patient } from '../types';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
-import { Plus, X, Calendar as CalendarIcon, Smartphone, Trash2, ChevronLeft, ChevronRight, User, UserPlus, List } from 'lucide-react';
+import { Plus, X, Calendar as CalendarIcon, Smartphone, Trash2, ChevronLeft, ChevronRight, User, UserPlus, List, Globe } from 'lucide-react';
 import './CalendarDarkOverrides.css';
 import { generateGoogleCalendarUrl, downloadIcsFile } from '../utils/calendarUtils';
 import { PatientService } from '../services/PatientService';
 
 // ✅ SOLUCIÓN DE TYPESCRIPT: Extendemos la interfaz localmente
-// Esto le dice a TS que en ESTA vista, la cita trae los datos del paciente anidados.
 interface ExtendedAppointment extends Appointment {
   patient?: {
     name: string;
@@ -71,9 +71,15 @@ const CustomToolbar: React.FC<ToolbarProps> = (props) => {
 };
 
 const CustomEvent = ({ event }: EventProps<any>) => {
+    // Renderizado condicional para eventos externos
+    const isExternal = event.resource?.source === 'external';
+    
     return (
         <div className="flex flex-col h-full justify-center px-1">
-            <div className="text-xs font-bold truncate flex items-center gap-1">{event.title}</div>
+            <div className="text-xs font-bold truncate flex items-center gap-1">
+                {isExternal && <Globe size={10} className="shrink-0" />} 
+                {event.title}
+            </div>
             <div className="text-[9px] opacity-80 truncate hidden sm:block">
                  {format(event.start, 'h:mm a')}
             </div>
@@ -82,8 +88,10 @@ const CustomEvent = ({ event }: EventProps<any>) => {
 };
 
 const CalendarView: React.FC = () => {
-  // ✅ ACTUALIZACIÓN 1: Usamos ExtendedAppointment para que el estado acepte la propiedad 'patient'
   const [appointments, setAppointments] = useState<ExtendedAppointment[]>([]);
+  // NUEVO ESTADO: Eventos Externos
+  const [externalEvents, setExternalEvents] = useState<any[]>([]);
+  
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -102,9 +110,21 @@ const CalendarView: React.FC = () => {
     try {
       const { data: patientsData } = await supabase.from('patients').select('*').order('name');
       setPatients(patientsData || []);
+      
       const appointmentsData = await AppointmentService.getAppointments();
-      // Forzamos el tipado porque sabemos que Supabase trae la relación
       setAppointments(appointmentsData as unknown as ExtendedAppointment[]);
+
+      // --- CARGA DE AGENDA EXTERNA (NUEVO) ---
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+          // Esto descarga, parsea y filtra el archivo iCal
+          const extEvents = await ExternalCalendarService.fetchExternalEvents(user.id);
+          setExternalEvents(extEvents);
+          if (extEvents.length > 0) {
+              toast.success(`Sincronizados ${extEvents.length} eventos externos.`);
+          }
+      }
+
     } catch (error) { toast.error("Error de conexión"); } 
     finally { setLoading(false); }
   };
@@ -118,7 +138,22 @@ const CalendarView: React.FC = () => {
   };
 
   const eventStyleGetter = (event: any) => {
-    // Aquí event.resource ya tiene el tipo correcto implícito
+    // --- ESTILOS PARA EVENTOS EXTERNOS (FANTASMAS) ---
+    if (event.resource?.source === 'external') {
+        return {
+            style: {
+                backgroundColor: 'repeating-linear-gradient(45deg, #f1f5f9, #f1f5f9 10px, #e2e8f0 10px, #e2e8f0 20px)', // Rayado gris
+                color: '#64748b',
+                border: '1px dashed #94a3b8',
+                borderRadius: '6px',
+                fontSize: '0.75rem',
+                opacity: 0.9,
+                cursor: 'help' // Cursor de ayuda
+            }
+        };
+    }
+
+    // Estilos normales para citas internas
     const patientName = event.resource.patient?.name || '';
     const bgColor = getPatientColor(patientName);
     return {
@@ -137,14 +172,27 @@ const CalendarView: React.FC = () => {
     };
   };
 
-  const calendarEvents = appointments.map(app => ({
+  // Mapeo de citas internas
+  const localEvents = appointments.map(app => ({
     id: app.id,
-    // ✅ ACTUALIZACIÓN 2: Ahora TS sabe que 'patient' existe en 'app'
     title: `${app.patient?.name || 'Paciente'}`,
     start: new Date(app.start_time),
     end: new Date(app.end_time),
-    resource: app
+    resource: { ...app, source: 'internal' }
   }));
+
+  // Mapeo de citas externas (Fantasmas)
+  const ghostEvents = externalEvents.map(evt => ({
+      id: evt.id,
+      title: evt.title || 'Evento Externo',
+      start: evt.start,
+      end: evt.end,
+      allDay: evt.isAllDay,
+      resource: { ...evt, source: 'external' } // Marcamos la fuente
+  }));
+
+  // Fusión de eventos para el calendario
+  const allEvents = [...localEvents, ...ghostEvents];
 
   const handleSelectSlot = ({ start, end, action }: { start: Date; end: Date; action: string }) => {
     const toLocalISO = (date: Date) => {
@@ -175,7 +223,15 @@ const CalendarView: React.FC = () => {
   };
 
   const handleSelectEvent = (event: any) => {
-    // ✅ ACTUALIZACIÓN 3: Casting explícito a ExtendedAppointment
+    // --- MANEJO DE CLIC EN EVENTO EXTERNO ---
+    if (event.resource?.source === 'external') {
+        // Aquí conectaremos luego la función de "Convertir a Cita Real"
+        toast.info(`Evento Externo: ${event.title}`, {
+            description: "Este espacio está ocupado en tu calendario de Google/Apple."
+        });
+        return; // Detenemos aquí para no abrir el modal de edición
+    }
+
     const app = event.resource as ExtendedAppointment;
     
     const toLocalISO = (dateString: string) => {
@@ -186,7 +242,6 @@ const CalendarView: React.FC = () => {
     setFormData({
         id: app.id,
         patientId: app.patient_id,
-        // Ahora TS permite acceder a app.patient sin errores
         patientName: app.patient?.name || '',
         title: app.title,
         notes: app.notes || '',
@@ -228,9 +283,8 @@ const CalendarView: React.FC = () => {
       toast.success(formData.id ? "Cita actualizada" : "Cita agendada");
       setIsModalOpen(false);
       
-      // Recargar datos
-      const refresh = await AppointmentService.getAppointments();
-      setAppointments(refresh as unknown as ExtendedAppointment[]);
+      // Recargar datos (Incluyendo externos por si acaso)
+      loadData();
       
     } catch (error) { toast.error("Error al guardar"); } 
     finally { setIsSaving(false); }
@@ -242,8 +296,7 @@ const CalendarView: React.FC = () => {
           await AppointmentService.deleteAppointment(formData.id);
           toast.success("Cita eliminada");
           setIsModalOpen(false);
-          const refresh = await AppointmentService.getAppointments();
-          setAppointments(refresh as unknown as ExtendedAppointment[]);
+          loadData();
       } catch (e) { toast.error("Error al eliminar"); }
   };
 
@@ -295,7 +348,7 @@ const CalendarView: React.FC = () => {
         ) : (
           <Calendar
             localizer={localizer}
-            events={calendarEvents}
+            events={allEvents} // ✅ USAMOS LA LISTA COMBINADA
             startAccessor="start"
             endAccessor="end"
             style={{ height: '100%' }}

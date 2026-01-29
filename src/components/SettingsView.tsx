@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Save, User, Stethoscope, Hash, Phone, MapPin, BookOpen, Download, FileSpreadsheet, ShieldCheck, Database, QrCode, PenTool, Image as ImageIcon, Lock, Camera } from 'lucide-react';
+import { Save, User, Stethoscope, Hash, Phone, MapPin, BookOpen, Download, FileSpreadsheet, ShieldCheck, Database, QrCode, PenTool, Image as ImageIcon, Lock, Camera, Calendar, Link2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { MedicalDataService } from '../services/MedicalDataService';
 import { toast } from 'sonner';
@@ -31,6 +31,9 @@ const SettingsView: React.FC = () => {
   const [address, setAddress] = useState('');
   const [websiteUrl, setWebsiteUrl] = useState('');
 
+  // Nuevo Estado: Sincronización de Agenda
+  const [calendarUrl, setCalendarUrl] = useState('');
+
   // Campos de Activos Visuales (Imágenes)
   const [logoUrl, setLogoUrl] = useState('');
   const [signatureUrl, setSignatureUrl] = useState('');
@@ -61,6 +64,9 @@ const SettingsView: React.FC = () => {
         setAddress(data.address || '');
         setWebsiteUrl(data.website_url || '');
         
+        // Cargar URL de calendario externo
+        setCalendarUrl(data.external_calendar_url || '');
+
         setLogoUrl(data.logo_url || '');
         setSignatureUrl(data.signature_url || '');
         setQrCodeUrl(data.qr_code_url || '');
@@ -121,6 +127,8 @@ const SettingsView: React.FC = () => {
         university,
         address,
         website_url: websiteUrl,
+        // Guardar URL de calendario externo
+        external_calendar_url: calendarUrl,
         logo_url: logoUrl,
         signature_url: signatureUrl,
         qr_code_url: qrCodeUrl,
@@ -287,6 +295,36 @@ const SettingsView: React.FC = () => {
                         <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Dirección Completa</label>
                         <textarea rows={3} value={address} onChange={e => setAddress(e.target.value)} className="w-full p-3 border border-slate-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-brand-teal outline-none resize-none dark:bg-slate-900 dark:text-white" placeholder="Calle, Número, Colonia, CP..." />
                     </div>
+                </div>
+            </div>
+        </div>
+
+        {/* --- SECCIÓN 1.5: INTEGRACIÓN DE AGENDA (Nuevo Módulo) --- */}
+        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+            <div className="p-4 bg-slate-50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-700 font-bold text-slate-700 dark:text-slate-200 flex items-center gap-2">
+                <Calendar size={18} className="text-brand-teal"/> Sincronización de Agenda Externa
+            </div>
+            <div className="p-6">
+                <div className="max-w-3xl">
+                    <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2">
+                        Enlace de Calendario (iCal / .ics)
+                    </label>
+                    <div className="flex items-center gap-2">
+                        <div className="flex-1 flex items-center border border-slate-200 dark:border-slate-700 rounded-lg px-3 bg-white dark:bg-slate-900 focus-within:ring-2 focus-within:ring-brand-teal">
+                            <Link2 size={16} className="text-slate-400 mr-2"/>
+                            <input 
+                                type="url" 
+                                value={calendarUrl} 
+                                onChange={(e) => setCalendarUrl(e.target.value)} 
+                                className="w-full py-3 outline-none bg-transparent dark:text-white" 
+                                placeholder="https://calendar.google.com/calendar/ical/..." 
+                            />
+                        </div>
+                    </div>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 flex items-center gap-1">
+                        <span className="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded text-[10px] font-bold">TIP</span>
+                        Pegue aquí la "Dirección secreta en formato iCal" de Google Calendar, iCloud o Outlook para visualizar sus eventos externos en la agenda.
+                    </p>
                 </div>
             </div>
         </div>
