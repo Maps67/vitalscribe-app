@@ -1852,7 +1852,6 @@ const ConsultationView: React.FC = () => {
                     })}
                     
                     {/* 🔥 NUEVO: PESTAÑA BALANCE 360° 🔥 */}
-                    {/* Se añade como una opción más, sin invadir las demás */}
                     {generatedNote && (
                         <button 
                             onClick={() => setActiveTab('balance_360')}
@@ -1907,7 +1906,6 @@ const ConsultationView: React.FC = () => {
                                 )}
 
                                 {/* --- ✅ PESTAÑA AISLADA: BALANCE 360° --- */}
-                                {/* Aquí es donde vive la nueva funcionalidad, sin molestar al resto */}
                                 {activeTab === 'balance_360' && generatedNote && (
                                     <div className="bg-white dark:bg-slate-900 p-8 rounded-xl shadow-lg border border-indigo-100 dark:border-slate-800 animate-fade-in-up">
                                             
@@ -1969,18 +1967,18 @@ const ConsultationView: React.FC = () => {
                                 )}
 
                                 {activeTab==='record' && generatedNote?.soapData && (
-                                <div className="bg-white dark:bg-slate-900 rounded-sm shadow-lg border border-slate-200 dark:border-slate-800 p-8 md:p-12 min-h-full h-fit pb-32 animate-fade-in-up relative">
+                                <div className="bg-white dark:bg-slate-900 rounded-sm shadow-lg border border-slate-200 dark:border-slate-800 p-4 md:p-12 min-h-full h-fit pb-32 animate-fade-in-up relative">
                                     <div className="relative md:sticky md:top-0 z-20 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm border-b border-slate-100 dark:border-slate-800 pb-4 mb-8 -mx-2 px-2 flex flex-col gap-2">
                                     <div className="flex justify-between items-start">
                                             <div>
-                                                <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Nota de Evolución</h1>
-                                                <p className="text-sm text-slate-500 dark:text-slate-400 uppercase tracking-wide flex items-center gap-1">
+                                                <h1 className="text-xl md:text-2xl font-bold text-slate-900 dark:text-white truncate">Nota de Evolución</h1>
+                                                <p className="text-xs md:text-sm text-slate-500 dark:text-slate-400 uppercase tracking-wide flex items-center gap-1">
                                                     <Lock size={12} className="text-green-600"/>
                                                     {doctorProfile?.specialty || "Cargando..."}
                                                 </p>
                                             </div>
                                             
-                                            <div className="flex flex-col items-end gap-3">
+                                            <div className="flex flex-col items-end gap-3 shrink-0">
                                             
                                             <div className="flex gap-2">
                                                 {/* 🗑️ BOTÓN DE BORRADO (CRUD) */}
@@ -1992,10 +1990,6 @@ const ConsultationView: React.FC = () => {
                                                     <Trash2 size={16}/> 
                                                     <span className="hidden sm:inline">Descartar</span>
                                                 </button>
-
-                                                {/* 🔴 ELIMINADO: BOTÓN BALANCE 360 AQUÍ 
-                                                    (Se movió a su propia pestaña para no estorbar)
-                                                */}
 
                                                 {/* ✅ BOTÓN DE RIESGO QUIRÚRGICO (Solo para Qx) */}
                                                 {isSurgicalProfile && (
@@ -2012,29 +2006,28 @@ const ConsultationView: React.FC = () => {
                                                 <button 
                                                     onClick={handleSaveConsultation} 
                                                     disabled={isSaving} 
-                                                    className="bg-brand-teal text-white px-6 py-2 rounded-lg font-bold flex items-center gap-2 hover:bg-teal-600 shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                                    className="bg-brand-teal text-white px-3 md:px-6 py-2 rounded-lg font-bold flex items-center gap-2 hover:bg-teal-600 shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                                                 >
                                                     {isSaving ? <RefreshCw className="animate-spin" size={16}/> : <Save size={16}/>} 
-                                                    Validar y Guardar
+                                                    <span className="inline lg:hidden">Guardar</span>
+                                                    <span className="hidden lg:inline">Validar y Guardar</span>
                                                 </button>
                                             </div>
 
-                                            <div className="flex items-start justify-end gap-1.5 max-w-xs text-right opacity-60 hover:opacity-100 transition-opacity duration-300 group cursor-help">
+                                            {/* ✅ CORRECCIÓN APLICADA: Se eliminó el </div> extra que rompía el código aquí */}
+
+                                            <div className="flex items-start justify-end gap-1.5 max-w-xs text-right opacity-60 hover:opacity-100 transition-opacity duration-300 group cursor-help hidden md:flex">
                                                 <ShieldCheck className="w-3 h-3 text-slate-400 mt-[2px] flex-shrink-0 group-hover:text-brand-teal" />
                                                 <p className="text-[10px] leading-3 text-slate-400 group-hover:text-slate-600 transition-colors">
-                                                <span className="font-semibold text-brand-teal">VitalScribe AI</span> es una herramienta de soporte. La responsabilidad final del diagnóstico, tratamiento y el uso de los formatos administrativos recae exclusivamente en el médico tratante.
+                                                <span className="font-semibold text-brand-teal">VitalScribe AI</span>. Responsabilidad del médico tratante.
                                                 </p>
                                             </div>
                                             </div>
 
                                     </div>
 
-                                    {/* 🔴 ELIMINADO: BLOQUE DE RESULTADOS BALANCE 360 AQUÍ
-                                            (Se movió a su propia pestaña)
-                                    */}
-
                                     {generatedNote.risk_analysis && (
-                                    <div className="mt-2">
+                                    <div className="mt-2 flex justify-end">
                                             <RiskBadge 
                                             level={generatedNote.risk_analysis.level as "Alto" | "Medio" | "Bajo"} 
                                             reason={generatedNote.risk_analysis.reason} 
@@ -2061,7 +2054,7 @@ const ConsultationView: React.FC = () => {
                                                                         : 'bg-white border border-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700 rounded-tl-none'
                                                                 }`}>
                                                                     <span className={`text-[10px] font-bold block mb-1 uppercase opacity-70 ${line.speaker === 'Médico' ? 'text-right' : 'text-left'}`}>
-                                                                                        {line.speaker}
+                                                                                                        {line.speaker}
                                                                     </span>
                                                                     {line.text}
                                                                 </div>
@@ -2252,7 +2245,7 @@ const ConsultationView: React.FC = () => {
 
                                                             return (
                                                             <div key={idx} className={`flex gap-3 items-start p-3 rounded-lg border group transition-all duration-200 ${containerClasses}`}>
-                                                                        
+                                                                                                    
                                                                 {isManualBlocked ? (
                                                                     <div className="flex-1 flex flex-col gap-1">
                                                                         <div className="flex items-center gap-2">
@@ -2264,51 +2257,51 @@ const ConsultationView: React.FC = () => {
                                                                             />
                                                                         </div>
                                                                         <div className="text-xs text-red-700 dark:text-red-200 bg-red-100/50 dark:bg-red-900/40 p-2 rounded border border-red-200 dark:border-red-800/50 break-words font-mono">
-                                                                                {med.dose.replace(/\*\*\*/g, '').trim() || "Fármaco bloqueado por protocolo de seguridad."}
+                                                                                                        {med.dose.replace(/\*\*\*/g, '').trim() || "Fármaco bloqueado por protocolo de seguridad."}
                                                                         </div>
                                                                     </div>
                                                                 ) : (
                                                                     <div className="flex-1 flex flex-col gap-2 min-w-0">
-                                                                            <div className="flex items-start gap-2 w-full">
-                                                                                <div className="relative flex-1">
-                                                                                    <textarea 
-                                                                                        rows={1}
-                                                                                        className={`w-full font-bold bg-transparent outline-none border-b border-transparent focus:border-indigo-300 transition-colors resize-none overflow-hidden block ${
-                                                                                            isRisky ? 'text-amber-700 dark:text-amber-400 pr-6' : 'text-slate-800 dark:text-white'
-                                                                                        }`} 
-                                                                                        value={med.drug} 
-                                                                                        onChange={e=>handleUpdateMedication(idx,'drug',e.target.value)} 
-                                                                                        placeholder="Nombre del medicamento" 
-                                                                                        ref={(el) => { if(el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; }}}
+                                                                                <div className="flex items-start gap-2 w-full">
+                                                                                    <div className="relative flex-1">
+                                                                                        <textarea 
+                                                                                            rows={1}
+                                                                                            className={`w-full font-bold bg-transparent outline-none border-b border-transparent focus:border-indigo-300 transition-colors resize-none overflow-hidden block ${
+                                                                                                isRisky ? 'text-amber-700 dark:text-amber-400 pr-6' : 'text-slate-800 dark:text-white'
+                                                                                            }`} 
+                                                                                            value={med.drug} 
+                                                                                            onChange={e=>handleUpdateMedication(idx,'drug',e.target.value)} 
+                                                                                            placeholder="Nombre del medicamento" 
+                                                                                            ref={(el) => { if(el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; }}}
+                                                                                        />
+                                                                                        {isRisky && (
+                                                                                            <div className="absolute right-0 top-1/2 -translate-y-1/2 text-amber-500 cursor-help" title={`Precaución: Posible interacción detectada en análisis clínico.`}>
+                                                                                                        <AlertCircle size={16}/>
+                                                                                            </div>
+                                                                                        )}
+                                                                                    </div>
+                                                                                    <input 
+                                                                                        className="text-sm font-bold bg-transparent outline-none border-b border-transparent focus:border-indigo-300 transition-colors text-slate-600 dark:text-slate-300 w-20 text-right shrink-0"
+                                                                                        value={med.dose} 
+                                                                                        onChange={e=>handleUpdateMedication(idx,'dose',e.target.value)} 
+                                                                                        placeholder="Dosis" 
                                                                                     />
-                                                                                    {isRisky && (
-                                                                                        <div className="absolute right-0 top-1/2 -translate-y-1/2 text-amber-500 cursor-help" title={`Precaución: Posible interacción detectada en análisis clínico.`}>
-                                                                                                <AlertCircle size={16}/>
-                                                                                        </div>
-                                                                                    )}
                                                                                 </div>
-                                                                                <input 
-                                                                                    className="text-sm font-bold bg-transparent outline-none border-b border-transparent focus:border-indigo-300 transition-colors text-slate-600 dark:text-slate-300 w-20 text-right shrink-0"
-                                                                                    value={med.dose} 
-                                                                                    onChange={e=>handleUpdateMedication(idx,'dose',e.target.value)} 
-                                                                                    placeholder="Dosis" 
-                                                                                />
-                                                                            </div>
-                                                                            
-                                                                            <div className="flex gap-2 text-xs w-full">
-                                                                                <input 
-                                                                                    className="flex-1 bg-transparent outline-none border-b border-transparent focus:border-indigo-300 transition-colors text-slate-500"
-                                                                                    value={med.frequency} 
-                                                                                    onChange={e=>handleUpdateMedication(idx,'frequency',e.target.value)} 
-                                                                                    placeholder="Frecuencia" 
-                                                                                />
-                                                                                <input 
-                                                                                    className="flex-1 bg-transparent outline-none border-b border-transparent focus:border-indigo-300 transition-colors text-slate-500"
-                                                                                    value={med.duration} 
-                                                                                    onChange={e=>handleUpdateMedication(idx,'duration',e.target.value)} 
-                                                                                    placeholder="Duración" 
-                                                                                />
-                                                                            </div>
+                                                                                
+                                                                                <div className="flex gap-2 text-xs w-full">
+                                                                                    <input 
+                                                                                        className="flex-1 bg-transparent outline-none border-b border-transparent focus:border-indigo-300 transition-colors text-slate-500"
+                                                                                        value={med.frequency} 
+                                                                                        onChange={e=>handleUpdateMedication(idx,'frequency',e.target.value)} 
+                                                                                        placeholder="Frecuencia" 
+                                                                                    />
+                                                                                    <input 
+                                                                                        className="flex-1 bg-transparent outline-none border-b border-transparent focus:border-indigo-300 transition-colors text-slate-500"
+                                                                                        value={med.duration} 
+                                                                                        onChange={e=>handleUpdateMedication(idx,'duration',e.target.value)} 
+                                                                                        placeholder="Duración" 
+                                                                                    />
+                                                                                </div>
                                                                     </div>
                                                                 )}
 
