@@ -6,7 +6,8 @@ import {
   Info, 
   ExternalLink, 
   Sparkles,
-  ShieldAlert
+  ShieldAlert,
+  SearchX // ✅ Nuevo icono para estado vacío
 } from 'lucide-react';
 import { ClinicalInsight } from '../types';
 
@@ -69,8 +70,20 @@ export const ContextualInsights: React.FC<ContextualInsightsProps> = ({ insights
     );
   }
 
+  // ✅ CORRECCIÓN CRÍTICA: ESTADO VACÍO (EMPTY STATE)
+  // En lugar de desaparecer (return null), mostramos un estado de espera pasivo.
   if (!insights || insights.length === 0) {
-    return null; // Si no hay insights, no renderiza nada (Invisible)
+    return (
+      <div className="flex flex-col gap-2 p-4 bg-slate-50/30 dark:bg-slate-900/30 border-b dark:border-slate-800 min-h-[150px] items-center justify-center text-center">
+         <div className="p-3 bg-slate-100 dark:bg-slate-800 rounded-full mb-2">
+            <Sparkles size={16} className="text-slate-300 dark:text-slate-600" />
+         </div>
+         <p className="text-xs text-slate-400 font-medium">Esperando datos clínicos...</p>
+         <p className="text-[10px] text-slate-300 dark:text-slate-600 max-w-[200px]">
+            Escriba o dicte en la nota para generar sugerencias contextuales en tiempo real.
+         </p>
+      </div>
+    ); 
   }
 
   return (

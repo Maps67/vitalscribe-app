@@ -45,6 +45,10 @@ interface ConsultationSidebarProps {
   isReadyToGenerate: boolean;
   handleLoadInsights: () => void;
   isLoadingInsights: boolean;
+  
+  // ✅ AGREGADO: La pieza que faltaba para corregir el error rojo
+  onRetryInsights: () => void; 
+
   generatedNote: any | null;
   activeSpeaker: 'doctor' | 'patient';
   handleSpeakerSwitch: (role: 'doctor' | 'patient') => void;
@@ -58,7 +62,7 @@ interface ConsultationSidebarProps {
   onDownloadRecord: () => void;
   onTriggerInterconsultation?: (specialty: string) => void;
   
-  // ✅ CORRECCIÓN INTEGRAL: Se agregan TODAS las propiedades faltantes
+  // Props opcionales que ya tenías
   vitalSnapshot?: any; 
   isMobileSnapshotVisible?: boolean;
   setIsMobileSnapshotVisible?: (visible: boolean) => void;
@@ -91,6 +95,12 @@ export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
   handleGenerate,
   isProcessing,
   isReadyToGenerate,
+  handleLoadInsights, 
+  isLoadingInsights,
+  
+  // ✅ AGREGADO: Recibimos la función aquí
+  onRetryInsights,
+
   generatedNote,
   activeSpeaker,
   handleSpeakerSwitch,
@@ -103,7 +113,6 @@ export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
   doctorProfile,
   onDownloadRecord,
   onTriggerInterconsultation,
-  // Desestructuración segura de las nuevas props (opcionales)
   vitalSnapshot,
   isMobileSnapshotVisible,
   setIsMobileSnapshotVisible,
@@ -309,12 +318,12 @@ export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
                       {activeMedicalContext.lastConsultation && (
                           <div className="mt-2 pt-2 border-t border-amber-200 dark:border-amber-800/50">
                               <span className="font-bold block text-[10px] uppercase text-amber-600 mb-1">
-                                    Resumen Última Visita ({new Date(activeMedicalContext.lastConsultation.date).toLocaleDateString()}):
+                                      Resumen Última Visita ({new Date(activeMedicalContext.lastConsultation.date).toLocaleDateString()}):
                               </span>
                               <div className="p-2 bg-white dark:bg-slate-900 rounded border border-amber-100 dark:border-amber-900/50">
-                                    <p className="italic opacity-80 text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed line-clamp-6 font-light">
-                                        {activeMedicalContext.lastConsultation.summary}
-                                    </p>
+                                      <p className="italic opacity-80 text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed line-clamp-6 font-light">
+                                          {activeMedicalContext.lastConsultation.summary}
+                                      </p>
                               </div>
                           </div>
                       )}
@@ -358,7 +367,6 @@ export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
       </div>
 
       {/* --- FOOTER CONTROLS --- */}
-      {/* ✅ CORRECCIÓN CSS: Se elimina 'flex' duplicado del className */}
       <div className={`
           flex-none flex flex-col gap-2 border-t dark:border-slate-800 pt-3 pb-1 mt-auto bg-white dark:bg-slate-900 z-20
       `}>

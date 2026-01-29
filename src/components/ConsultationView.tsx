@@ -956,6 +956,35 @@ const ConsultationView: React.FC = () => {
       }
   };
 
+  // ✅ FUNCIÓN NUEVA: Forzar re-análisis manual de contexto
+  const handleRetryInsights = () => {
+      if (!generatedNote) return toast.error("Genere una nota primero.");
+      
+      const currentContent = generatedNote.soapData 
+        ? `${generatedNote.soapData.subjective} \n ${generatedNote.soapData.analysis} \n ${generatedNote.soapData.plan}`
+        : generatedNote.clinicalNote || "";
+
+      if (currentContent.length < 10) return toast.warning("Nota insuficiente para analizar.");
+
+      setLoadingClinicalInsights(true);
+      lastAnalyzedRef.current = ""; // Reset de caché para forzar ejecución
+
+      GeminiMedicalService.generateClinicalInsights(currentContent, selectedSpecialty)
+        .then(insights => {
+            if (insights && insights.length > 0) {
+                setClinicalInsights(insights);
+                toast.success(`Se encontraron ${insights.length} referencias.`);
+            } else {
+                toast.info("La IA no encontró referencias adicionales.");
+            }
+        })
+        .catch(err => {
+            console.error("Error manual insights:", err);
+            toast.error("Error de conexión al analizar.");
+        })
+        .finally(() => setLoadingClinicalInsights(false));
+  };
+
   const handleGenerate = async () => {
     if (!doctorProfile) return toast.error("Perfil médico no cargado.");
 
@@ -1801,7 +1830,8 @@ const ConsultationView: React.FC = () => {
         setIsAttachmentsOpen={setIsAttachmentsOpen}
         doctorProfile={doctorProfile}
         onDownloadRecord={handleDownloadFullRecord}
-        onTriggerInterconsultation={handleSidebarInterconsultation} 
+        onTriggerInterconsultation={handleSidebarInterconsultation}
+        onRetryInsights={handleRetryInsights} 
       />
       
       {/* ⚠️ LAYOUT PRINCIPAL ⚠️ */}

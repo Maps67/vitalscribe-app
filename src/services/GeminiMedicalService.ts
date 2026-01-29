@@ -9,7 +9,7 @@ import {
   FollowUpMessage 
 } from '../types';
 
-console.log("🚀 V-STABLE DEPLOY: Safety Override Protocol (v8.0 - HYBRID DB/LOCAL) [Centralized Brain Active]");
+console.log("🚀 V-STABLE DEPLOY: Safety Override Protocol (v8.2 - MODEL NAME FIX) [Active]");
 
 // ==========================================
 // 🛡️ 1. CONSTANTE DE SEGURIDAD (FALLBACK - RED DE EMERGENCIA)
@@ -428,8 +428,8 @@ export const GeminiMedicalService = {
         // 3. Conexión (Usando la librería actualizada)
         const client = new GoogleGenerativeAI(apiKey);
         
-        // 🚀 MODELO FLASH (Ahora sí funcionará porque tienes la v0.24.1)
-        const model = client.getGenerativeModel({ model: "gemini-1.5-flash" });
+        // 🚀 MODELO FIX: Usar nombre explícito versionado
+        const model = client.getGenerativeModel({ model: "gemini-2.5-flash" });
 
         const prompt = `
           ACTÚA COMO: Auditor Médico.
@@ -568,8 +568,25 @@ export const GeminiMedicalService = {
   },
 
   // --- H. INSIGHTS CLÍNICOS CONTEXTUALES (SMART CITATION) ---
+  // ✅ ACTUALIZADO: AHORA USA CLIENT-SIDE API PARA EVITAR BLOQUEO DE EDGE FUNCTION
   async generateClinicalInsights(noteContent: string, specialty: string = "Medicina General"): Promise<ClinicalInsight[]> {
     try {
+        // 1. Recuperar API Key Global (Bypass de Supabase Edge Function)
+        const apiKey = import.meta.env.VITE_GOOGLE_AI_KEY || 
+                       import.meta.env.VITE_GEMINI_API_KEY || 
+                       import.meta.env.VITE_GEMINI_KEY || 
+                       import.meta.env.VITE_GOOGLE_API_KEY;
+
+        if (!apiKey) {
+           console.warn("⚠️ [Insights] No se detectó API Key en variables de entorno. Deshabilitando insights.");
+           return [];
+        }
+
+        // 2. Configurar Cliente Directo
+        const client = new GoogleGenerativeAI(apiKey);
+        // 🚀 FIX: Usamos "gemini-2.5-flash" explícito para evitar 404 en v1beta
+        const model = client.getGenerativeModel({ model: "gemini-2.5-flash" }); 
+
         const prompt = `
             ACTÚA COMO: Asistente de Investigación Clínica y Soporte a la Decisión (CDSS).
             OBJETIVO: Leer la nota clínica actual y sugerir 2-3 recursos informativos RELEVANTES y DE ALTA CALIDAD.
@@ -585,17 +602,27 @@ export const GeminiMedicalService = {
                     "title": "Título corto",
                     "content": "Resumen breve",
                     "reference": "Fuente (Autor, Año)",
-                    "url": "URL"
+                    "url": "URL (Opcional)"
                 }
             ]
+            
+            IMPORTANTE: Responde ÚNICAMENTE con el Array JSON válido.
         `;
 
-        const rawText = await generateWithFailover(prompt, true, true);
-        const res = JSON.parse(cleanJSON(rawText));
+        // 3. Generación Directa (Sin Edge Function)
+        const result = await model.generateContent(prompt);
+        const response = result.response;
+        const text = response.text();
+        
+        // 4. Limpieza y Parsing
+        const cleanText = cleanJSON(text);
+        const res = JSON.parse(cleanText);
+        
         return Array.isArray(res) ? res : [];
 
     } catch (e) {
-        console.warn("⚠️ Error generando insights clínicos (No crítico):", e);
+        console.warn("⚠️ Error generando insights clínicos (Modo Cliente):", e);
+        // Retornamos array vacío para no romper la UI
         return [];
     }
   },
@@ -756,4 +783,4 @@ export const GeminiMedicalService = {
       throw new Error("No se pudo procesar la evidencia quirúrgica.");
     }
   }
-  }; // Fin del objeto GeminiMedicalService
+}; // Fin del objeto GeminiMedicalService
