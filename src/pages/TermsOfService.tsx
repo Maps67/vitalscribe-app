@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { 
   Shield, Scale, FileText, Download, CheckCircle, 
   AlertTriangle, Lock, Server, FileJson, ChevronLeft,
-  Activity // ✅ IMPORTANTE: Agregado para el icono de la nueva sección
+  Activity 
 } from 'lucide-react';
 
 const TermsOfService = () => {
@@ -143,12 +143,34 @@ const TermsOfService = () => {
             <p className="text-xs text-slate-400 mb-6 uppercase">Última actualización: Enero 2026</p>
 
             <div className="space-y-6 text-sm text-slate-600">
-              <section className="p-4 bg-amber-50 rounded-xl border border-amber-100">
-                <h4 className="font-bold text-amber-800 mb-2 flex items-center gap-2">
-                  <AlertTriangle size={18}/> Descargo de Responsabilidad Médica
+              
+              {/* ===================================================================== */}
+              {/* 🛡️ AQUÍ ESTÁ EL CAMBIO CRÍTICO: CLÁUSULA DE NO-DISPOSITIVO MÉDICO  */}
+              {/* ===================================================================== */}
+              <section className="p-4 bg-red-50 rounded-xl border border-red-100">
+                <h4 className="font-bold text-red-800 mb-4 flex items-center gap-2">
+                  <AlertTriangle size={18}/> ⚠️ CLÁUSULA DE NO-DISPOSITIVO MÉDICO (IMPORTANTE)
                 </h4>
-                <p className="text-amber-900/80 italic">VitalScribe AI™ es una herramienta de asistencia. La validación, edición y firma final de cualquier documento clínico generado por el sistema es responsabilidad absoluta y exclusiva del médico usuario facultado.</p>
+                <div className="space-y-3 text-red-900/90">
+                  <p>
+                    <strong>1. NATURALEZA ADMINISTRATIVA:</strong> El USUARIO reconoce que VitalScribe AI™ es una herramienta de 
+                    <strong> gestión documental y referencia bibliográfica automatizada</strong>. 
+                    NO es un Dispositivo Médico (SaMD) ni sustituye el juicio clínico.
+                  </p>
+                  <p>
+                    <strong>2. ALERTA DE "ESPEJO DIGITAL":</strong> Las alertas de seguridad, cálculos de dosis y sugerencias de bloqueo 
+                    generadas por el sistema son meras <strong>referencias informativas</strong> basadas en guías estándar. 
+                    NO constituyen una orden médica ni una prohibición técnica. El Médico tiene la facultad técnica y la obligación legal 
+                    de ignorar estas sugerencias si su juicio clínico así lo dicta.
+                  </p>
+                  <p>
+                    <strong>3. OBLIGACIÓN DE VERIFICACIÓN:</strong> Al hacer clic en "Guardar", "Imprimir" o "Finalizar", el USUARIO certifica 
+                    que ha verificado personalmente todos los datos (incluyendo dosis pediátricas y diagnósticos). VitalScribe se deslinda 
+                    de cualquier daño derivado de la omisión de revisión humana.
+                  </p>
+                </div>
               </section>
+              {/* ===================================================================== */}
 
               <section>
                 <h4 className="font-bold text-slate-800 mb-2">1. Capacidad del Usuario</h4>
@@ -188,7 +210,7 @@ const TermsOfService = () => {
                 </div>
               </section>
 
-              {/* ✅ CLÁUSULA 4: CALCULADORAS DE RIESGO (NUEVO BLINDAJE LEGAL) */}
+              {/* ✅ CLÁUSULA 4: CALCULADORAS DE RIESGO */}
               <section className="p-4 bg-emerald-50 rounded-xl border border-emerald-100">
                 <h4 className="font-bold text-emerald-900 mb-2 flex items-center gap-2">
                   <Activity size={18}/> 4. Calculadoras de Riesgo y Algoritmos Clínicos
