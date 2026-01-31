@@ -62,13 +62,14 @@ export class MedicalDataService {
     
     // Map DB columns to Frontend types if necessary (snake_case to camelCase)
     return data.map((p: any) => ({
-      id: p.id,
-      name: p.name,
-      phone: p.phone,
-      lastVisit: new Date(p.last_visit).toLocaleDateString(), // Convert timestamp
-      condition: p.condition,
-      avatarUrl: p.avatar_url || `https://ui-avatars.com/api/?name=${p.name}&background=random`
-    }));
+     id: p.id,
+     name: p.name,
+     phone: p.phone,
+     lastVisit: new Date(p.last_visit).toLocaleDateString(),
+     condition: p.condition,
+     avatarUrl: p.avatar_url || `https://ui-avatars.com/api/?name=${p.name}&background=random`,
+     doctor_id: p.user_id // <--- ✅ ESTA ES LA ÚNICA LÍNEA NUEVA (Mapeamos user_id a doctor_id)
+   }));
   }
 
   async createPatient(patientData: Omit<Patient, 'id' | 'lastVisit'>) {
