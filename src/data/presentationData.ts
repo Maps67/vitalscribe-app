@@ -1,11 +1,11 @@
 import { SlideData } from '../types/presentation'; 
 
 export const presentationData: SlideData[] = [
-  // SLIDE 1: PORTADA (HERO)
+  // SLIDE 1: PORTADA (HERO) - ✅ ACTUALIZADO A v9.3
   {
     id: "intro",
     type: "hero",
-    title: "VitalScribe AI v8.0",
+    title: "VitalScribe AI v9.3", 
     subtitle: "Arquitectura Omni-Sentinel:",
     content: "Sistema Operativo Clínico de Alta Precisión (CDSS). Eficiencia Administrativa + Seguridad Activa + Blindaje Legal.",
     image: "https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&q=80&w=2070", 
@@ -67,17 +67,34 @@ export const presentationData: SlideData[] = [
     ]
   },
 
-  // --- ✨ NUEVA SLIDE: CALCULADORA DE RIESGO ---
+  // --- ✨ SLIDE 6: MÓDULO HÍBRIDO (LOCAL + CLOUD) - ✅ MEJORADO ---
   {
     id: "risk_calc",
     type: "grid",
     title: "Módulo de Seguridad Quirúrgica",
-    content: "Matemática médica de precisión (NSQIP/RCRI) integrada para decisiones críticas.",
+    content: "Matemática médica de precisión (NSQIP/RCRI) con ejecución blindada.",
     items: [
-      { iconName: "Calculator", title: "Algoritmos Gold-Standard", text: "Implementación nativa de Gupta MICA (Regresión Logística) y Lee RCRI (Aditivo). Misma certeza científica que MDCalc." },
-      { iconName: "WifiOff", title: "Privacidad Edge-Computing", text: "Cálculo matemático 100% local. Los datos sensibles del paciente nunca abandonan el dispositivo." },
-      { iconName: "Zap", title: "Auto-Llenado Contextual", text: "El sistema extrae variables (Edad, Creatinina, ASA) directamente del expediente activo. Cero error humano." },
-      { iconName: "Shield", title: "Respaldo Médico-Legal", text: "Justificación objetiva de decisiones (ej. solicitud de terapia intensiva) basada en probabilidad estadística documentada." }
+      { 
+        iconName: "Calculator", 
+        title: "Algoritmos Gold-Standard", 
+        text: "Implementación fiel de Gupta MICA y Lee RCRI. Resultados idénticos a la literatura (Circulation 2013/1999)." 
+      },
+      { 
+        iconName: "WifiOff", 
+        title: "Privacidad Híbrida (Edge/Cloud)", 
+        // Verdad Técnica: Matemática local + IA en Nube
+        text: "Cálculo de riesgo ejecutado localmente en dispositivo (Zero-Latency) + Análisis semántico en Nube Blindada." 
+      },
+      { 
+        iconName: "Zap", 
+        title: "Auto-Llenado Contextual", 
+        text: "El sistema extrae variables (Edad, Creatinina, ASA) directamente del expediente activo. Cero error humano." 
+      },
+      { 
+        iconName: "Shield", 
+        title: "Escudo Legal Activo", 
+        text: "Descargos de responsabilidad clínicos integrados y referencias bibliográficas visibles en cada cálculo." 
+      }
     ]
   },
 
@@ -133,12 +150,12 @@ export const presentationData: SlideData[] = [
     image: "https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?auto=format&fit=crop&q=80&w=2000"
   },
 
-  // SLIDE 11: CIERRE (HERO)
+  // SLIDE 11: CIERRE (HERO) - ✅ ACTUALIZADO A v9.3
   {
     id: "closing",
     type: "hero",
     title: "Medicina de Alta Precisión.",
-    subtitle: "VitalScribe AI v8.0",
+    subtitle: "VitalScribe AI v9.3", 
     content: "El único Sistema Operativo que entiende, protege y defiende su criterio médico.",
     image: "https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=1964",
     meta: { gradient: "from-teal-600 to-blue-900" }
