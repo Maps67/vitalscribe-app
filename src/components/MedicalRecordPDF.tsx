@@ -111,6 +111,8 @@ interface Props {
 }
 
 const MedicalRecordPDF: React.FC<Props> = ({ doctor, patient, history, generatedAt }) => {
+  
+  // Función auxiliar para formatear fechas
   const formatDate = (dateString: string) => {
     try {
       return new Date(dateString).toLocaleDateString('es-MX', {
@@ -118,6 +120,42 @@ const MedicalRecordPDF: React.FC<Props> = ({ doctor, patient, history, generated
       });
     } catch { return dateString; }
   };
+
+  // ---------------------------------------------------------------------------
+  // 🛡️ INYECCIÓN DE SEGURIDAD: LIMPIADOR DE TEXTO DE BASE DE DATOS
+  // ---------------------------------------------------------------------------
+  const cleanHistoryText = (rawText: any) => {
+    if (!rawText) return "Sin antecedentes patológicos registrados.";
+    
+    // Si ya es un objeto (JSON ya parseado), intentamos extraer el campo 'background' o unimos valores
+    if (typeof rawText === 'object') {
+        if (rawText.background) return rawText.background;
+        // Si es un array o objeto genérico, lo convertimos a string legible
+        return JSON.stringify(rawText).replace(/["{}[\]]/g, '').replace(/,/g, ', ');
+    }
+
+    // Si es string, intentamos parsear por si es un JSON válido
+    try {
+      const parsed = JSON.parse(rawText);
+      if (parsed && typeof parsed === 'object' && parsed.background) {
+        return parsed.background;
+      }
+    } catch (e) {
+      // No es JSON, continuamos con limpieza manual...
+    }
+
+    // LIMPIEZA QUIRÚRGICA (Regex) para formato escapado de Supabase
+    let clean = String(rawText)
+      .replace(/\\[a-zA-Z0-9]+\\:\\/g, '') // Elimina \background\:\
+      .replace(/\\,/g, ',')                // Arregla comas escapadas
+      .replace(/\\n/g, '\n')               // Arregla saltos de línea
+      .replace(/\\/g, '')                  // Elimina barras invertidas sobrantes
+      .replace(/[a-zA-Z0-9]+:/g, '')       // Elimina keys sueltas (ej: family:)
+      .replace(/["{}]/g, '');              // Elimina llaves y comillas
+
+    return clean.trim() || "Sin antecedentes relevantes.";
+  };
+  // ---------------------------------------------------------------------------
 
   return (
     <Document>
@@ -156,17 +194,16 @@ const MedicalRecordPDF: React.FC<Props> = ({ doctor, patient, history, generated
         <Text style={styles.sectionTitle}>HISTORIA CLÍNICA GENERAL</Text>
         <View style={{marginBottom: 10}}>
             <Text style={styles.subsectionTitle}>ANTECEDENTES:</Text>
+            {/* CORRECCIÓN APLICADA AQUÍ: Uso de cleanHistoryText */}
             <Text style={{fontSize: 9, textAlign: 'justify'}}>
-                {(patient.history || (patient as any).pathological_history) 
-                  ? JSON.stringify((patient.history || (patient as any).pathological_history)).replace(/["{}]/g, '').replace(/,/g, ', ')
-                  : 'Sin antecedentes patológicos registrados.'}
+                {cleanHistoryText(patient.history || (patient as any).pathological_history)}
             </Text>
         </View>
         <View style={{marginBottom: 10}}>
             <Text style={styles.subsectionTitle}>ALERGIAS:</Text>
             <Text style={{fontSize: 9, color: '#dc2626'}}>
                 {(patient as any).allergies 
-                  ? (typeof (patient as any).allergies === 'string' ? (patient as any).allergies : JSON.stringify((patient as any).allergies)) 
+                  ? (typeof (patient as any).allergies === 'string' ? (patient as any).allergies : JSON.stringify((patient as any).allergies).replace(/["{}[\]]/g, '')) 
                   : 'Negadas.'}
             </Text>
         </View>
