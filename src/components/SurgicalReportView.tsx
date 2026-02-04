@@ -3,7 +3,7 @@ import {
   Upload, Mic, FileText, X, CheckCircle, ShieldAlert, 
   Scissors, AlertTriangle, Save, RefreshCw, Square, 
   User, Download, Activity, CalendarDays, FileImage, Music, 
-  PenLine, ShieldCheck, Zap
+  PenLine, ShieldCheck, Zap, Copy // Agregué Copy para futura utilidad
 } from 'lucide-react'; 
 import { toast } from 'sonner';
 import { GeminiMedicalService } from '../services/GeminiMedicalService';
@@ -17,13 +17,13 @@ import SurgicalLeaveGenerator, { GeneratedLeaveData } from './SurgicalLeaveGener
 
 // Interfaz de datos de la bitácora
 interface SurgicalLogData {
-    preoperative_diagnosis: string;
-    postoperative_diagnosis: string;
-    procedure: string;
-    findings: string;
-    complications: string;
-    plan: string;
-    material_notes: string;
+  preoperative_diagnosis: string;
+  postoperative_diagnosis: string;
+  procedure: string;
+  findings: string;
+  complications: string;
+  plan: string;
+  material_notes: string;
 }
 
 interface SurgicalReportViewProps {
@@ -58,7 +58,7 @@ export const SurgicalReportView: React.FC<SurgicalReportViewProps> = ({ doctor, 
       }
   }, [transcript]);
 
-  // Autoscroll para evitar desbordamiento visual durante el dictado
+  // Autoscroll
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -86,6 +86,9 @@ export const SurgicalReportView: React.FC<SurgicalReportViewProps> = ({ doctor, 
     if (isListening) stopListening();
   };
 
+  // ---------------------------------------------------------------------------
+  // 🛡️ LÓGICA BLINDADA V3 (SOPORTE DE SINÓNIMOS + REGEX ROBUSTO)
+  // ---------------------------------------------------------------------------
   const handleProcessLog = async () => {
     if (!textContent && !uploadedFile) {
         return toast.error("Por favor, proporcione dictado o evidencia.");
@@ -95,26 +98,92 @@ export const SurgicalReportView: React.FC<SurgicalReportViewProps> = ({ doctor, 
     const loadingId = toast.loading("Analizando protocolo quirúrgico...");
 
     try {
+      // 1. Preparar texto unificado
       let evidenceText = textContent || "";
       if (uploadedFile) {
           evidenceText += `\n[EVIDENCIA ADJUNTA: ${uploadedFile.name}]`;
       }
 
-      const rawData = await GeminiMedicalService.generateSurgicalReport(evidenceText, doctor.specialty); 
-      
-      const getVal = (key: string, altKey?: string) => {
-          return rawData[key] || rawData[altKey || ''] || "---";
+      console.log("📝 Texto enviado a procesar:", evidenceText);
+
+      // 2. Intentar IA (Gemini)
+      let rawData: any = {};
+      try {
+          rawData = await GeminiMedicalService.generateSurgicalReport(evidenceText, doctor.specialty);
+          console.log("🤖 Respuesta IA:", rawData);
+      } catch (e) {
+          console.warn("⚠️ Fallo IA, usando extracción manual:", e);
+      }
+
+      // 3. Función de Respaldo Manual (Regex Voraz + Inicio de Línea)
+      const extractManual = (header: string) => {
+         // Busca título al inicio de línea para evitar falsos positivos (como "planos" vs "PLAN")
+         let regex = new RegExp(`(?:^|\\n)${header}:?\\s*([\\s\\S]*?)(?=\\n[A-ZÁÉÍÓÚÑ ]+:|$)`, 'i');
+         let match = evidenceText.match(regex);
+
+         // Modo Voraz (Último recurso, ideal para la sección PLAN si está al final)
+         if (!match || !match[1] || match[1].trim().length < 3) {
+             console.log(`🔧 Activando modo voraz protegido para: ${header}`);
+             regex = new RegExp(`(?:^|\\n)${header}:?\\s*([\\s\\S]*)`, 'i');
+             match = evidenceText.match(regex);
+         }
+
+         return match ? match[1].trim() : null;
       };
 
-      const cleanData: SurgicalLogData = {
-          preoperative_diagnosis: getVal('preoperative_diagnosis', 'pre_dx'),
-          postoperative_diagnosis: getVal('dx_post', 'postoperative_diagnosis'),
-          procedure: getVal('procedure'),
-          findings: getVal('findings'),
-          complications: getVal('complications'),
-          material_notes: getVal('material_notes', 'materials'),
-          plan: getVal('plan')
+      // 4. Mapeo Inteligente (Soporta múltiples Headers manuales para la misma sección)
+      const getVal = (aiKeys: string[], manualHeaders?: string | string[]) => {
+          // A) Buscar en IA
+          for (const key of aiKeys) {
+              if (rawData && rawData[key] && rawData[key] !== '---') return rawData[key];
+          }
+          
+          // B) Buscar Manualmente (Itera sobre posibles variaciones de título)
+          if (manualHeaders) {
+              const headers = Array.isArray(manualHeaders) ? manualHeaders : [manualHeaders];
+              for (const h of headers) {
+                  const manual = extractManual(h);
+                  // Si encontró algo útil (más de 5 letras), retornamos eso
+                  if (manual && manual.length > 5) return manual; 
+              }
+          }
+          return "---";
       };
+
+      // 5. Configuración de Sinónimos y Campos
+      const cleanData: SurgicalLogData = {
+          preoperative_diagnosis: getVal(
+             ['preoperative_diagnosis', 'pre_dx'], 
+             ['DIAGNÓSTICO PRE-OPERATORIO', 'PRE-OPERATORIO']
+          ),
+          postoperative_diagnosis: getVal(
+             ['postoperative_diagnosis', 'dx_post', 'post_dx'], 
+             ['DIAGNÓSTICO POST-OPERATORIO', 'POST-OPERATORIO']
+          ),
+          procedure: getVal(
+             ['procedure', 'surgery'], 
+             ['CIRUGÍA', 'PROCEDIMIENTO', 'OPERACIÓN']
+          ),
+          findings: getVal(
+             ['findings', 'hallazgos'], 
+             ['HALLAZGOS', 'HALLAZGOS TRANSOPERATORIOS']
+          ),
+          complications: getVal(
+             ['complications', 'events'], 
+             ['COMPLICACIONES', 'INCIDENTES']
+          ),
+          plan: getVal(
+             ['plan', 'post_care'], 
+             ['PLAN', 'PLAN DE CUIDADOS', 'INDICACIONES']
+          ),
+          material_notes: getVal(
+             ['material_notes', 'materials', 'technique'], 
+             // AQUÍ ESTÁ LA MEJORA CLAVE: Busca todas estas variantes
+             ['DESCRIPCIÓN DE TÉCNICA', 'TÉCNICA', 'TÉCNICA QUIRÚRGICA', 'INSUMOS', 'MATERIALES']
+          )
+      };
+
+      console.log("✅ Datos Procesados Finales:", cleanData);
 
       setSurgicalLog(cleanData);
       setUploadedFile(null);
@@ -122,11 +191,20 @@ export const SurgicalReportView: React.FC<SurgicalReportViewProps> = ({ doctor, 
       setTextContent(""); 
       toast.success("Bitácora generada con éxito", { id: loadingId });
 
-    } catch (error) {
-      toast.error("Error al procesar el dictado.", { id: loadingId });
+    } catch (error: any) {
+      console.error(error);
+      toast.error("Error al procesar: " + error.message, { id: loadingId });
     } finally {
       setIsProcessing(false);
     }
+  };
+
+  // Función extra para copiar al portapapeles (Utilidad Pura)
+  const handleCopyText = () => {
+    if (!surgicalLog) return;
+    const text = `PROCEDIMIENTO: ${surgicalLog.procedure}\nDIAGNÓSTICO: ${surgicalLog.postoperative_diagnosis}\nHALLAZGOS: ${surgicalLog.findings}\nCOMPLICACIONES: ${surgicalLog.complications}\nTÉCNICA: ${surgicalLog.material_notes}\nPLAN: ${surgicalLog.plan}`;
+    navigator.clipboard.writeText(text);
+    toast.success("Copiado al portapapeles para uso externo");
   };
 
   const handleSaveLog = async () => {
@@ -142,7 +220,7 @@ export const SurgicalReportView: React.FC<SurgicalReportViewProps> = ({ doctor, 
 • DIAGNÓSTICO: ${surgicalLog.postoperative_diagnosis}
 • HALLAZGOS: ${surgicalLog.findings}
 • COMPLICACIONES: ${surgicalLog.complications}
-• MATERIALES: ${surgicalLog.material_notes}
+• TÉCNICA/MATERIALES: ${surgicalLog.material_notes}
 • PLAN: ${surgicalLog.plan}`;
 
           const { error } = await supabase.from('consultations').insert({
@@ -191,11 +269,9 @@ export const SurgicalReportView: React.FC<SurgicalReportViewProps> = ({ doctor, 
   };
 
   return (
-    // 🥪 ESTRUCTURA CORREGIDA: Eliminamos 'fixed inset-0' para que no tape el menú principal.
-    // Usamos 'relative h-full flex flex-col' para que se adapte al contenedor padre sin desbordar.
     <div className="relative h-full w-full flex flex-col bg-slate-50 dark:bg-slate-950 overflow-hidden">
       
-      {/* 1. TOP: HEADER ESTÁTICO (flex-none para que no se encoja) */}
+      {/* 1. TOP: HEADER ESTÁTICO */}
       <header className="flex-none bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 p-4 z-20 shadow-sm">
         <div className="flex justify-between items-center mb-3">
             <h2 className="text-lg font-black text-slate-800 dark:text-white flex items-center gap-2 uppercase tracking-tight">
@@ -212,7 +288,7 @@ export const SurgicalReportView: React.FC<SurgicalReportViewProps> = ({ doctor, 
         </div>
       </header>
 
-      {/* 2. MIDDLE: BODY SCROLLABLE (flex-1 para que tome el espacio y overflow-y-auto para el scroll) */}
+      {/* 2. MIDDLE: BODY SCROLLABLE */}
       <main ref={scrollRef} className="flex-1 overflow-y-auto overflow-x-hidden p-4 scroll-smooth min-h-0">
         {currentModule === 'op_log' && (
             <div className="max-w-2xl mx-auto min-h-full flex flex-col">
@@ -223,7 +299,7 @@ export const SurgicalReportView: React.FC<SurgicalReportViewProps> = ({ doctor, 
                             
                             <textarea
                                 className="flex-1 w-full bg-transparent border-none outline-none resize-none text-lg font-medium text-slate-600 dark:text-slate-300 placeholder:text-slate-300 dark:placeholder:text-slate-600 leading-relaxed"
-                                placeholder="Dicte hallazgos o escriba aquí..."
+                                placeholder="Dicte hallazgos o pegue su texto estructurado aquí..."
                                 value={textContent} 
                                 onChange={(e) => setTextContent(e.target.value)}
                             />
@@ -237,23 +313,29 @@ export const SurgicalReportView: React.FC<SurgicalReportViewProps> = ({ doctor, 
                             )}
                         </div>
 
-                        <button onClick={() => fileInputRef.current?.click()} className="flex-none flex items-center gap-2 px-6 py-3 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 rounded-full text-xs font-black shadow-sm border border-slate-200 dark:border-slate-800 uppercase tracking-widest active:scale-95 transition-all">
-                            <Upload size={14} className="text-indigo-600"/> Anexar Evidencia
-                        </button>
-                        <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileChange} accept="audio/*,image/*,.pdf"/>
+                        <div className="flex gap-4">
+                            <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 px-6 py-3 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 rounded-full text-xs font-black shadow-sm border border-slate-200 dark:border-slate-800 uppercase tracking-widest active:scale-95 transition-all">
+                                <Upload size={14} className="text-indigo-600"/> Anexar Evidencia
+                            </button>
+                            {/* Input oculto */}
+                            <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileChange} accept="audio/*,image/*,.pdf"/>
+                        </div>
                     </div>
                 ) : (
                     <div className="space-y-4 pb-10">
                         <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-xl border border-indigo-100 dark:border-indigo-900 overflow-hidden">
                             <div className="bg-indigo-600 p-4 flex justify-between items-center text-white">
                                 <h3 className="font-black text-xs uppercase tracking-widest flex items-center gap-2"><ShieldCheck size={16}/> Reporte Validado</h3>
+                                <button onClick={handleCopyText} className="text-white/80 hover:text-white transition-colors" title="Copiar texto plano">
+                                    <Copy size={16} />
+                                </button>
                             </div>
                             <div className="divide-y divide-slate-100 dark:divide-slate-800">
                                 <DataRow label="Diagnóstico Post-Qx" value={surgicalLog.postoperative_diagnosis} />
                                 <DataRow label="Procedimiento" value={surgicalLog.procedure} />
                                 <DataRow label="Hallazgos Críticos" value={surgicalLog.findings} highlight />
                                 <DataRow label="Complicaciones" value={surgicalLog.complications} alert={(surgicalLog.complications || '').toLowerCase().includes('sangrado') || (surgicalLog.complications || '').toLowerCase().includes('incidente')} />
-                                <DataRow label="Insumos y Materiales" value={surgicalLog.material_notes} />
+                                <DataRow label="Insumos / Técnica" value={surgicalLog.material_notes} />
                                 <DataRow label="Plan de Cuidados" value={surgicalLog.plan} />
                             </div>
                         </div>
@@ -274,7 +356,7 @@ export const SurgicalReportView: React.FC<SurgicalReportViewProps> = ({ doctor, 
         )}
       </main>
 
-      {/* 3. BOTTOM: FOOTER ESTÁTICO DE ACCIONES (flex-none para que siempre esté visible) */}
+      {/* 3. BOTTOM: FOOTER ESTÁTICO DE ACCIONES */}
       <footer className="flex-none bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 p-4 z-20 shadow-[0_-4px_15px_rgba(0,0,0,0.05)]">
         {currentModule === 'op_log' && (
             <div className="max-w-md mx-auto flex justify-between items-center gap-4">
