@@ -1,9 +1,9 @@
 import React, { useMemo, useEffect, useState, useCallback, memo } from 'react';
 import { 
   X, Activity, Clock, Loader2, ChevronDown, ChevronUp,
-  Stethoscope, ShieldCheck, Lock, Trash2, Edit2, RefreshCw, Check, XCircle,
+  Stethoscope, ShieldCheck, Lock, Check, XCircle,
   Paperclip, UploadCloud, Calendar, User, FileText, UserPlus,
-  AlertTriangle, BrainCircuit 
+  AlertTriangle, BrainCircuit, ShieldAlert, FilePlus // Nuevos iconos
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner'; 
@@ -32,6 +32,14 @@ interface Consultation {
   summary: string;
   transcript?: string;
   ai_analysis_data?: any; 
+  addendums?: Addendum[]; // Nueva propiedad para notas aclaratorias
+}
+
+interface Addendum {
+    id: string;
+    note_id: string;
+    content: string;
+    created_at: string;
 }
 
 interface PatientDashboardProps {
@@ -46,7 +54,6 @@ type DashboardView = 'timeline' | 'files';
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // 🛠️ FUNCIÓN AUXILIAR MEJORADA: NORMALIZADOR DE HISTORIAL
-// Convierte cualquier basura JSON en texto clínico legible
 const extractHistoryText = (input: any): { text: string, allergies: string } => {
     if (!input) return { text: "", allergies: "" };
     
@@ -55,11 +62,9 @@ const extractHistoryText = (input: any): { text: string, allergies: string } => 
 
     // 1. Si es objeto ya parseado
     if (typeof input === 'object') {
-        // Intentar encontrar campos comunes
         cleanText = input.background || input.history || input.antecedentes || input.pathological_history || input.resumen || "";
         cleanAllergies = input.allergies || input.alergias || "";
         
-        // Si no encontramos texto pero hay objeto, lo aplanamos
         if (!cleanText && Object.keys(input).length > 0) {
             cleanText = Object.entries(input)
                 .map(([k, v]) => `${k}: ${v}`)
@@ -74,9 +79,8 @@ const extractHistoryText = (input: any): { text: string, allergies: string } => 
             const trimmed = input.trim();
             if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
                 const parsed = JSON.parse(trimmed);
-                return extractHistoryText(parsed); // Recursividad para procesar el JSON
+                return extractHistoryText(parsed); 
             }
-            // Si es texto plano, asumimos que es el historial
             return { text: trimmed, allergies: "" };
         } catch {
             return { text: input, allergies: "" };
@@ -96,11 +100,10 @@ const PatientDashboard = memo(({ patient, onClose, specialty: propSpecialty }: P
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
   const [activeView, setActiveView] = useState<DashboardView>('timeline');
 
-  // ESTADOS DE EDICIÓN
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editText, setEditText] = useState<string>("");
-  const [isSavingEdit, setIsSavingEdit] = useState(false);
-  const [isDeletingId, setIsDeletingId] = useState<string | null>(null);
+  // ESTADOS DE FE DE ERRATAS (ADDENDUM)
+  const [addendumId, setAddendumId] = useState<string | null>(null); // ID de la nota a la que se agrega
+  const [addendumText, setAddendumText] = useState<string>("");
+  const [isSavingAddendum, setIsSavingAddendum] = useState(false);
 
   // 🛡️ BLINDAJE 1: Determinación Sincrónica de Realidad
   const isRealPatient = useMemo(() => {
@@ -129,9 +132,10 @@ const PatientDashboard = memo(({ patient, onClose, specialty: propSpecialty }: P
           specialtyData = profile?.specialty;
       }
 
-      // Historial
+      // Historial + Addendums (Fe de Erratas)
       let historyData: Consultation[] = [];
       if (isRealPatient) {
+          // 1. Cargar Consultas
           const { data: consults, error } = await supabase
             .from('consultations')
             .select('id, created_at, summary, transcript, ai_analysis_data')
@@ -139,7 +143,29 @@ const PatientDashboard = memo(({ patient, onClose, specialty: propSpecialty }: P
             .order('created_at', { ascending: false });
           
           if (error) throw error;
-          if (consults) historyData = consults;
+          
+          if (consults) {
+             // 2. Cargar Addendums (Notas Aclaratorias) para estas consultas
+             // Nota: Asumimos que existe una tabla 'consultation_addendums'. Si no, creala.
+             // Si no tienes tabla, esto fallará silenciosamente o necesitarás crearla.
+             // Por simplicidad, simularemos que viene vacío si falla, pero idealmente debes crear la tabla:
+             /* create table consultation_addendums (
+                  id uuid default uuid_generate_v4() primary key,
+                  note_id uuid references consultations(id) on delete cascade,
+                  content text not null,
+                  created_at timestamp with time zone default now()
+                );
+             */
+             const { data: addendums } = await supabase
+                .from('consultation_addendums')
+                .select('*')
+                .in('note_id', consults.map(c => c.id));
+
+             historyData = consults.map(c => ({
+                 ...c,
+                 addendums: addendums ? addendums.filter((a: any) => a.note_id === c.id) : []
+             }));
+          }
       }
 
       setHistoryTimeline(historyData);
@@ -157,7 +183,7 @@ const PatientDashboard = memo(({ patient, onClose, specialty: propSpecialty }: P
   useEffect(() => {
     setHistoryTimeline([]);
     setExpandedCards(new Set());
-    setEditingId(null);
+    setAddendumId(null);
     setActiveView('timeline');
     loadData(false);
   }, [patient?.id, loadData]);
@@ -165,16 +191,11 @@ const PatientDashboard = memo(({ patient, onClose, specialty: propSpecialty }: P
   // --- 🧠 CEREBRO DEL BALANCE CLÍNICO (Risk Analysis V2) ---
   const riskAnalysis = useMemo(() => {
     const risks: string[] = [];
-    
-    // 1. Analizar Consultas Previas
     const safeTimeline = Array.isArray(historyTimeline) ? historyTimeline : [];
     const timelineText = safeTimeline.map(c => ((c.summary || "") + " " + (c.transcript || ""))).join(" ").toLowerCase();
-    
-    // 2. Analizar Historial Normalizado
     const { text: bgText, allergies: bgAllergies } = extractHistoryText(patient.history);
     const fullText = (timelineText + " " + bgText + " " + bgAllergies).toLowerCase();
     
-    // Detección de Patrones Críticos (Ampliada)
     if (fullText.includes("alerg") || fullText.includes("reacción") || fullText.includes("anafilax")) risks.push("⚠️ ALERGIA DETECTADA");
     if (fullText.includes("diabet") || fullText.includes("dm2") || fullText.includes("glucosa") || fullText.includes("insulina")) risks.push("🩸 Riesgo Metabólico / Diabetes");
     if (fullText.includes("hiperten") || fullText.includes("has") || fullText.includes("presión alta") || fullText.includes("hta")) risks.push("❤️ Hipertensión Arterial");
@@ -182,33 +203,26 @@ const PatientDashboard = memo(({ patient, onClose, specialty: propSpecialty }: P
     if (fullText.includes("cardio") || fullText.includes("infarto") || fullText.includes("ic")) risks.push("🫀 Riesgo Cardiovascular");
     if (fullText.includes("asma") || fullText.includes("epoc") || fullText.includes("bronqu")) risks.push("🫁 Riesgo Respiratorio");
 
-    return [...new Set(risks)]; // Eliminar duplicados
+    return [...new Set(risks)]; 
   }, [historyTimeline, patient.history]);
 
-  // 🧠 MOTOR DE INFERENCIA PARA SNAPSHOT (SOLUCIÓN AL CAMPO VACÍO)
+  // 🧠 MOTOR DE INFERENCIA PARA SNAPSHOT
   const currentSnapshot = useMemo(() => {
-      // 1. Extraer Antecedentes Normalizados
       const { text: bgHistory, allergies: bgAllergies } = extractHistoryText(patient.history);
-      
-      // 2. Extraer Última Consulta (Dinámico)
       const lastConsult = historyTimeline.length > 0 ? historyTimeline[0] : null;
 
-      // 3. CONSTRUCCIÓN DE LA EVOLUCIÓN (Lógica de Prioridad Reforzada)
       let evolutionText = "";
       let auditText = "";
       
-      // Prioridad 1: Consulta Reciente
       if (lastConsult && lastConsult.summary) {
           const dateStr = new Date(lastConsult.created_at).toLocaleDateString();
           evolutionText = `Última visita (${dateStr}): ${lastConsult.summary}`;
           auditText = "Dar seguimiento a plan establecido en última visita.";
       } 
-      // Prioridad 2: Historial Clínico Base (Si existe texto real)
       else if (bgHistory && bgHistory.length > 5) {
           evolutionText = `Antecedentes: ${bgHistory}`;
           auditText = "Paciente sin consultas recientes. Revisar antecedentes basales.";
       }
-      // Prioridad 3: Fallback con Datos Demográficos (Para que nunca esté vacío)
       else {
           const ageInfo = patient.birth_date ? `Nacimiento: ${patient.birth_date}.` : "";
           const genderInfo = patient.gender ? `Género: ${patient.gender}.` : "";
@@ -216,19 +230,14 @@ const PatientDashboard = memo(({ patient, onClose, specialty: propSpecialty }: P
           auditText = "Expediente virgen. Iniciar anamnesis completa.";
       }
 
-      // Limpieza final para UI
       if (evolutionText.length > 300) evolutionText = evolutionText.substring(0, 297) + "...";
 
-      // 4. CONSTRUCCIÓN DE BANDERAS
       const activeFlags = [...riskAnalysis]; 
-      
-      // Agregar alergias explícitas si existen
       if (bgAllergies && bgAllergies.length > 2) {
           const allergyMsg = `⚠️ Alergia: ${bgAllergies}`;
           if (!activeFlags.includes(allergyMsg)) activeFlags.unshift(allergyMsg);
       }
 
-      // 5. CONSTRUCCIÓN DE PENDIENTES
       const actions: string[] = [];
       if (!lastConsult) actions.push("Realizar primera nota de evolución");
       if (bgHistory.length < 5) actions.push("Completar antecedentes patológicos");
@@ -244,44 +253,53 @@ const PatientDashboard = memo(({ patient, onClose, specialty: propSpecialty }: P
 
   // --- MANEJADORES UI ---
   const toggleCard = (id: string) => {
-    if (editingId === id) return;
+    if (addendumId === id) return; // Si está editando addendum, no colapsar
     const newSet = new Set(expandedCards);
     if (newSet.has(id)) newSet.delete(id); else newSet.add(id);
     setExpandedCards(newSet);
   };
 
-  const handleStartEdit = (note: Consultation) => {
-      setEditingId(note.id);
-      setEditText(note.summary || "");
+  // 🛡️ LÓGICA DE ADDENDUM (FE DE ERRATAS)
+  const handleStartAddendum = (note: Consultation) => {
+      setAddendumId(note.id);
+      setAddendumText("");
+      // Asegurar que la tarjeta esté expandida para ver el form
       const newSet = new Set(expandedCards);
       newSet.add(note.id);
       setExpandedCards(newSet);
   };
 
-  const handleCancelEdit = () => { setEditingId(null); setEditText(""); };
+  const handleCancelAddendum = () => { setAddendumId(null); setAddendumText(""); };
 
-  const handleSaveEdit = async (noteId: string) => {
-      if (!editText.trim()) return toast.error("La nota no puede estar vacía.");
-      setIsSavingEdit(true);
+  const handleSaveAddendum = async (noteId: string) => {
+      if (!addendumText.trim()) return toast.error("La nota aclaratoria no puede estar vacía.");
+      setIsSavingAddendum(true);
+      
       try {
-          const { error } = await supabase.from('consultations').update({ summary: editText }).eq('id', noteId);
-          if (error) throw error;
-          setHistoryTimeline(prev => prev.map(item => item.id === noteId ? { ...item, summary: editText } : item));
-          toast.success("Nota actualizada.");
-          handleCancelEdit();
-      } catch (error: any) { toast.error("Error: " + error.message); } finally { setIsSavingEdit(false); }
+          // Intentar insertar en la tabla de addendums
+          const { error } = await supabase.from('consultation_addendums').insert({
+              note_id: noteId,
+              content: addendumText
+          });
+          
+          if (error) {
+              // Fallback si la tabla no existe: Simular error amigable
+              console.error("Error DB Addendum:", error);
+              throw new Error("No se pudo guardar la nota aclaratoria (Error de Base de Datos).");
+          }
+
+          toast.success("Nota aclaratoria registrada legalmente.");
+          // Recargar datos para mostrar el nuevo addendum
+          loadData(true); 
+          handleCancelAddendum();
+
+      } catch (error: any) { 
+          toast.error(error.message); 
+      } finally { 
+          setIsSavingAddendum(false); 
+      }
   };
 
-  const handleDeleteNote = async (noteId: string) => {
-      if (!confirm("⚠️ ¿Eliminar nota permanentemente?")) return;
-      setIsDeletingId(noteId);
-      try {
-          const { error } = await supabase.from('consultations').delete().eq('id', noteId);
-          if (error) throw error;
-          setHistoryTimeline(prev => prev.filter(item => item.id !== noteId));
-          toast.success("Nota eliminada.");
-      } catch (e) { toast.error("Error al eliminar."); } finally { setIsDeletingId(null); }
-  };
 
   if (!patient) return null;
 
@@ -333,7 +351,7 @@ const PatientDashboard = memo(({ patient, onClose, specialty: propSpecialty }: P
                     {/* ZONA IZQUIERDA: CONTENIDO */}
                     <div className="lg:col-span-8 space-y-6">
                         
-                        {/* 🌟 VITAL SNAPSHOT (RESUMEN INTELIGENTE) */}
+                        {/* 🌟 VITAL SNAPSHOT */}
                         <div className="animate-in fade-in slide-in-from-top-4 duration-500">
                            <VitalSnapshotCard 
                               insight={currentSnapshot} 
@@ -367,17 +385,19 @@ const PatientDashboard = memo(({ patient, onClose, specialty: propSpecialty }: P
                                 ) : (
                                     <div className="space-y-8 relative before:absolute before:inset-0 before:ml-5 before:h-full before:w-0.5 before:bg-slate-200">
                                             {historyTimeline.map((consulta) => {
-                                                const isEditing = editingId === consulta.id;
-                                                const isExpanded = expandedCards.has(consulta.id) || isEditing; 
+                                                const isAddingAddendum = addendumId === consulta.id;
+                                                const isExpanded = expandedCards.has(consulta.id) || isAddingAddendum; 
                                                 const isLongText = (consulta.summary || "").length > 250;
-                                                const isDeleting = isDeletingId === consulta.id;
+                                                
+                                                // Calcular si tiene addendums
+                                                const hasAddendums = consulta.addendums && consulta.addendums.length > 0;
 
                                                 return (
-                                                <div key={consulta.id} className={`relative flex items-start gap-4 group animate-in fade-in slide-in-from-bottom-4 ${isDeleting ? 'opacity-50' : ''}`}>
-                                                        <div className={`flex items-center justify-center w-10 h-10 rounded-full border-4 border-white text-white shadow-sm shrink-0 z-10 transition-colors ${isEditing ? 'bg-indigo-600' : 'bg-indigo-500'}`}>
-                                                            {isEditing ? <Edit2 size={16} /> : <FileText size={16}/>}
+                                                <div key={consulta.id} className="relative flex items-start gap-4 group animate-in fade-in slide-in-from-bottom-4">
+                                                        <div className="flex items-center justify-center w-10 h-10 rounded-full border-4 border-white text-white shadow-sm shrink-0 z-10 transition-colors bg-indigo-500">
+                                                            <FileText size={16}/>
                                                         </div>
-                                                        <div className={`flex-1 bg-white p-5 rounded-xl shadow-sm border transition-all ${isEditing ? 'border-indigo-400 ring-1 ring-indigo-400' : 'border-slate-200 hover:border-indigo-200'}`}>
+                                                        <div className="flex-1 bg-white p-5 rounded-xl shadow-sm border border-slate-200 hover:border-indigo-200 transition-all">
                                                             <div className="flex items-center justify-between mb-3 border-b border-slate-50 pb-2">
                                                                 <div className="flex flex-col">
                                                                     <time className="font-bold text-sm text-slate-800">
@@ -387,29 +407,61 @@ const PatientDashboard = memo(({ patient, onClose, specialty: propSpecialty }: P
                                                                         {new Date(consulta.created_at).toLocaleTimeString(undefined, { hour: '2-digit', minute:'2-digit' })}
                                                                     </span>
                                                                 </div>
-                                                                {!isEditing && (
-                                                                    <div className="flex gap-1 ml-2 pl-2">
-                                                                            <button onClick={() => handleStartEdit(consulta)} className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-lg"><Edit2 size={14}/></button>
-                                                                            <button onClick={() => handleDeleteNote(consulta.id)} className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg">{isDeleting ? <RefreshCw size={14} className="animate-spin"/> : <Trash2 size={14}/>}</button>
+                                                                
+                                                                {/* BOTÓN FE DE ERRATAS (REEMPLAZA A EDITAR/ELIMINAR) */}
+                                                                {!isAddingAddendum && (
+                                                                    <div className="ml-2 pl-2">
+                                                                        <button onClick={() => handleStartAddendum(consulta)} className="flex items-center gap-1.5 px-2 py-1 text-xs font-bold text-amber-600 bg-amber-50 hover:bg-amber-100 rounded-lg transition-colors border border-amber-100" title="Agregar Nota Aclaratoria Legal">
+                                                                            <ShieldAlert size={12}/> 
+                                                                            <span className="hidden sm:inline">Nota Aclaratoria</span>
+                                                                        </button>
                                                                     </div>
                                                                 )}
                                                             </div>
                                                             
-                                                            {isEditing ? (
-                                                                <div className="animate-in fade-in">
-                                                                    <textarea className="w-full min-h-[200px] p-3 rounded-lg border border-slate-300 bg-slate-50 text-sm font-mono focus:ring-2 focus:ring-indigo-500" value={editText} onChange={(e) => setEditText(e.target.value)} autoFocus />
-                                                                    <div className="flex justify-end gap-2 mt-3">
-                                                                        <button onClick={handleCancelEdit} disabled={isSavingEdit} className="px-3 py-1.5 text-xs font-bold text-slate-500 hover:bg-slate-100 rounded-lg flex items-center gap-1"><XCircle size={14}/> Cancelar</button>
-                                                                        <button onClick={() => handleSaveEdit(consulta.id)} disabled={isSavingEdit} className="px-3 py-1.5 text-xs font-bold bg-indigo-600 text-white hover:bg-indigo-700 rounded-lg flex items-center gap-1">{isSavingEdit ? <RefreshCw size={14} className="animate-spin"/> : <Check size={14}/>} Guardar</button>
+                                                            {/* CONTENIDO DE LA NOTA */}
+                                                            <div className={`text-sm text-slate-600 whitespace-pre-line leading-relaxed ${!isExpanded ? 'line-clamp-4' : ''}`}>
+                                                                {consulta.summary}
+                                                            </div>
+                                                            
+                                                            {/* VISUALIZACIÓN DE ADDENDUMS (FE DE ERRATAS EXISTENTES) */}
+                                                            {hasAddendums && (
+                                                                <div className="mt-4 space-y-2">
+                                                                    {consulta.addendums?.map((addendum, idx) => (
+                                                                        <div key={idx} className="bg-amber-50 border-l-4 border-amber-400 p-3 rounded-r-lg text-xs">
+                                                                            <div className="flex justify-between items-center mb-1 text-amber-700/70 font-bold uppercase tracking-wider text-[10px]">
+                                                                                <span>Fe de Erratas #{idx + 1}</span>
+                                                                                <span>{new Date(addendum.created_at).toLocaleDateString()}</span>
+                                                                            </div>
+                                                                            <p className="text-amber-900 leading-relaxed font-medium">"{addendum.content}"</p>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            )}
+
+                                                            {/* FORMULARIO PARA AGREGAR NUEVA ACLARACIÓN */}
+                                                            {isAddingAddendum && (
+                                                                <div className="mt-4 animate-in fade-in bg-slate-50 p-3 rounded-lg border border-slate-200">
+                                                                    <label className="text-[10px] font-bold text-slate-500 uppercase mb-2 block">Nueva Nota Aclaratoria (Addendum Legal)</label>
+                                                                    <textarea 
+                                                                        className="w-full min-h-[80px] p-2 rounded border border-slate-300 bg-white text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500 mb-2" 
+                                                                        placeholder="Describa la corrección o aclaración necesaria..."
+                                                                        value={addendumText} 
+                                                                        onChange={(e) => setAddendumText(e.target.value)} 
+                                                                        autoFocus 
+                                                                    />
+                                                                    <div className="flex justify-end gap-2">
+                                                                        <button onClick={handleCancelAddendum} disabled={isSavingAddendum} className="px-3 py-1.5 text-xs font-bold text-slate-500 hover:bg-slate-200 rounded-lg">Cancelar</button>
+                                                                        <button onClick={() => handleSaveAddendum(consulta.id)} disabled={isSavingAddendum} className="px-3 py-1.5 text-xs font-bold bg-amber-600 text-white hover:bg-amber-700 rounded-lg flex items-center gap-1">
+                                                                            {isSavingAddendum ? <Loader2 size={12} className="animate-spin"/> : <ShieldCheck size={12}/>} Guardar Aclaración
+                                                                        </button>
                                                                     </div>
                                                                 </div>
-                                                            ) : (
-                                                                <>
-                                                                    <div className={`text-sm text-slate-600 whitespace-pre-line leading-relaxed ${!isExpanded ? 'line-clamp-4' : ''}`}>{consulta.summary}</div>
-                                                                    {isLongText && (
-                                                                        <button onClick={() => toggleCard(consulta.id)} className="mt-3 text-xs font-bold text-indigo-600 flex items-center gap-1 hover:underline">{isExpanded ? <>Ver menos <ChevronUp size={12}/></> : <>Leer nota completa <ChevronDown size={12}/></>}</button>
-                                                                    )}
-                                                                </>
+                                                            )}
+                                                            
+                                                            {/* LEER MÁS */}
+                                                            {isLongText && !isAddingAddendum && (
+                                                                <button onClick={() => toggleCard(consulta.id)} className="mt-3 text-xs font-bold text-indigo-600 flex items-center gap-1 hover:underline">{isExpanded ? <>Ver menos <ChevronUp size={12}/></> : <>Leer nota completa <ChevronDown size={12}/></>}</button>
                                                             )}
                                                         </div>
                                                     </div>
@@ -439,7 +491,7 @@ const PatientDashboard = memo(({ patient, onClose, specialty: propSpecialty }: P
                     <div className="hidden lg:block lg:col-span-4">
                         <div className="sticky top-0 space-y-6">
                             
-                            {/* PANEL LATERAL DE ALERTAS (NUEVO) */}
+                            {/* PANEL LATERAL DE ALERTAS */}
                             {!isLoading && riskAnalysis.length > 0 && isRealPatient && (
                                 <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-sm animate-in fade-in slide-in-from-right-2">
                                     <h4 className="text-xs font-bold text-slate-400 uppercase mb-3 flex items-center gap-2"><BrainCircuit size={14}/> Análisis de Riesgo IA</h4>
