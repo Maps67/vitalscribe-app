@@ -13,6 +13,8 @@ import { SpecialtyVault } from './SpecialtyVault';
 import { DoctorFileGallery } from './DoctorFileGallery';
 import { UploadMedico } from './UploadMedico';
 import { VitalSnapshotCard } from './VitalSnapshotCard'; 
+// 🔥 NUEVO: Importamos el Importador de Word
+import { WordImporter } from './WordImporter';
 
 // --- TIPOS ---
 interface Patient {
@@ -351,6 +353,14 @@ const PatientDashboard = memo(({ patient, onClose, specialty: propSpecialty }: P
                     {/* ZONA IZQUIERDA: CONTENIDO */}
                     <div className="lg:col-span-8 space-y-6">
                         
+                        {/* 🔥 AQUÍ ESTÁ EL IMPORTADOR DE WORD (Solo pacientes reales) */}
+                        {isRealPatient && (
+                            <WordImporter 
+                                patientId={patient.id} 
+                                onImportComplete={() => loadData(true)} 
+                            />
+                        )}
+                        
                         {/* 🌟 VITAL SNAPSHOT */}
                         <div className="animate-in fade-in slide-in-from-top-4 duration-500">
                            <VitalSnapshotCard 
@@ -388,8 +398,6 @@ const PatientDashboard = memo(({ patient, onClose, specialty: propSpecialty }: P
                                                 const isAddingAddendum = addendumId === consulta.id;
                                                 const isExpanded = expandedCards.has(consulta.id) || isAddingAddendum; 
                                                 const isLongText = (consulta.summary || "").length > 250;
-                                                
-                                                // Calcular si tiene addendums
                                                 const hasAddendums = consulta.addendums && consulta.addendums.length > 0;
 
                                                 return (
@@ -408,23 +416,20 @@ const PatientDashboard = memo(({ patient, onClose, specialty: propSpecialty }: P
                                                                     </span>
                                                                 </div>
                                                                 
-                                                                {/* BOTÓN FE DE ERRATAS (REEMPLAZA A EDITAR/ELIMINAR) */}
                                                                 {!isAddingAddendum && (
                                                                     <div className="ml-2 pl-2">
-                                                                        <button onClick={() => handleStartAddendum(consulta)} className="flex items-center gap-1.5 px-2 py-1 text-xs font-bold text-amber-600 bg-amber-50 hover:bg-amber-100 rounded-lg transition-colors border border-amber-100" title="Agregar Nota Aclaratoria Legal">
-                                                                            <ShieldAlert size={12}/> 
-                                                                            <span className="hidden sm:inline">Nota Aclaratoria</span>
-                                                                        </button>
+                                                                            <button onClick={() => handleStartAddendum(consulta)} className="flex items-center gap-1.5 px-2 py-1 text-xs font-bold text-amber-600 bg-amber-50 hover:bg-amber-100 rounded-lg transition-colors border border-amber-100" title="Agregar Nota Aclaratoria Legal">
+                                                                                    <ShieldAlert size={12}/> 
+                                                                                    <span className="hidden sm:inline">Nota Aclaratoria</span>
+                                                                            </button>
                                                                     </div>
                                                                 )}
                                                             </div>
                                                             
-                                                            {/* CONTENIDO DE LA NOTA */}
                                                             <div className={`text-sm text-slate-600 whitespace-pre-line leading-relaxed ${!isExpanded ? 'line-clamp-4' : ''}`}>
-                                                                {consulta.summary}
+                                                                    {consulta.summary}
                                                             </div>
                                                             
-                                                            {/* VISUALIZACIÓN DE ADDENDUMS (FE DE ERRATAS EXISTENTES) */}
                                                             {hasAddendums && (
                                                                 <div className="mt-4 space-y-2">
                                                                     {consulta.addendums?.map((addendum, idx) => (
@@ -439,27 +444,25 @@ const PatientDashboard = memo(({ patient, onClose, specialty: propSpecialty }: P
                                                                 </div>
                                                             )}
 
-                                                            {/* FORMULARIO PARA AGREGAR NUEVA ACLARACIÓN */}
                                                             {isAddingAddendum && (
                                                                 <div className="mt-4 animate-in fade-in bg-slate-50 p-3 rounded-lg border border-slate-200">
-                                                                    <label className="text-[10px] font-bold text-slate-500 uppercase mb-2 block">Nueva Nota Aclaratoria (Addendum Legal)</label>
-                                                                    <textarea 
-                                                                        className="w-full min-h-[80px] p-2 rounded border border-slate-300 bg-white text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500 mb-2" 
-                                                                        placeholder="Describa la corrección o aclaración necesaria..."
-                                                                        value={addendumText} 
-                                                                        onChange={(e) => setAddendumText(e.target.value)} 
-                                                                        autoFocus 
-                                                                    />
-                                                                    <div className="flex justify-end gap-2">
-                                                                        <button onClick={handleCancelAddendum} disabled={isSavingAddendum} className="px-3 py-1.5 text-xs font-bold text-slate-500 hover:bg-slate-200 rounded-lg">Cancelar</button>
-                                                                        <button onClick={() => handleSaveAddendum(consulta.id)} disabled={isSavingAddendum} className="px-3 py-1.5 text-xs font-bold bg-amber-600 text-white hover:bg-amber-700 rounded-lg flex items-center gap-1">
-                                                                            {isSavingAddendum ? <Loader2 size={12} className="animate-spin"/> : <ShieldCheck size={12}/>} Guardar Aclaración
-                                                                        </button>
-                                                                    </div>
+                                                                        <label className="text-[10px] font-bold text-slate-500 uppercase mb-2 block">Nueva Nota Aclaratoria (Addendum Legal)</label>
+                                                                        <textarea 
+                                                                            className="w-full min-h-[80px] p-2 rounded border border-slate-300 bg-white text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500 mb-2" 
+                                                                            placeholder="Describa la corrección o aclaración necesaria..."
+                                                                            value={addendumText} 
+                                                                            onChange={(e) => setAddendumText(e.target.value)} 
+                                                                            autoFocus 
+                                                                        />
+                                                                        <div className="flex justify-end gap-2">
+                                                                            <button onClick={handleCancelAddendum} disabled={isSavingAddendum} className="px-3 py-1.5 text-xs font-bold text-slate-500 hover:bg-slate-200 rounded-lg">Cancelar</button>
+                                                                            <button onClick={() => handleSaveAddendum(consulta.id)} disabled={isSavingAddendum} className="px-3 py-1.5 text-xs font-bold bg-amber-600 text-white hover:bg-amber-700 rounded-lg flex items-center gap-1">
+                                                                                {isSavingAddendum ? <Loader2 size={12} className="animate-spin"/> : <ShieldCheck size={12}/>} Guardar Aclaración
+                                                                            </button>
+                                                                        </div>
                                                                 </div>
                                                             )}
                                                             
-                                                            {/* LEER MÁS */}
                                                             {isLongText && !isAddingAddendum && (
                                                                 <button onClick={() => toggleCard(consulta.id)} className="mt-3 text-xs font-bold text-indigo-600 flex items-center gap-1 hover:underline">{isExpanded ? <>Ver menos <ChevronUp size={12}/></> : <>Leer nota completa <ChevronDown size={12}/></>}</button>
                                                             )}
