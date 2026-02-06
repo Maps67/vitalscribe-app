@@ -7,7 +7,7 @@ const API_KEY = import.meta.env.VITE_GOOGLE_GENAI_API_KEY || "";
 
 // CORRECCIÓN CRÍTICA: Usamos el modelo estable y rápido para el CHAT.
 // Esto separa el tráfico del Chat (Flash) de la Consulta Médica (Pro/Exp).
-const MODEL_NAME = "gemini-1.5-flash"; 
+const MODEL_NAME = "gemini-2.5-flash"; 
 
 /**
  * 📘 BIBLIA DE CONOCIMIENTO (MANUAL OPERATIVO COMPLETO v5.2)

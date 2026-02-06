@@ -23,7 +23,7 @@ serve(async (req) => {
     }
 
     // 3. Configuración del modelo (Centralizado)
-    const MODEL = "gemini-1.5-flash"; 
+    const MODEL = "gemini-2.5-flash"; 
     const BASE_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${API_KEY}`;
 
     let prompt = "";

@@ -14,8 +14,6 @@ console.log("🚀 SUPABASE EDGE: MEDICINE AI - OPERATIONAL [COGNITIVE SHIELD ACT
 const MODELS_TO_TRY = [
   "gemini-3-flash-preview", 
   "gemini-2.5-flash", 
-  "gemini-1.5-flash-002", 
-  "gemini-1.5-pro-002"
 ];
 
 serve(async (req) => {

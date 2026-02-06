@@ -20,7 +20,7 @@ class GeminiAgentService {
     try {
       // 1. Intentamos listar modelos
       const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${API_KEY}`);
-      if (!response.ok) return "gemini-1.5-flash"; // Fallback moderno por defecto
+      if (!response.ok) return "gemini-2.5-flash"; // Fallback moderno por defecto
       
       const data = await response.json();
       const models = data.models || [];
@@ -36,7 +36,7 @@ class GeminiAgentService {
       return "gemini-pro";
     } catch (e) {
       console.warn("Radar falló, usando fallback seguro.");
-      return "gemini-1.5-flash";
+      return "gemini-2.5-flash";
     }
   }
 

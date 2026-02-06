@@ -18770,7 +18770,7 @@ class GeminiAgentService {
     try {
       // 1. Intentamos listar modelos
       const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${API_KEY}`);
-      if (!response.ok) return "gemini-1.5-flash"; // Fallback moderno por defecto
+      if (!response.ok) return "gemini-2.5-flash"; // Fallback moderno por defecto
       
       const data = await response.json();
       const models = data.models || [];
@@ -18786,7 +18786,7 @@ class GeminiAgentService {
       return "gemini-pro";
     } catch (e) {
       console.warn("Radar falló, usando fallback seguro.");
-      return "gemini-1.5-flash";
+      return "gemini-2.5-flash";
     }
   }
 
@@ -18892,7 +18892,7 @@ if (!API_KEY) {
 // 🛡️ LISTA DE COMBATE (High IQ Only)
 const MODELS_TO_TRY = [
   "gemini-2.0-flash-exp",    // 1. Velocidad + Razonamiento superior
-  "gemini-1.5-flash-002",    // 2. Estable y probado
+  "gemini-2.5-flash-002",    // 2. Estable y probado
   "gemini-1.5-pro-002"       // 3. Respaldo pesado
 ];
 
@@ -19720,7 +19720,7 @@ const API_KEY = import.meta.env.VITE_GOOGLE_GENAI_API_KEY || "";
 
 // CORRECCIÓN CRÍTICA: Usamos el modelo estable y rápido para el CHAT.
 // Esto separa el tráfico del Chat (Flash) de la Consulta Médica (Pro/Exp).
-const MODEL_NAME = "gemini-1.5-flash"; 
+const MODEL_NAME = "gemini-2.5-flash"; 
 
 /**
  * 📘 BIBLIA DE CONOCIMIENTO (MANUAL OPERATIVO COMPLETO v5.2)
@@ -20705,7 +20705,7 @@ serve(async (req) => {
     }
 
     // 3. Configuración del modelo (Centralizado)
-    const MODEL = "gemini-1.5-flash"; 
+    const MODEL = "gemini-2.5-flash"; 
     const BASE_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${API_KEY}`;
 
     let prompt = "";
@@ -20930,7 +20930,7 @@ console.log("🚀 SUPABASE EDGE: MEDICINE AI - FINAL RECOVERY");
 const MODELS_TO_TRY = [
   "gemini-3-flash-preview", 
   "gemini-2.0-flash-exp", 
-  "gemini-1.5-flash-002", 
+  "gemini-2.5-flash-002", 
   "gemini-1.5-pro-002"
 ];
 
@@ -21045,7 +21045,7 @@ console.log("🚀 SUPABASE EDGE: MEDICINE AI - FINAL RECOVERY [WITH TOOLS]");
 const MODELS_TO_TRY = [
   "gemini-3-flash-preview", 
   "gemini-2.0-flash-exp", 
-  "gemini-1.5-flash-002", 
+  "gemini-2.5-flash-002", 
   "gemini-1.5-pro-002"
 ];
 
