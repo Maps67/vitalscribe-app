@@ -2059,20 +2059,25 @@ const ConsultationView: React.FC = () => {
                                                     <Quote size={14} className="text-indigo-500"/> Transcripción Inteligente
                                                 </h4>
                                                 <div className="space-y-4 max-h-[300px] overflow-y-auto custom-scrollbar pr-2">
-                                                        {generatedNote.conversation_log.map((line, idx) => (
-                                                            <div key={idx} className={`flex ${line.speaker === 'Médico' ? 'justify-end' : 'justify-start'}`}>
-                                                                <div className={`max-w-[80%] rounded-2xl p-3 text-sm ${
-                                                                    line.speaker === 'Médico' 
-                                                                        ? 'bg-blue-50 text-blue-900 dark:bg-blue-900/30 dark:text-blue-100 rounded-tr-none' 
-                                                                        : 'bg-white border border-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700 rounded-tl-none'
-                                                                }`}>
-                                                                    <span className={`text-[10px] font-bold block mb-1 uppercase opacity-70 ${line.speaker === 'Médico' ? 'text-right' : 'text-left'}`}>
-                                                                                                        {line.speaker}
-                                                                    </span>
-                                                                    {line.text}
-                                                                </div>
-                                                            </div>
-                                                        ))}
+                                                        {generatedNote.conversation_log.map((line, idx) => {
+  // Lógica inteligente para detectar al médico
+  const isDoctor = ['médico', 'medico', 'doctor', 'dr', 'dr.'].includes(line.speaker.toLowerCase().trim());
+  
+  return (
+    <div key={idx} className={`flex w-full mb-4 ${isDoctor ? 'justify-end' : 'justify-start'}`}>
+      <div className={`max-w-[80%] rounded-2xl p-4 text-sm ${
+        isDoctor
+          ? 'bg-blue-50 text-blue-900 dark:bg-blue-900/30 dark:text-blue-100 rounded-tr-none' // Estilo Médico (Derecha)
+          : 'bg-white border border-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700 rounded-tl-none' // Estilo Paciente (Izquierda)
+      }`}>
+        <span className={`text-[10px] font-bold block mb-1 uppercase opacity-70 ${isDoctor ? 'text-right' : 'text-left'}`}>
+          {line.speaker}
+        </span>
+        <p>{line.text}</p>
+      </div>
+    </div>
+  );
+})}
                                                 </div>
                                             </div>
                                     )}
