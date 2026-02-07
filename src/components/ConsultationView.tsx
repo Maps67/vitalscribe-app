@@ -7,12 +7,12 @@ import {
   ChevronDown, ChevronUp, Sparkles, PenLine, UserPlus, 
   ShieldCheck, AlertCircle, RefreshCw, Pill, Plus, Building2,
   Activity, Calculator, ClipboardList, Scissors, Microscope, Eye, Lock,
-  Mic, Square, Trash2, Shield, CheckCircle 
+  Mic, Square, Trash2, Shield, CheckCircle, Utensils 
 } from 'lucide-react';
 
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition'; 
 import { GeminiMedicalService } from '../services/GeminiMedicalService';
-import { ChatMessage, GeminiResponse, Patient, DoctorProfile, PatientInsight, MedicationItem, ClinicalInsight } from '../types';
+import { ChatMessage, GeminiResponse, Patient, DoctorProfile, PatientInsight, MedicationItem, ClinicalInsight, NutritionPlan, BodyCompositionData } from '../types';
 import { supabase } from '../lib/supabase';
 import FormattedText from './FormattedText';
 import { toast } from 'sonner';
@@ -43,6 +43,12 @@ import { analizarConBalance360 } from '../services/BalanceService';
 // ✅ INYECCIÓN RIESGO QUIRÚRGICO
 import { RiskCalculatorModal } from './tools/RiskCalculatorModal';
 import { RiskAssessmentResult } from '../types/RiskModels';
+
+// ✅ [MÓDULO NUTRICIÓN] IMPORTACIONES FASE 2
+import MealPlanEditor from './Nutrition/MealPlanEditor';
+import InBodyWidget from './Nutrition/InBodyWidget';
+import EpigeneticBadge from './Nutrition/EpigeneticBadge';
+import DietPDF from './Nutrition/DietPDF';
 
 // ✅ CORRECCIÓN DE ARQUITECTURA: 'balance_360' es ahora una Pestaña Independiente
 type TabType = 'record' | 'patient' | 'chat' | 'insurance' | 'surgical_report' | 'balance_360';
@@ -93,7 +99,9 @@ const SPECIALTIES = [
   "Traumatología y Ortopedia", 
   "Traumatología: Artroscopia", 
   "Urología", 
-  "Urgencias Médicas"
+  "Urgencias Médicas",
+  "Nutrición Clínica", // ✅ AGREGADO PARA SOPORTE
+  "Nutriología",       // ✅ AGREGADO PARA SOPORTE
 ];
 
 // --- Feature: Folio Controlado (Lista Blanca de Especialidades) ---
@@ -124,6 +132,14 @@ const SURGICAL_SPECIALTIES = [
   'Traumatología y Ortopedia',
   'Traumatología: Artroscopia',
   'Urología'
+];
+
+// --- Feature: Módulo Nutrición (Lista Blanca) ---
+const NUTRITION_SPECIALTIES = [
+  'Nutrición',
+  'Nutriología',
+  'Dietista',
+  'Bariatría' // A veces usan ambas herramientas
 ];
 
 const cleanHistoryString = (input: any): string => {
@@ -222,6 +238,10 @@ const ConsultationView: React.FC = () => {
   const [editablePrescriptions, setEditablePrescriptions] = useState<MedicationItem[]>([]);
   const [isEditingInstructions, setIsEditingInstructions] = useState(false);
 
+  // --- [NUTRICIÓN] Estados Locales ---
+  const [currentMealPlan, setCurrentMealPlan] = useState<NutritionPlan | null>(null);
+  const [currentBodyComp, setCurrentBodyComp] = useState<BodyCompositionData | null>(null);
+
   // --- Feature: Folio Controlado (Estado Local) ---
   const [specialFolio, setSpecialFolio] = useState('');
   
@@ -288,7 +308,15 @@ const ConsultationView: React.FC = () => {
   const isSurgicalProfile = useMemo(() => {
     if (!doctorProfile?.specialty) return false;
     return SURGICAL_SPECIALTIES.some(s => 
-      doctorProfile.specialty.toLowerCase().includes(s.toLowerCase())
+      doctorProfile.specialty!.toLowerCase().includes(s.toLowerCase())
+    );
+  }, [doctorProfile]);
+
+  // --- [NUEVO] DETECCIÓN DE PERFIL NUTRICIÓN ---
+  const isNutritionProfile = useMemo(() => {
+    if (!doctorProfile?.specialty) return false;
+    return NUTRITION_SPECIALTIES.some(s => 
+      doctorProfile.specialty!.toLowerCase().includes(s.toLowerCase())
     );
   }, [doctorProfile]);
 
@@ -694,6 +722,10 @@ const ConsultationView: React.FC = () => {
       setSessionSnapshot(null);
       setBalanceAuditResult(null); // Limpiar auditoría anterior
       
+      // ✅ [NUTRICIÓN] Limpiar estado local
+      setCurrentMealPlan(null);
+      setCurrentBodyComp(null);
+
       if (patient.isGhost) {
           const tempPatient = {
               ...patient,
@@ -757,6 +789,7 @@ const ConsultationView: React.FC = () => {
     setManualContext(""); 
     setSessionSnapshot(null);
     setBalanceAuditResult(null);
+    setCurrentMealPlan(null);
     startTimeRef.current = Date.now(); 
     
     toast.success(`Paciente registrado: ${name}`);
@@ -857,6 +890,8 @@ const ConsultationView: React.FC = () => {
           setGeneratedNote(null); 
           setSessionSnapshot(null); 
           setBalanceAuditResult(null);
+          setCurrentMealPlan(null);
+          setCurrentBodyComp(null);
           setEditableInstructions('');
           setEditablePrescriptions([]);
           setSpecialFolio('');
@@ -900,6 +935,8 @@ const ConsultationView: React.FC = () => {
           setConsultationId(null); // Reset ID
           setIsRiskExpanded(false);
           setSpecialFolio('');
+          setCurrentMealPlan(null);
+          setCurrentBodyComp(null);
           startTimeRef.current = Date.now(); 
 
       } catch (error: any) {
@@ -1086,6 +1123,24 @@ const ConsultationView: React.FC = () => {
           fullMedicalContext,
           manualContext 
       ) as EnhancedGeminiResponse;
+
+      if ((response as any).detected_metrics) {
+          const metrics = (response as any).detected_metrics;
+          
+          // Solo actualizamos si viene algún dato real (mayor a 0)
+          if (metrics.weight_kg > 0 || metrics.body_fat_percent > 0 || metrics.muscle_mass_kg > 0) {
+              setCurrentBodyComp(prev => ({
+                  ...prev, // Mantener fecha y datos previos si existen
+                  weight_kg: metrics.weight_kg || prev?.weight_kg || 0,
+                  body_fat_percent: metrics.body_fat_percent || prev?.body_fat_percent || 0,
+                  muscle_mass_kg: metrics.muscle_mass_kg || prev?.muscle_mass_kg || 0,
+                  visceral_fat_level: metrics.visceral_fat_level || prev?.visceral_fat_level || 0,
+                  // Si no hay fecha previa, usamos hoy
+                  date_measured: prev?.date_measured || new Date().toISOString().split('T')[0]
+              }));
+              toast.success("🤖 Datos de InBody extraídos de la conversación.");
+          }
+      }
       
       if (!response || (!response.soapData && !response.clinicalNote)) {
           throw new Error("La IA generó una respuesta vacía o inválida.");
@@ -1339,6 +1394,9 @@ const ConsultationView: React.FC = () => {
       return 0;
   };
 
+  // ===========================================================================
+  // 🖨️ MOTOR DE GENERACIÓN DE PDF (BIFURCADO: MEDICINA vs NUTRICIÓN)
+  // ===========================================================================
   const generatePDFBlob = async () => {
       if (!selectedPatient || !doctorProfile) return null;
 
@@ -1346,11 +1404,30 @@ const ConsultationView: React.FC = () => {
       const dob = patientAny.birthdate || patientAny.dob || patientAny.fecha_nacimiento;
       const ageDisplay = calculateAge(dob);
 
+      // 1️⃣ BIFURCACIÓN NUTRICIÓN: Si es nutriólogo, generamos el Plan Alimenticio
+      if (isNutritionProfile) {
+          try {
+              return await pdf(
+                  <DietPDF 
+                      doctor={doctorProfile}
+                      patient={selectedPatient}
+                      plan={currentMealPlan} // Usa el estado local del plan
+                      bodyComp={currentBodyComp} // Usa el estado local del InBody
+                      date={new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' })}
+                  />
+              ).toBlob();
+          } catch (error) {
+              console.error("❌ Error generando PDF de Dieta:", error);
+              toast.error("Error al generar el documento PDF de Nutrición.");
+              return null;
+          }
+      }
+
+      // 2️⃣ FLUJO MÉDICO ESTÁNDAR (RECETA / NOTA CLÍNICA)
+      // Esta es la lógica original intacta para médicos generales/especialistas
       const legacyContent = generatedNote?.clinicalNote || "";
 
       // FILTRO DE SEGURIDAD: Excluir medicamentos suspendidos de la receta impresa
-      // Esto evita que aparezcan tachados o con la leyenda "SUSPENDER" en el PDF,
-      // reduciendo el riesgo de que el paciente los compre por error.
       const activePrescriptions = editablePrescriptions.filter(med => {
           const isSuspended = (med as any).action === 'SUSPENDER' || 
                               (med.dose && med.dose.toUpperCase().includes('SUSPENDER')) || 
@@ -1373,7 +1450,7 @@ const ConsultationView: React.FC = () => {
                 patientName={selectedPatient.name}
                 patientAge={ageDisplay} 
                 date={new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' })}
-                prescriptions={activePrescriptions}  // <--- SE ENVÍA LISTA FILTRADA
+                prescriptions={activePrescriptions} 
                 instructions={editableInstructions}
                 riskAnalysis={generatedNote?.risk_analysis}
                 content={activePrescriptions.length > 0 ? undefined : legacyContent}
@@ -1497,7 +1574,12 @@ const ConsultationView: React.FC = () => {
 
         const finalAiData = {
             ...generatedNote,
-            insurance_data: hasValidInsurance ? insuranceData : null 
+            insurance_data: hasValidInsurance ? insuranceData : null,
+            // ✅ [NUTRICIÓN] Guardar datos específicos en JSONB
+            nutrition_data: isNutritionProfile ? {
+                generated_plan: currentMealPlan,
+                body_composition: currentBodyComp
+            } : null
         };
 
         const payload = {
@@ -1559,6 +1641,10 @@ const ConsultationView: React.FC = () => {
         setLinkedAppointmentId(null);
         setManualContext(""); 
         
+        // Limpieza Nutrición
+        setCurrentMealPlan(null);
+        setCurrentBodyComp(null);
+
         setSpecialFolio('');
         setConsultationId(null); // Limpiamos ID después de finalizar el flujo completo
         
@@ -1674,10 +1760,12 @@ const ConsultationView: React.FC = () => {
       const SPECIALTY_CHIPS: Record<string, string[]> = {
           
           // --- CIRUGÍA GENERAL Y SUBESPECIALIDADES ---
-          // Cubre: Hernias, Vesícula, Apéndice, Post-op, Heridas.
-          // "Opciones Técnicas" activa la búsqueda de mallas, abordajes o nuevos procedimientos según el caso.
           'Cirugía': ['📉 Riesgo Preoperatorio', '💊 Manejo Post-quirúrgico', '🛠️ Opciones Técnicas'],
           
+          // --- NUTRICIÓN ---
+          'Nutrición': ['🥦 Equivalentes', '📉 Déficit Calórico', '🧬 Nutrigenómica'],
+          'Nutriología': ['🥦 Equivalentes', '📉 Déficit Calórico', '🧬 Nutrigenómica'],
+
           // --- OTRAS ÁREAS ---
           'Pediatría': ['⚖️ Dosis Ponderal', '🚩 Signos de Alarma', '👶 Percentiles'],
           'Cardiología': ['💓 Riesgo CV', '💊 Ajuste Renal', '⚠️ Interacción Fármacos'],
@@ -1701,10 +1789,6 @@ const ConsultationView: React.FC = () => {
           // Pequeño retardo para permitir que el estado se actualice antes de enviar
           setTimeout(() => {
               const fakeEvent = { preventDefault: () => {} } as React.FormEvent;
-              // Llamamos a la función de envío existente
-              // NOTA: Para que esto funcione perfecto, handleChatSend debe leer el estado actualizado.
-              // Como React es asíncrono, lo ideal es disparar el evento manualmente.
-              // Aquí simulamos el clic del usuario para mayor seguridad:
               const submitBtn = document.getElementById('chat-submit-btn');
               if(submitBtn) submitBtn.click();
           }, 100);
@@ -1842,7 +1926,15 @@ const ConsultationView: React.FC = () => {
                 {/* BARRA DE PESTAÑAS (TAB BAR) */}
                 <div className="flex border-b dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0 items-center px-2">
                     <button onClick={()=>setGeneratedNote(null)} className="md:hidden p-4 text-slate-500"><ArrowLeft/></button>
-                    {[{id:'record',icon:FileText,l:'EXPEDIENTE CLÍNICO'},{id:'patient',icon:User,l:'PLAN PACIENTE'},{id:'chat',icon:MessageSquare,l:'ASISTENTE'}, {id:'insurance', icon:Building2, l:'SEGUROS'}].map(t => {
+                    {[{id:'record',icon:FileText,l:'EXPEDIENTE CLÍNICO'},
+                      {
+                        id:'patient',
+                        // ✅ CAMBIO UI: Icono y texto cambian si es Nutrición
+                        icon: isNutritionProfile ? Utensils : User, 
+                        l: isNutritionProfile ? 'PLAN ALIMENTICIO' : 'PLAN PACIENTE'
+                      },
+                      {id:'chat',icon:MessageSquare,l:'ASISTENTE'}, 
+                      {id:'insurance', icon:Building2, l:'SEGUROS'}].map(t => {
                         const hideOnDesktop = t.id === 'chat' ? 'lg:hidden' : '';
                         return (
                             <button key={t.id} onClick={()=>setActiveTab(t.id as TabType)} disabled={!generatedNote&&t.id!=='record'} className={`flex-1 py-4 flex justify-center gap-2 text-sm font-bold border-b-4 transition-colors ${hideOnDesktop} ${activeTab===t.id?'text-brand-teal border-brand-teal':'text-slate-400 border-transparent hover:text-slate-600'}`}>
@@ -1887,7 +1979,20 @@ const ConsultationView: React.FC = () => {
                     )}
                 </div>
                 
+                
                 <div className="flex-1 overflow-y-auto p-4 md:p-8 bg-slate-100 dark:bg-slate-950">
+                {/* 🟢 INJERTO NUTRICIÓN: PANEL SIEMPRE VISIBLE */}
+          {activeTab === 'record' && isNutritionProfile && (
+              <div className="mb-6 animate-fade-in-down w-full max-w-4xl mx-auto">
+                  <InBodyWidget 
+                      data={currentBodyComp || undefined} 
+                      onDataChange={(newData) => {
+                          setCurrentBodyComp(newData);
+                          toast.success("Datos actualizados");
+                      }}
+                  />
+              </div>
+          )}
                     {!generatedNote && activeTab !== 'surgical_report' ? (
                         <div className="h-full flex flex-col items-center justify-center text-slate-400 gap-4 opacity-50">
                             <FileText size={64} strokeWidth={1}/>
@@ -1907,7 +2012,6 @@ const ConsultationView: React.FC = () => {
                                 )}
 
                                 {/* --- ✅ PESTAÑA AISLADA: BALANCE 360° --- */}
-                                {/* Aquí es donde vive la nueva funcionalidad, sin molestar al resto */}
                                 {activeTab === 'balance_360' && generatedNote && (
                                     <div className="bg-white dark:bg-slate-900 p-8 rounded-xl shadow-lg border border-indigo-100 dark:border-slate-800 animate-fade-in-up">
                                             
@@ -1993,27 +2097,23 @@ const ConsultationView: React.FC = () => {
                                                     <span className="hidden sm:inline">Descartar</span>
                                                 </button>
 
-                                                {/* 🔴 ELIMINADO: BOTÓN BALANCE 360 AQUÍ 
-                                                    (Se movió a su propia pestaña para no estorbar)
-                                                */}
-
                                                 {/* ✅ BOTÓN DE RIESGO QUIRÚRGICO (Solo para Qx) */}
-{isSurgicalProfile && (
-    <button
-        onClick={() => setIsRiskCalcOpen(true)}
-        className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-3 py-2 rounded-lg font-bold flex items-center gap-2 hover:bg-slate-200 transition-all border border-slate-200 dark:border-slate-700"
-        title="Calculadora de Riesgo Quirúrgico"
-    >
-        {/* CAMBIO AUDITADO: Icono Activity -> Calculator */}
-        <Calculator size={16} />
-        
-        {/* CAMBIO AUDITADO: Texto adaptable para móvil */}
-        <span className="text-xs">
-            <span className="inline sm:hidden">Calc.</span>
-            <span className="hidden sm:inline">Calc. Riesgo</span>
-        </span>
-    </button>
-)}
+                                                {isSurgicalProfile && (
+                                                    <button
+                                                        onClick={() => setIsRiskCalcOpen(true)}
+                                                        className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-3 py-2 rounded-lg font-bold flex items-center gap-2 hover:bg-slate-200 transition-all border border-slate-200 dark:border-slate-700"
+                                                        title="Calculadora de Riesgo Quirúrgico"
+                                                    >
+                                                        {/* CAMBIO AUDITADO: Icono Activity -> Calculator */}
+                                                        <Calculator size={16} />
+                                                        
+                                                        {/* CAMBIO AUDITADO: Texto adaptable para móvil */}
+                                                        <span className="text-xs">
+                                                            <span className="inline sm:hidden">Calc.</span>
+                                                            <span className="hidden sm:inline">Calc. Riesgo</span>
+                                                        </span>
+                                                    </button>
+                                                )}
 
                                                 <button 
                                                     onClick={handleSaveConsultation} 
@@ -2035,10 +2135,6 @@ const ConsultationView: React.FC = () => {
 
                                     </div>
 
-                                    {/* 🔴 ELIMINADO: BLOQUE DE RESULTADOS BALANCE 360 AQUÍ 
-                                            (Se movió a su propia pestaña)
-                                    */}
-
                                     {generatedNote.risk_analysis && (
                                     <div className="mt-2">
                                             <RiskBadge 
@@ -2053,6 +2149,13 @@ const ConsultationView: React.FC = () => {
                                     </div>
                                     </div>
 
+                                    {/* ✅ [NUTRICIÓN] COMPONENTE DE EPIGENÉTICA (SI HAY DATOS) */}
+                                    {isNutritionProfile && generatedNote.nutrition_data?.epigenetic_insights && (
+                                        <div className="mb-6">
+                                            <EpigeneticBadge markers={[]} /> {/* // TODO: Parsear marcadores reales */}
+                                        </div>
+                                    )}
+
                                     {generatedNote.conversation_log && generatedNote.conversation_log.length > 0 && (
                                             <div className="mb-10 bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-6 border border-slate-100 dark:border-slate-800">
                                                 <h4 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
@@ -2060,24 +2163,24 @@ const ConsultationView: React.FC = () => {
                                                 </h4>
                                                 <div className="space-y-4 max-h-[300px] overflow-y-auto custom-scrollbar pr-2">
                                                         {generatedNote.conversation_log.map((line, idx) => {
-  // Lógica inteligente para detectar al médico
-  const isDoctor = ['médico', 'medico', 'doctor', 'dr', 'dr.'].includes(line.speaker.toLowerCase().trim());
-  
-  return (
-    <div key={idx} className={`flex w-full mb-4 ${isDoctor ? 'justify-end' : 'justify-start'}`}>
-      <div className={`max-w-[80%] rounded-2xl p-4 text-sm ${
-        isDoctor
-          ? 'bg-blue-50 text-blue-900 dark:bg-blue-900/30 dark:text-blue-100 rounded-tr-none' // Estilo Médico (Derecha)
-          : 'bg-white border border-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700 rounded-tl-none' // Estilo Paciente (Izquierda)
-      }`}>
-        <span className={`text-[10px] font-bold block mb-1 uppercase opacity-70 ${isDoctor ? 'text-right' : 'text-left'}`}>
-          {line.speaker}
-        </span>
-        <p>{line.text}</p>
-      </div>
-    </div>
-  );
-})}
+                                // Lógica inteligente para detectar al médico
+                                const isDoctor = ['médico', 'medico', 'doctor', 'dr', 'dr.'].includes(line.speaker.toLowerCase().trim());
+                                
+                                return (
+                                    <div key={idx} className={`flex w-full mb-4 ${isDoctor ? 'justify-end' : 'justify-start'}`}>
+                                    <div className={`max-w-[80%] rounded-2xl p-4 text-sm ${
+                                        isDoctor
+                                        ? 'bg-blue-50 text-blue-900 dark:bg-blue-900/30 dark:text-blue-100 rounded-tr-none' // Estilo Médico (Derecha)
+                                        : 'bg-white border border-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700 rounded-tl-none' // Estilo Paciente (Izquierda)
+                                    }`}>
+                                        <span className={`text-[10px] font-bold block mb-1 uppercase opacity-70 ${isDoctor ? 'text-right' : 'text-left'}`}>
+                                        {line.speaker}
+                                        </span>
+                                        <p>{line.text}</p>
+                                    </div>
+                                    </div>
+                                );
+                                })}
                                                 </div>
                                             </div>
                                     )}
@@ -2171,7 +2274,25 @@ const ConsultationView: React.FC = () => {
 
                                 {activeTab==='patient' && (
                                     <div className="flex flex-col h-full gap-4 animate-fade-in-up">
-                                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-3"> {/* ✅ FIX MÓVIL: Responsive layout */}
+                                            
+                                            {/* --- ✅ [BIFURCACIÓN] LÓGICA DE NUTRICIÓN VS MEDICINA --- */}
+                                            {isNutritionProfile ? (
+                                                <div className="h-full">
+                                                    <MealPlanEditor 
+                                                        initialPlan={currentMealPlan || undefined}
+                                                        onSave={(plan) => {
+                                                            setCurrentMealPlan(plan);
+                                                            toast.success("Plan Alimenticio actualizado en memoria.");
+                                                        }}
+                                                        onCancel={() => {
+                                                            // Opcional: limpiar
+                                                        }}
+                                                    />
+                                                </div>
+                                            ) : (
+                                                // --- BLOQUE CLÁSICO DE MEDICINA (Recetas) ---
+                                                <>
+                                                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-3"> {/* ✅ FIX MÓVIL: Responsive layout */}
                                                 <h3 className="font-bold text-xl dark:text-white">Plan de Tratamiento</h3>
                                                 <div className="flex flex-wrap gap-2 w-full sm:w-auto justify-end"> {/* ✅ FIX MÓVIL: Wrapping */}
                                                     
@@ -2219,7 +2340,7 @@ const ConsultationView: React.FC = () => {
                                                                         onChange={(e) => setSpecialFolio(e.target.value)}
                                                                     />
                                                                     <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-slate-800 text-white text-[10px] rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
-                                                                                                                Solo para Fracción I / II
+                                                                                    Solo para Fracción I / II
                                                                     </div>
                                                                 </div>
                                                             </div>
@@ -2280,46 +2401,46 @@ const ConsultationView: React.FC = () => {
                                                                     </div>
                                                                 ) : (
                                                                     <div className="flex-1 flex flex-col gap-2 min-w-0">
-                                                                                <div className="flex items-start gap-2 w-full">
-                                                                                    <div className="relative flex-1">
-                                                                                        <textarea 
-                                                                                            rows={1}
-                                                                                            className={`w-full font-bold bg-transparent outline-none border-b border-transparent focus:border-indigo-300 transition-colors resize-none overflow-hidden block ${
-                                                                                                isRisky ? 'text-amber-700 dark:text-amber-400 pr-6' : 'text-slate-800 dark:text-white'
-                                                                                            }`} 
-                                                                                            value={med.drug} 
-                                                                                            onChange={e=>handleUpdateMedication(idx,'drug',e.target.value)} 
-                                                                                            placeholder="Nombre del medicamento" 
-                                                                                            ref={(el) => { if(el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; }}}
+                                                                                    <div className="flex items-start gap-2 w-full">
+                                                                                        <div className="relative flex-1">
+                                                                                            <textarea 
+                                                                                                    rows={1}
+                                                                                                    className={`w-full font-bold bg-transparent outline-none border-b border-transparent focus:border-indigo-300 transition-colors resize-none overflow-hidden block ${
+                                                                                                        isRisky ? 'text-amber-700 dark:text-amber-400 pr-6' : 'text-slate-800 dark:text-white'
+                                                                                                    }`} 
+                                                                                                    value={med.drug} 
+                                                                                                    onChange={e=>handleUpdateMedication(idx,'drug',e.target.value)} 
+                                                                                                    placeholder="Nombre del medicamento" 
+                                                                                                    ref={(el) => { if(el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; }}}
+                                                                                            />
+                                                                                            {isRisky && (
+                                                                                                <div className="absolute right-0 top-1/2 -translate-y-1/2 text-amber-500 cursor-help" title={`Precaución: Posible interacción detectada en análisis clínico.`}>
+                                                                                                                                <AlertCircle size={16}/>
+                                                                                                </div>
+                                                                                            )}
+                                                                                        </div>
+                                                                                        <input 
+                                                                                            className="text-sm font-bold bg-transparent outline-none border-b border-transparent focus:border-indigo-300 transition-colors text-slate-600 dark:text-slate-300 w-20 text-right shrink-0"
+                                                                                            value={med.dose} 
+                                                                                            onChange={e=>handleUpdateMedication(idx,'dose',e.target.value)} 
+                                                                                            placeholder="Dosis" 
                                                                                         />
-                                                                                        {isRisky && (
-                                                                                            <div className="absolute right-0 top-1/2 -translate-y-1/2 text-amber-500 cursor-help" title={`Precaución: Posible interacción detectada en análisis clínico.`}>
-                                                                                                            <AlertCircle size={16}/>
-                                                                                            </div>
-                                                                                        )}
                                                                                     </div>
-                                                                                    <input 
-                                                                                        className="text-sm font-bold bg-transparent outline-none border-b border-transparent focus:border-indigo-300 transition-colors text-slate-600 dark:text-slate-300 w-20 text-right shrink-0"
-                                                                                        value={med.dose} 
-                                                                                        onChange={e=>handleUpdateMedication(idx,'dose',e.target.value)} 
-                                                                                        placeholder="Dosis" 
-                                                                                    />
-                                                                                </div>
-                                                                                
-                                                                                <div className="flex gap-2 text-xs w-full">
-                                                                                    <input 
-                                                                                        className="flex-1 bg-transparent outline-none border-b border-transparent focus:border-indigo-300 transition-colors text-slate-500"
-                                                                                        value={med.frequency} 
-                                                                                        onChange={e=>handleUpdateMedication(idx,'frequency',e.target.value)} 
-                                                                                        placeholder="Frecuencia" 
-                                                                                    />
-                                                                                    <input 
-                                                                                        className="flex-1 bg-transparent outline-none border-b border-transparent focus:border-indigo-300 transition-colors text-slate-500"
-                                                                                        value={med.duration} 
-                                                                                        onChange={e=>handleUpdateMedication(idx,'duration',e.target.value)} 
-                                                                                        placeholder="Duración" 
-                                                                                    />
-                                                                                </div>
+                                                                                    
+                                                                                    <div className="flex gap-2 text-xs w-full">
+                                                                                        <input 
+                                                                                            className="flex-1 bg-transparent outline-none border-b border-transparent focus:border-indigo-300 transition-colors text-slate-500"
+                                                                                            value={med.frequency} 
+                                                                                            onChange={e=>handleUpdateMedication(idx,'frequency',e.target.value)} 
+                                                                                            placeholder="Frecuencia" 
+                                                                                        />
+                                                                                        <input 
+                                                                                            className="flex-1 bg-transparent outline-none border-b border-transparent focus:border-indigo-300 transition-colors text-slate-500"
+                                                                                            value={med.duration} 
+                                                                                            onChange={e=>handleUpdateMedication(idx,'duration',e.target.value)} 
+                                                                                            placeholder="Duración" 
+                                                                                        />
+                                                                                    </div>
                                                                     </div>
                                                                 )}
 
@@ -2358,7 +2479,8 @@ const ConsultationView: React.FC = () => {
                                                     )}
                                                 </div>
                                             </div>
-
+                                            </>
+                                            )}
                                     </div>
                                 )}
 

@@ -24,7 +24,10 @@ const SPECIALTIES = [
   "Endocrinología", "Gastroenterología", "Geriatría", "Ginecología y Obstetricia", "Medicina del Deporte", 
   "Medicina Interna", "Nefrología", "Neumología", "Neurocirugía", "Neurología", "Oftalmología", 
   "Otorrinolaringología", "Pediatría", "Psiquiatría", "Reumatología", "Traumatología y Ortopedia", 
-  "Traumatología: Artroscopia", "Urología", "Urgencias Médicas","Cirugía Cardiotorácica"
+  "Traumatología: Artroscopia", "Urología", "Urgencias Médicas", "Cirugía Cardiotorácica",
+  // ✅ INYECCIÓN DE BISTURÍ: MÓDULO NUTRICIÓN
+  "Nutrición Clínica",
+  "Nutriología"
 ];
 
 interface AuthProps {

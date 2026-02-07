@@ -1,6 +1,6 @@
 // PROYECTO: VitalScribe AI
 // DEFINICIONES DE TIPOS (TYPESCRIPT)
-// ESTADO: FUSIÓN FINAL V9.3 (Full Compatibility Build)
+// ESTADO: FUSIÓN FINAL V9.4 (Nutrition Module Integration)
 
 // --- PERFILES DE USUARIO ---
 export interface DoctorProfile {
@@ -21,6 +21,12 @@ export interface DoctorProfile {
   avatar_url?: string | null;
   website_url?: string | null;
   updated_at?: string | null;
+  
+  // Configuración Módulo Nutrición (Opcional)
+  nutrition_config?: {
+    methodology: 'macros' | 'equivalents' | 'menu';
+    show_inbody_graphs: boolean;
+  };
 }
 
 // --- PACIENTES ---
@@ -56,6 +62,8 @@ export interface Consultation {
   transcript: string;
   summary: string;
   status: 'pending' | 'completed' | 'archived';
+  // Tipo de consulta para diferenciar flujo UI
+  type?: 'medical' | 'nutrition' | 'psychology'; 
 }
 
 // --- ESTRUCTURA SOAP ---
@@ -76,6 +84,65 @@ export interface SoapData {
 }
 export type SOAPData = SoapData;
 
+// --- MÓDULO DE NUTRICIÓN (NUEVOS TIPOS) ---
+// Estructura para datos InBody / Bioimpedancia
+export interface BodyCompositionData {
+  weight_kg: number;
+  height_cm: number;
+  bmi?: number;
+  muscle_mass_kg?: number;    // Masa Muscular Esquelética
+  body_fat_percent?: number;  // Porcentaje de Grasa Corporal
+  visceral_fat_level?: number;
+  basal_metabolic_rate?: number; // Tasa Metabólica Basal (BMR)
+  total_body_water?: number;
+  metabolic_age?: number;
+  score?: number;             // Puntaje InBody (opcional)
+  date_measured: string;
+}
+
+// Estructura para Nutrigenómica / Epigenética
+export interface EpigeneticMarker {
+  gene: string;      // Ej: "MTHFR", "FTO"
+  variant: string;   // Ej: "C677T"
+  risk_level: 'low' | 'medium' | 'high';
+  implication: string; // Ej: "Metabolismo lento de folatos"
+  dietary_action: string; // Ej: "Aumentar consumo de vegetales de hoja verde oscura"
+}
+
+// Estructura del Plan Alimenticio (Reemplaza Prescription en Nutrición)
+export interface MealItem {
+  name: string;
+  quantity: string;
+  calories?: number;
+  notes?: string;
+}
+
+export interface DailyMealPlan {
+  day_label: string; // "Lunes", "Días de Entrenamiento", etc.
+  meals: {
+    breakfast: MealItem[];
+    snack_am?: MealItem[];
+    lunch: MealItem[];
+    snack_pm?: MealItem[];
+    dinner: MealItem[];
+  };
+  daily_macros?: {
+    protein_g: number;
+    carbs_g: number;
+    fats_g: number;
+    total_kcal: number;
+  };
+}
+
+export interface NutritionPlan {
+  title: string;
+  goal: string; // Ej: "Déficit calórico para reducción de grasa"
+  duration_weeks?: number;
+  daily_plans: DailyMealPlan[];
+  forbidden_foods?: string[]; // Basado en epigenética/alergias
+  recommended_supplements?: string[];
+}
+
 // --- MEDICAMENTOS ---
 export interface MedicationItem {
   id?: string;
@@ -93,6 +160,14 @@ export interface GeminiResponse {
   soapData?: SoapData;
   patientInstructions?: string;
   prescriptions?: MedicationItem[];
+  
+  // Extensiones Modulares (Opcionales para no romper flujo médico)
+  nutrition_data?: {
+    analysis_inbody?: string;     // Interpretación textual del InBody
+    generated_plan?: NutritionPlan;
+    epigenetic_insights?: string;
+  };
+
   risk_analysis?: {
     level: string;
     reason: string;

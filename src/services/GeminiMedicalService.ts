@@ -1,18 +1,22 @@
 import { supabase } from '../lib/supabase';
 import { GoogleGenerativeAI, GenerationConfig } from "@google/generative-ai";
+import { checkRedLines } from './MedicalSafetyRules';
 // Importamos los tipos definidos en la arquitectura v5.2
 import { 
   GeminiResponse, 
   PatientInsight, 
   MedicationItem, 
   ClinicalInsight, 
-  FollowUpMessage 
+  FollowUpMessage,
+  // ✅ NUEVOS TIPOS FASE 1
+  NutritionPlan,
+  BodyCompositionData
 } from '../types';
 
-console.log("🚀 V-STABLE DEPLOY: Safety Override Protocol (v8.5 - DIRECT CHAT BYPASS) [Active]");
+console.log("🚀 V-STABLE DEPLOY: Safety Override Protocol (v9.5 - NUTRITION CORE ACTIVE) [Active]");
 
 // ==========================================
-// 🛡️ 1. CONSTANTE DE SEGURIDAD (FALLBACK - RED DE EMERGENCIA)
+// 🛡️ 1. CONSTANTE DE SEGURIDAD (FALLBACK - RED DE EMERGENCIA MÉDICA)
 // ==========================================
 // Este es el prompt que usará el sistema si Supabase se cae o no responde.
 // Mantiene tu lógica original de "Farmacólogo Clínico Experto".
@@ -66,6 +70,31 @@ TABLA DE CONCENTRACIONES ESTÁNDAR (MÉXICO/LATAM):
 `;
 
 // ==========================================
+// 🥗 1.8 NUCLEO DE NUTRICIÓN (NUEVO CEREBRO)
+// ==========================================
+// ✅ INYECCIÓN TÁCTICA: Este prompt solo se activa para Nutriólogos.
+const NUTRITION_CORE_PROMPT = `
+🧬 PROMPT DEL SISTEMA: PLANIFICADOR NUTRICIONAL CLÍNICO Y DEPORTIVO
+ROL: Eres un Nutriólogo Clínico Senior experto en Bioquímica y Antropometría.
+TU TAREA: Generar una Nota SOAP Nutricional y un Plan Alimenticio Estructurado (JSON).
+
+PRINCIPIOS DE CÁLCULO (NO INVENTES NADA, CALCULA):
+1. TASA METABÓLICA BASAL (TMB): Si tienes Peso, Talla, Edad y Sexo, USA MIFFLIN-ST JEOR.
+2. ALERGIAS: Si el historial menciona alergias (Nueces, Gluten, Lactosa), BLOQUEA esos alimentos del menú.
+3. OBJETIVO:
+   - Si detectas "Déficit", resta 300-500 kcal al TMB.
+   - Si detectas "Superávit", suma 300-500 kcal.
+   - Si no hay datos, asume "Mantenimiento".
+
+FORMATO DE SALIDA (ESTRICTO PARA NUTRICIÓN):
+- En lugar de "Recetas Médicas", genera "Menús".
+- Sé específico con porciones (Tazas, gramos, piezas). Evita "una porción", di "150g".
+
+ESTRUCTURA DE RESPUESTA JSON REQUERIDA:
+Debes llenar el campo 'nutrition_data' con el objeto 'generated_plan'.
+`;
+
+// ==========================================
 // 🧠 2. GESTIÓN DE CEREBRO CENTRALIZADO (NUEVO v8.0)
 // ==========================================
 
@@ -97,7 +126,7 @@ async function getSystemPrompt(slug: string = 'security_core_v1'): Promise<strin
 
     if (error || !data) {
       // Si la tabla no existe aún o hay error, usamos fallback silencioso
-      console.warn("⚠️ Usando reglas locales (Fallback Activo).");
+      // console.warn("⚠️ Usando reglas locales (Fallback Activo).");
       return FALLBACK_SECURITY_PROMPT;
     }
 
@@ -194,6 +223,17 @@ async function generateWithFailover(prompt: string, jsonMode: boolean = false, u
  */
 const getSpecialtyPromptConfig = (specialty: string) => {
   const configs: Record<string, any> = {
+    // ✅ INYECCIÓN NUTRITIONAL (Fase 4)
+    "Nutrición": {
+      role: "Nutriólogo Clínico y Deportivo",
+      focus: "Composición corporal, metabolismo basal, distribución de macronutrientes, micronutrientes clave y adherencia dietética.",
+      bias: "Enfoque 'Food as Medicine'. Prioriza alimentos reales sobre suplementos. Calcula requerimientos energéticos con precisión matemática. Evita lenguaje moralizante sobre la comida."
+    },
+    "Nutriología": { // Alias
+      role: "Nutriólogo Clínico",
+      focus: "Bioquímica nutricional, interacción fármaco-nutriente y dietoterapia.",
+      bias: "Prioriza el manejo nutricional de patologías (Diabetes, HTA, ERC)."
+    },
     "Cardiología": {
       role: "Cardiólogo Intervencionista",
       focus: "Hemodinamia, ritmo, presión arterial, perfusión, soplos y riesgo cardiovascular.",
@@ -268,124 +308,224 @@ export const GeminiMedicalService = {
     try {
       console.log("⚡ Generando Nota Clínica Consistente (Modo Híbrido DB/Local)...");
 
-      // 1. CARGA DE REGLAS (DB o Fallback)
-      const dynamicSecurityPrompt = await getSystemPrompt('security_core_v1');
+      // 1. DETECCIÓN DE MODO NUTRICIÓN (Switch Lógico)
+      const isNutritionMode = specialty.toLowerCase().includes('nutri') || 
+                              specialty.toLowerCase().includes('dietista') || 
+                              specialty.toLowerCase().includes('bariatría');
+
       const specialtyConfig = getSpecialtyPromptConfig(specialty);
       
-      
-      const prompt = `
-  ACTÚA COMO: ${specialtyConfig.role} y Escriba Médico Forense.
-  ENFOQUE: ${specialtyConfig.focus}
-  
-  ${dynamicSecurityPrompt} // Mantiene tu seguridad
-  ${PEDIATRIC_FORMULARY}
+      let prompt = "";
 
-  ⚠️ REGLA DE INTEGRIDAD FARMACÉUTICA:
-  1. USA ESTRICTAMENTE LAS CONCENTRACIONES DE LA LISTA DE ARRIBA.
-  2. NO INVENTES OTRAS (Ej: Si la dosis meta es 450mg, NO inventes "Suspensión 400mg/5ml").
-  3. MEJOR AJUSTA EL VOLUMEN (ml) para encajar en una concentración real de la lista (Ej: Usa la de 500mg/5ml y calcula los ml necesarios).
+      // 🔄 BIFURCACIÓN COGNITIVA
+      if (isNutritionMode) {
+          // =======================
+          // MODO NUTRICIÓN (NUEVO)
+          // =======================
+          console.log("🥬 Activando Motor de Nutrición (Con Extracción de Datos)...");
+          
+          prompt = `
+        ACTÚA COMO: ${specialtyConfig.role} (Nutriólogo Clínico y Especialista en Epigenética).
+        ENFOQUE: ${specialtyConfig.focus}
+        SESGO COGNITIVO: ${specialtyConfig.bias}
 
-  ===================================================
-  🎙️ PROTOCOLO DE TRANSCRIPCIÓN: MODO "VERBATIM STRICTO"
-  ===================================================
-  TU TAREA NO ES RESUMIR, ES DOCUMENTAR EVIDENCIA.
-  
-  🔴 PROHIBICIONES ABSOLUTAS (SI LAS ROMPES, FALLAS):
-  1. PROHIBIDO USAR PARÉNTESIS PARA DESCRIBIR ACTOS (Ej: ❌ "(El paciente llora)", ❌ "(Asiente con la cabeza)"). 
-  2. PROHIBIDO RESUMIR BLOQUES DE TEXTO (Ej: ❌ "Paciente refiere síntomas depresivos...").
-  3. PROHIBIDO "LIMPIAR" EL LENGUAJE: Si el paciente dice "loquero", ESCRIBE "loquero". Si dice "agüitado", ESCRIBE "agüitado".
-  
-  🟢 INSTRUCCIONES DE EJECUCIÓN:
-  1. CITA TEXTUAL: Usa comillas para cada frase.
-  2. FORMATO GUIÓN: 
-     MÉDICO: "..."
-     PACIENTE: "..."
-  3. DENSIDAD MÁXIMA: Prefiero que el texto sea largo y redundante a que sea corto e interpretado.
+        ⚠️ REGLAS MÁXIMAS DE SEGURIDAD LEGAL:
+        1. PROHIBIDO emitir diagnósticos médicos de enfermedades. Sustituir por "Impresión Nutricional" o "Evaluación Metabólica".
+        2. NO puedes suspender ni recetar fármacos. Si detectas un fármaco de riesgo (ej. AINEs en ERC), genera una "Referencia Médica" sugiriendo interconsulta urgente.
+        3. El análisis debe centrarse en: Composición corporal (InBody), salud celular (PhA), metilación y crononutrición.
 
-  TRANSCRIPCIÓN CRUDA: "${transcript}"
-
-        TAREA: Analizar transcripción y generar Nota Clínica + Auditoría de Seguridad + RECETA ESTRUCTURADA DETERMINISTA.
+        ${NUTRITION_CORE_PROMPT}
 
         TRANSCRIPCIÓN CRUDA (INPUT):
         "${transcript}"
 
-        HISTORIA CLÍNICA PREVIA (CONTEXTO):
+        CONTEXTO PACIENTE:
         "${patientHistory || 'No disponible'}"
+        "${manualContext || ''}"
 
-        CONTEXTO MÉDICO INICIAL (INPUT MANUAL DEL DOCTOR):
-        "${manualContext || 'No proporcionado. Basarse enteramente en la transcripción.'}"
-
-        ===================================================
-        🧠 MOTOR DE INTUICIÓN CLÍNICA (DATA SUPREMACY)
-        ===================================================
-        1. JERARQUÍA DE DATOS: Los valores de laboratorio (K+, Na+, Glucosa, pH) detectados en el audio o contexto TIENEN VETO sobre las órdenes verbales.
-           - Ejemplo: Si el médico dice "Poner insulina" PERO el audio menciona "Potasio 2.8", TU OBLIGACIÓN ES BLOQUEAR LA INSULINA.
+        INSTRUCCIONES DE SALIDA (JSON SCHEMA):
+        Genera un JSON con esta estructura EXACTA. No inventes campos nuevos.
         
-        2. INTERPRETACIÓN: Interpreta QUÉ QUISO DECIR médicamente.
-           IMPORTANTE: Si el "CONTEXTO MÉDICO INICIAL" contiene datos clave, ÚSALO como verdad absoluta.
+        🔴 IMPORTANTE - EXTRACCIÓN DE DATOS INBODY: 
+        Escucha atentamente la transcripción. Si el profesional o el paciente mencionan valores numéricos de Peso, Grasa, Músculo o Visceral, EXTRÁELOS y colócalos en el objeto "detected_metrics". Si no se mencionan explícitamente, déjalos en 0.
 
-        3. CONEXIÓN DE PUNTOS: Usa el HISTORIAL para dar contexto.
-
-        ===================================================
-        🛡️ DIRECTIVA DE SEGURIDAD LEGAL
-        ===================================================
-        TIENES PROHIBIDO emitir diagnósticos absolutos. Usa SIEMPRE "Lenguaje de Probabilidad":
-        - "Cuadro clínico compatible con..."
-        - ❌ PROHIBIDO: "Diagnóstico: [Enfermedad]" o afirmaciones absolutas.
-
-        ===================================================
-        🗣️ PROTOCOLO DE LENGUAJE CIUDADANO (SOLO PARA 'patientInstructions')
-        ===================================================
-        Esta sección es EXCLUSIVAMENTE para el paciente. Debes "traducir" tu pensamiento médico a lenguaje cotidiano.
-        
-        REGLAS DE TRADUCCIÓN:
-        1. 🚫 PROHIBIDO TECNICISMOS: 
-           - No digas "Glucosa capilar", di "Nivel de azúcar en el dedo".
-           - No digas "Dieta hiposódica", di "Comer con poca sal".
-        2. PEDAGOGÍA: Explica COMO SI FUERA PARA UN ADOLESCENTE DE 12 AÑOS. Sé claro y directo.
-        3. FORMATO: Usa verbos de acción (Tome, Vigile, Acuda) y listas numeradas.
-
-        NOTA: En 'clinicalNote' y 'soapData' DEBES MANTENER EL LENGUAJE MÉDICO TÉCNICO Y PROFESIONAL.
-
-        SALIDA ESPERADA (JSON Schema Strict):
         {
-          "clinicalNote": "Texto completo...",
-          "soapData": { 
-             "subjective": "...", 
-             "objective": "...", 
-             "analysis": "Integración diagnóstica con lenguaje probabilístico y códigos CIE-10.", 
-             "plan": "..." 
+          "clinicalNote": "Nota narrativa profesional centrada en metabolismo y hallazgos epigenéticos.",
+          "soapData": {
+            "subjective": "Recordatorio de 24h, síntomas digestivos, estrés, hábitos de sueño.",
+            "objective": "Datos InBody (MME, Grasa Visceral, PhA), medidas y laboratorios.",
+            "analysis": "Evaluación nutricional de precisión (NO USAR PALABRA DIAGNÓSTICO), riesgo metabólico y estado celular.",
+            "plan": "Resumen de la estrategia dietética, suplementación dirigida y referencias médicas si aplica."
           },
-          "prescriptions": [
-            { 
-               "drug": "Nombre Genérico (Comercial)", 
-               "dose": "Dosis, 'SUSPENDER' o 'BLOQUEO DE SEGURIDAD'", 
-               "frequency": "Frecuencia", 
-               "duration": "Duración", 
-               "notes": "Instrucciones o ALERTA DE BLOQUEO",
-               "action": "NUEVO" | "CONTINUAR" | "AJUSTAR" | "SUSPENDER"
-             }
-          ],
-          "patientInstructions": "...",
-          "risk_analysis": { 
-             "level": "Bajo" | "Medio" | "Alto", 
-             "reason": "..." 
+          "detected_metrics": { 
+              "weight_kg": 0,       
+              "body_fat_percent": 0, 
+              "muscle_mass_kg": 0,   
+              "visceral_fat_level": 0 
           },
-          "actionItems": { 
-             "next_appointment": "YYYY-MM-DD o null", 
-             "urgent_referral": boolean, 
-             "lab_tests_required": ["..."]
+          "nutrition_data": {
+            "generated_plan": {
+              "title": "Nombre del Plan de Optimización",
+              "goal": "Meta principal (Ej: Reducción grasa visceral)",
+              "daily_plans": [
+                {
+                  "day_label": "Ejemplo Día Tipo",
+                  "meals": {
+                    "breakfast": [{ "name": "Alimento", "quantity": "Cantidad", "notes": "Notas" }],
+                    "lunch": [{ "name": "Alimento", "quantity": "Cantidad", "notes": "Notas" }],
+                    "dinner": [{ "name": "Alimento", "quantity": "Cantidad", "notes": "Notas" }],
+                    "snack_am": [],
+                    "snack_pm": []
+                  },
+                  "daily_macros": { "protein_g": 0, "carbs_g": 0, "fats_g": 0, "total_kcal": 0 }
+                }
+              ],
+              "forbidden_foods": ["Alimentos a evitar por sensibilidad o inflamación"]
+            }
           },
-          "conversation_log": [ 
-             { "speaker": "Médico", "text": "..." }, 
-             { "speaker": "Paciente", "text": "..." } 
-          ]
+          "patientInstructions": "Recomendaciones de hábitos, hidratación y sueño (Lenguaje paciente).",
+          "risk_analysis": { "level": "Bajo/Medio/Alto", "reason": "Justificación clínica" },
+          "actionItems": { "urgent_referral": false, "lab_tests_required": [] },
+          "conversation_log": [{ "speaker": "Nutriólogo", "text": "..." }, { "speaker": "Paciente", "text": "..." }]
         }
-      `;
+        `;
+
+      } else {
+          // =======================
+          // MODO MÉDICO (CLÁSICO)
+          // =======================
+          console.log("💊 Activando Motor Médico (Farmacología)...");
+          
+          // 1. Carga reglas de seguridad DB
+          const dynamicSecurityPrompt = await getSystemPrompt('security_core_v1');
+
+          prompt = `
+            ACTÚA COMO: ${specialtyConfig.role} y Escriba Médico Forense.
+            ENFOQUE: ${specialtyConfig.focus}
+            
+            ${dynamicSecurityPrompt} // Mantiene tu seguridad
+            ${PEDIATRIC_FORMULARY}
+
+            ⚠️ REGLA DE INTEGRIDAD FARMACÉUTICA:
+            1. USA ESTRICTAMENTE LAS CONCENTRACIONES DE LA LISTA DE ARRIBA.
+            2. NO INVENTES OTRAS (Ej: Si la dosis meta es 450mg, NO inventes "Suspensión 400mg/5ml").
+            3. MEJOR AJUSTA EL VOLUMEN (ml) para encajar en una concentración real de la lista (Ej: Usa la de 500mg/5ml y calcula los ml necesarios).
+
+            ===================================================
+            🎙️ PROTOCOLO DE TRANSCRIPCIÓN: MODO "VERBATIM STRICTO"
+            ===================================================
+            TU TAREA NO ES RESUMIR, ES DOCUMENTAR EVIDENCIA.
+            
+            🔴 PROHIBICIONES ABSOLUTAS (SI LAS ROMPES, FALLAS):
+            1. PROHIBIDO USAR PARÉNTESIS PARA DESCRIBIR ACTOS (Ej: ❌ "(El paciente llora)", ❌ "(Asiente con la cabeza)"). 
+            2. PROHIBIDO RESUMIR BLOQUES DE TEXTO (Ej: ❌ "Paciente refiere síntomas depresivos...").
+            3. PROHIBIDO "LIMPIAR" EL LENGUAJE: Si el paciente dice "loquero", ESCRIBE "loquero". Si dice "agüitado", ESCRIBE "agüitado".
+            
+            🟢 INSTRUCCIONES DE EJECUCIÓN:
+            1. CITA TEXTUAL: Usa comillas para cada frase.
+            2. FORMATO GUIÓN: 
+                MÉDICO: "..."
+                PACIENTE: "..."
+            3. DENSIDAD MÁXIMA: Prefiero que el texto sea largo y redundante a que sea corto e interpretado.
+
+            TRANSCRIPCIÓN CRUDA: "${transcript}"
+
+            TAREA: Analizar transcripción y generar Nota Clínica + Auditoría de Seguridad + RECETA ESTRUCTURADA DETERMINISTA.
+
+            TRANSCRIPCIÓN CRUDA (INPUT):
+            "${transcript}"
+
+            HISTORIA CLÍNICA PREVIA (CONTEXTO):
+            "${patientHistory || 'No disponible'}"
+
+            CONTEXTO MÉDICO INICIAL (INPUT MANUAL DEL DOCTOR):
+            "${manualContext || 'No proporcionado. Basarse enteramente en la transcripción.'}"
+
+            ===================================================
+            🧠 MOTOR DE INTUICIÓN CLÍNICA (DATA SUPREMACY)
+            ===================================================
+            1. JERARQUÍA DE DATOS: Los valores de laboratorio (K+, Na+, Glucosa, pH) detectados en el audio o contexto TIENEN VETO sobre las órdenes verbales.
+                - Ejemplo: Si el médico dice "Poner insulina" PERO el audio menciona "Potasio 2.8", TU OBLIGACIÓN ES BLOQUEAR LA INSULINA.
+            
+            2. INTERPRETACIÓN: Interpreta QUÉ QUISO DECIR médicamente.
+                IMPORTANTE: Si el "CONTEXTO MÉDICO INICIAL" contiene datos clave, ÚSALO como verdad absoluta.
+
+            3. CONEXIÓN DE PUNTOS: Usa el HISTORIAL para dar contexto.
+
+            ===================================================
+            🛡️ DIRECTIVA DE SEGURIDAD LEGAL
+            ===================================================
+            TIENES PROHIBIDO emitir diagnósticos absolutos. Usa SIEMPRE "Lenguaje de Probabilidad":
+            - "Cuadro clínico compatible con..."
+            - ❌ PROHIBIDO: "Diagnóstico: [Enfermedad]" o afirmaciones absolutas.
+
+            ===================================================
+            🗣️ PROTOCOLO DE LENGUAJE CIUDADANO (SOLO PARA 'patientInstructions')
+            ===================================================
+            Esta sección es EXCLUSIVAMENTE para el paciente. Debes "traducir" tu pensamiento médico a lenguaje cotidiano.
+            
+            REGLAS DE TRADUCCIÓN:
+            1. 🚫 PROHIBIDO TECNICISMOS: 
+                - No digas "Glucosa capilar", di "Nivel de azúcar en el dedo".
+                - No digas "Dieta hiposódica", di "Comer con poca sal".
+            2. PEDAGOGÍA: Explica COMO SI FUERA PARA UN ADOLESCENTE DE 12 AÑOS. Sé claro y directo.
+            3. FORMATO: Usa verbos de acción (Tome, Vigile, Acuda) y listas numeradas.
+
+            NOTA: En 'clinicalNote' y 'soapData' DEBES MANTENER EL LENGUAJE MÉDICO TÉCNICO Y PROFESIONAL.
+
+            SALIDA ESPERADA (JSON Schema Strict):
+            {
+                "clinicalNote": "Texto completo...",
+                "soapData": { 
+                    "subjective": "...", 
+                    "objective": "...", 
+                    "analysis": "Integración diagnóstica con lenguaje probabilístico y códigos CIE-10.", 
+                    "plan": "..." 
+                },
+                "prescriptions": [
+                { 
+                    "drug": "Nombre Genérico (Comercial)", 
+                    "dose": "Dosis, 'SUSPENDER' o 'BLOQUEO DE SEGURIDAD'", 
+                    "frequency": "Frecuencia", 
+                    "duration": "Duración", 
+                    "notes": "Instrucciones o ALERTA DE BLOQUEO",
+                    "action": "NUEVO" | "CONTINUAR" | "AJUSTAR" | "SUSPENDER"
+                    }
+                ],
+                "patientInstructions": "...",
+                "risk_analysis": { 
+                    "level": "Bajo" | "Medio" | "Alto", 
+                    "reason": "..." 
+                },
+                "actionItems": { 
+                    "next_appointment": "YYYY-MM-DD o null", 
+                    "urgent_referral": boolean, 
+                    "lab_tests_required": ["..."]
+                },
+                "conversation_log": [ 
+                    { "speaker": "Médico", "text": "..." }, 
+                    { "speaker": "Paciente", "text": "..." } 
+                ]
+            }
+          `;
+      }
 
       // 🔐 LLAMADA SEGURA: No pasamos config, usa TopK 1 por defecto
       const rawText = await generateWithFailover(prompt, true);
       const parsedData = JSON.parse(cleanJSON(rawText));
+
+      const objectiveText = parsedData.soapData?.objective || "";
+const clinicalNote = parsedData.clinicalNote || "";
+
+const safetyCheck = checkRedLines(objectiveText, clinicalNote);
+
+if (safetyCheck.isCritical) {
+    parsedData.risk_analysis = {
+        level: "Alto",
+        reason: `⚠️ ALERTA VITAL: ${safetyCheck.reasons.join(" | ")}`
+    };
+    parsedData.actionItems.urgent_referral = true;
+}
 
       console.log("✅ Nota estructurada generada con éxito.");
       return parsedData as GeminiResponse & { prescriptions: MedicationItem[] };
@@ -852,5 +992,77 @@ export const GeminiMedicalService = {
       console.error("❌ Error en Módulo Quirúrgico:", error);
       throw new Error("No se pudo procesar la evidencia quirúrgica.");
     }
+  },
+
+  // --- ✅ K. MÓDULO INBODY (VISION API - SOPORTE REAL DE IMÁGENES) ---
+  async analyzeBodyComposition(imageBase64: string): Promise<BodyCompositionData | null> {
+    try {
+        console.log("👁️ Iniciando análisis visual de InBody...");
+
+        // 1. Recuperar API Key (Modo Cliente Directo para evitar cuellos de botella en Edge Function con imágenes)
+        const apiKey = import.meta.env.VITE_GOOGLE_AI_KEY || 
+                       import.meta.env.VITE_GEMINI_API_KEY || 
+                       import.meta.env.VITE_GEMINI_KEY || 
+                       import.meta.env.VITE_GOOGLE_API_KEY;
+
+        if (!apiKey) throw new Error("No API Key found");
+
+        // 2. Configurar Modelo Vision
+        const client = new GoogleGenerativeAI(apiKey);
+        const model = client.getGenerativeModel({ model: "gemini-2.5-flash" });
+
+        // 3. Preparar el Prompt
+        const prompt = `
+            ACTÚA COMO: Experto en Nutrición Deportiva y Antropometría.
+            TAREA: Analizar esta IMAGEN de un escáner InBody (o similar) y extraer los datos numéricos con precisión quirúrgica.
+            
+            REGLAS DE EXTRACCIÓN:
+            1. Busca "Peso" (Weight).
+            2. Busca "Masa Músculo Esquelética" (SMM) o "Masa Magra".
+            3. Busca "Porcentaje de Grasa Corporal" (PBF) o "Grasa Corporal".
+            4. Busca "Nivel de Grasa Visceral" (Visceral Fat Level).
+            5. Busca "Tasa Metabólica Basal" (BMR/TMB).
+            
+            SI ALGUN DATO NO ES VISIBLE: Devuelve 0 o null, NO inventes números.
+            
+            SALIDA OBLIGATORIA (JSON PURO):
+            {
+                "weight_kg": 0.0,
+                "height_cm": 0.0,
+                "muscle_mass_kg": 0.0,
+                "body_fat_percent": 0.0,
+                "visceral_fat_level": 0,
+                "basal_metabolic_rate": 0,
+                "date_measured": "YYYY-MM-DD" (Si ves la fecha en el ticket, úsala. Si no, usa hoy)
+            }
+        `;
+
+        // 4. Preparar la imagen para Gemini
+        // Nota: Aseguramos que la string base64 no tenga el prefijo 'data:image/...' para la API de Google
+        const base64Data = imageBase64.includes('base64,') 
+            ? imageBase64.split('base64,')[1] 
+            : imageBase64;
+
+        const imagePart = {
+            inlineData: {
+                data: base64Data,
+                mimeType: "image/jpeg"
+            }
+        };
+
+        // 5. Ejecutar Visión
+        const result = await model.generateContent([prompt, imagePart]);
+        const response = result.response;
+        const text = response.text();
+
+        // 6. Limpiar y Parsear
+        const cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
+        return JSON.parse(cleanText);
+
+    } catch (e) {
+        console.error("❌ Error analizando InBody (Vision Mode):", e);
+        return null;
+    }
   }
+
 }; // Fin del objeto GeminiMedicalService

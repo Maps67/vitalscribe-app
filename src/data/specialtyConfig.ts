@@ -1,6 +1,6 @@
 import { 
   Activity, Brain, Box, FileText, File, 
-  Baby, Stethoscope, HeartPulse 
+  Baby, Stethoscope, HeartPulse, ClipboardList // ✅ AGREGADO: Icono para Nutrición
 } from 'lucide-react';
 import React from 'react';
 
@@ -41,6 +41,19 @@ export const SPECIALTY_CONFIG: Record<string, SpecialtyConfigItem> = {
     allowedTypes: ['video/mp4', 'application/pdf'],
     labels: ['Video Quirúrgico', 'Reporte Sinóptico', 'Protocolo Operatorio'],
     icon: FileText,
+    color: 'text-emerald-600 bg-emerald-50 border-emerald-200'
+  },
+  // ✅ INYECCIÓN DE BISTURÍ: CONFIGURACIÓN VISUAL NUTRICIÓN
+  'Nutriología': {
+    allowedTypes: ['image/jpeg', 'image/png', 'application/pdf'],
+    labels: ['Composición Corporal (InBody)', 'Estudios de Laboratorio', 'Foto de Progreso', 'Plan Alimenticio'],
+    icon: ClipboardList, 
+    color: 'text-emerald-600 bg-emerald-50 border-emerald-200'
+  },
+  'Nutrición Clínica': {
+    allowedTypes: ['image/jpeg', 'image/png', 'application/pdf'],
+    labels: ['Composición Corporal (InBody)', 'Estudios de Laboratorio', 'Foto de Progreso'],
+    icon: ClipboardList, 
     color: 'text-emerald-600 bg-emerald-50 border-emerald-200'
   },
   // --- NUEVAS ESPECIALIDADES AGREGADAS ---
