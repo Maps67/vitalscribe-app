@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase';
-import { Patient, Consultation } from '../types';
+import { Patient, Consultation, BodyCompositionData, NutritionPlan } from '../types';
 
 export class MedicalDataService {
   
@@ -91,4 +91,121 @@ export class MedicalDataService {
       throw e;
     }
   }
+  // ==========================================
+  // 🥗 MÓDULO DE NUTRICIÓN (NUEVO)
+  // ==========================================
+
+  /**
+   * Guarda las métricas del InBody.
+   * (Soluciona error: 'saveBodyMetrics' does not exist)
+   */
+  async saveBodyMetrics(patientId: string, metrics: BodyCompositionData) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: "No user logged in" };
+
+    // Validación básica
+    if (metrics.weight_kg === 0 && metrics.muscle_mass_kg === 0) {
+       return { success: false, error: "Empty metrics" };
+    }
+
+    const { error } = await supabase
+      .from('body_measurements')
+      .insert({
+        patient_id: patientId,
+        user_id: user.id,
+        weight_kg: metrics.weight_kg,
+        height_cm: metrics.height_cm,
+        muscle_mass_kg: metrics.muscle_mass_kg,
+        body_fat_percent: metrics.body_fat_percent,
+        visceral_fat_level: metrics.visceral_fat_level,
+        basal_metabolic_rate: metrics.basal_metabolic_rate,
+        measured_at: metrics.date_measured || new Date().toISOString()
+      });
+
+    if (error) {
+      console.error("❌ Error guardando InBody:", error);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  }
+
+  /**
+   * Guarda el Plan Alimenticio.
+   * (Soluciona error: 'saveNutritionPlan' does not exist)
+   */
+  async saveNutritionPlan(patientId: string, plan: NutritionPlan) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: false };
+
+    const { error } = await supabase
+      .from('nutrition_plans')
+      .insert({
+        patient_id: patientId,
+        user_id: user.id,
+        title: plan.title,
+        goal: plan.goal,
+        plan_json: plan,
+        is_active: true,
+        created_at: new Date().toISOString()
+      });
+
+    if (error) {
+      console.error("❌ Error guardando dieta:", error);
+      return { success: false };
+    }
+
+    return { success: true };
+  }
+
+  /**
+   * Recupera historial para gráficas (Opcional pero recomendado)
+   */
+  async getPatientNutritionHistory(patientId: string): Promise<BodyCompositionData[]> {
+    const { data, error } = await supabase
+      .from('body_measurements')
+      .select('*')
+      .eq('patient_id', patientId)
+      .order('measured_at', { ascending: true });
+
+    if (error || !data) return [];
+
+    return data.map((d: any) => ({
+      weight_kg: d.weight_kg,
+      height_cm: d.height_cm,
+      muscle_mass_kg: d.muscle_mass_kg,
+      body_fat_percent: d.body_fat_percent,
+      visceral_fat_level: d.visceral_fat_level,
+      basal_metabolic_rate: d.basal_metabolic_rate,
+      date_measured: d.measured_at
+    }));
+  }
+
+  // ✅ NUEVA FUNCIÓN AGREGADA AQUÍ 👇
+  /**
+   * Recupera el ÚLTIMO plan nutricional activo del paciente.
+   */
+  async getLatestNutritionPlan(patientId: string): Promise<NutritionPlan | null> {
+    try {
+      const { data, error } = await supabase
+        .from('nutrition_plans')
+        .select('plan_json')
+        .eq('patient_id', patientId)
+        .order('created_at', { ascending: false }) // Trae el más nuevo
+        .limit(1)
+        .single();
+
+      if (error) {
+        // Ignoramos el error si simplemente no hay datos
+        if (error.code !== 'PGRST116') console.error("Error recuperando dieta:", error);
+        return null;
+      }
+
+      return data?.plan_json || null;
+    } catch (e) {
+      console.error("Excepción en getLatestNutritionPlan:", e);
+      return null;
+    }
+  }
+
 }

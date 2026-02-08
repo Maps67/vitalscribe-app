@@ -12,6 +12,7 @@ import {
 
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition'; 
 import { GeminiMedicalService } from '../services/GeminiMedicalService';
+import { MedicalDataService } from '../services/MedicalDataService'; // ✅ NUEVA IMPORTACIÓN
 import { ChatMessage, GeminiResponse, Patient, DoctorProfile, PatientInsight, MedicationItem, ClinicalInsight, NutritionPlan, BodyCompositionData } from '../types';
 import { supabase } from '../lib/supabase';
 import FormattedText from './FormattedText';
@@ -49,6 +50,7 @@ import MealPlanEditor from './Nutrition/MealPlanEditor';
 import InBodyWidget from './Nutrition/InBodyWidget';
 import EpigeneticBadge from './Nutrition/EpigeneticBadge';
 import DietPDF from './Nutrition/DietPDF';
+import { FoodSearchModal } from './FoodSearchModal';
 
 // ✅ CORRECCIÓN DE ARQUITECTURA: 'balance_360' es ahora una Pestaña Independiente
 type TabType = 'record' | 'patient' | 'chat' | 'insurance' | 'surgical_report' | 'balance_360';
@@ -753,6 +755,17 @@ const ConsultationView: React.FC = () => {
                   .select('*') 
                   .eq('id', patient.id)
                   .single();
+
+                  if (isNutritionProfile) {
+              const medService = new MedicalDataService();
+              const lastPlan = await medService.getLatestNutritionPlan(patient.id);
+
+              if (lastPlan) {
+                  setCurrentMealPlan(lastPlan);
+              } else {
+                  setCurrentMealPlan(null);
+              }
+          }
 
               toast.dismiss(loadingHistory);
 
@@ -1549,6 +1562,24 @@ const ConsultationView: React.FC = () => {
         // 🔥 PUNTO B: CORRECCIÓN CRÍTICA: Materializar paciente temporal antes de guardar
         const finalPatientId = await PatientService.ensurePatientId(selectedPatient);
 
+        // ✅ [NUTRICIÓN - INYECCIÓN] Guardado en Tablas Especializadas
+        if (isNutritionProfile) {
+            const medService = new MedicalDataService();
+            
+            // 1. Guardar Métricas InBody
+            if (currentBodyComp) {
+                // Validar que tenga datos reales antes de guardar
+                if (currentBodyComp.weight_kg > 0 || currentBodyComp.muscle_mass_kg > 0) {
+                     await medService.saveBodyMetrics(finalPatientId, currentBodyComp);
+                }
+            }
+
+            // 2. Guardar Plan Alimenticio (Si existe)
+            if (currentMealPlan) {
+                await medService.saveNutritionPlan(finalPatientId, currentMealPlan);
+            }
+        }
+
         const medsSummary = editablePrescriptions.length > 0 
             ? "\n\nMEDICAMENTOS:\n" + editablePrescriptions.map(m => `- ${m.drug} ${m.dose} (${m.frequency})`).join('\n')
             : "";
@@ -2173,10 +2204,10 @@ const ConsultationView: React.FC = () => {
                                         ? 'bg-blue-50 text-blue-900 dark:bg-blue-900/30 dark:text-blue-100 rounded-tr-none' // Estilo Médico (Derecha)
                                         : 'bg-white border border-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700 rounded-tl-none' // Estilo Paciente (Izquierda)
                                     }`}>
-                                        <span className={`text-[10px] font-bold block mb-1 uppercase opacity-70 ${isDoctor ? 'text-right' : 'text-left'}`}>
-                                        {line.speaker}
-                                        </span>
-                                        <p>{line.text}</p>
+                                            <span className={`text-[10px] font-bold block mb-1 uppercase opacity-70 ${isDoctor ? 'text-right' : 'text-left'}`}>
+                                            {line.speaker}
+                                            </span>
+                                            <p>{line.text}</p>
                                     </div>
                                     </div>
                                 );
@@ -2272,215 +2303,166 @@ const ConsultationView: React.FC = () => {
                                     </div>
                                 )}
 
-                                {activeTab==='patient' && (
+                                {activeTab === 'patient' && (
                                     <div className="flex flex-col h-full gap-4 animate-fade-in-up">
+                                        
+                                        {/* 1. CABECERA UNIFICADA (Visible para Nutrición Y Medicina) */}
+                                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-2">
+                                            <h3 className="font-bold text-xl dark:text-white flex items-center gap-2">
+                                                {isNutritionProfile ? <Utensils size={24} className="text-emerald-600"/> : <Pill size={24} className="text-blue-600"/>}
+                                                {isNutritionProfile ? 'Plan de Alimentación' : 'Plan de Tratamiento'}
+                                            </h3>
                                             
-                                            {/* --- ✅ [BIFURCACIÓN] LÓGICA DE NUTRICIÓN VS MEDICINA --- */}
+                                            <div className="flex flex-wrap gap-2 w-full sm:w-auto justify-end">
+                                                <FoodSearchModal />
+                                                {/* Botones Exclusivos MEDICINA */}
+                                                {!isNutritionProfile && (
+                                                    <>
+                                                        <button 
+                                                            onClick={() => setIsInterconsultationOpen(true)}
+                                                            className="p-2 bg-indigo-100 text-indigo-600 rounded-lg hover:bg-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-400 flex items-center gap-2"
+                                                            title="Segunda Opinión / Interconsulta"
+                                                        >
+                                                            <Microscope size={18}/>
+                                                        </button>
+
+                                                        {isSurgicalSpecialty && (
+                                                            <button 
+                                                                onClick={() => setIsSurgicalModalOpen(true)}
+                                                                className="p-2 bg-indigo-100 text-indigo-600 rounded-lg hover:bg-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-400 flex items-center gap-2"
+                                                                title="Generar Incapacidad"
+                                                            >
+                                                                <Scissors size={18}/>
+                                                                <span className="text-xs font-bold hidden sm:inline">Incapacidad</span>
+                                                            </button>
+                                                        )}
+                                                    </>
+                                                )}
+
+                                                {/* Botones COMUNES (WhatsApp y PDF) */}
+                                                <button 
+                                                    onClick={handleShareWhatsApp} 
+                                                    className="p-2 bg-green-100 text-green-600 rounded-lg hover:bg-green-200 dark:bg-green-900/30 dark:text-green-400 transition-colors"
+                                                    title="Enviar por WhatsApp"
+                                                >
+                                                    <Share2 size={18}/>
+                                                </button>
+                                                
+                                                <button 
+                                                    onClick={handlePrint} 
+                                                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-md transition-all font-bold text-sm"
+                                                >
+                                                    <Download size={18}/>
+                                                    <span className="hidden sm:inline">Descargar PDF</span>
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        {/* 2. CONTENIDO DEL CUERPO (BIFURCACIÓN) */}
+                                        <div className="flex-1 overflow-hidden">
                                             {isNutritionProfile ? (
+                                                // --- CARRIL A: NUTRICIÓN (Editor de Dieta) ---
                                                 <div className="h-full">
                                                     <MealPlanEditor 
-                                                        initialPlan={currentMealPlan || undefined}
+                                                        initialPlan={currentMealPlan || (generatedNote?.soapData?.plan ? {
+                                                            title: 'Plan Sugerido por IA',
+                                                            goal: generatedNote.soapData.plan, 
+                                                            daily_plans: [{ 
+                                                                day_label: 'Día 1', 
+                                                                meals: { breakfast: [], snack_am: [], lunch: [], snack_pm: [], dinner: [] },
+                                                                daily_macros: { protein_g: 0, carbs_g: 0, fats_g: 0, total_kcal: 0 }
+                                                            }],
+                                                            forbidden_foods: []
+                                                        } : undefined)}
                                                         onSave={(plan) => {
                                                             setCurrentMealPlan(plan);
                                                             toast.success("Plan Alimenticio actualizado en memoria.");
                                                         }}
-                                                        onCancel={() => {
-                                                            // Opcional: limpiar
-                                                        }}
+                                                        onCancel={() => {}}
                                                     />
                                                 </div>
                                             ) : (
-                                                // --- BLOQUE CLÁSICO DE MEDICINA (Recetas) ---
-                                                <>
-                                                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-3"> {/* ✅ FIX MÓVIL: Responsive layout */}
-                                                <h3 className="font-bold text-xl dark:text-white">Plan de Tratamiento</h3>
-                                                <div className="flex flex-wrap gap-2 w-full sm:w-auto justify-end"> {/* ✅ FIX MÓVIL: Wrapping */}
+                                                // --- CARRIL B: MEDICINA CLÁSICA (Recetas) ---
+                                                <div className="h-full flex flex-col gap-4 overflow-y-auto">
                                                     
-                                                    {/* [AJUSTE MÓVIL 2] Inyección en Barra de Acciones: Botón adicional de Interconsulta */}
-                                                    <button 
-                                                        onClick={() => setIsInterconsultationOpen(true)}
-                                                        className="p-2 bg-indigo-100 text-indigo-600 rounded-lg hover:bg-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-400 flex items-center gap-2"
-                                                        title="Segunda Opinión / Interconsulta"
-                                                    >
-                                                        <Microscope size={18}/>
-                                                    </button>
-
-                                                    {isSurgicalSpecialty && (
-                                                        <button 
-                                                            onClick={() => setIsSurgicalModalOpen(true)}
-                                                            className="p-2 bg-indigo-100 text-indigo-600 rounded-lg hover:bg-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-400 flex items-center gap-2"
-                                                            title="Generar Incapacidad Quirúrgica"
-                                                        >
-                                                            <Scissors size={18}/>
-                                                            <span className="text-xs font-bold hidden sm:inline">Incapacidad</span>
-                                                        </button>
-                                                    )}
-
-                                                    <button onClick={handleShareWhatsApp} className="p-2 bg-green-100 text-green-600 rounded-lg hover:bg-green-200 dark:bg-green-900/30 dark:text-green-400"><Share2 size={18}/></button>
-                                                    <button onClick={handlePrint} className="p-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 dark:bg-blue-900/30 dark:text-blue-400"><Download size={18}/></button>
-                                                </div>
-                                            </div>
-
-                                            <div className="bg-white dark:bg-slate-900 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800">
-                                                
-                                                <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
-                                                    <div className="flex items-center gap-4 w-full md:w-auto">
-                                                        <h3 className="font-bold text-lg flex items-center gap-2 text-indigo-600 dark:text-indigo-400">
-                                                            <Pill size={20}/> Receta Médica
-                                                        </h3>
-                                                        
-                                                        {showControlledInput && (
-                                                            <div className="flex-1 md:flex-none animate-fade-in-right">
-                                                                <div className="relative group">
-                                                                    <input 
-                                                                        type="text" 
-                                                                        placeholder="Folio / Código COFEPRIS" 
-                                                                        className="text-xs border-2 border-indigo-100 dark:border-indigo-900/50 bg-indigo-50/50 dark:bg-indigo-900/20 rounded-lg px-3 py-1.5 w-full md:w-56 outline-none focus:border-indigo-500 text-indigo-700 dark:text-indigo-300 font-medium placeholder:text-indigo-300 transition-all"
-                                                                        value={specialFolio}
-                                                                        onChange={(e) => setSpecialFolio(e.target.value)}
-                                                                    />
-                                                                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-slate-800 text-white text-[10px] rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
-                                                                                    Solo para Fracción I / II
+                                                    <div className="bg-white dark:bg-slate-900 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800">
+                                                        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+                                                            <div className="flex items-center gap-4 w-full md:w-auto">
+                                                                <h3 className="font-bold text-lg flex items-center gap-2 text-indigo-600 dark:text-indigo-400">
+                                                                    <Pill size={20}/> Receta Médica
+                                                                </h3>
+                                                                {showControlledInput && (
+                                                                    <div className="flex-1 md:flex-none animate-fade-in-right">
+                                                                        <div className="relative group">
+                                                                            <input 
+                                                                                type="text" 
+                                                                                placeholder="Folio / Código COFEPRIS" 
+                                                                                className="text-xs border-2 border-indigo-100 dark:border-indigo-900/50 bg-indigo-50/50 dark:bg-indigo-900/20 rounded-lg px-3 py-1.5 w-full md:w-56 outline-none focus:border-indigo-500 text-indigo-700 dark:text-indigo-300 font-medium placeholder:text-indigo-300 transition-all"
+                                                                                value={specialFolio}
+                                                                                onChange={(e) => setSpecialFolio(e.target.value)}
+                                                                            />
+                                                                        </div>
                                                                     </div>
-                                                                </div>
+                                                                )}
+                                                            </div>
+                                                            <button onClick={handleAddMedication} className="text-xs bg-indigo-50 text-indigo-600 px-3 py-1 rounded-full flex items-center gap-1 hover:bg-indigo-100 dark:bg-indigo-900/30 dark:text-indigo-300">
+                                                                <Plus size={12}/> Agregar Fármaco
+                                                            </button>
+                                                        </div>
+                                                        
+                                                        {editablePrescriptions.length === 0 ? (
+                                                            <p className="text-sm text-slate-400 italic text-center py-4">No se detectaron medicamentos.</p>
+                                                        ) : (
+                                                            <div className="space-y-3">
+                                                                {editablePrescriptions.map((med, idx) => (
+                                                                    <div key={idx} className="flex gap-3 items-start p-3 rounded-lg border bg-slate-50 border-slate-100 dark:bg-slate-800/50 dark:border-slate-700 group">
+                                                                        <div className="flex-1 flex flex-col gap-2 min-w-0">
+                                                                            <div className="flex items-start gap-2 w-full">
+                                                                                <div className="relative flex-1">
+                                                                                    <textarea 
+                                                                                        rows={1}
+                                                                                        className="w-full font-bold bg-transparent outline-none border-b border-transparent focus:border-indigo-300 transition-colors resize-none overflow-hidden block text-slate-800 dark:text-white"
+                                                                                        value={med.drug} 
+                                                                                        onChange={e=>handleUpdateMedication(idx,'drug',e.target.value)} 
+                                                                                        placeholder="Nombre del medicamento" 
+                                                                                    />
+                                                                                </div>
+                                                                                <input 
+                                                                                    className="text-sm font-bold bg-transparent outline-none border-b border-transparent focus:border-indigo-300 transition-colors text-slate-600 dark:text-slate-300 w-20 text-right shrink-0"
+                                                                                    value={med.dose} 
+                                                                                    onChange={e=>handleUpdateMedication(idx,'dose',e.target.value)} 
+                                                                                    placeholder="Dosis" 
+                                                                                />
+                                                                            </div>
+                                                                            <div className="flex gap-2 text-xs w-full">
+                                                                                <input className="flex-1 bg-transparent outline-none border-b border-transparent focus:border-indigo-300 transition-colors text-slate-500" value={med.frequency} onChange={e=>handleUpdateMedication(idx,'frequency',e.target.value)} placeholder="Frecuencia" />
+                                                                                <input className="flex-1 bg-transparent outline-none border-b border-transparent focus:border-indigo-300 transition-colors text-slate-500" value={med.duration} onChange={e=>handleUpdateMedication(idx,'duration',e.target.value)} placeholder="Duración" />
+                                                                            </div>
+                                                                        </div>
+                                                                        <button onClick={()=>handleRemoveMedication(idx)} className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400"><X size={16}/></button>
+                                                                    </div>
+                                                                ))}
                                                             </div>
                                                         )}
                                                     </div>
 
-                                                    <button onClick={handleAddMedication} className="text-xs bg-indigo-50 text-indigo-600 px-3 py-1 rounded-full flex items-center gap-1 hover:bg-indigo-100 dark:bg-indigo-900/30 dark:text-indigo-300">
-                                                        <Plus size={12}/> Agregar Fármaco
-                                                    </button>
-                                                </div>
-                                                
-                                                {editablePrescriptions.length === 0 ? (
-                                                    <p className="text-sm text-slate-400 italic text-center py-4">No se detectaron medicamentos en la transcripción.</p>
-                                                ) : (
-                                                    <div className="space-y-3">
-                                                        {editablePrescriptions.map((med, idx) => {
-                                                            const normalize = (str: string) => str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-                                                            
-                                                            const isManualBlocked = (med as any).action === 'SUSPENDER' || (med.dose && med.dose.includes('BLOQUEO'));
-
-                                                            let isRisky = false;
-                                                            if (!isManualBlocked && generatedNote?.risk_analysis?.reason) {
-                                                                const reason = normalize(generatedNote.risk_analysis.reason);
-                                                                const drugName = normalize(med.drug);
-                                                                
-                                                                const firstWord = drugName.split(' ')[0];
-                                                                const matchParens = med.drug.match(/\(([^)]+)\)/);
-                                                                
-                                                                if (reason.includes(firstWord)) isRisky = true;
-                                                                if (matchParens && reason.includes(normalize(matchParens[1]))) isRisky = true;
-                                                            }
-
-                                                            let containerClasses = "bg-slate-50 border-slate-100 dark:bg-slate-800/50 dark:border-slate-700";
-                                                            let icon = null;
-
-                                                            if (isManualBlocked) {
-                                                                containerClasses = "bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-800 ring-1 ring-red-100";
-                                                            } else if (isRisky) {
-                                                                containerClasses = "bg-amber-50 border-amber-200 dark:bg-amber-900/20 dark:border-amber-800";
-                                                            }
-
-                                                            return (
-                                                            <div key={idx} className={`flex gap-3 items-start p-3 rounded-lg border group transition-all duration-200 ${containerClasses}`}>
-                                                                            
-                                                                {isManualBlocked ? (
-                                                                    <div className="flex-1 flex flex-col gap-1">
-                                                                        <div className="flex items-center gap-2">
-                                                                            <ShieldCheck size={16} className="text-red-600 shrink-0" />
-                                                                            <input 
-                                                                                className="font-bold text-red-800 dark:text-red-300 bg-transparent outline-none w-full"
-                                                                                value={med.drug}
-                                                                                readOnly
-                                                                            />
-                                                                        </div>
-                                                                        <div className="text-xs text-red-700 dark:text-red-200 bg-red-100/50 dark:bg-red-900/40 p-2 rounded border border-red-200 dark:border-red-800/50 break-words font-mono">
-                                                                                        {med.dose.replace(/\*\*\*/g, '').trim() || "Fármaco bloqueado por protocolo de seguridad."}
-                                                                        </div>
-                                                                    </div>
-                                                                ) : (
-                                                                    <div className="flex-1 flex flex-col gap-2 min-w-0">
-                                                                                    <div className="flex items-start gap-2 w-full">
-                                                                                        <div className="relative flex-1">
-                                                                                            <textarea 
-                                                                                                    rows={1}
-                                                                                                    className={`w-full font-bold bg-transparent outline-none border-b border-transparent focus:border-indigo-300 transition-colors resize-none overflow-hidden block ${
-                                                                                                        isRisky ? 'text-amber-700 dark:text-amber-400 pr-6' : 'text-slate-800 dark:text-white'
-                                                                                                    }`} 
-                                                                                                    value={med.drug} 
-                                                                                                    onChange={e=>handleUpdateMedication(idx,'drug',e.target.value)} 
-                                                                                                    placeholder="Nombre del medicamento" 
-                                                                                                    ref={(el) => { if(el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; }}}
-                                                                                            />
-                                                                                            {isRisky && (
-                                                                                                <div className="absolute right-0 top-1/2 -translate-y-1/2 text-amber-500 cursor-help" title={`Precaución: Posible interacción detectada en análisis clínico.`}>
-                                                                                                                                <AlertCircle size={16}/>
-                                                                                                </div>
-                                                                                            )}
-                                                                                        </div>
-                                                                                        <input 
-                                                                                            className="text-sm font-bold bg-transparent outline-none border-b border-transparent focus:border-indigo-300 transition-colors text-slate-600 dark:text-slate-300 w-20 text-right shrink-0"
-                                                                                            value={med.dose} 
-                                                                                            onChange={e=>handleUpdateMedication(idx,'dose',e.target.value)} 
-                                                                                            placeholder="Dosis" 
-                                                                                        />
-                                                                                    </div>
-                                                                                    
-                                                                                    <div className="flex gap-2 text-xs w-full">
-                                                                                        <input 
-                                                                                            className="flex-1 bg-transparent outline-none border-b border-transparent focus:border-indigo-300 transition-colors text-slate-500"
-                                                                                            value={med.frequency} 
-                                                                                            onChange={e=>handleUpdateMedication(idx,'frequency',e.target.value)} 
-                                                                                            placeholder="Frecuencia" 
-                                                                                        />
-                                                                                        <input 
-                                                                                            className="flex-1 bg-transparent outline-none border-b border-transparent focus:border-indigo-300 transition-colors text-slate-500"
-                                                                                            value={med.duration} 
-                                                                                            onChange={e=>handleUpdateMedication(idx,'duration',e.target.value)} 
-                                                                                            placeholder="Duración" 
-                                                                                        />
-                                                                                    </div>
-                                                                    </div>
-                                                                )}
-
-                                                                <button 
-                                                                    onClick={()=>handleRemoveMedication(idx)} 
-                                                                    className={`opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 ${
-                                                                        isManualBlocked ? 'text-red-400' : 'text-slate-400'
-                                                                    }`}
-                                                                    title="Quitar de la lista"
-                                                                >
-                                                                    <X size={16}/>
-                                                                </button>
-                                                            </div>
-                                                            )
-                                                        })}
-                                                    </div>
-                                                )}
-                                            </div>
-
-                                            <div className="bg-white dark:bg-slate-900 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 flex-1 flex flex-col">
-                                                <div className="flex justify-between items-center mb-4">
-                                                    <h3 className="font-bold text-lg flex items-center gap-2 text-teal-600 dark:text-teal-400">
-                                                        <FileText size={20}/> Indicaciones y Cuidados
-                                                    </h3>
-                                                    <button onClick={()=>setIsEditingInstructions(!isEditingInstructions)} className="p-2 bg-slate-100 dark:bg-slate-800 rounded-lg text-slate-500 hover:text-teal-600 transition-colors">
-                                                        <Edit2 size={18}/>
-                                                    </button>
-                                                </div>
-                                                <div className="flex-1 overflow-y-auto custom-scrollbar min-h-[200px]">
-                                                    {isEditingInstructions ? (
-                                                        <textarea className="w-full h-full border dark:border-slate-700 p-4 rounded-lg bg-slate-50 dark:bg-slate-800 dark:text-slate-200 resize-none outline-none focus:ring-2 focus:ring-teal-500" value={editableInstructions} onChange={e=>setEditableInstructions(e.target.value)}/>
-                                                    ) : (
-                                                        <div className="prose dark:prose-invert max-w-none text-sm text-slate-700 dark:text-slate-300">
-                                                            <FormattedText content={editableInstructions}/>
+                                                    <div className="bg-white dark:bg-slate-900 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 flex-1 flex flex-col">
+                                                        <div className="flex justify-between items-center mb-4">
+                                                            <h3 className="font-bold text-lg flex items-center gap-2 text-teal-600 dark:text-teal-400"><FileText size={20}/> Indicaciones y Cuidados</h3>
+                                                            <button onClick={()=>setIsEditingInstructions(!isEditingInstructions)} className="p-2 bg-slate-100 dark:bg-slate-800 rounded-lg text-slate-500 hover:text-teal-600 transition-colors"><Edit2 size={18}/></button>
                                                         </div>
-                                                    )}
+                                                        <div className="flex-1 overflow-y-auto custom-scrollbar min-h-[200px]">
+                                                            {isEditingInstructions ? (
+                                                                <textarea className="w-full h-full border dark:border-slate-700 p-4 rounded-lg bg-slate-50 dark:bg-slate-800 dark:text-slate-200 resize-none outline-none focus:ring-2 focus:ring-teal-500" value={editableInstructions} onChange={e=>setEditableInstructions(e.target.value)}/>
+                                                            ) : (
+                                                                <div className="prose dark:prose-invert max-w-none text-sm text-slate-700 dark:text-slate-300"><FormattedText content={editableInstructions}/></div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+
                                                 </div>
-                                            </div>
-                                            </>
                                             )}
+                                        </div>
                                     </div>
                                 )}
 

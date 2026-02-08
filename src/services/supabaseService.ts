@@ -1,5 +1,11 @@
 import { createClient, SupabaseClient, User } from '@supabase/supabase-js';
-import { DatabaseRecord, Patient } from '../types';
+// Importamos los tipos base y los NUEVOS tipos de Nutrición
+import { 
+  DatabaseRecord, 
+  Patient, 
+  BodyCompositionData, 
+  NutritionPlan 
+} from '../types';
 
 /**
  * SECURITY ARCHITECTURE (RLS - Row Level Security)
@@ -21,7 +27,9 @@ export class MedicalDataService {
     }
   }
 
-  // --- AUTHENTICATION METHODS ---
+  // ==========================================
+  // 🔐 1. AUTHENTICATION METHODS (CORE)
+  // ==========================================
 
   async signUp(email: string, pass: string) {
     if (!this.supabase) return { error: { message: 'No database connection' } };
@@ -44,7 +52,9 @@ export class MedicalDataService {
     return data.user;
   }
 
-  // --- DATA METHODS (RLS Protected) ---
+  // ==========================================
+  // 🩺 2. GENERAL MEDICINE LANE (LANE A)
+  // ==========================================
 
   async getPatients(): Promise<Patient[]> {
     if (!this.supabase) return [];
@@ -62,14 +72,14 @@ export class MedicalDataService {
     
     // Map DB columns to Frontend types if necessary (snake_case to camelCase)
     return data.map((p: any) => ({
-     id: p.id,
-     name: p.name,
-     phone: p.phone,
-     lastVisit: new Date(p.last_visit).toLocaleDateString(),
-     condition: p.condition,
-     avatarUrl: p.avatar_url || `https://ui-avatars.com/api/?name=${p.name}&background=random`,
-     doctor_id: p.user_id // <--- ✅ ESTA ES LA ÚNICA LÍNEA NUEVA (Mapeamos user_id a doctor_id)
-   }));
+      id: p.id,
+      name: p.name,
+      phone: p.phone,
+      lastVisit: p.last_visit ? new Date(p.last_visit).toLocaleDateString() : 'N/A',
+      condition: p.condition,
+      avatarUrl: p.avatar_url || `https://ui-avatars.com/api/?name=${p.name}&background=random`,
+      doctor_id: p.user_id 
+    }));
   }
 
   async createPatient(patientData: Omit<Patient, 'id' | 'lastVisit'>) {
@@ -85,7 +95,7 @@ export class MedicalDataService {
         name: patientData.name,
         phone: patientData.phone,
         condition: patientData.condition,
-        avatar_url: patientData.avatarUrl,
+        avatar_url: patientData.avatarUrl || patientData.avatar_url,
         last_visit: new Date().toISOString()
       })
       .select()
@@ -114,6 +124,106 @@ export class MedicalDataService {
     if (error) {
       console.error("RLS Error:", error);
       return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  }
+
+  // ==========================================
+  // 🥗 3. NUTRITION MODULE (LANE B - NEW)
+  // ==========================================
+  // Estas funciones solo se activan para perfiles de Nutrición.
+  
+  /**
+   * Guarda los datos extraídos del InBody (JSON) en la tabla relacional.
+   */
+  async saveBodyMetrics(patientId: string, metrics: BodyCompositionData): Promise<{ success: boolean; error?: string }> {
+    if (!this.supabase) return { success: false, error: "No DB" };
+
+    const { data: { user } } = await this.supabase.auth.getUser();
+    if (!user) return { success: false, error: "Not Auth" };
+
+    // Validar que metrics tenga datos reales (no ceros)
+    if (metrics.weight_kg === 0 && metrics.muscle_mass_kg === 0) {
+       console.warn("⚠️ Intentando guardar métricas vacías. Operación cancelada.");
+       return { success: false, error: "Empty metrics" };
+    }
+
+    const { error } = await this.supabase
+      .from('body_measurements') // Tabla nueva requerida
+      .insert({
+        patient_id: patientId,
+        user_id: user.id, // Para RLS
+        weight_kg: metrics.weight_kg,
+        height_cm: metrics.height_cm,
+        muscle_mass_kg: metrics.muscle_mass_kg,
+        body_fat_percent: metrics.body_fat_percent,
+        visceral_fat_level: metrics.visceral_fat_level,
+        basal_metabolic_rate: metrics.basal_metabolic_rate,
+        measured_at: metrics.date_measured || new Date().toISOString()
+      });
+
+    if (error) {
+      console.error("❌ Error guardando métricas InBody:", error);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  }
+
+  /**
+   * Recupera el historial antropométrico para gráficas.
+   */
+  async getPatientNutritionHistory(patientId: string): Promise<BodyCompositionData[]> {
+    if (!this.supabase) return [];
+
+    const { data, error } = await this.supabase
+      .from('body_measurements')
+      .select('*')
+      .eq('patient_id', patientId)
+      .order('measured_at', { ascending: true }); // Ascendente para gráficas de tiempo
+
+    if (error) {
+      console.error("❌ Error recuperando historial nutricional:", error);
+      return [];
+    }
+
+    // Mapeo DB -> Frontend Type
+    return data.map((d: any) => ({
+      weight_kg: d.weight_kg,
+      height_cm: d.height_cm,
+      muscle_mass_kg: d.muscle_mass_kg,
+      body_fat_percent: d.body_fat_percent,
+      visceral_fat_level: d.visceral_fat_level,
+      basal_metabolic_rate: d.basal_metabolic_rate,
+      date_measured: d.measured_at
+    }));
+  }
+
+  /**
+   * Guarda el plan alimenticio generado por la IA.
+   */
+  async saveNutritionPlan(patientId: string, plan: NutritionPlan): Promise<{ success: boolean }> {
+    if (!this.supabase) return { success: false };
+
+    const { data: { user } } = await this.supabase.auth.getUser();
+    if (!user) return { success: false };
+
+    const { error } = await this.supabase
+      .from('nutrition_plans') // Tabla nueva requerida
+      .insert({
+        patient_id: patientId,
+        user_id: user.id,
+        title: plan.title,
+        goal: plan.goal,
+        plan_json: plan, // Guardamos el JSON completo estructurado
+        is_active: true,
+        created_at: new Date().toISOString()
+      });
+
+    if (error) {
+      console.error("❌ Error guardando dieta:", error);
+      return { success: false };
     }
 
     return { success: true };

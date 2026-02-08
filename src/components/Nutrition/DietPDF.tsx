@@ -111,8 +111,23 @@ const styles = StyleSheet.create({
     color: '#0f172a'
   },
   // Tabla de Alimentos
+  dayWrapper: {
+    marginBottom: 10,
+    display: 'flex',
+    flexDirection: 'column'
+  },
+  dayTitleHeader: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    backgroundColor: '#059669',
+    color: 'white',
+    padding: 6,
+    marginBottom: 5,
+    borderRadius: 2,
+    marginTop: 5
+  },
   mealContainer: {
-    marginBottom: 15,
+    marginBottom: 10,
     borderWidth: 1,
     borderColor: '#e2e8f0',
     borderRadius: 4
@@ -185,18 +200,8 @@ const DietPDF: React.FC<DietPDFProps> = ({ doctor, patient, plan, bodyComp, date
     goal: 'Mantenimiento' 
   };
 
-  // ✅ CORRECCIÓN CRÍTICA: Inicialización completa del objeto 'meals'
-  // Esto evita el error ts(2339) al acceder a snack_am/pm
-  const dayPlan = safePlan.daily_plans[0] || { 
-    day_label: 'Día 1',
-    meals: { 
-        breakfast: [], 
-        snack_am: [], 
-        lunch: [], 
-        snack_pm: [], 
-        dinner: [] 
-    } 
-  };
+  // ❌ ELIMINADO: const dayPlan = safePlan.daily_plans[0] ...
+  // (Esta línea era la culpable de que solo saliera el día 1)
 
   return (
     <Document>
@@ -261,74 +266,89 @@ const DietPDF: React.FC<DietPDFProps> = ({ doctor, patient, plan, bodyComp, date
         {/* PLAN ALIMENTICIO */}
         <Text style={styles.sectionTitle}>{safePlan.title || 'Plan de Alimentación Personalizado'}</Text>
         
-        {/* DESAYUNO */}
-        {dayPlan.meals.breakfast && dayPlan.meals.breakfast.length > 0 && (
-          <View style={styles.mealContainer}>
-            <View style={styles.mealHeader}><Text style={styles.mealTitle}>DESAYUNO</Text></View>
-            {dayPlan.meals.breakfast.map((item, i) => (
-              <View key={i} style={styles.mealRow}>
-                <Text style={styles.foodName}>• {item.name}</Text>
-                <Text style={styles.foodQty}>{item.quantity}</Text>
-              </View>
-            ))}
-          </View>
-        )}
+        {/* 🔥 AQUÍ ESTÁ EL CAMBIO PRINCIPAL 🔥 */}
+        {/* Recorremos TODOS los días del plan, no solo el primero */}
+        {safePlan.daily_plans.map((dayPlan, index) => (
+            <View 
+                key={index} 
+                style={styles.dayWrapper} 
+                break={index > 0} // Esto fuerza salto de página desde el día 2
+            >
+                {/* Título del Día (Ej: DÍA 1, DÍA 2) */}
+                <Text style={styles.dayTitleHeader}>
+                    {dayPlan.day_label ? dayPlan.day_label.toUpperCase() : `DÍA ${index + 1}`}
+                </Text>
 
-        {/* COLACIÓN AM */}
-        {dayPlan.meals.snack_am && dayPlan.meals.snack_am.length > 0 && (
-          <View style={styles.mealContainer}>
-            <View style={styles.mealHeader}><Text style={styles.mealTitle}>COLACIÓN MATUTINA</Text></View>
-            {dayPlan.meals.snack_am.map((item, i) => (
-              <View key={i} style={styles.mealRow}>
-                <Text style={styles.foodName}>• {item.name}</Text>
-                <Text style={styles.foodQty}>{item.quantity}</Text>
-              </View>
-            ))}
-          </View>
-        )}
+                {/* DESAYUNO */}
+                {dayPlan.meals.breakfast && dayPlan.meals.breakfast.length > 0 && (
+                  <View style={styles.mealContainer} wrap={false}>
+                    <View style={styles.mealHeader}><Text style={styles.mealTitle}>DESAYUNO</Text></View>
+                    {dayPlan.meals.breakfast.map((item, i) => (
+                      <View key={i} style={styles.mealRow}>
+                        <Text style={styles.foodName}>• {item.name}</Text>
+                        <Text style={styles.foodQty}>{item.quantity}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
 
-        {/* COMIDA */}
-        {dayPlan.meals.lunch && dayPlan.meals.lunch.length > 0 && (
-          <View style={styles.mealContainer}>
-            <View style={styles.mealHeader}><Text style={styles.mealTitle}>COMIDA</Text></View>
-            {dayPlan.meals.lunch.map((item, i) => (
-              <View key={i} style={styles.mealRow}>
-                <Text style={styles.foodName}>• {item.name}</Text>
-                <Text style={styles.foodQty}>{item.quantity}</Text>
-              </View>
-            ))}
-          </View>
-        )}
+                {/* COLACIÓN AM */}
+                {dayPlan.meals.snack_am && dayPlan.meals.snack_am.length > 0 && (
+                  <View style={styles.mealContainer} wrap={false}>
+                    <View style={styles.mealHeader}><Text style={styles.mealTitle}>COLACIÓN MATUTINA</Text></View>
+                    {dayPlan.meals.snack_am.map((item, i) => (
+                      <View key={i} style={styles.mealRow}>
+                        <Text style={styles.foodName}>• {item.name}</Text>
+                        <Text style={styles.foodQty}>{item.quantity}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
 
-        {/* COLACIÓN PM */}
-        {dayPlan.meals.snack_pm && dayPlan.meals.snack_pm.length > 0 && (
-          <View style={styles.mealContainer}>
-            <View style={styles.mealHeader}><Text style={styles.mealTitle}>COLACIÓN VESPERTINA</Text></View>
-            {dayPlan.meals.snack_pm.map((item, i) => (
-              <View key={i} style={styles.mealRow}>
-                <Text style={styles.foodName}>• {item.name}</Text>
-                <Text style={styles.foodQty}>{item.quantity}</Text>
-              </View>
-            ))}
-          </View>
-        )}
+                {/* COMIDA */}
+                {dayPlan.meals.lunch && dayPlan.meals.lunch.length > 0 && (
+                  <View style={styles.mealContainer} wrap={false}>
+                    <View style={styles.mealHeader}><Text style={styles.mealTitle}>COMIDA</Text></View>
+                    {dayPlan.meals.lunch.map((item, i) => (
+                      <View key={i} style={styles.mealRow}>
+                        <Text style={styles.foodName}>• {item.name}</Text>
+                        <Text style={styles.foodQty}>{item.quantity}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
 
-        {/* CENA */}
-        {dayPlan.meals.dinner && dayPlan.meals.dinner.length > 0 && (
-          <View style={styles.mealContainer}>
-            <View style={styles.mealHeader}><Text style={styles.mealTitle}>CENA</Text></View>
-            {dayPlan.meals.dinner.map((item, i) => (
-              <View key={i} style={styles.mealRow}>
-                <Text style={styles.foodName}>• {item.name}</Text>
-                <Text style={styles.foodQty}>{item.quantity}</Text>
-              </View>
-            ))}
-          </View>
-        )}
+                {/* COLACIÓN PM */}
+                {dayPlan.meals.snack_pm && dayPlan.meals.snack_pm.length > 0 && (
+                  <View style={styles.mealContainer} wrap={false}>
+                    <View style={styles.mealHeader}><Text style={styles.mealTitle}>COLACIÓN VESPERTINA</Text></View>
+                    {dayPlan.meals.snack_pm.map((item, i) => (
+                      <View key={i} style={styles.mealRow}>
+                        <Text style={styles.foodName}>• {item.name}</Text>
+                        <Text style={styles.foodQty}>{item.quantity}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+
+                {/* CENA */}
+                {dayPlan.meals.dinner && dayPlan.meals.dinner.length > 0 && (
+                  <View style={styles.mealContainer} wrap={false}>
+                    <View style={styles.mealHeader}><Text style={styles.mealTitle}>CENA</Text></View>
+                    {dayPlan.meals.dinner.map((item, i) => (
+                      <View key={i} style={styles.mealRow}>
+                        <Text style={styles.foodName}>• {item.name}</Text>
+                        <Text style={styles.foodQty}>{item.quantity}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+            </View>
+        ))}
 
         {/* RECOMENDACIONES EPIGENÉTICAS / GENERALES */}
         {safePlan.forbidden_foods && safePlan.forbidden_foods.length > 0 && (
-           <View style={{ marginTop: 10, padding: 10, backgroundColor: '#fff1f2', borderRadius: 4 }}>
+           <View style={{ marginTop: 10, padding: 10, backgroundColor: '#fff1f2', borderRadius: 4 }} wrap={false}>
               <Text style={[styles.sectionTitle, { color: '#be123c', borderLeftColor: '#be123c' }]}>Restricciones Clínicas</Text>
               <Text style={{ fontSize: 9, color: '#881337' }}>
                  Evitar estrictamente: {safePlan.forbidden_foods.join(', ')}.
@@ -337,7 +357,7 @@ const DietPDF: React.FC<DietPDFProps> = ({ doctor, patient, plan, bodyComp, date
         )}
 
         {/* FOOTER */}
-        <View style={styles.footer}>
+        <View style={styles.footer} fixed>
           <Text style={styles.disclaimer}>Este documento es una guía nutricional y no sustituye el tratamiento médico farmacológico.</Text>
           <Text style={styles.disclaimer}>Generado con VitalScribe AI - Módulo de Precisión Nutricional</Text>
         </View>

@@ -1063,6 +1063,69 @@ if (safetyCheck.isCritical) {
         console.error("❌ Error analizando InBody (Vision Mode):", e);
         return null;
     }
-  }
+  },
+// --- L. GENERADOR DE DIETAS (VERSIÓN 4.0 - STRICT DATA MODE) ---
+  async generateNutritionPlan(goal: string, patientContext: string = ""): Promise<any> {
+    try {
+        // PROMPT INGENIERIL: Diseñado para romper el patrón de "Chatbot"
+        const prompt = `
+            ROLE: DATABASE_GENERATOR
+            OUTPUT_FORMAT: RAW_JSON
+            NO_CHAT: TRUE
 
+            TASK: Create a 1-day meal plan JSON object based on: "${goal}".
+            PATIENT_CONTEXT: ${patientContext}
+
+            STRICT CONSTRAINTS:
+            1. DO NOT speak. DO NOT explain. DO NOT use Markdown (**bold**, *italics*).
+            2. DO NOT use code blocks (\`\`\`json).
+            3. START output with '{' and END with '}'.
+            4. Use Spanish for values.
+
+            REQUIRED JSON SCHEMA:
+            {
+                "day_label": "Ejemplo 1",
+                "meals": {
+                    "breakfast": [{ "name": "Ej: Huevo", "quantity": "2 pzas" }],
+                    "snack_am": [{ "name": "Ej: Nuez", "quantity": "5 pzas" }],
+                    "lunch": [{ "name": "Ej: Atún", "quantity": "1 lata" }],
+                    "snack_pm": [{ "name": "Ej: Gelatina", "quantity": "1 taza" }],
+                    "dinner": [{ "name": "Ej: Queso", "quantity": "60g" }]
+                },
+                "daily_macros": { "protein_g": 0, "carbs_g": 0, "fats_g": 0, "total_kcal": 0 }
+            }
+        `;
+
+        // Añadimos un "pre-fill" al prompt del sistema para forzar el modo
+        const rawText = await this.chatWithContext(
+            "CRITICAL: You are a headless JSON API. You never output conversational text. You only output raw JSON strings.", 
+            prompt
+        );
+        
+        console.log("🤖 AI Response:", rawText.substring(0, 100) + "..."); 
+
+        if (!rawText) return null;
+
+        // Limpieza agresiva (Quitar todo lo que no sea el objeto JSON)
+        let cleanJson = rawText;
+        // 1. Buscar la primera llave {
+        const firstCurly = cleanJson.indexOf('{');
+        // 2. Buscar la última llave }
+        const lastCurly = cleanJson.lastIndexOf('}');
+
+        if (firstCurly === -1 || lastCurly === -1) {
+             console.error("❌ La IA falló y envió texto plano.");
+             return null; 
+        }
+
+        // 3. Cortar todo el texto basura antes y después
+        cleanJson = cleanJson.substring(firstCurly, lastCurly + 1);
+
+        return JSON.parse(cleanJson);
+
+    } catch (e) {
+        console.error("🔥 Error JSON:", e);
+        return null;
+    }
+  },  
 }; // Fin del objeto GeminiMedicalService
