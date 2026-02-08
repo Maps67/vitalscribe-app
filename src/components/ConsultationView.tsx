@@ -299,6 +299,7 @@ const ConsultationView: React.FC = () => {
 
   // ✅ [RIESGO QUIRÚRGICO] Estado del Modal
   const [isRiskCalcOpen, setIsRiskCalcOpen] = useState(false);
+  const [isDietEditorOpen, setIsDietEditorOpen] = useState(false);
 
   const startTimeRef = useRef<number>(Date.now());
 
@@ -2437,10 +2438,30 @@ const ConsultationView: React.FC = () => {
                     <Plus size={14} /> Anexar Dieta al PDF
                 </button>
             ) : (
-                <div className="flex items-center gap-2 px-4 py-2 bg-white border border-emerald-200 text-emerald-700 text-xs font-bold rounded-lg">
-                    <CheckCircle size={14} /> Dieta Anexada
-                    <button onClick={()=>setCurrentMealPlan(null)} className="ml-2 text-slate-400 hover:text-red-500"><X size={12}/></button>
-                </div>
+                <div className="flex items-center gap-2">
+        {/* Etiqueta Visual */}
+        <div className="flex items-center gap-2 px-3 py-2 bg-white border border-emerald-200 text-emerald-700 text-xs font-bold rounded-lg cursor-default">
+            <CheckCircle size={14} /> Lista para Imprimir
+        </div>
+        
+        {/* ✏️ BOTÓN NUEVO: EDITAR */}
+        <button 
+            onClick={() => setIsDietEditorOpen(true)}
+            className="p-2 bg-white border border-indigo-200 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors shadow-sm"
+            title="Personalizar menú"
+        >
+            <Edit2 size={14}/>
+        </button>
+
+        {/* 🗑️ BOTÓN ELIMINAR */}
+        <button 
+            onClick={() => setCurrentMealPlan(null)} 
+            className="p-2 text-slate-400 hover:text-red-500 transition-colors ml-1"
+            title="Quitar dieta"
+        >
+            <X size={14}/>
+        </button>
+    </div>
             )}
         </div>
     )}
@@ -2753,6 +2774,36 @@ const ConsultationView: React.FC = () => {
               patientAge={getNumericAge()}
               onInsertResult={handleRiskResult}
           />
+      )}
+
+      {/* ✅ NUEVO: MODAL DE EDICIÓN DE DIETA (PARA MÉDICOS) */}
+      {isDietEditorOpen && currentMealPlan && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl h-[90vh] flex flex-col overflow-hidden">
+                <div className="flex justify-between items-center p-4 border-b border-slate-100 bg-slate-50">
+                    <h3 className="font-bold text-lg flex items-center gap-2 text-emerald-800">
+                        <Utensils size={20} className="text-emerald-600"/> 
+                        Personalizar Plan Nutricional
+                    </h3>
+                    <button onClick={() => setIsDietEditorOpen(false)} className="p-2 hover:bg-slate-200 rounded-full transition-colors">
+                        <X size={20}/>
+                    </button>
+                </div>
+                
+                <div className="flex-1 overflow-hidden bg-slate-100 p-4">
+                    <MealPlanEditor 
+                        initialPlan={currentMealPlan}
+                        medicalContextTrigger={generatedNote?.medical_context_trigger}
+                        onSave={(plan) => {
+                            setCurrentMealPlan(plan);
+                            setIsDietEditorOpen(false);
+                            toast.success("Cambios guardados en el anexo.");
+                        }}
+                        onCancel={() => setIsDietEditorOpen(false)}
+                    />
+                </div>
+            </div>
+        </div>
       )}
 
     </div>
