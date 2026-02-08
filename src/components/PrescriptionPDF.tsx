@@ -1,6 +1,6 @@
 import React from 'react';
 import { Page, Text, View, Document, StyleSheet, Image } from '@react-pdf/renderer';
-import { MedicationItem } from '../types';
+import { MedicationItem, NutritionPlan } from '../types';
 
 // Estilos corporativos unificados
 const styles = StyleSheet.create({
@@ -22,7 +22,7 @@ const styles = StyleSheet.create({
   // 1. SECCIÓN LOGO
   logoSection: { 
     width: 80, 
-    minHeight: 60, // Changed from fixed height to minHeight
+    minHeight: 60, 
     justifyContent: 'center',
     alignItems: 'flex-start'
   },
@@ -43,10 +43,10 @@ const styles = StyleSheet.create({
   specialty: { fontSize: 10, fontFamily: 'Helvetica-Bold', color: '#555', marginBottom: 2, textTransform: 'uppercase', textAlign: 'center' },
   detailsLegal: { fontSize: 8, color: '#444', marginBottom: 1, textAlign: 'center' },
 
-  // 3. SECCIÓN QR (Modificada para soportar Folio)
+  // 3. SECCIÓN QR
   qrSection: {
     width: 80, 
-    minHeight: 60, // Changed from fixed height to minHeight
+    minHeight: 60, 
     justifyContent: 'center',
     alignItems: 'flex-end',
     display: 'flex',
@@ -98,8 +98,6 @@ const styles = StyleSheet.create({
   medInstructions: { fontSize: 10, fontStyle: 'italic', color: '#444' },
   rxHeader: { fontSize: 12, fontFamily: 'Helvetica-Bold', color: '#0f766e', marginTop: 15, marginBottom: 8, textTransform: 'uppercase', borderBottomWidth: 1, borderBottomColor: '#0f766e' },
 
-  // NOTA: Se eliminaron los estilos de warningBox para limpiar la UI del paciente
-
   // Secciones SOAP
   sectionBlock: { marginBottom: 10 },
   sectionTitle: { fontSize: 9, fontFamily: 'Helvetica-Bold', color: '#0f766e', marginBottom: 2, textTransform: 'uppercase' },
@@ -115,6 +113,57 @@ const styles = StyleSheet.create({
   // Legal
   legalTextContainer: { width: '55%', flexDirection: 'column', justifyContent: 'flex-end' }, 
   legalText: { fontSize: 6, color: '#888', marginTop: 2, textAlign: 'left', lineHeight: 1.3 },
+
+  // --- ESTILOS ESPECÍFICOS PARA PÁGINA 2 (NUTRICIÓN) ---
+  nutriBox: {
+    border: '1px solid #e2e8f0',
+    borderRadius: 4,
+    padding: 10,
+    marginBottom: 15,
+    backgroundColor: '#f8fafc'
+  },
+  nutriHeader: {
+    fontSize: 12,
+    fontFamily: 'Helvetica-Bold',
+    color: '#0d9488',
+    marginBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#cbd5e1',
+    paddingBottom: 4
+  },
+  mealRow: {
+    flexDirection: 'row',
+    marginBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+    paddingBottom: 4
+  },
+  mealTime: {
+    width: '25%',
+    fontFamily: 'Helvetica-Bold',
+    fontSize: 9,
+    color: '#475569'
+  },
+  mealContent: {
+    width: '75%',
+    fontSize: 9,
+    color: '#334155'
+  },
+  forbiddenBox: {
+    marginTop: 20,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#fecaca',
+    backgroundColor: '#fef2f2',
+    borderRadius: 4
+  },
+  forbiddenTitle: {
+    fontSize: 9,
+    fontFamily: 'Helvetica-Bold',
+    color: '#dc2626',
+    marginBottom: 4,
+    textTransform: 'uppercase'
+  }
 });
 
 interface PrescriptionPDFProps {
@@ -137,8 +186,10 @@ interface PrescriptionPDFProps {
   riskAnalysis?: { level: string; reason: string };
   
   documentTitle?: string;
-  // --- Feature: Folio Controlado ---
   specialFolio?: string;
+  
+  // ✅ NUEVO: Plan Nutricional Opcional
+  nutritionPlan?: NutritionPlan | null;
 }
 
 const PrescriptionPDF: React.FC<PrescriptionPDFProps> = ({ 
@@ -146,20 +197,18 @@ const PrescriptionPDF: React.FC<PrescriptionPDFProps> = ({
   patientName, patientAge, date, 
   content, prescriptions, instructions, riskAnalysis,
   documentTitle = "RECETA MÉDICA",
-  specialFolio // Destructuring del nuevo prop
+  specialFolio,
+  nutritionPlan // Recibimos el plan
 }) => {
 
-  // --- LÓGICA DE FILTRADO DE SEGURIDAD (Mantiene la protección técnica) ---
+  // --- LÓGICA DE FILTRADO DE SEGURIDAD ---
   const isRiskyMedication = (medName: string) => {
     if (!riskAnalysis || !riskAnalysis.reason) return false;
     const normalize = (str: string) => str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
     const reason = normalize(riskAnalysis.reason);
     const drugFull = normalize(medName);
-    
-    // Filtro por nombre genérico o comercial
     const drugFirstWord = drugFull.split(' ')[0];
     if (reason.includes(drugFirstWord)) return true;
-    
     const parentheticalMatch = medName.match(/\(([^)]+)\)/);
     if (parentheticalMatch) {
         const brandName = normalize(parentheticalMatch[1]);
@@ -169,22 +218,16 @@ const PrescriptionPDF: React.FC<PrescriptionPDFProps> = ({
   };
 
   const safePrescriptions = prescriptions?.filter(med => {
-    // Si la IA detecta riesgo, lo filtramos silenciosamente de la receta impresa
     if (isRiskyMedication(med.drug)) return false;
-
-    // Filtros manuales de seguridad
     const fullText = (med.drug + " " + (med.notes || "")).toUpperCase();
     const isManualBlocked = 
       fullText.includes("BLOQUEO DE SEGURIDAD") ||
       fullText.includes("(INACTIVO") ||
       fullText.includes("SUSPENDER") ||
       fullText.includes("CONTRAINDICADO");
-
     return !isManualBlocked; 
   });
 
-  // --- LÓGICA DE DETECCIÓN DE FILTRADO ---
-  // Detectamos si se ocultó algo para poner una nota discreta al final
   const hiddenCount = (prescriptions?.length || 0) - (safePrescriptions?.length || 0);
 
   const formatContent = (text: string) => {
@@ -216,68 +259,90 @@ const PrescriptionPDF: React.FC<PrescriptionPDFProps> = ({
   const isValidUrl = (url?: string) => url && (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:image'));
   const hasStructuredData = (safePrescriptions && safePrescriptions.length > 0) || (instructions && instructions.trim().length > 0);
 
+  // --- COMPONENTE DE HEADER REUTILIZABLE ---
+  const DocumentHeader = () => (
+    <View style={styles.header}>
+        <View style={styles.logoSection}>
+        {isValidUrl(logoUrl) && <Image src={logoUrl!} style={styles.logo} />}
+        </View>
+
+        <View style={styles.doctorInfo}>
+        <Text style={styles.doctorName}>{finalDoctorName}</Text>
+        <Text style={styles.specialty}>{specialty}</Text>
+        <Text style={styles.detailsLegal}>{university || 'Institución no registrada'}</Text>
+        <Text style={styles.detailsLegal}>Cédula Profesional: {license || 'En trámite'}</Text>
+        <Text style={styles.detailsLegal}>{address} {phone ? `| Tel: ${phone}` : ''}</Text>
+        </View>
+
+        <View style={styles.qrSection}>
+            {isValidUrl(qrCodeUrl) && (
+                <Image src={qrCodeUrl!} style={styles.qrCodeHeader} />
+            )}
+            {specialFolio && (
+                <View style={styles.folioBadge}>
+                    <Text style={styles.folioLabel}>FOLIO / CERT:</Text>
+                    <Text style={styles.folioText}>{specialFolio}</Text>
+                </View>
+            )}
+        </View>
+    </View>
+  );
+
+  // --- COMPONENTE DE FOOTER REUTILIZABLE ---
+  const DocumentFooter = () => (
+    <View style={styles.footer} wrap={false}>
+        <View style={styles.legalTextContainer}>
+            <Text style={{fontSize: 7, fontFamily: 'Helvetica-Bold', marginBottom: 2}}>AVISO LEGAL:</Text>
+            <Text style={styles.legalText}>
+            Este documento es un comprobante médico privado válido (NOM-004-SSA3-2012).
+            </Text>
+        </View>
+        
+        <View style={styles.signatureSection}>
+            {isValidUrl(signatureUrl) ? (
+                <Image src={signatureUrl!} style={styles.signatureImage} />
+            ) : <View style={{height: 40}} />}
+            <View style={styles.signatureLine} />
+            <Text style={{ fontSize: 9, marginTop: 4, fontFamily: 'Helvetica-Bold' }}>{finalDoctorName}</Text>
+            <Text style={{ fontSize: 7, marginTop: 1 }}>Céd. Prof. {license}</Text>
+        </View>
+    </View>
+  );
+
+  // --- COMPONENTE DE INFO PACIENTE REUTILIZABLE ---
+  const PatientBar = () => (
+    <View style={styles.patientSection}>
+        <View>
+            <Text style={styles.label}>PACIENTE</Text>
+            <Text style={styles.value}>{patientName}</Text>
+        </View>
+        <View style={{flexDirection: 'row', gap: 20}}>
+            {patientAge && (
+                <View>
+                <Text style={styles.label}>EDAD</Text>
+                <Text style={styles.value}>{patientAge}</Text>
+                </View>
+            )}
+            <View>
+            <Text style={styles.label}>FECHA</Text>
+            <Text style={styles.value}>{date}</Text>
+            </View>
+        </View>
+    </View>
+  );
+
   return (
     <Document>
+      {/* =================================================== */}
+      {/* PÁGINA 1: RECETA MÉDICA (FARMACIA)                  */}
+      {/* =================================================== */}
       <Page size="LETTER" style={styles.page}>
-        
-        {/* ENCABEZADO */}
-        <View style={styles.header}>
-          <View style={styles.logoSection}>
-             {isValidUrl(logoUrl) && <Image src={logoUrl!} style={styles.logo} />}
-          </View>
+        <DocumentHeader />
+        <PatientBar />
 
-          <View style={styles.doctorInfo}>
-            <Text style={styles.doctorName}>{finalDoctorName}</Text>
-            <Text style={styles.specialty}>{specialty}</Text>
-            <Text style={styles.detailsLegal}>{university || 'Institución no registrada'}</Text>
-            <Text style={styles.detailsLegal}>Cédula Profesional: {license || 'En trámite'}</Text>
-            <Text style={styles.detailsLegal}>{address} {phone ? `| Tel: ${phone}` : ''}</Text>
-          </View>
-
-          <View style={styles.qrSection}>
-             {isValidUrl(qrCodeUrl) && (
-                 <Image src={qrCodeUrl!} style={styles.qrCodeHeader} />
-             )}
-             
-             {/* --- FEATURE: FOLIO CONTROLADO VISUAL --- */}
-             {specialFolio && (
-                 <View style={styles.folioBadge}>
-                     <Text style={styles.folioLabel}>FOLIO / CERT:</Text>
-                     <Text style={styles.folioText}>{specialFolio}</Text>
-                 </View>
-             )}
-          </View>
-        </View>
-
-        {/* BARRA DE DATOS */}
-        <View style={styles.patientSection}>
-            <View>
-                <Text style={styles.label}>PACIENTE</Text>
-                <Text style={styles.value}>{patientName}</Text>
-            </View>
-            <View style={{flexDirection: 'row', gap: 20}}>
-                {patientAge && (
-                  <View>
-                    <Text style={styles.label}>EDAD</Text>
-                    <Text style={styles.value}>{patientAge}</Text>
-                  </View>
-                )}
-                <View>
-                  <Text style={styles.label}>FECHA</Text>
-                  <Text style={styles.value}>{date}</Text>
-                </View>
-            </View>
-        </View>
-
-        {/* CUERPO PRINCIPAL */}
         <View style={styles.rxSection}>
           <Text style={styles.docTitle}>{documentTitle}</Text>
           
-          {/* 🛑 CAMBIO DE SEGURIDAD (VITALSCRIBE v8.0)
-              Se ha eliminado el bloque rojo de "ADVERTENCIA" para no alarmar al paciente.
-              El filtrado de medicamentos riesgosos ocurre internamente en "safePrescriptions".
-          */}
-
           {hasStructuredData ? (
              <View style={{ width: '100%' }}> 
                  {safePrescriptions && safePrescriptions.length > 0 ? (
@@ -305,7 +370,6 @@ const PrescriptionPDF: React.FC<PrescriptionPDFProps> = ({
                     </Text>
                  )}
                  
-                 {/* Nota discreta si hubo filtrado de seguridad */}
                  {hiddenCount > 0 && (
                     <Text style={{fontSize: 7, color: '#999', fontStyle: 'italic', textAlign: 'center', marginBottom: 10}}>
                         * {hiddenCount} ítem(s) omitido(s) por protocolo de seguridad clínica. Consulte a su médico.
@@ -326,31 +390,110 @@ const PrescriptionPDF: React.FC<PrescriptionPDFProps> = ({
           )}
         </View>
 
-        {/* ESPACIADOR FLEXIBLE */}
         <View style={{ flex: 1 }} />
-
-        {/* PIE DE PÁGINA */}
-        <View style={styles.footer} wrap={false}>
-          <View style={styles.legalTextContainer}>
-             <Text style={{fontSize: 7, fontFamily: 'Helvetica-Bold', marginBottom: 2}}>AVISO LEGAL:</Text>
-             <Text style={styles.legalText}>
-                Este documento es un comprobante médico privado válido (NOM-004-SSA3-2012).
-             </Text>
-             {/* SE ELIMINÓ: Generado vía VitalScribe AI
-                Para garantizar limpieza visual y autoría exclusiva del médico.
-             */}
-          </View>
-          
-          <View style={styles.signatureSection}>
-             {isValidUrl(signatureUrl) ? (
-                 <Image src={signatureUrl!} style={styles.signatureImage} />
-             ) : <View style={{height: 40}} />}
-             <View style={styles.signatureLine} />
-             <Text style={{ fontSize: 9, marginTop: 4, fontFamily: 'Helvetica-Bold' }}>{finalDoctorName}</Text>
-             <Text style={{ fontSize: 7, marginTop: 1 }}>Céd. Prof. {license}</Text>
-          </View>
-        </View>
+        <DocumentFooter />
       </Page>
+
+      {/* =================================================== */}
+      {/* PÁGINA 2: ANEXO NUTRICIONAL (CONDICIONAL)           */}
+      {/* =================================================== */}
+      {nutritionPlan && (
+        <Page size="LETTER" style={styles.page}>
+            <DocumentHeader />
+            <PatientBar />
+
+            <View style={styles.rxSection}>
+                <Text style={styles.docTitle}>ANEXO: GUÍA NUTRICIONAL CLÍNICA</Text>
+                
+                {/* 1. OBJETIVO DEL PLAN - LIMPIEZA DE TEXTO */}
+                {nutritionPlan.goal && (
+                    <View style={{ marginBottom: 20 }}>
+                        <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: '#0d9488', marginBottom: 4 }}>OBJETIVO CLÍNICO:</Text>
+                        <Text style={{ fontSize: 10, fontStyle: 'italic', color: '#444' }}>
+                            {/* AQUÍ ESTÁ LA CORRECCIÓN: Quitamos el ⚠️ y texto redundante */}
+                            {nutritionPlan.goal.replace(/⚠️/g, '').replace(/Protocolo Clínico:/g, '').trim()}
+                        </Text>
+                    </View>
+                )}
+
+                {/* 2. TABLA DE COMIDAS */}
+                {nutritionPlan.daily_plans && nutritionPlan.daily_plans.length > 0 && (
+                    <View>
+                        <Text style={styles.rxHeader}>DISTRIBUCIÓN SUGERIDA DE ALIMENTOS</Text>
+                        
+                        <View style={styles.nutriBox}>
+                            {/* Desayuno */}
+                            {nutritionPlan.daily_plans[0].meals.breakfast.length > 0 && (
+                                <View style={styles.mealRow}>
+                                    <Text style={styles.mealTime}>DESAYUNO</Text>
+                                    <View style={{ width: '75%' }}>
+                                        {nutritionPlan.daily_plans[0].meals.breakfast.map((item, i) => (
+                                            <Text key={i} style={styles.mealContent}>• {item.name} {item.quantity ? `(${item.quantity})` : ''}</Text>
+                                        ))}
+                                    </View>
+                                </View>
+                            )}
+
+                            {/* Colaciones */}
+                            {(nutritionPlan.daily_plans[0].meals.snack_am.length > 0 || nutritionPlan.daily_plans[0].meals.snack_pm.length > 0) && (
+                                <View style={styles.mealRow}>
+                                    <Text style={styles.mealTime}>COLACIONES</Text>
+                                    <View style={{ width: '75%' }}>
+                                        {nutritionPlan.daily_plans[0].meals.snack_am.map((item, i) => (
+                                            <Text key={`am-${i}`} style={styles.mealContent}>• (AM) {item.name} {item.quantity ? `(${item.quantity})` : ''}</Text>
+                                        ))}
+                                        {nutritionPlan.daily_plans[0].meals.snack_pm.map((item, i) => (
+                                            <Text key={`pm-${i}`} style={styles.mealContent}>• (PM) {item.name} {item.quantity ? `(${item.quantity})` : ''}</Text>
+                                        ))}
+                                    </View>
+                                </View>
+                            )}
+
+                            {/* Comida */}
+                            {nutritionPlan.daily_plans[0].meals.lunch.length > 0 && (
+                                <View style={styles.mealRow}>
+                                    <Text style={styles.mealTime}>COMIDA</Text>
+                                    <View style={{ width: '75%' }}>
+                                        {nutritionPlan.daily_plans[0].meals.lunch.map((item, i) => (
+                                            <Text key={i} style={styles.mealContent}>• {item.name} {item.quantity ? `(${item.quantity})` : ''}</Text>
+                                        ))}
+                                    </View>
+                                </View>
+                            )}
+
+                            {/* Cena */}
+                            {nutritionPlan.daily_plans[0].meals.dinner.length > 0 && (
+                                <View style={{ flexDirection: 'row', paddingTop: 4 }}>
+                                    <Text style={styles.mealTime}>CENA</Text>
+                                    <View style={{ width: '75%' }}>
+                                        {nutritionPlan.daily_plans[0].meals.dinner.map((item, i) => (
+                                            <Text key={i} style={styles.mealContent}>• {item.name} {item.quantity ? `(${item.quantity})` : ''}</Text>
+                                        ))}
+                                    </View>
+                                </View>
+                            )}
+                        </View>
+                    </View>
+                )}
+
+                {/* 3. ALIMENTOS PROHIBIDOS - LIMPIEZA DE TEXTO */}
+                {nutritionPlan.forbidden_foods && nutritionPlan.forbidden_foods.length > 0 && (
+                    <View style={styles.forbiddenBox}>
+                        {/* AQUÍ ESTÁ LA CORRECCIÓN: Quitamos el emoji del título */}
+                        <Text style={styles.forbiddenTitle}>RESTRICCIONES / EVITAR:</Text>
+                        <Text style={{ fontSize: 9, color: '#b91c1c' }}>
+                            {/* AQUÍ ESTÁ LA CORRECCIÓN: Quitamos la ❌ de cada item */}
+                            {nutritionPlan.forbidden_foods.map(f => f.replace(/❌/g, '').trim()).join(', ')}.
+                        </Text>
+                    </View>
+                )}
+            </View>
+
+            <View style={{ flex: 1 }} />
+            <DocumentFooter />
+        </Page>
+      )}
+
     </Document>
   );
 };

@@ -51,12 +51,15 @@ import InBodyWidget from './Nutrition/InBodyWidget';
 import EpigeneticBadge from './Nutrition/EpigeneticBadge';
 import DietPDF from './Nutrition/DietPDF';
 import { FoodSearchModal } from './FoodSearchModal';
+import { CLINICAL_PROTOCOLS } from '../data/clinical_protocols';
 
 // ✅ CORRECCIÓN DE ARQUITECTURA: 'balance_360' es ahora una Pestaña Independiente
 type TabType = 'record' | 'patient' | 'chat' | 'insurance' | 'surgical_report' | 'balance_360';
 
 interface EnhancedGeminiResponse extends GeminiResponse {
    prescriptions?: MedicationItem[];
+   // ✅ NUEVO CAMPO: Trigger detectado por el cerebro
+   medical_context_trigger?: string; 
 }
 
 interface TranscriptSegment {
@@ -103,7 +106,7 @@ const SPECIALTIES = [
   "Urología", 
   "Urgencias Médicas",
   "Nutrición Clínica", // ✅ AGREGADO PARA SOPORTE
-  "Nutriología",       // ✅ AGREGADO PARA SOPORTE
+  "Nutriología",        // ✅ AGREGADO PARA SOPORTE
 ];
 
 // --- Feature: Folio Controlado (Lista Blanca de Especialidades) ---
@@ -183,7 +186,7 @@ const ConsultationView: React.FC = () => {
       setTranscript, 
       isAPISupported 
   } = useSpeechRecognition();
-  
+   
   // --- [MOTOR 2] CHAT ASISTENTE (CANAL SECUNDARIO AISLADO) ---
   const {
       isListening: isChatListening,
@@ -199,14 +202,14 @@ const ConsultationView: React.FC = () => {
           setChatInput(chatTranscript);
       }
   }, [chatTranscript, isChatListening]);
-  
+   
   const location = useLocation(); 
-  
+   
   const [patients, setPatients] = useState<any[]>([]); 
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [doctorProfile, setDoctorProfile] = useState<DoctorProfile | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null); 
-  
+   
   const [activeMedicalContext, setActiveMedicalContext] = useState<{ 
       history: string; 
       allergies: string; 
@@ -221,9 +224,9 @@ const ConsultationView: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  
+   
   const [generatedNote, setGeneratedNote] = useState<EnhancedGeminiResponse | null>(null);
-  
+   
   // --- NUEVO ESTADO: ID DE CONSULTA (Para Update/Delete) ---
   const [consultationId, setConsultationId] = useState<string | null>(null);
 
@@ -232,10 +235,10 @@ const ConsultationView: React.FC = () => {
 
   const [consentGiven, setConsentGiven] = useState(false);
   const [activeTab, setActiveTab] = useState<TabType>('record');
-  
+   
   // Este estado se mantiene para sincronizar el dropdown visual, pero NO afecta la lógica legal
   const [selectedSpecialty, setSelectedSpecialty] = useState('Medicina General');
-  
+   
   const [editableInstructions, setEditableInstructions] = useState('');
   const [editablePrescriptions, setEditablePrescriptions] = useState<MedicationItem[]>([]);
   const [isEditingInstructions, setIsEditingInstructions] = useState(false);
@@ -246,7 +249,7 @@ const ConsultationView: React.FC = () => {
 
   // --- Feature: Folio Controlado (Estado Local) ---
   const [specialFolio, setSpecialFolio] = useState('');
-  
+   
   const [insuranceData, setInsuranceData] = useState<{provider: string, policyNumber: string, accidentDate: string} | null>(null);
 
   const [isAppointmentModalOpen, setIsAppointmentModalOpen] = useState(false);
@@ -255,7 +258,7 @@ const ConsultationView: React.FC = () => {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [isChatting, setIsChatting] = useState(false);
-  
+   
   const [isAttachmentsOpen, setIsAttachmentsOpen] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
 
@@ -264,9 +267,9 @@ const ConsultationView: React.FC = () => {
   const [isInsightsOpen, setIsInsightsOpen] = useState(false);
   const [patientInsights, setPatientInsights] = useState<PatientInsight | null>(null);
   const [isLoadingInsights, setIsLoadingInsights] = useState(false);
-  
+   
   const [linkedAppointmentId, setLinkedAppointmentId] = useState<string | null>(null);
-  
+   
   const [editingSection, setEditingSection] = useState<string | null>(null);
 
   const [segments, setSegments] = useState<TranscriptSegment[]>([]);
@@ -278,7 +281,7 @@ const ConsultationView: React.FC = () => {
   // --- NUEVOS ESTADOS: BRIEFING & MANUAL CONTEXT ---
   const [clinicalInsights, setClinicalInsights] = useState<ClinicalInsight[]>([]);
   const [loadingClinicalInsights, setLoadingClinicalInsights] = useState(false);
-  
+   
   const [showBriefing, setShowBriefing] = useState(false);
   const [manualContext, setManualContext] = useState<string>("");
 
@@ -1468,6 +1471,8 @@ const ConsultationView: React.FC = () => {
                 riskAnalysis={generatedNote?.risk_analysis}
                 content={activePrescriptions.length > 0 ? undefined : legacyContent}
                 specialFolio={specialFolio}
+                // ✅ NUEVA PROP CONECTADA: El plan de nutrición viaja a la receta
+                nutritionPlan={currentMealPlan}
             />
         ).toBlob();
       } catch (error) {
@@ -1531,7 +1536,7 @@ const ConsultationView: React.FC = () => {
       toast.dismiss(loadingToast);
     }
   };
-  
+   
   const handleShareWhatsApp = async () => { 
     if (!editableInstructions || !selectedPatient) return toast.error("No hay instrucciones.");
     const drName = doctorProfile?.full_name || 'su médico';
@@ -1895,7 +1900,7 @@ const ConsultationView: React.FC = () => {
   const showControlledInput = SPECIALTIES_WITH_CONTROLLED_RX.some(s => 
       selectedSpecialty?.toLowerCase().includes(s.toLowerCase())
   );
-  
+   
   const isSurgicalSpecialty = selectedSpecialty?.toLowerCase().includes('cirug') || 
                               doctorProfile?.specialty?.toLowerCase().includes('cirug');
 
@@ -2305,164 +2310,221 @@ const ConsultationView: React.FC = () => {
 
                                 {activeTab === 'patient' && (
                                     <div className="flex flex-col h-full gap-4 animate-fade-in-up">
-                                        
-                                        {/* 1. CABECERA UNIFICADA (Visible para Nutrición Y Medicina) */}
-                                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-2">
-                                            <h3 className="font-bold text-xl dark:text-white flex items-center gap-2">
-                                                {isNutritionProfile ? <Utensils size={24} className="text-emerald-600"/> : <Pill size={24} className="text-blue-600"/>}
-                                                {isNutritionProfile ? 'Plan de Alimentación' : 'Plan de Tratamiento'}
-                                            </h3>
                                             
-                                            <div className="flex flex-wrap gap-2 w-full sm:w-auto justify-end">
-                                                <FoodSearchModal />
-                                                {/* Botones Exclusivos MEDICINA */}
-                                                {!isNutritionProfile && (
-                                                    <>
-                                                        <button 
-                                                            onClick={() => setIsInterconsultationOpen(true)}
-                                                            className="p-2 bg-indigo-100 text-indigo-600 rounded-lg hover:bg-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-400 flex items-center gap-2"
-                                                            title="Segunda Opinión / Interconsulta"
-                                                        >
-                                                            <Microscope size={18}/>
-                                                        </button>
-
-                                                        {isSurgicalSpecialty && (
-                                                            <button 
-                                                                onClick={() => setIsSurgicalModalOpen(true)}
-                                                                className="p-2 bg-indigo-100 text-indigo-600 rounded-lg hover:bg-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-400 flex items-center gap-2"
-                                                                title="Generar Incapacidad"
-                                                            >
-                                                                <Scissors size={18}/>
-                                                                <span className="text-xs font-bold hidden sm:inline">Incapacidad</span>
-                                                            </button>
-                                                        )}
-                                                    </>
-                                                )}
-
-                                                {/* Botones COMUNES (WhatsApp y PDF) */}
-                                                <button 
-                                                    onClick={handleShareWhatsApp} 
-                                                    className="p-2 bg-green-100 text-green-600 rounded-lg hover:bg-green-200 dark:bg-green-900/30 dark:text-green-400 transition-colors"
-                                                    title="Enviar por WhatsApp"
-                                                >
-                                                    <Share2 size={18}/>
-                                                </button>
+                                            {/* 1. CABECERA UNIFICADA (Visible para Nutrición Y Medicina) */}
+                                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-2">
+                                                <h3 className="font-bold text-xl dark:text-white flex items-center gap-2">
+                                                    {isNutritionProfile ? <Utensils size={24} className="text-emerald-600"/> : <Pill size={24} className="text-blue-600"/>}
+                                                    {isNutritionProfile ? 'Plan de Alimentación' : 'Plan de Tratamiento'}
+                                                </h3>
                                                 
-                                                <button 
-                                                    onClick={handlePrint} 
-                                                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-md transition-all font-bold text-sm"
-                                                >
-                                                    <Download size={18}/>
-                                                    <span className="hidden sm:inline">Descargar PDF</span>
-                                                </button>
-                                            </div>
-                                        </div>
-
-                                        {/* 2. CONTENIDO DEL CUERPO (BIFURCACIÓN) */}
-                                        <div className="flex-1 overflow-hidden">
-                                            {isNutritionProfile ? (
-                                                // --- CARRIL A: NUTRICIÓN (Editor de Dieta) ---
-                                                <div className="h-full">
-                                                    <MealPlanEditor 
-                                                        initialPlan={currentMealPlan || (generatedNote?.soapData?.plan ? {
-                                                            title: 'Plan Sugerido por IA',
-                                                            goal: generatedNote.soapData.plan, 
-                                                            daily_plans: [{ 
-                                                                day_label: 'Día 1', 
-                                                                meals: { breakfast: [], snack_am: [], lunch: [], snack_pm: [], dinner: [] },
-                                                                daily_macros: { protein_g: 0, carbs_g: 0, fats_g: 0, total_kcal: 0 }
-                                                            }],
-                                                            forbidden_foods: []
-                                                        } : undefined)}
-                                                        onSave={(plan) => {
-                                                            setCurrentMealPlan(plan);
-                                                            toast.success("Plan Alimenticio actualizado en memoria.");
-                                                        }}
-                                                        onCancel={() => {}}
-                                                    />
-                                                </div>
-                                            ) : (
-                                                // --- CARRIL B: MEDICINA CLÁSICA (Recetas) ---
-                                                <div className="h-full flex flex-col gap-4 overflow-y-auto">
-                                                    
-                                                    <div className="bg-white dark:bg-slate-900 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800">
-                                                        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
-                                                            <div className="flex items-center gap-4 w-full md:w-auto">
-                                                                <h3 className="font-bold text-lg flex items-center gap-2 text-indigo-600 dark:text-indigo-400">
-                                                                    <Pill size={20}/> Receta Médica
-                                                                </h3>
-                                                                {showControlledInput && (
-                                                                    <div className="flex-1 md:flex-none animate-fade-in-right">
-                                                                        <div className="relative group">
-                                                                            <input 
-                                                                                type="text" 
-                                                                                placeholder="Folio / Código COFEPRIS" 
-                                                                                className="text-xs border-2 border-indigo-100 dark:border-indigo-900/50 bg-indigo-50/50 dark:bg-indigo-900/20 rounded-lg px-3 py-1.5 w-full md:w-56 outline-none focus:border-indigo-500 text-indigo-700 dark:text-indigo-300 font-medium placeholder:text-indigo-300 transition-all"
-                                                                                value={specialFolio}
-                                                                                onChange={(e) => setSpecialFolio(e.target.value)}
-                                                                            />
-                                                                        </div>
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                            <button onClick={handleAddMedication} className="text-xs bg-indigo-50 text-indigo-600 px-3 py-1 rounded-full flex items-center gap-1 hover:bg-indigo-100 dark:bg-indigo-900/30 dark:text-indigo-300">
-                                                                <Plus size={12}/> Agregar Fármaco
+                                                <div className="flex flex-wrap gap-2 w-full sm:w-auto justify-end">
+                                                    <FoodSearchModal />
+                                                    {/* Botones Exclusivos MEDICINA */}
+                                                    {!isNutritionProfile && (
+                                                        <>
+                                                            <button 
+                                                                onClick={() => setIsInterconsultationOpen(true)}
+                                                                className="p-2 bg-indigo-100 text-indigo-600 rounded-lg hover:bg-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-400 flex items-center gap-2"
+                                                                title="Segunda Opinión / Interconsulta"
+                                                            >
+                                                                <Microscope size={18}/>
                                                             </button>
-                                                        </div>
-                                                        
-                                                        {editablePrescriptions.length === 0 ? (
-                                                            <p className="text-sm text-slate-400 italic text-center py-4">No se detectaron medicamentos.</p>
-                                                        ) : (
-                                                            <div className="space-y-3">
-                                                                {editablePrescriptions.map((med, idx) => (
-                                                                    <div key={idx} className="flex gap-3 items-start p-3 rounded-lg border bg-slate-50 border-slate-100 dark:bg-slate-800/50 dark:border-slate-700 group">
-                                                                        <div className="flex-1 flex flex-col gap-2 min-w-0">
-                                                                            <div className="flex items-start gap-2 w-full">
-                                                                                <div className="relative flex-1">
-                                                                                    <textarea 
-                                                                                        rows={1}
-                                                                                        className="w-full font-bold bg-transparent outline-none border-b border-transparent focus:border-indigo-300 transition-colors resize-none overflow-hidden block text-slate-800 dark:text-white"
-                                                                                        value={med.drug} 
-                                                                                        onChange={e=>handleUpdateMedication(idx,'drug',e.target.value)} 
-                                                                                        placeholder="Nombre del medicamento" 
-                                                                                    />
-                                                                                </div>
-                                                                                <input 
-                                                                                    className="text-sm font-bold bg-transparent outline-none border-b border-transparent focus:border-indigo-300 transition-colors text-slate-600 dark:text-slate-300 w-20 text-right shrink-0"
-                                                                                    value={med.dose} 
-                                                                                    onChange={e=>handleUpdateMedication(idx,'dose',e.target.value)} 
-                                                                                    placeholder="Dosis" 
-                                                                                />
-                                                                            </div>
-                                                                            <div className="flex gap-2 text-xs w-full">
-                                                                                <input className="flex-1 bg-transparent outline-none border-b border-transparent focus:border-indigo-300 transition-colors text-slate-500" value={med.frequency} onChange={e=>handleUpdateMedication(idx,'frequency',e.target.value)} placeholder="Frecuencia" />
-                                                                                <input className="flex-1 bg-transparent outline-none border-b border-transparent focus:border-indigo-300 transition-colors text-slate-500" value={med.duration} onChange={e=>handleUpdateMedication(idx,'duration',e.target.value)} placeholder="Duración" />
-                                                                            </div>
-                                                                        </div>
-                                                                        <button onClick={()=>handleRemoveMedication(idx)} className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400"><X size={16}/></button>
-                                                                    </div>
-                                                                ))}
-                                                            </div>
-                                                        )}
-                                                    </div>
 
-                                                    <div className="bg-white dark:bg-slate-900 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 flex-1 flex flex-col">
-                                                        <div className="flex justify-between items-center mb-4">
-                                                            <h3 className="font-bold text-lg flex items-center gap-2 text-teal-600 dark:text-teal-400"><FileText size={20}/> Indicaciones y Cuidados</h3>
-                                                            <button onClick={()=>setIsEditingInstructions(!isEditingInstructions)} className="p-2 bg-slate-100 dark:bg-slate-800 rounded-lg text-slate-500 hover:text-teal-600 transition-colors"><Edit2 size={18}/></button>
-                                                        </div>
-                                                        <div className="flex-1 overflow-y-auto custom-scrollbar min-h-[200px]">
-                                                            {isEditingInstructions ? (
-                                                                <textarea className="w-full h-full border dark:border-slate-700 p-4 rounded-lg bg-slate-50 dark:bg-slate-800 dark:text-slate-200 resize-none outline-none focus:ring-2 focus:ring-teal-500" value={editableInstructions} onChange={e=>setEditableInstructions(e.target.value)}/>
-                                                            ) : (
-                                                                <div className="prose dark:prose-invert max-w-none text-sm text-slate-700 dark:text-slate-300"><FormattedText content={editableInstructions}/></div>
+                                                            {isSurgicalSpecialty && (
+                                                                <button 
+                                                                    onClick={() => setIsSurgicalModalOpen(true)}
+                                                                    className="p-2 bg-indigo-100 text-indigo-600 rounded-lg hover:bg-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-400 flex items-center gap-2"
+                                                                    title="Generar Incapacidad"
+                                                                >
+                                                                    <Scissors size={18}/>
+                                                                    <span className="text-xs font-bold hidden sm:inline">Incapacidad</span>
+                                                                </button>
                                                             )}
-                                                        </div>
-                                                    </div>
+                                                        </>
+                                                    )}
 
+                                                    {/* Botones COMUNES (WhatsApp y PDF) */}
+                                                    <button 
+                                                        onClick={handleShareWhatsApp} 
+                                                        className="p-2 bg-green-100 text-green-600 rounded-lg hover:bg-green-200 dark:bg-green-900/30 dark:text-green-400 transition-colors"
+                                                        title="Enviar por WhatsApp"
+                                                    >
+                                                        <Share2 size={18}/>
+                                                    </button>
+                                                    
+                                                    <button 
+                                                        onClick={handlePrint} 
+                                                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-md transition-all font-bold text-sm"
+                                                    >
+                                                        <Download size={18}/>
+                                                        <span className="hidden sm:inline">Descargar PDF</span>
+                                                    </button>
                                                 </div>
-                                            )}
-                                        </div>
+                                            </div>
+
+                                            {/* 2. CONTENIDO DEL CUERPO (BIFURCACIÓN) */}
+                                            <div className="flex-1 overflow-hidden">
+                                                {isNutritionProfile ? (
+                                                    // --- CARRIL A: NUTRICIÓN (Editor de Dieta) ---
+                                                    <div className="h-full">
+                                                        <MealPlanEditor 
+                                                            initialPlan={currentMealPlan || (generatedNote?.soapData?.plan ? {
+                                                                title: 'Plan Sugerido por IA',
+                                                                goal: generatedNote.soapData.plan, 
+                                                                daily_plans: [{ 
+                                                                    day_label: 'Día 1', 
+                                                                    meals: { breakfast: [], snack_am: [], lunch: [], snack_pm: [], dinner: [] },
+                                                                    daily_macros: { protein_g: 0, carbs_g: 0, fats_g: 0, total_kcal: 0 }
+                                                                }],
+                                                                forbidden_foods: []
+                                                            } : undefined)}
+                                                            // ✅ CONEXIÓN DE INTELIGENCIA: Pasamos el trigger detectado
+                                                            medicalContextTrigger={generatedNote?.medical_context_trigger}
+                                                            onSave={(plan) => {
+                                                                setCurrentMealPlan(plan);
+                                                                toast.success("Plan Alimenticio actualizado en memoria.");
+                                                            }}
+                                                            onCancel={() => {}}
+                                                        />
+                                                    </div>
+                                                ) : (
+                                                    // --- CARRIL B: MEDICINA CLÁSICA (Recetas) ---
+                                                    <div className="h-full flex flex-col gap-4 overflow-y-auto">
+    
+    {/* 1. EL NUEVO BANNER (Lógica Condicional) */}
+    {generatedNote?.medical_context_trigger && CLINICAL_PROTOCOLS[generatedNote.medical_context_trigger] && (
+        <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-xl flex flex-col sm:flex-row justify-between items-center gap-4 shadow-sm animate-in slide-in-from-top-2 shrink-0">
+            <div className="flex items-start gap-3">
+                <div className="bg-emerald-100 p-2 rounded-full text-emerald-600">
+                    <Sparkles size={20} />
+                </div>
+                <div>
+                    <h4 className="font-bold text-emerald-800 text-sm">
+                        Sugerencia Nutricional Detectada
+                    </h4>
+                    <p className="text-xs text-emerald-700 mt-1">
+                        El diagnóstico coincide con: <strong>{CLINICAL_PROTOCOLS[generatedNote.medical_context_trigger].name}</strong>.
+                    </p>
+                </div>
+            </div>
+            
+            {!currentMealPlan ? (
+                <button 
+                    onClick={() => {
+                        const proto = CLINICAL_PROTOCOLS[generatedNote.medical_context_trigger!];
+                        const autoPlan = {
+                            title: `Plan: ${proto.name}`,
+                            goal: `Protocolo Clínico: ${proto.description}`,
+                            forbidden_foods: proto.avoid_list,
+                            daily_plans: [{
+                                day_label: 'Guía Nutricional',
+                                meals: {
+                                    breakfast: proto.allowed_suggestions.slice(0,2).map(f=>({name:f, quantity:'1 ración'})),
+                                    snack_am: proto.allowed_suggestions.slice(2,3).map(f=>({name:f, quantity:'1 ración'})),
+                                    lunch: proto.allowed_suggestions.slice(3,5).map(f=>({name:f, quantity:'1 ración'})),
+                                    snack_pm: [],
+                                    dinner: proto.allowed_suggestions.slice(5,7).map(f=>({name:f, quantity:'1 ración'})),
+                                },
+                                daily_macros: { protein_g: 0, carbs_g: 0, fats_g: 0, total_kcal: 0 }
+                            }]
+                        };
+                        setCurrentMealPlan(autoPlan);
+                        toast.success("Dieta anexada a la impresión (Página 2)");
+                    }}
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow-sm transition-colors flex items-center gap-2 whitespace-nowrap"
+                >
+                    <Plus size={14} /> Anexar Dieta al PDF
+                </button>
+            ) : (
+                <div className="flex items-center gap-2 px-4 py-2 bg-white border border-emerald-200 text-emerald-700 text-xs font-bold rounded-lg">
+                    <CheckCircle size={14} /> Dieta Anexada
+                    <button onClick={()=>setCurrentMealPlan(null)} className="ml-2 text-slate-400 hover:text-red-500"><X size={12}/></button>
+                </div>
+            )}
+        </div>
+    )}
+
+    {/* 2. TARJETA DE RECETA MÉDICA (Contenido Existente) */}
+    <div className="bg-white dark:bg-slate-900 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+            <div className="flex items-center gap-4 w-full md:w-auto">
+                <h3 className="font-bold text-lg flex items-center gap-2 text-indigo-600 dark:text-indigo-400">
+                    <Pill size={20}/> Receta Médica
+                </h3>
+                {showControlledInput && (
+                    <div className="flex-1 md:flex-none animate-fade-in-right">
+                        <div className="relative group">
+                            <input 
+                                type="text" 
+                                placeholder="Folio / Código COFEPRIS" 
+                                className="text-xs border-2 border-indigo-100 dark:border-indigo-900/50 bg-indigo-50/50 dark:bg-indigo-900/20 rounded-lg px-3 py-1.5 w-full md:w-56 outline-none focus:border-indigo-500 text-indigo-700 dark:text-indigo-300 font-medium placeholder:text-indigo-300 transition-all"
+                                value={specialFolio}
+                                onChange={(e) => setSpecialFolio(e.target.value)}
+                            />
+                        </div>
+                    </div>
+                )}
+            </div>
+            <button onClick={handleAddMedication} className="text-xs bg-indigo-50 text-indigo-600 px-3 py-1 rounded-full flex items-center gap-1 hover:bg-indigo-100 dark:bg-indigo-900/30 dark:text-indigo-300">
+                    <Plus size={12}/> Agregar Fármaco
+            </button>
+        </div>
+        
+        {editablePrescriptions.length === 0 ? (
+            <p className="text-sm text-slate-400 italic text-center py-4">No se detectaron medicamentos.</p>
+        ) : (
+            <div className="space-y-3">
+                {editablePrescriptions.map((med, idx) => (
+                    <div key={idx} className="flex gap-3 items-start p-3 rounded-lg border bg-slate-50 border-slate-100 dark:bg-slate-800/50 dark:border-slate-700 group">
+                        <div className="flex-1 flex flex-col gap-2 min-w-0">
+                            <div className="flex items-start gap-2 w-full">
+                                <div className="relative flex-1">
+                                    <textarea 
+                                        rows={1}
+                                        className="w-full font-bold bg-transparent outline-none border-b border-transparent focus:border-indigo-300 transition-colors resize-none overflow-hidden block text-slate-800 dark:text-white"
+                                        value={med.drug} 
+                                        onChange={e=>handleUpdateMedication(idx,'drug',e.target.value)} 
+                                        placeholder="Nombre del medicamento" 
+                                    />
+                                </div>
+                                <input 
+                                    className="text-sm font-bold bg-transparent outline-none border-b border-transparent focus:border-indigo-300 transition-colors text-slate-600 dark:text-slate-300 w-20 text-right shrink-0"
+                                    value={med.dose} 
+                                    onChange={e=>handleUpdateMedication(idx,'dose',e.target.value)} 
+                                    placeholder="Dosis" 
+                                />
+                            </div>
+                            <div className="flex gap-2 text-xs w-full">
+                                <input className="flex-1 bg-transparent outline-none border-b border-transparent focus:border-indigo-300 transition-colors text-slate-500" value={med.frequency} onChange={e=>handleUpdateMedication(idx,'frequency',e.target.value)} placeholder="Frecuencia" />
+                                <input className="flex-1 bg-transparent outline-none border-b border-transparent focus:border-indigo-300 transition-colors text-slate-500" value={med.duration} onChange={e=>handleUpdateMedication(idx,'duration',e.target.value)} placeholder="Duración" />
+                            </div>
+                        </div>
+                        <button onClick={()=>handleRemoveMedication(idx)} className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400"><X size={16}/></button>
+                    </div>
+                ))}
+            </div>
+        )}
+    </div>
+
+    {/* 3. TARJETA DE INDICACIONES Y CUIDADOS (Contenido Existente) */}
+    <div className="bg-white dark:bg-slate-900 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 flex-1 flex flex-col">
+        <div className="flex justify-between items-center mb-4">
+            <h3 className="font-bold text-lg flex items-center gap-2 text-teal-600 dark:text-teal-400"><FileText size={20}/> Indicaciones y Cuidados</h3>
+            <button onClick={()=>setIsEditingInstructions(!isEditingInstructions)} className="p-2 bg-slate-100 dark:bg-slate-800 rounded-lg text-slate-500 hover:text-teal-600 transition-colors"><Edit2 size={18}/></button>
+        </div>
+        <div className="flex-1 overflow-y-auto custom-scrollbar min-h-[200px]">
+            {isEditingInstructions ? (
+                <textarea className="w-full h-full border dark:border-slate-700 p-4 rounded-lg bg-slate-50 dark:bg-slate-800 dark:text-slate-200 resize-none outline-none focus:ring-2 focus:ring-teal-500" value={editableInstructions} onChange={e=>setEditableInstructions(e.target.value)}/>
+            ) : (
+                <div className="prose dark:prose-invert max-w-none text-sm text-slate-700 dark:text-slate-300"><FormattedText content={editableInstructions}/></div>
+            )}
+                                                            </div>
+                                                        </div>
+
+                                                    </div>
+                                                )}
+                                            </div>
                                     </div>
                                 )}
 

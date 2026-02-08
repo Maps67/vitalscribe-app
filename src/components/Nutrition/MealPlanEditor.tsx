@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Plus, 
   Trash2, 
@@ -11,16 +11,22 @@ import {
   Calendar,
   Sparkles, 
   Loader2,
-  Calculator 
+  Calculator,
+  AlertTriangle,
+  CheckCircle,
+  ArrowRight
 } from 'lucide-react';
 import { NutritionPlan, DailyMealPlan, MealItem } from '../../types';
 import { GeminiMedicalService } from '../../services/GeminiMedicalService';
 import { toast } from 'sonner';
 // ✅ IMPORTACIÓN CLAVE: Traemos tu Lupa
 import { FoodSearchModal } from '../FoodSearchModal';
+// ✅ IMPORTACIÓN NUEVA: El Cerebro de Protocolos
+import { CLINICAL_PROTOCOLS } from '../../data/clinical_protocols';
 
 interface MealPlanEditorProps {
   initialPlan?: NutritionPlan;
+  medicalContextTrigger?: string; // ✅ NUEVA PROP: Señal de la IA
   onSave: (plan: NutritionPlan) => void;
   onCancel: () => void;
 }
@@ -31,7 +37,7 @@ const EMPTY_DAY: DailyMealPlan = {
   daily_macros: { protein_g: 0, carbs_g: 0, fats_g: 0, total_kcal: 0 }
 };
 
-const MealPlanEditor: React.FC<MealPlanEditorProps> = ({ initialPlan, onSave, onCancel }) => {
+const MealPlanEditor: React.FC<MealPlanEditorProps> = ({ initialPlan, medicalContextTrigger, onSave, onCancel }) => {
   const [plan, setPlan] = useState<NutritionPlan>(initialPlan || {
     title: 'Plan Nutricional Semanal',
     goal: '',
@@ -41,8 +47,58 @@ const MealPlanEditor: React.FC<MealPlanEditorProps> = ({ initialPlan, onSave, on
 
   const [activeDayIndex, setActiveDayIndex] = useState(0);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [suggestedProtocol, setSuggestedProtocol] = useState<any>(null);
 
-  // --- LÓGICA IA ---
+  // --- EFECTO: DETECTAR PROTOCOLO ---
+  useEffect(() => {
+    if (medicalContextTrigger && CLINICAL_PROTOCOLS[medicalContextTrigger]) {
+        setSuggestedProtocol(CLINICAL_PROTOCOLS[medicalContextTrigger]);
+        // Solo mostramos toast si el plan está vacío para no molestar
+        if (!plan.goal) {
+            toast.info("💡 Protocolo clínico sugerido disponible.", { icon: <Sparkles size={16}/> });
+        }
+    }
+  }, [medicalContextTrigger]);
+
+  // --- LÓGICA DE APLICACIÓN DE PROTOCOLO ---
+  const handleApplyProtocol = () => {
+      if (!suggestedProtocol) return;
+
+      const foods = suggestedProtocol.allowed_suggestions;
+      const avoid = suggestedProtocol.avoid_list;
+
+      // Distribuir alimentos sugeridos en las comidas para dar un ejemplo base
+      // (Algoritmo simple de distribución)
+      const breakfastItems = foods.slice(0, 2).map((f: string) => ({ name: f, quantity: '1 porción' }));
+      const lunchItems = foods.slice(2, 5).map((f: string) => ({ name: f, quantity: '1 porción' }));
+      const dinnerItems = foods.slice(5, 7).map((f: string) => ({ name: f, quantity: '1 porción' }));
+      const snackItems = foods.slice(7).map((f: string) => ({ name: f, quantity: '1 porción' }));
+
+      const newDay: DailyMealPlan = {
+          day_label: 'Día 1 (Protocolo)',
+          meals: {
+              breakfast: breakfastItems,
+              snack_am: snackItems.length > 0 ? [snackItems[0]] : [],
+              lunch: lunchItems,
+              snack_pm: snackItems.length > 1 ? [snackItems[1]] : [],
+              dinner: dinnerItems
+          },
+          daily_macros: { protein_g: 0, carbs_g: 0, fats_g: 0, total_kcal: 0 } // Se calcularían idealmente
+      };
+
+      setPlan(prev => ({
+          ...prev,
+          title: `Plan: ${suggestedProtocol.name}`,
+          goal: `Objetivo Clínico: ${suggestedProtocol.description}. Tipo: ${suggestedProtocol.diet_type}`,
+          forbidden_foods: avoid,
+          daily_plans: [newDay]
+      }));
+
+      setSuggestedProtocol(null); // Ocultar banner tras aplicar
+      toast.success("Protocolo clínico aplicado correctamente.");
+  };
+
+  // --- LÓGICA IA (GENERATIVA) ---
   const handleAutoFill = async () => {
     if (!plan.goal || plan.goal.length < 5) {
         return toast.warning("Escribe un objetivo nutricional claro primero (Ej: Dieta Keto 1500kcal).");
@@ -220,6 +276,38 @@ const MealPlanEditor: React.FC<MealPlanEditorProps> = ({ initialPlan, onSave, on
           <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">🥗 Editor de Plan Alimenticio</h2>
           <p className="text-sm text-slate-500">Define manual o automáticamente el régimen del paciente.</p>
         </div>
+
+        {/* ✅ BANNER DE PROTOCOLO INTELIGENTE (SI EXISTE TRIGGER) */}
+        {suggestedProtocol && (
+            <div className="bg-emerald-50 border border-emerald-100 p-4 rounded-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 animate-in slide-in-from-top-4">
+                <div>
+                    <h3 className="font-bold text-emerald-800 flex items-center gap-2">
+                        <Sparkles size={18} className="text-emerald-600"/>
+                        Protocolo Clínico Detectado
+                    </h3>
+                    <p className="text-sm text-emerald-700 mt-1">
+                        Se sugiere: <strong>{suggestedProtocol.name}</strong> ({suggestedProtocol.diet_type}).
+                    </p>
+                    <p className="text-xs text-emerald-600 mt-1 opacity-80">
+                        {suggestedProtocol.description}
+                    </p>
+                </div>
+                <div className="flex gap-2 shrink-0">
+                    <button 
+                        onClick={() => setSuggestedProtocol(null)}
+                        className="px-3 py-2 text-sm text-emerald-700 font-medium hover:bg-emerald-100 rounded-lg"
+                    >
+                        Ignorar
+                    </button>
+                    <button 
+                        onClick={handleApplyProtocol}
+                        className="px-4 py-2 bg-emerald-600 text-white text-sm font-bold rounded-lg hover:bg-emerald-700 shadow-sm flex items-center gap-2"
+                    >
+                        <CheckCircle size={16} /> Aplicar Protocolo
+                    </button>
+                </div>
+            </div>
+        )}
         
         <div className="flex gap-2 items-end">
             <div className="flex-1">
@@ -242,6 +330,23 @@ const MealPlanEditor: React.FC<MealPlanEditorProps> = ({ initialPlan, onSave, on
                 <span className="hidden sm:inline">Generar Menú</span>
             </button>
         </div>
+
+        {/* ALIMENTOS PROHIBIDOS (VISUALIZACIÓN) */}
+        {plan.forbidden_foods && plan.forbidden_foods.length > 0 && (
+            <div className="flex items-start gap-2 bg-red-50 p-3 rounded-lg border border-red-100">
+                <AlertTriangle size={16} className="text-red-500 shrink-0 mt-0.5"/>
+                <div>
+                    <span className="text-xs font-bold text-red-700 block mb-1">RESTRICCIONES / EVITAR:</span>
+                    <div className="flex flex-wrap gap-1">
+                        {plan.forbidden_foods.map((food, i) => (
+                            <span key={i} className="text-[10px] bg-white border border-red-100 text-red-600 px-1.5 py-0.5 rounded">
+                                {food}
+                            </span>
+                        ))}
+                    </div>
+                </div>
+            </div>
+        )}
       </div>
 
       <div className="flex flex-1 overflow-hidden gap-4 md:gap-6">

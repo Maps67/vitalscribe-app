@@ -448,9 +448,25 @@ export const GeminiMedicalService = {
                 - Ejemplo: Si el médico dice "Poner insulina" PERO el audio menciona "Potasio 2.8", TU OBLIGACIÓN ES BLOQUEAR LA INSULINA.
             
             2. INTERPRETACIÓN: Interpreta QUÉ QUISO DECIR médicamente.
-                IMPORTANTE: Si el "CONTEXTO MÉDICO INICIAL" contiene datos clave, ÚSALO como verdad absoluta.
+                IMPORTANT: Si el "CONTEXTO MÉDICO INICIAL" contiene datos clave, ÚSALO como verdad absoluta.
 
             3. CONEXIÓN DE PUNTOS: Usa el HISTORIAL para dar contexto.
+
+            ===================================================
+            🧬 DETECTOR DE PROTOCOLO NUTRICIONAL (TRIGGERS)
+            ===================================================
+            Analiza el cuadro clínico y determina si encaja en alguno de estos escenarios para activar soporte nutricional automático.
+            Devuelve EXACTAMENTE la clave listada a continuación, o 'null' si no aplica.
+
+            - 'colecistectomia' -> Si detectas post-operado de vesícula reciente.
+            - 'apendicectomia' -> Si detectas post-operado de apéndice.
+            - 'bariatrica_fase1' -> Si detectas Bypass o Manga gástrica reciente (Fase de líquidos).
+            - 'hernioplastia' -> Post-operado de hernia (inguinal/umbilical/hiatal).
+            - 'diabetes_descomp' -> Diabetes descontrolada, hiperglucemia o debut diabético.
+            - 'hipertension' -> Crisis hipertensiva o ajuste por riesgo cardiovascular.
+            - 'renal_etapa3' -> Enfermedad Renal Crónica, elevación de creatinina/urea.
+            - 'gastritis' -> Gastritis aguda, úlcera, reflujo severo.
+            - 'sii_fodmap' -> Colitis, distensión, Síndrome de Intestino Irritable.
 
             ===================================================
             🛡️ DIRECTIVA DE SEGURIDAD LEGAL
@@ -482,6 +498,7 @@ export const GeminiMedicalService = {
                     "analysis": "Integración diagnóstica con lenguaje probabilístico y códigos CIE-10.", 
                     "plan": "..." 
                 },
+                "medical_context_trigger": "CLAVE_PROTOCOLO_O_NULL", 
                 "prescriptions": [
                 { 
                     "drug": "Nombre Genérico (Comercial)", 
