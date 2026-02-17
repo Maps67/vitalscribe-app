@@ -29,6 +29,7 @@ import { DoctorFileGallery } from './DoctorFileGallery';
 import { UploadMedico } from './UploadMedico';
 import { InsightsPanel } from './InsightsPanel';
 import { RiskBadge } from './RiskBadge';
+import { RiskAlert } from './medical/RiskAlert';
 import InsurancePanel from './Insurance/InsurancePanel';
 import { VitalSnapshotCard } from './VitalSnapshotCard';
 import { SpecialtyVault } from './SpecialtyVault';
@@ -2173,13 +2174,19 @@ const ConsultationView: React.FC = () => {
                                     </div>
 
                                     {generatedNote.risk_analysis && (
-                                    <div className="mt-2">
-                                            <RiskBadge 
-                                            level={generatedNote.risk_analysis.level as "Alto" | "Medio" | "Bajo"} 
-                                            reason={generatedNote.risk_analysis.reason} 
-                                            />
-                                    </div>
-                                    )}
+    <div className="mt-4 mb-2 animate-in fade-in slide-in-from-top-4 duration-500">
+        <RiskAlert 
+            analysis={{
+                reason: generatedNote.risk_analysis.reason,
+                /* 👇 AQUÍ ESTÁ LA CORRECCIÓN TÉCNICA: Reconstruimos el objeto para forzar el tipo */
+                level: generatedNote.risk_analysis.level as "Bajo" | "Medio" | "Alto"
+            }}
+            onConfirm={() => {
+                toast.info("Alerta de riesgo revisada.", { icon: <ShieldCheck size={16}/> });
+            }}
+        />
+    </div>
+)}
 
                                     <div className="text-xs font-bold text-slate-800 dark:text-slate-200 self-end">
                                             {selectedPatient?.name || "Paciente no registrado"}

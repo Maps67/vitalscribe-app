@@ -1,4 +1,4 @@
-// FUERZA DE ACTUALIZACION: VITALSCRIBE v6.1 - [UNIFICADO]
+// FUERZA DE ACTUALIZACION: VITALSCRIBE v6.3 - [MODELS: 2026 COMPLIANT]
 // @ts-ignore
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
@@ -7,96 +7,90 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-console.log("🚀 SUPABASE EDGE: MEDICINE AI - OPERATIONAL [COGNITIVE SHIELD ACTIVE]");
+console.log("🚀 SUPABASE EDGE: MEDICINE AI - OPERATIONAL [MODEL UPDATE 2026]");
 
-// LISTA DE MODELOS (Prioridad: Velocidad y Precisión Médica)
-// Se mantiene gemini-2.5-flash como punta de lanza por ser superior al 2.0-exp del respaldo.
+// LISTA DE MODELOS ACTUALIZADA SEGÚN TABLA DE DEPRECIACIÓN
+// Prioridad 1: Gemini 3.0 Flash Preview (Futuro, sin fecha de cierre)
+// Prioridad 2: Gemini 2.5 Flash (Estable hasta Junio 2026)
+// ELIMINADO: Gemini 2.0 (End of Life: Marzo 2026)
 const MODELS_TO_TRY = [
-  "gemini-3-flash-preview", 
   "gemini-2.5-flash", 
+  "gemini-3-flash-preview", 
 ];
 
 serve(async (req) => {
-  // Manejo de CORS (Pre-flight)
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
 
   try {
-    // 1. Obtener API Key de Secrets (Blindaje de Seguridad)
     const API_KEY = Deno.env.get('GOOGLE_GENAI_API_KEY');
-    if (!API_KEY) {
-      throw new Error("CRITICAL: API Key no encontrada en Secrets.");
-    }
+    if (!API_KEY) throw new Error("CRITICAL: API Key no encontrada.");
 
-    // 2. Parsear y VALIDAR entrada
     const reqBody = await req.json();
     let prompt = reqBody.prompt;
     
-    // Extracción de parámetros de control avanzados (Heredado del Index Normal)
+    // Parámetros de control
     const useTools = reqBody.useTools || false;
-    const jsonMode = reqBody.jsonMode !== false; // Default a true
+    const jsonMode = reqBody.jsonMode !== false; 
 
-    // --- NÚCLEO COGNITIVO (PRESERVADO) ---
-    // Si no hay prompt directo, construimos el prompt médico estructurado.
-    // ESTA SECCIÓN ES INNEGOCIABLE PARA EL FUNCIONAMIENTO DEL FRONTEND.
+    // --- NÚCLEO COGNITIVO REFORZADO (V6.2 + V6.3 Models) ---
     if (!prompt) {
         const transcript = reqBody.transcript || ""; 
-        if (!transcript.trim()) {
-            throw new Error("La transcripción está vacía.");
-        }
+        if (!transcript.trim()) throw new Error("La transcripción está vacía.");
         
         const specialty = reqBody.specialty || "Medicina General";
         const history = reqBody.patientHistory || "No disponible";
 
-        // Prompt de Alta Fidelidad (V5.4 Standard)
+        // PROMPT DE SEGURIDAD (ANTI-ALUCINACIÓN)
         prompt = `
-          ROL: Eres un médico especialista en ${specialty}. Redacta con terminología clínica precisa.
-          
-          ENTRADA:
-          - Transcripción de la consulta: "${transcript}"
-          - Historial previo: "${history}"
+          ROL: Actúa como un médico especialista senior en ${specialty}. Tu prioridad es la SEGURIDAD CLÍNICA y la VERACIDAD.
 
-          INSTRUCCIONES:
-          Genera una estructura JSON válida que coincida con la interfaz del sistema. 
-          No incluyas bloques de código markdown (\`\`\`json), solo el objeto raw.
+          CONTEXTO DE ENTRADA:
+          - Historial: "${history}"
+          - Transcripción (RAW): "${transcript}"
 
-          ESTRUCTURA JSON REQUERIDA (NO MODIFICAR CLAVES):
+          DIRECTIVAS DE SEGURIDAD (MANDATORIO):
+          1. NO INVENTAR (Principio de No Maleficencia): Si un dato (dosis, síntoma, diagnóstico, CIE-10) no se menciona explícitamente, NO lo incluyas. No asumas fiebre si no hay termómetro. No asumas cirugía si no se menciona herida.
+          2. PRIVACIDAD (HIPAA/GDPR): En la salida, NO incluyas nombres propios detectados. Usa "el paciente".
+          3. OBJETIVIDAD: Separa síntomas referidos (S) de signos medidos (O).
+
+          ESTRUCTURA DE SALIDA (JSON PURO):
+          Genera SOLAMENTE un objeto JSON.
           {
-            "clinicalNote": "Nota clínica narrativa completa, profesional y detallada.",
+            "clinicalNote": "Nota narrativa formal técnica.",
             "soapData": {
-              "subjective": "Resumen detallado de síntomas y motivo de consulta (S)",
-              "objective": "Hallazgos físicos, signos vitales y observaciones (O)",
-              "analysis": "Razonamiento clínico, diagnóstico presuntivo y diagnósticos diferenciales (A)",
-              "plan": "Plan farmacológico, estudios solicitados y recomendaciones (P)"
+              "subjective": "Sintomatología referida por paciente.",
+              "objective": "Signos vitales y exploración (SOLO SI SE MENCIONAN).",
+              "analysis": "Juicio clínico. Usar 'Sospecha de...' si no hay certeza.",
+              "plan": "Farmacología y estudios."
             },
-            "patientInstructions": "Explicación clara y empática dirigida al paciente sobre su tratamiento",
+            "patientInstructions": "Lenguaje claro para el paciente.",
             "risk_analysis": {
-              "level": "Elegir uno: Bajo, Medio, o Alto",
-              "reason": "Justificación clínica breve del nivel de riesgo asignado"
+              "level": "Bajo | Medio | Alto",
+              "reason": "Justificación basada en evidencia actual."
             }
           }
         `;
     }
 
-    // 3. Ejecución Segura y Redundante
     let successfulResponse = null;
     let lastError = "";
 
-    console.log(`🧠 Iniciando inferencia... [Tools: ${useTools ? 'ON' : 'OFF'}]`);
+    console.log(`🧠 Iniciando inferencia con ${MODELS_TO_TRY[0]}...`);
 
     for (const modelName of MODELS_TO_TRY) {
       try {
         console.log(`Trying Model: ${modelName}`);
-        
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${API_KEY}`;
         
-        // Payload Dinámico (Soporta Tools del Index Normal)
         const payload: any = {
           contents: [{ parts: [{ text: prompt }] }],
           generationConfig: { 
-            // Ajuste mime-type según necesidad
-            response_mime_type: (useTools || !jsonMode) ? "text/plain" : "application/json" 
+            response_mime_type: (useTools || !jsonMode) ? "text/plain" : "application/json",
+            // TEMPERATURA 0.2: CRÍTICO PARA EVITAR INVENTAR FIEBRE O DATOS
+            temperature: 0.2, 
+            topP: 0.8
           }
         };
 
@@ -114,13 +108,13 @@ serve(async (req) => {
            const errText = await response.text();
            console.warn(`⚠️ Fallo ${modelName}: ${errText}`);
            lastError = errText;
-           continue; // Intenta el siguiente modelo
+           continue; 
         }
 
         const data = await response.json();
         if (data.candidates?.[0]?.content?.parts?.[0]?.text) {
              successfulResponse = data.candidates[0].content.parts[0].text;
-             break; // Éxito rotundo
+             break; 
         }
 
       } catch (e) {
@@ -129,14 +123,14 @@ serve(async (req) => {
     }
 
     if (!successfulResponse) {
-      throw new Error(`Fallo total en cascada de modelos. Último error: ${lastError}`);
+      throw new Error(`Fallo total. Último error: ${lastError}`);
     }
 
-    // 4. Limpieza y Retorno (Sanitización JSON)
+    // Limpieza Estricta
     let clean = successfulResponse.replace(/```json/g, '').replace(/```/g, '');
     
-    // Recorte estricto para evitar basura antes/después del JSON (Heredado del Index Normal)
     if (!useTools && jsonMode) {
+        clean = clean.trim();
         const firstCurly = clean.indexOf('{');
         const lastCurly = clean.lastIndexOf('}');
         if (firstCurly !== -1 && lastCurly !== -1) {
@@ -150,7 +144,7 @@ serve(async (req) => {
     });
 
   } catch (error: any) {
-    console.error("❌ ERROR CRÍTICO EN EDGE FUNCTION:", error);
+    console.error("❌ ERROR CRÍTICO:", error);
     return new Response(JSON.stringify({ error: error.message }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 500,

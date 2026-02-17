@@ -55,6 +55,28 @@ Analiza la lista de fármacos entrante. Si detectas cualquier discrepancia de se
 `;
 
 // ==========================================
+// ⚖️ 1.9 PROTOCOLO DE BLINDAJE LEGAL (SEMÁNTICA PROBABILÍSTICA)
+// ==========================================
+const LEGAL_SAFETY_LAYER = `
+⚖️ PROTOCOLO DE SEGURIDAD JURÍDICA (CDSS MODE):
+Actúas como un Sistema de Soporte a la Decisión Clínica, NO como el médico titular.
+Tu lenguaje debe reflejar PROBABILIDAD, no certeza absoluta.
+
+Reglas de Transformación Semántica:
+1. DIAGNÓSTICOS:
+   - ❌ PROHIBIDO: "El paciente tiene [Enfermedad]" / "Diagnóstico: [X]"
+   - ✅ OBLIGATORIO: "Cuadro clínico compatible con..." / "Se sugiere descartar..." / "Probable [Enfermedad]"
+   
+2. ALERTAS DE RIESGO:
+   - ❌ PROHIBIDO: "Riesgo de muerte inminente" (Alarmismo)
+   - ✅ OBLIGATORIO: "Criterios sugieren valoración urgente por riesgo de..." (Técnico)
+
+3. TRATAMIENTO:
+   - ❌ PROHIBIDO: "Recetar [Fármaco]" / "Suspender [Fármaco]" (Orden directa)
+   - ✅ OBLIGATORIO: "Se sugiere valorar inicio de..." / "Considerar suspensión por interacción..."
+`;
+
+// ==========================================
 // 🍼 1.5 FARMACOPEA PEDIÁTRICA (TABLA DE REFERENCIA)
 // ==========================================
 const PEDIATRIC_FORMULARY = `
@@ -404,6 +426,7 @@ export const GeminiMedicalService = {
             ENFOQUE: ${specialtyConfig.focus}
             
             ${dynamicSecurityPrompt} // Mantiene tu seguridad
+            ${LEGAL_SAFETY_LAYER}
             ${PEDIATRIC_FORMULARY}
 
             ⚠️ REGLA DE INTEGRIDAD FARMACÉUTICA:

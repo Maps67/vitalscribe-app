@@ -8,6 +8,7 @@ import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
 import { GeminiMedicalService } from '../services/GeminiMedicalService';
 import { supabase } from '../lib/supabase';
 import { PatientSearch, PatientSearchResult } from './PatientSearch';
+import { RiskAlert } from './medical/RiskAlert'; // ✅ [OBJETIVO B] IMPORTAR
 
 interface QuickNoteModalProps {
   onClose: () => void;
@@ -19,6 +20,9 @@ export const QuickNoteModal: React.FC<QuickNoteModalProps> = ({ onClose, doctorP
   const [generatedNote, setGeneratedNote] = useState('');
   const [isProcessingAI, setIsProcessingAI] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState<PatientSearchResult | null>(null);
+  
+  // ✅ [OBJETIVO B] ESTADO PARA RIESGO
+  const [riskAnalysis, setRiskAnalysis] = useState<{level: 'Bajo'|'Medio'|'Alto', reason: string} | null>(null);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   
@@ -76,6 +80,17 @@ export const QuickNoteModal: React.FC<QuickNoteModalProps> = ({ onClose, doctorP
       const result = await GeminiMedicalService.generateClinicalNote(tempContext, doctorProfile?.specialty || 'Medicina General');
       
       const payload = result as any; 
+      
+      // ✅ [OBJETIVO B] CAPTURA DE SEGURIDAD
+      if (payload && payload.risk_analysis) {
+          setRiskAnalysis({
+              level: payload.risk_analysis.level as "Bajo" | "Medio" | "Alto",
+              reason: payload.risk_analysis.reason
+          });
+      } else {
+          setRiskAnalysis(null);
+      }
+
       let cleanText = "";
 
       if (typeof payload === 'string') {
@@ -196,6 +211,17 @@ export const QuickNoteModal: React.FC<QuickNoteModalProps> = ({ onClose, doctorP
           
           {step === 'capture' && (
             <div className="absolute inset-0 p-4 md:p-6 flex flex-col h-full">
+              
+              {/* ✅ [OBJETIVO B] ALERTA VISUAL EN MODAL */}
+              {riskAnalysis && (
+                  <div className="mb-3 shrink-0 animate-in slide-in-from-top-2">
+                      <RiskAlert 
+                          analysis={riskAnalysis}
+                          onConfirm={() => console.log("Riesgo visto en nota rápida")}
+                      />
+                  </div>
+              )}
+
               <div className="flex-1 relative bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden shadow-inner">
                 {isListening && (
                   <div className="absolute top-3 right-3 flex items-center gap-2 px-2 py-1 bg-red-100 text-red-600 rounded-full text-xs font-bold animate-pulse z-20 pointer-events-none shadow-sm">
@@ -264,7 +290,7 @@ export const QuickNoteModal: React.FC<QuickNoteModalProps> = ({ onClose, doctorP
                    
                    {(transcript || generatedNote) && (
                      <button 
-                       onClick={() => { resetTranscript(); setGeneratedNote(''); }}
+                       onClick={() => { resetTranscript(); setGeneratedNote(''); setRiskAnalysis(null); }}
                        className="px-3 py-2 text-slate-400 hover:text-red-500 text-sm font-medium transition-colors"
                      >
                        Borrar
