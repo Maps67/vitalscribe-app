@@ -27,7 +27,7 @@ import { QuickDocModal } from '../components/QuickDocModal';
 import { FastAdmitModal } from '../components/FastAdmitModal';
 import { UserGuideModal } from '../components/UserGuideModal';
 import { QuickNoteModal } from '../components/QuickNoteModal';
-// 👇 [NUEVO] Importación del Módulo SUIVE-1
+// 👇 Importación del Módulo SUIVE-1
 import { SuiveReportGenerator } from '../components/SuiveReportGenerator';
 
 // Tipos del Sistema
@@ -51,8 +51,8 @@ interface PendingItem {
 }
 
 interface WeatherState {
-    temp: string;
-    code: number;
+   temp: string;
+   code: number;
 }
 
 const BrandLogo = ({ className = "" }: { className?: string }) => (
@@ -511,13 +511,12 @@ const Dashboard: React.FC = () => {
         .animate-slide-top { animation: slideInTop 0.5s ease-out forwards; }
       `}</style>
       
-      {/* 📱 VISTA MÓVIL */}
+      {/* 📱 VISTA MÓVIL REPARADA (FIX v9.6) */}
       <div className="md:hidden fixed inset-0 z-10 flex flex-col bg-slate-50 p-4 pb-24 overflow-hidden overscroll-none">
         <header className="shrink-0 bg-white rounded-xl p-4 shadow-sm border border-slate-200 relative animate-slide-top">
             <div className="flex flex-col gap-2 mb-2">
                 <div className="flex justify-between items-center w-full">
                     <div className="flex items-center gap-2">
-                        {/* ⚠️ MODIFICACIÓN: Avatar Dinámico Móvil */}
                         {doctorProfile?.avatar_url ? (
                             <img 
                                 src={doctorProfile.avatar_url} 
@@ -561,6 +560,7 @@ const Dashboard: React.FC = () => {
             </div>
         </header>
 
+        {/* 🟢 ZONA DE SCROLL COMPARTIDO (FIX) */}
         <section className="flex-1 min-h-0 flex flex-col my-4 animate-fade-in delay-150">
             <div className="flex justify-between items-center mb-2 px-1 shrink-0">
                 <h3 className="font-bold text-slate-700 text-xs flex items-center gap-1.5"><Calendar size={14} className="text-blue-500"/> Agenda de Hoy</h3>
@@ -570,6 +570,7 @@ const Dashboard: React.FC = () => {
                 </div>
             </div>
             
+            {/* Contenedor scrolleable único que aloja la Agenda Y el Reporte SUIVE */}
             <div className="flex-1 overflow-y-auto custom-scrollbar space-y-3 pr-1 pb-2">
                 {isLoading ? (
                     <div className="h-full flex flex-col items-center justify-center space-y-3 opacity-60">
@@ -585,19 +586,13 @@ const Dashboard: React.FC = () => {
                     appointments.map((apt, index) => (
                         <div key={apt.id} onClick={() => handleStartConsultation(apt)} className={`relative overflow-hidden p-4 rounded-xl shadow-sm border border-slate-100 flex items-center gap-4 active:scale-[0.98] transition-all shrink-0 ${index % 2 === 0 ? 'bg-white' : 'bg-slate-50/80'}`}>
                              <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-500"></div>
-                             
-                             {/* 🎨 HORA: Regular (font-medium), color slate-500 */}
                              <div className="font-medium text-slate-500 text-xs min-w-[35px] text-center bg-slate-100 rounded-md py-1 px-1.5 tabular-nums">
                                 {format(parseISO(apt.start_time), 'HH:mm')}
                              </div>
-                             
                              <div className="flex-1 min-w-0">
-                                {/* 🎨 PACIENTE: Bold, color slate-900 (Contraste AA) */}
                                 <p className="font-bold text-slate-900 text-sm truncate leading-tight tracking-tight">
                                     {apt.title}
                                 </p>
-                                
-                                {/* 🎨 ESTADO: Semibold, color slate-600 */}
                                 <div className="flex items-center gap-1.5 mt-1">
                                     <div className={`w-1.5 h-1.5 rounded-full ${apt.patient ? 'bg-emerald-400' : 'bg-amber-400'}`}></div>
                                     <p className="text-[11px] font-semibold text-slate-600 truncate">
@@ -609,17 +604,20 @@ const Dashboard: React.FC = () => {
                         </div>
                     ))
                 )}
+
+                {/* 👇 [MODIFICADO] SECCIÓN SUIVE INSERTADA AL FINAL DEL SCROLL 👇 */}
+                <div className="pt-6 pb-2">
+                   <div className="flex items-center gap-2 mb-2 px-1">
+                       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Herramientas</span>
+                       <div className="h-px bg-slate-200 flex-1"></div>
+                   </div>
+                   <SuiveReportGenerator />
+                </div>
+                {/* 👆 FIN SECCIÓN SUIVE 👆 */}
             </div>
         </section>
 
-        {/* 👇 [NUEVO] SECCIÓN DE REPORTE SUIVE MÓVIL 👇 */}
-        <div className="px-4 mb-4 border-t border-slate-200 pt-4">
-           <SuiveReportGenerator />
-        </div>
-        {/* 👆 FIN SECCIÓN SUIVE 👆 */}
-
         <footer className="shrink-0 flex flex-col gap-2 animate-fade-in delay-300 pb-2">
-            {/* ⚠️ AQUI ESTA LA CORRECCION DE ALTURA PARA MÓVIL (h-40 -> h-48) */}
             <div className="grid grid-cols-2 gap-2 h-48">
                 <ImpactMetrics 
                     dailyTotal={totalDailyLoad} 
@@ -653,7 +651,6 @@ const Dashboard: React.FC = () => {
          <div className="max-w-[1800px] mx-auto">
              <header className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-10 gap-6 animate-slide-top">
                  <div className="flex items-center gap-6">
-                     {/* ⚠️ MODIFICACIÓN: Avatar Dinámico Escritorio */}
                      {doctorProfile?.avatar_url ? (
                         <img 
                             src={doctorProfile.avatar_url} 
@@ -720,7 +717,6 @@ const Dashboard: React.FC = () => {
                             <div className="space-y-2 overflow-y-auto max-h-[240px] custom-scrollbar pr-1">
                                 {appointments.length === 0 ? <p className="text-center text-slate-400 py-10 text-sm">Sin citas hoy.</p> : appointments.map((apt, index) => (
                                     <div key={apt.id} className={`flex items-center gap-3 p-3 rounded-lg group cursor-pointer border border-slate-100 shadow-sm hover:shadow-md hover:border-blue-200 transition-all ${index % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}`} onClick={() => handleStartConsultation(apt)}>
-                                            {/* 🎨 ESCRITORIO: Tipografía ajustada también */}
                                             <div className="font-medium text-slate-500 text-xs w-10 text-right tabular-nums">{format(parseISO(apt.start_time), 'HH:mm')}</div>
                                             <div className="w-1 h-8 bg-slate-200 rounded-full group-hover:bg-blue-600 transition-colors"></div>
                                             <div className="flex-1 min-w-0"><p className="font-bold text-slate-900 text-sm truncate">{apt.title}</p></div>
@@ -731,7 +727,7 @@ const Dashboard: React.FC = () => {
                          <ActionRadar items={pendingItems} onItemClick={handleRadarClick} />
                      </div>
 
-                     {/* 👇 [NUEVO] SECCIÓN DE REPORTE SUIVE ESCRITORIO 👇 */}
+                     {/* 👇 SECCIÓN DE REPORTE SUIVE ESCRITORIO (Sin cambios, ya funcionaba) 👇 */}
                      <div className="mt-2">
                         <SuiveReportGenerator />
                      </div>
@@ -741,28 +737,22 @@ const Dashboard: React.FC = () => {
                  
                  <aside className="lg:col-span-1 flex flex-col gap-6">
                      <div className="grid grid-cols-2 gap-4">
-                       {/* 🎨 ANIMACIÓN PREMIUM DE HOVER (Consulta Rápida) */}
                        <button onClick={() => setIsFastAdmitOpen(true)} className="aspect-square bg-gradient-to-br from-teal-500 to-blue-600 rounded-xl p-4 shadow-lg overflow-hidden group text-left flex flex-col justify-between transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-xl relative active:scale-95">
                          <div className="absolute -right-4 -bottom-4 text-white opacity-20 transform transition-transform duration-500 group-hover:rotate-45 group-hover:scale-110"><UserPlus size={80} strokeWidth={1.5} /></div>
                          <div className="relative z-10 bg-white/20 w-10 h-10 flex items-center justify-center rounded-full backdrop-blur-sm"><UserPlus className="text-white" size={20} /></div>
                          <div className="relative z-10"><h3 className="text-white font-bold text-sm leading-tight">Consulta<br/>Rápida</h3></div>
-                         
-                         {/* ↗️ ÍCONO DE REVELACIÓN (Flecha aparece al hacer hover) */}
                          <div className="absolute top-4 right-4 text-white opacity-0 transform translate-y-2 -translate-x-2 transition-all duration-300 group-hover:opacity-100 group-hover:translate-y-0 group-hover:translate-x-0">
                              <ArrowUpRight size={20} />
                          </div>
                        </button>
                        
-                       {/* 🎨 ANIMACIÓN PREMIUM DE HOVER (Subir Archivo) */}
                        <button onClick={() => setIsUploadModalOpen(true)} className="aspect-square bg-white border border-slate-200 rounded-xl p-4 shadow-sm overflow-hidden group text-left flex flex-col justify-between transition-all duration-300 ease-out hover:-translate-y-1 hover:border-teal-400 hover:shadow-md hover:bg-teal-50 relative active:scale-95">
                          <div className="absolute -right-4 -bottom-4 text-teal-50 opacity-0 group-hover:opacity-100 transition-all duration-500 scale-150"><FolderUp size={80} /></div>
                          <div className="relative z-10 bg-teal-50 w-10 h-10 flex items-center justify-center rounded-full group-hover:bg-teal-600 group-hover:text-white transition-colors"><FolderUp size={20} className="text-teal-600 group-hover:text-white" /></div>
                          <div className="relative z-10"><h3 className="text-slate-700 font-bold text-sm leading-tight group-hover:text-teal-700">Subir<br/>Archivo</h3></div>
-                         
-                           {/* ↗️ ÍCONO DE REVELACIÓN (Flecha aparece al hacer hover en Teal) */}
-                           <div className="absolute top-4 right-4 text-teal-600 opacity-0 transform translate-y-2 -translate-x-2 transition-all duration-300 group-hover:opacity-100 group-hover:translate-y-0 group-hover:translate-x-0">
-                              <ArrowUpRight size={20} />
-                          </div>
+                         <div className="absolute top-4 right-4 text-teal-600 opacity-0 transform translate-y-2 -translate-x-2 transition-all duration-300 group-hover:opacity-100 group-hover:translate-y-0 group-hover:translate-x-0">
+                             <ArrowUpRight size={20} />
+                         </div>
                        </button>
                      </div>
 
