@@ -210,11 +210,12 @@ const ReportsView: React.FC = () => {
         </div>
       </div>
 
-      {/* 4. PIE DE PÁGINA: AVISO DE FUTURAS ACTUALIZACIONES */}
+      {/* 4. PIE DE PÁGINA: AVISO CORREGIDO Y CLARO */}
       <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 p-4 text-center border-dashed">
           <p className="text-slate-400 text-xs flex items-center justify-center gap-2">
              <Clock size={14} />
-             Las gráficas detalladas de epidemiología (CIE-10) y productividad financiera estarán disponibles en la próxima actualización v8.1.
+             Las métricas de <b>Rentabilidad Financiera</b> y <b>Retención de Pacientes</b> estarán disponibles en la actualización v8.1. 
+             (Su reporte epidemiológico SUIVE-1 ya está activo en el Dashboard).
           </p>
       </div>
 

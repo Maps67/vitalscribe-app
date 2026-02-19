@@ -3,7 +3,7 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, Stethoscope, Users, Briefcase, LogOut, X, 
   Settings, Download, Share, Calendar, Moon, Sun, Presentation,
-  ShieldCheck 
+  ShieldCheck, BarChart3 // ✅ IMPORTADO BarChart3 para el icono de reportes
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useTheme } from '../context/ThemeContext';
@@ -68,6 +68,8 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, onLogout }) => {
     { path: '/consultation', icon: <Stethoscope size={20} />, label: 'Consulta IA' },
     { path: '/agenda', icon: <Calendar size={20} />, label: 'Agenda' },
     { path: '/patients', icon: <Users size={20} />, label: 'Pacientes' },
+    // ✅ NUEVO ÍTEM AGREGADO AQUÍ
+    { path: '/reports', icon: <BarChart3 size={20} />, label: 'Reportes' },
     { path: '/card', icon: <Briefcase size={20} />, label: 'Hub Profesional' },
     { path: '/settings', icon: <Settings size={20} />, label: 'Configuración' },
   ];
