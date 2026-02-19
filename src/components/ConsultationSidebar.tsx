@@ -4,7 +4,7 @@ import {
   Stethoscope, Search, X, Calendar, UserPlus, ChevronUp, 
   ChevronDown, Activity, AlertCircle, ShieldCheck, Check, 
   Sparkles, Paperclip, User, CornerDownLeft, Download, Loader2,
-  Lock, Microscope 
+  Lock, Microscope, Clock, FileText, HeartPulse
 } from 'lucide-react';
 import { UploadMedico } from './UploadMedico';
 import { SpecialtyVault } from './SpecialtyVault';
@@ -45,10 +45,7 @@ interface ConsultationSidebarProps {
   isReadyToGenerate: boolean;
   handleLoadInsights: () => void;
   isLoadingInsights: boolean;
-  
-  // ✅ AGREGADO: La pieza que faltaba para corregir el error rojo
   onRetryInsights: () => void; 
-
   generatedNote: any | null;
   activeSpeaker: 'doctor' | 'patient';
   handleSpeakerSwitch: (role: 'doctor' | 'patient') => void;
@@ -61,13 +58,38 @@ interface ConsultationSidebarProps {
   doctorProfile: DoctorProfile | null;
   onDownloadRecord: () => void;
   onTriggerInterconsultation?: (specialty: string) => void;
-  
-  // Props opcionales que ya tenías
   vitalSnapshot?: any; 
   isMobileSnapshotVisible?: boolean;
   setIsMobileSnapshotVisible?: (visible: boolean) => void;
   loadingSnapshot?: boolean;
 }
+
+// Formateador inteligente para limpiar el JSON técnico y mostrar solo datos clínicos
+const formatClinicalHistory = (rawHistory?: string) => {
+    if (!rawHistory || rawHistory === "No registrados") return "No registrados";
+    
+    try {
+        const parsed = JSON.parse(rawHistory);
+        
+        // Si es un expediente de admisión rápida que aún no tiene datos clínicos reales
+        if (parsed.type?.includes('fast_admit') && !parsed.pathological && !parsed.family && !parsed.nonPathological) {
+            return "Expediente Exprés (Antecedentes pendientes de captura en el Wizard).";
+        }
+
+        // Si tiene datos clínicos estructurados
+        const sections = [];
+        if (parsed.pathological) sections.push(`APP: ${parsed.pathological}`);
+        if (parsed.family) sections.push(`AHF: ${parsed.family}`);
+        if (parsed.nonPathological) sections.push(`APNP: ${parsed.nonPathological}`);
+        if (parsed.obgyn) sections.push(`AGO: ${parsed.obgyn}`);
+
+        if (sections.length > 0) return sections.join('\n');
+
+        return "Expediente digitalizado (Ver ficha completa).";
+    } catch (e) {
+        return rawHistory;
+    }
+};
 
 export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
   isOnline,
@@ -97,10 +119,7 @@ export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
   isReadyToGenerate,
   handleLoadInsights, 
   isLoadingInsights,
-  
-  // ✅ AGREGADO: Recibimos la función aquí
   onRetryInsights,
-
   generatedNote,
   activeSpeaker,
   handleSpeakerSwitch,
@@ -120,6 +139,24 @@ export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
 }) => {
   const [isMobileContextExpanded, setIsMobileContextExpanded] = useState(false);
   const [isCreatingPatient, setIsCreatingPatient] = useState(false);
+
+  // 🛡️ RESCATE DE ALERGIAS (Fix Integridad)
+  let resolvedAllergies = activeMedicalContext?.allergies;
+  
+  if (activeMedicalContext?.history) {
+      try {
+          const parsed = JSON.parse(activeMedicalContext.history);
+          if (!resolvedAllergies || resolvedAllergies === "No registradas") {
+              resolvedAllergies = parsed.allergies || parsed.allergies_declared || parsed.allergies_snapshot || "No registradas";
+          }
+      } catch (e) {
+          // Ignorar si no es JSON
+      }
+  }
+
+  // Banderas visuales
+  const hasRedAllergies = resolvedAllergies && resolvedAllergies !== "No registradas" && resolvedAllergies.toUpperCase() !== "NEGADAS";
+  const hasGreenAllergies = resolvedAllergies?.toUpperCase() === "NEGADAS";
 
   const onTriggerCreatePatient = async () => {
     if (!searchTerm.trim()) return;
@@ -255,77 +292,110 @@ export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
       {/* --- CONTEXT & CHAT AREA --- */}
       <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar overscroll-contain flex flex-col gap-2 pr-1">
           
-          {/* Active Context Card */}
+          {/* --- NUEVO DISEÑO: ACTIVE CONTEXT CARD --- */}
           {activeMedicalContext && !generatedNote && (
             <div className="relative z-30 group shrink-0" onClick={() => setIsMobileContextExpanded(!isMobileContextExpanded)}>
-              <div className={`bg-amber-50 dark:bg-amber-900/20 p-3 rounded-lg border border-amber-200 dark:border-amber-800 text-xs shadow-sm cursor-help transition-opacity duration-200 ${isMobileContextExpanded ? 'opacity-0' : 'opacity-100 md:group-hover:opacity-0'}`}>
-                <div className="flex items-center gap-2 mb-2 text-amber-700 dark:text-amber-400 font-bold border-b border-amber-200 dark:border-amber-800 pb-1">
-                  <AlertCircle size={14} />
-                  <span>Antecedentes Activos</span>
+              
+              {/* VISTA CONTRAÍDA (Limpia y Neutral) */}
+              <div className={`bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-200 dark:border-slate-700 text-xs shadow-sm cursor-help transition-all duration-300 hover:border-brand-teal/50 ${isMobileContextExpanded ? 'opacity-0' : 'opacity-100 md:group-hover:opacity-0'}`}>
+                <div className="flex items-center justify-between mb-2 pb-2 border-b border-slate-200 dark:border-slate-700">
+                  <div className="flex items-center gap-2 text-slate-600 dark:text-slate-300 font-bold">
+                    <HeartPulse size={14} className="text-brand-teal" />
+                    <span>Contexto Clínico</span>
+                  </div>
+                  <ChevronDown size={14} className="text-slate-400" />
                 </div>
+                
                 <div className="space-y-2 text-slate-700 dark:text-slate-300">
-                  {activeMedicalContext.allergies && activeMedicalContext.allergies !== "No registradas" && (
-                    <div className="flex items-start gap-1">
-                      <span className="font-bold text-red-600 dark:text-red-400 whitespace-nowrap">⚠️ Alergias:</span>
-                      <p className="font-medium text-red-700 dark:text-red-300 line-clamp-1">{activeMedicalContext.allergies}</p>
+                  {/* Etiqueta Roja (Alergias) solo si existen */}
+                  {hasRedAllergies && (
+                    <div className="flex items-start gap-1 bg-red-50 dark:bg-red-900/20 px-2 py-1 rounded text-red-700 dark:text-red-300 font-bold border border-red-100 dark:border-red-800/50">
+                      <span>⚠</span>
+                      <p className="line-clamp-1 truncate">{resolvedAllergies}</p>
                     </div>
                   )}
+
                   {activeMedicalContext.history && activeMedicalContext.history !== "No registrados" && (
-                    <div>
-                      <span className="font-semibold block text-[10px] uppercase text-amber-600">Patológicos:</span>
-                      <p className="line-clamp-1">{activeMedicalContext.history}</p>
+                    <div className="px-1 flex items-start gap-2">
+                      <FileText size={12} className="text-slate-400 mt-0.5 shrink-0"/>
+                      <p className="line-clamp-1 text-slate-600 dark:text-slate-400">{formatClinicalHistory(activeMedicalContext.history)}</p>
                     </div>
                   )}
+
                   {activeMedicalContext.lastConsultation && (
-                    <div className="mt-2 pt-2 border-t border-amber-200 dark:border-amber-800/50">
-                      <span className="font-semibold block text-[10px] uppercase text-amber-600 mb-1">
-                          Última Visita ({new Date(activeMedicalContext.lastConsultation.date).toLocaleDateString()}):
-                      </span>
-                      <p className="italic opacity-80 pl-1 border-l-2 border-amber-300 dark:border-amber-700 line-clamp-2 text-[10px]">
+                    <div className="px-1 flex items-start gap-2 pt-1">
+                      <Clock size={12} className="text-brand-teal mt-0.5 shrink-0"/>
+                      <p className="line-clamp-1 text-slate-600 dark:text-slate-400 italic">
                           {activeMedicalContext.lastConsultation.summary}
                       </p>
-                    </div>
-                  )}
-                  {activeMedicalContext.insurance && (
-                    <div className="mt-2 pt-2 border-t border-amber-200 dark:border-amber-800/50">
-                      <div className="flex items-center gap-1 text-[10px] text-emerald-600 font-bold">
-                          <ShieldCheck size={10} /> 
-                          <span>{activeMedicalContext.insurance.provider}</span>
-                      </div>
                     </div>
                   )}
                 </div>
               </div>
 
-              {/* Hover/Expanded Detail */}
-              <div className={`absolute top-0 left-0 w-full transition-all duration-200 ease-out z-50 pointer-events-none group-hover:pointer-events-auto ${isMobileContextExpanded ? 'opacity-100 visible' : 'opacity-0 invisible md:group-hover:opacity-100 md:group-hover:visible'}`}>
-                <div className="bg-amber-50 dark:bg-slate-800 p-4 rounded-xl border-2 border-amber-300 dark:border-amber-600 text-xs shadow-2xl scale-100 origin-top">
-                  <div className="flex items-center gap-2 mb-2 text-amber-700 dark:text-amber-400 font-bold border-b border-amber-200 dark:border-amber-800 pb-1">
-                      <AlertCircle size={14} />
-                      <span>Antecedentes Activos (Detalle)</span>
+              {/* VISTA EXPANDIDA (Detalle Premium) */}
+              <div className={`absolute top-0 left-0 w-full transition-all duration-300 ease-out z-50 pointer-events-none group-hover:pointer-events-auto ${isMobileContextExpanded ? 'opacity-100 visible translate-y-0' : 'opacity-0 invisible -translate-y-2 md:group-hover:opacity-100 md:group-hover:visible md:group-hover:translate-y-0'}`}>
+                <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xl flex flex-col gap-4">
+                  
+                  {/* Header Detalle */}
+                  <div className="flex items-center gap-2 text-slate-800 dark:text-white font-bold border-b border-slate-100 dark:border-slate-700 pb-2">
+                      <Activity size={16} className="text-brand-teal" />
+                      <span>Expediente del Paciente</span>
                   </div>
-                  <div className="space-y-3 text-slate-800 dark:text-slate-200 max-h-[300px] overflow-y-auto custom-scrollbar">
-                      <div>
-                          <span className="font-bold block text-[10px] uppercase text-amber-600">Historial (Resumen):</span>
-                          <p className="whitespace-pre-wrap leading-relaxed line-clamp-4 text-xs">{activeMedicalContext.history}</p>
-                      </div>
-                      {activeMedicalContext.allergies && activeMedicalContext.allergies !== "No registradas" && (
-                          <div className="bg-red-50 dark:bg-red-900/20 p-2 rounded border border-red-100 dark:border-red-800">
-                              <span className="font-bold block text-[10px] uppercase text-red-600">⚠ Alergias Críticas:</span>
-                              <p className="font-black text-red-700 dark:text-red-300 text-sm">{activeMedicalContext.allergies}</p>
+
+                  <div className="space-y-4 max-h-[400px] overflow-y-auto custom-scrollbar pr-1">
+                      
+                      {/* 1. SECCIÓN ALERGIAS */}
+                      {hasRedAllergies && (
+                          <div className="bg-red-50 dark:bg-red-900/20 p-3 rounded-lg border-l-4 border-red-500 border border-red-100 dark:border-red-800 shadow-sm">
+                              <span className="font-bold flex items-center gap-1 text-[10px] uppercase text-red-600 dark:text-red-400 mb-1">
+                                <AlertCircle size={12}/> Alergias Críticas
+                              </span>
+                              <p className="font-black text-red-700 dark:text-red-300 text-sm leading-tight">{resolvedAllergies}</p>
                           </div>
                       )}
+
+                      {hasGreenAllergies && (
+                          <div className="bg-emerald-50 dark:bg-emerald-900/20 p-2 rounded-lg border border-emerald-100 dark:border-emerald-800 flex items-center gap-2">
+                              <Check size={14} className="text-emerald-600"/>
+                              <span className="font-medium text-emerald-700 dark:text-emerald-300 text-xs">Alergias Negadas</span>
+                          </div>
+                      )}
+
+                      {/* 2. SECCIÓN HISTORIAL */}
+                      {activeMedicalContext.history && activeMedicalContext.history !== "No registrados" && (
+                        <div>
+                            <span className="font-bold flex items-center gap-1 text-[10px] uppercase text-slate-500 mb-1">
+                              <FileText size={12}/> Resumen Clínico
+                            </span>
+                            <div className="bg-slate-50 dark:bg-slate-900/50 p-3 rounded-lg border border-slate-100 dark:border-slate-800">
+                              <p className="whitespace-pre-wrap leading-relaxed text-xs text-slate-700 dark:text-slate-300 font-medium">
+                                  {formatClinicalHistory(activeMedicalContext.history)}
+                              </p>
+                            </div>
+                        </div>
+                      )}
+                      
+                      {/* 3. SECCIÓN ÚLTIMA VISITA (Cita estructurada) */}
                       {activeMedicalContext.lastConsultation && (
-                          <div className="mt-2 pt-2 border-t border-amber-200 dark:border-amber-800/50">
-                              <span className="font-bold block text-[10px] uppercase text-amber-600 mb-1">
-                                      Resumen Última Visita ({new Date(activeMedicalContext.lastConsultation.date).toLocaleDateString()}):
+                          <div>
+                              <span className="font-bold flex items-center gap-1 text-[10px] uppercase text-brand-teal mb-1">
+                                <Calendar size={12}/> Visita Anterior ({new Date(activeMedicalContext.lastConsultation.date).toLocaleDateString()})
                               </span>
-                              <div className="p-2 bg-white dark:bg-slate-900 rounded border border-amber-100 dark:border-amber-900/50">
-                                      <p className="italic opacity-80 text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed line-clamp-6 font-light">
-                                          {activeMedicalContext.lastConsultation.summary}
-                                      </p>
+                              <div className="bg-teal-50/50 dark:bg-teal-900/10 p-3 rounded-lg border-l-4 border-brand-teal border border-teal-100 dark:border-teal-900/30">
+                                  <p className="text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed text-xs">
+                                      {activeMedicalContext.lastConsultation.summary}
+                                  </p>
                               </div>
                           </div>
+                      )}
+
+                      {/* 4. SEGURO */}
+                      {activeMedicalContext.insurance && (
+                        <div className="flex items-center gap-2 p-2 bg-slate-50 dark:bg-slate-900/50 rounded border border-slate-100 dark:border-slate-800">
+                            <ShieldCheck size={14} className="text-indigo-500" /> 
+                            <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">Cobertura: {activeMedicalContext.insurance.provider}</span>
+                        </div>
                       )}
                   </div>
                 </div>
@@ -334,28 +404,28 @@ export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
           )}
 
           {/* Consent Checkbox */}
-          <div onClick={() => setConsentGiven(!consentGiven)} className="flex items-center gap-2 p-3 rounded-lg border cursor-pointer select-none dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 shrink-0">
+          <div onClick={() => setConsentGiven(!consentGiven)} className="flex items-center gap-2 p-3 rounded-lg border cursor-pointer select-none dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 shrink-0 mt-1">
             <div className={`w-5 h-5 rounded border flex items-center justify-center ${consentGiven ? 'bg-green-500 border-green-500 text-white' : 'bg-white dark:bg-slate-700'}`}>
               {consentGiven && <Check size={14}/>}
             </div>
-            <label className="text-xs dark:text-white cursor-pointer">Consentimiento otorgado.</label>
+            <label className="text-xs dark:text-white cursor-pointer font-medium">Consentimiento informado verbal.</label>
           </div>
 
           {/* Transcript Area */}
           <div className={`flex-1 min-h-[150px] flex flex-col p-2 overflow-hidden border rounded-xl bg-slate-50 dark:bg-slate-900/50 dark:border-slate-800`}>
             {segments.length === 0 ? (
               <div className="flex-1 flex flex-col items-center justify-center text-slate-400 opacity-50 text-xs">
-                <div className="mb-2"><Paperclip size={24}/></div>
-                <p>El historial aparecerá aquí</p>
+                <div className="mb-2"><Mic size={24}/></div>
+                <p>El diálogo de la consulta aparecerá aquí</p>
               </div>
             ) : (
               <div className="flex-1 overflow-y-auto custom-scrollbar space-y-2" ref={transcriptEndRef}>
                 {segments.map((seg, idx) => (
                   <div key={idx} className={`flex w-full ${seg.role === 'doctor' ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-1`}>
-                    <div className={`max-w-[90%] p-2 rounded-xl text-xs border ${
+                    <div className={`max-w-[90%] p-2 rounded-xl text-xs border shadow-sm ${
                       seg.role === 'doctor' 
-                      ? 'bg-indigo-100 text-indigo-900 border-indigo-200 rounded-tr-none dark:bg-indigo-900/50 dark:text-indigo-100 dark:border-indigo-800' 
-                      : 'bg-white text-slate-700 border-slate-200 rounded-tl-none dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'
+                      ? 'bg-indigo-50 text-indigo-900 border-indigo-100 rounded-tr-none dark:bg-indigo-900/30 dark:text-indigo-100 dark:border-indigo-800/50' 
+                      : 'bg-white text-slate-700 border-slate-200 rounded-tl-none dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700'
                     }`}>
                       <p className="whitespace-pre-wrap">{seg.text}</p>
                     </div>
@@ -382,11 +452,11 @@ export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
           </div>
         </div>
 
-        <div className={`relative border-2 rounded-xl transition-colors bg-white dark:bg-slate-900 overflow-hidden min-h-[80px] ${isListening ? 'border-red-400 shadow-red-100 dark:shadow-none' : 'border-slate-200 dark:border-slate-700'}`}>
+        <div className={`relative border-2 rounded-xl transition-colors bg-white dark:bg-slate-900 overflow-hidden min-h-[80px] shadow-inner ${isListening ? 'border-red-400 shadow-red-100 dark:shadow-none' : 'border-slate-200 dark:border-slate-700'}`}>
           {isListening && <div className="absolute top-2 right-2 flex gap-1"><span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse"/><span className="text-[10px] text-red-500 font-bold">GRABANDO</span></div>}
-          <textarea ref={textareaRef} value={transcript} onChange={(e) => setTranscript(e.target.value)} placeholder={isListening ? "Escuchando..." : "Escribe o dicta aquí..."} className="w-full h-full p-3 bg-transparent resize-none outline-none text-sm dark:text-white"/>
+          <textarea ref={textareaRef} value={transcript} onChange={(e) => setTranscript(e.target.value)} placeholder={isListening ? "Escuchando pacientemente..." : "Escribe o dicta aquí..."} className="w-full h-full p-3 bg-transparent resize-none outline-none text-sm dark:text-white"/>
           {transcript && !isListening && (
-            <button onClick={handleManualSend} className="absolute bottom-2 right-2 p-1.5 bg-indigo-600 text-white rounded-full shadow-lg hover:bg-indigo-700 transition-colors" title="Agregar al historial">
+            <button onClick={handleManualSend} className="absolute bottom-2 right-2 p-1.5 bg-brand-teal text-white rounded-full shadow-lg hover:bg-teal-600 transition-transform active:scale-95" title="Agregar al historial">
               <CornerDownLeft size={14}/>
             </button>
           )}
@@ -401,8 +471,8 @@ export const ConsultationSidebar: React.FC<ConsultationSidebarProps> = ({
             {isListening ? <><Pause size={16} fill="currentColor"/> Pausar</> : isPaused ? <><Play size={16} fill="currentColor"/> Reanudar</> : <><Mic size={16}/> Grabar</>}
           </button>
           <button onClick={isListening || isPaused ? handleFinishRecording : handleGenerate} disabled={(!transcript && segments.length === 0) || isProcessing} className={`flex-1 text-white py-3 rounded-xl font-bold shadow-lg flex justify-center gap-2 disabled:opacity-50 text-sm transition-all ${!isOnline ? 'bg-amber-500 hover:bg-amber-600' : (isListening || isPaused) ? 'bg-green-600 hover:bg-green-700' : `bg-brand-teal hover:bg-teal-600 ${isReadyToGenerate ? 'animate-pulse ring-2 ring-teal-300 ring-offset-2 shadow-xl shadow-teal-500/40' : ''}`}`}>
-            {isProcessing ? <RefreshCw className="animate-spin" size={16}/> : (isListening || isPaused) ? <Check size={16}/> : (isOnline ? <RefreshCw size={16}/> : <Save size={16}/>)} 
-            {isProcessing ? '...' : (isListening || isPaused) ? 'Terminar' : (isOnline ? 'Generar' : 'Guardar')}
+            {isProcessing ? <RefreshCw className="animate-spin" size={16}/> : (isListening || isPaused) ? <Check size={16}/> : (isOnline ? <RefreshCw size={16}/> : <Sparkles size={16}/>)} 
+            {isProcessing ? 'Procesando' : (isListening || isPaused) ? 'Terminar' : (isOnline ? 'Generar Notas' : 'Guardar')}
           </button>
         </div>
       </div>

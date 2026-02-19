@@ -23,9 +23,8 @@ export const PatientService = {
   },
 
   /**
-   * Crea un paciente nuevo rápidamente solo con el nombre.
-   * Supabase genera el UUID automáticamente.
-   * ACTUALIZADO (Protocolo Blindaje): Exige doctorId para cumplir RLS.
+   * Crea un paciente nuevo rápidamente.
+   * NOTA: Para el flujo seguro, preferir ensurePatientId que maneja metadatos completos.
    */
   async createQuickPatient(name: string, doctorId: string): Promise<Patient | null> {
     if (!doctorId) throw new Error("ID de médico requerido para crear paciente.");
@@ -35,7 +34,7 @@ export const PatientService = {
       .insert([{ 
         name: name,
         doctor_id: doctorId,
-        isTemporary: true // Bandera para indicar registro rápido/incompleto
+        isTemporary: true 
       }])
       .select()
       .single();
@@ -60,24 +59,20 @@ export const PatientService = {
 
   /**
    * 🛡️ IMPORTACIÓN BLINDADA (Lógica Opción B: Identidad Digital)
-   * * Algoritmo de Unicidad:
-   * 1. Busca si ya existe un paciente con ese EMAIL en tu lista.
-   * 2. Si no, busca si existe con ese TELÉFONO.
-   * 3. Si encuentra coincidencia -> ACTUALIZA datos faltantes (Merge).
-   * 4. Si no encuentra nada -> INSERTA nuevo paciente.
+   * Gestiona la unicidad por email/teléfono.
    */
   async upsertPatientIdentity(
     rawPatient: { name: string; email?: string; phone?: string; birth_date?: string; gender?: string },
     doctorId: string
   ): Promise<{ patient: Patient; action: 'created' | 'updated' }> {
     
-    // 1. Limpieza de datos clave para búsqueda (Sanitización en entrada)
+    // 1. Limpieza de datos
     const cleanEmail = rawPatient.email && rawPatient.email.trim().length > 3 ? rawPatient.email.trim() : null;
     const cleanPhone = rawPatient.phone && rawPatient.phone.trim().length > 5 ? rawPatient.phone.trim() : null;
 
     let existingId: string | null = null;
 
-    // 2. Estrategia de Búsqueda Secuencial (Prioridad: Email > Teléfono)
+    // 2. Búsqueda Secuencial
     if (cleanEmail) {
       const { data } = await supabase
         .from('patients')
@@ -98,14 +93,13 @@ export const PatientService = {
       if (data) existingId = data.id;
     }
 
-    // 3. Ejecución (Update o Insert)
+    // 3. Ejecución
     if (existingId) {
-      // UPDATE: Solo actualizamos datos, respetando que no se borren datos previos si el CSV viene vacío
+      // UPDATE
       const updatePayload: any = {
-          name: rawPatient.name, // El nombre se actualiza por si hubo corrección ortográfica
+          name: rawPatient.name, 
           ...(rawPatient.birth_date && { birth_date: rawPatient.birth_date }),
-          ...(rawPatient.gender && { gender: rawPatient.gender }),
-          // Solo actualizamos email/phone si vienen datos nuevos y válidos
+          ...(rawPatient.gender && { gender: rawPatient.gender }), // Mapeo a columna gender
           ...(cleanEmail && { email: cleanEmail }),
           ...(cleanPhone && { phone: cleanPhone })
       };
@@ -120,7 +114,7 @@ export const PatientService = {
       if (error) throw error;
       return { patient: data, action: 'updated' };
     } else {
-      // INSERT: Paciente totalmente nuevo
+      // INSERT
       const { data, error } = await supabase
         .from('patients')
         .insert({
@@ -129,7 +123,7 @@ export const PatientService = {
           email: cleanEmail,
           phone: cleanPhone,
           birth_date: rawPatient.birth_date,
-          gender: rawPatient.gender,
+          gender: rawPatient.gender, // Insert directo a columna gender
           isTemporary: false
         })
         .select()
@@ -141,51 +135,59 @@ export const PatientService = {
   },
 
   /**
-   * 🌟 NUEVA FUNCIÓN (Solución Error UUID 22P02)
-   * Materializador de Pacientes:
-   * Convierte un paciente temporal (ID 'temp_...') en uno real en BD antes de guardar consultas.
+   * 🌟 MATERIALIZADOR DE PACIENTES (Integridad Estructural v5.4)
+   * Convierte un paciente temporal en real, asegurando que los datos críticos
+   * como 'gender' se escriban en sus columnas correspondientes.
    */
   async ensurePatientId(patient: { id: string; name: string; [key:string]: any }): Promise<string> {
-    // 1. Análisis rápido: ¿Parece un ID temporal o es un paciente marcado como temporal?
+    // 1. Análisis rápido: ¿Es temporal?
     const isTemp = patient.id.startsWith('temp_') || patient.id.length < 20 || patient.isTemporary === true;
 
     if (!isTemp) {
-      // Es un UUID real, no hacemos nada, retornamos el ID.
-      return patient.id;
+      return patient.id; // Ya es UUID real
     }
 
-    console.log('⚡ [PatientService] Detectado paciente temporal. Materializando:', patient.name);
+    console.log('⚡ [PatientService] Materializando paciente bajo Protocolo Omega:', patient.name);
 
-    // 2. Obtener al doctor actual (para el RLS y ownership)
+    // 2. Obtener al doctor (RLS Owner)
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('No se puede crear paciente sin sesión de doctor activa.');
+    if (!user) throw new Error('Error de Seguridad: Sesión de médico requerida.');
 
-    // 3. Insertar el paciente real en la Base de Datos
-    const { data: newRealPatient, error } = await supabase
-      .from('patients')
-      .insert({
+    // 3. Preparar historial con metadatos de auditoría
+    const updatedHistory = {
+        ...(patient.history || {}),
+        is_incomplete: true, // Flag de regularización
+        allergies_snapshot: patient.history?.allergies_declared || 'NO DATA', // Respaldo en JSON
+        materialization_date: new Date().toISOString()
+    };
+
+    // 4. INSERCIÓN BLINDADA
+    // Mapeamos explícitamente el 'gender' a la columna de la base de datos
+    const insertPayload = {
         name: patient.name,
         doctor_id: user.id,
-        // Al materializarlo, ya no es temporal
-        isTemporary: false, 
-        // Preservamos otros datos si existen en el objeto temporal
+        isTemporary: false,
         email: patient.email || null,
         phone: patient.phone || null,
-        // ✅ FIX: Persistencia de datos de Admisión Rápida
         birth_date: patient.birth_date || patient.birthDate || null,
-        history: patient.history || null
-      })
-      .select('id') // Solo nos importa el nuevo ID
+        // 🚨 INTEGRIDAD CRÍTICA: Mapeo directo a columna 'gender'
+        gender: patient.gender || null, 
+        history: updatedHistory
+    };
+
+    const { data: newRealPatient, error } = await supabase
+      .from('patients')
+      .insert(insertPayload)
+      .select('id')
       .single();
 
     if (error) {
-      console.error('❌ Error crítico materializando paciente:', error);
-      throw error;
+      console.error('❌ Error crítico (Integridad DB):', error);
+      throw error; // Esto alertará al frontend si falla la constraint NOT NULL
     }
 
-    console.log('✅ [PatientService] Paciente materializado con nuevo UUID:', newRealPatient.id);
+    console.log('✅ [PatientService] Paciente materializado con éxito. UUID:', newRealPatient.id);
     
-    // 4. Retornamos el NUEVO UUID válido para usar en FKs
     return newRealPatient.id;
   }
 };

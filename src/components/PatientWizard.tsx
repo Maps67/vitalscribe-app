@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   User, Calendar, Phone, MapPin, Activity, AlertTriangle, 
   Save, X, Shield, HeartPulse, Droplet, FileBadge, 
-  Mail, Hash, Contact, Briefcase
+  Mail, Hash, Contact, Briefcase, Info
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -61,6 +61,7 @@ export const PatientWizard: React.FC<PatientWizardProps> = ({ initialData, onClo
   const [isSaving, setIsSaving] = useState(false);
   const [errors, setErrors] = useState<{ [key: string]: boolean }>({});
   const [activeTab, setActiveTab] = useState<'general' | 'background' | 'admin'>('general');
+  const [isIncompleteRecord, setIsIncompleteRecord] = useState(false);
 
   // Inicialización Segura
   const [formData, setFormData] = useState<WizardData>({
@@ -89,13 +90,17 @@ export const PatientWizard: React.FC<PatientWizardProps> = ({ initialData, onClo
       try {
         if (initialData.history) {
           parsedHistory = JSON.parse(initialData.history);
+          
+          // DETECCIÓN DE REGISTRO INCOMPLETO (Flag Omega)
+          if (parsedHistory.is_incomplete) {
+             setIsIncompleteRecord(true);
+          }
         }
       } catch (e) {
         console.warn("Error parsing patient history JSON:", e);
       }
 
-      // LÓGICA DE NORMALIZACIÓN (CORRECCIÓN): 
-      // Si viene "No especificado" de la DB, lo convertimos a '' (vacío) para que el Select muestre "Seleccione..."
+      // LÓGICA DE NORMALIZACIÓN: 
       const rawGender = safeValue(initialData.gender);
       const normalizedGender = rawGender === 'No especificado' ? '' : rawGender;
 
@@ -105,7 +110,7 @@ export const PatientWizard: React.FC<PatientWizardProps> = ({ initialData, onClo
         name: safeValue(initialData.name),
         dob: safeValue(initialData.dob),
         age: safeValue(initialData.age),
-        gender: normalizedGender, // <--- AQUI ESTÁ LA SOLUCIÓN
+        gender: normalizedGender,
         curp: safeValue(initialData.curp),
         bloodType: safeValue(initialData.bloodType),
         maritalStatus: safeValue(initialData.maritalStatus) || 'Soltero/a',
@@ -126,7 +131,15 @@ export const PatientWizard: React.FC<PatientWizardProps> = ({ initialData, onClo
         nonPathological: safeValue(initialData.nonPathological || parsedHistory.nonPathological),
         family: safeValue(initialData.family || parsedHistory.family),
         obgyn: safeValue(initialData.obgyn || parsedHistory.obgyn),
-        allergies: safeValue(initialData.allergies || parsedHistory.allergies),
+        
+        // 🔥 CORRECCIÓN CRÍTICA (INTEGRIDAD BIOLÓGICA v5.4):
+        // Mapeamos 'allergies_declared' (del Modal Rápido) al campo 'allergies' del Wizard.
+        allergies: safeValue(
+            initialData.allergies || 
+            parsedHistory.allergies || 
+            parsedHistory.allergies_declared // <--- LA LLAVE QUE FALTABA
+        ),
+        
         nonCriticalAllergies: safeValue(initialData.nonCriticalAllergies || parsedHistory.nonCriticalAllergies)
       }));
     }
@@ -154,7 +167,6 @@ export const PatientWizard: React.FC<PatientWizardProps> = ({ initialData, onClo
   const validateAndSave = async () => {
     const newErrors: { [key: string]: boolean } = {};
     
-    // --- PROTOCOLO DE URGENCIA ACTIVADO ---
     const safeName = safeValue(formData.name);
     
     if (!safeName.trim()) newErrors.name = true;
@@ -170,22 +182,23 @@ export const PatientWizard: React.FC<PatientWizardProps> = ({ initialData, onClo
     setIsSaving(true);
     
     // Empaquetado de Datos Clínicos
+    // Al guardar aquí, consolidamos 'allergies_declared' en 'allergies' estándar
     const clinicalData = {
-      allergies: formData.allergies,
+      allergies: formData.allergies, 
       nonCriticalAllergies: formData.nonCriticalAllergies,
       pathological: formData.pathological,
       nonPathological: formData.nonPathological,
       family: formData.family,
       obgyn: formData.obgyn,
-      bloodType: formData.bloodType
+      bloodType: formData.bloodType,
+      // Al guardar desde el Wizard completo, ya no está incompleto
+      is_incomplete: false 
     };
 
     // Preparación del payload para DB
     const cleanData: WizardData = {
         ...formData,
         name: formData.name.trim(),
-        // Si no selecciona género, enviamos 'No especificado' para que la DB tenga un valor,
-        // pero la próxima vez que cargue, lo convertiremos a vacío visualmente.
         gender: formData.gender || 'No especificado', 
         
         // Lógica NULL-IF-EMPTY para evitar conflictos de constraint Unique (409)
@@ -234,9 +247,16 @@ export const PatientWizard: React.FC<PatientWizardProps> = ({ initialData, onClo
             </div>
             {initialData ? 'Editar Expediente' : 'Alta de Paciente'}
           </h2>
-          <p className="text-xs text-slate-400 mt-1 ml-12 font-medium tracking-wide">
-            Modo Rápido Habilitado - NOM-004 Compatible
-          </p>
+          <div className="flex items-center gap-2 mt-1">
+            <p className="text-xs text-slate-400 font-medium tracking-wide ml-12">
+                Modo Rápido Habilitado - NOM-004 Compatible
+            </p>
+            {isIncompleteRecord && (
+                <span className="bg-amber-100 text-amber-700 text-[10px] px-2 py-0.5 rounded-full font-bold flex items-center gap-1 border border-amber-200">
+                    <Info size={10} /> REGULARIZACIÓN PENDIENTE
+                </span>
+            )}
+          </div>
         </div>
         <button onClick={onClose} className="p-2 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-full text-slate-400 hover:text-red-500 transition-colors">
           <X size={24} />
@@ -290,7 +310,7 @@ export const PatientWizard: React.FC<PatientWizardProps> = ({ initialData, onClo
                             </div>
                         </div>
 
-                        {/* Género (CORREGIDO: Muestra "Seleccione..." si está vacío) */}
+                        {/* Género */}
                         <div className="md:col-span-4">
                             <label className={LABEL_CLASS}>Género</label>
                             <select 
@@ -298,7 +318,6 @@ export const PatientWizard: React.FC<PatientWizardProps> = ({ initialData, onClo
                                 value={formData.gender} 
                                 onChange={(e) => handleChange('gender', e.target.value)}
                             >
-                                {/* Esta opción se muestra por defecto si value es "" */}
                                 <option value="" disabled hidden>Seleccione...</option>
                                 <option value="Masculino" className="text-slate-700">Masculino</option>
                                 <option value="Femenino" className="text-slate-700">Femenino</option>
@@ -335,7 +354,6 @@ export const PatientWizard: React.FC<PatientWizardProps> = ({ initialData, onClo
                                 />
                                 <Hash size={16} className="absolute left-3 top-3.5 text-slate-400"/>
                             </div>
-                            {/* Mensaje de ayuda visual si hay error de duplicado */}
                             {errors.curp && <p className="text-xs text-red-500 mt-1 font-bold animate-pulse">⚠️ Este CURP ya está registrado en el sistema.</p>}
                         </div>
                     </div>
