@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   Users, 
   ShieldAlert, 
@@ -10,43 +10,132 @@ import {
   Mail,          // Icono para Email
   LifeBuoy,      // Icono para Soporte
   ChevronRight,  // Icono para lista
-  ExternalLink   // Icono para enlaces externos
+  ExternalLink,  // Icono para enlaces externos
+  RefreshCw      // ✅ NUEVO: Icono para indicador de carga
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { supabase } from '../lib/supabase'; // ✅ NUEVO: Conexión a DB
+
+// ✅ INTERFAZ DE DATOS (Para tipado estricto)
+interface ConsultationMetrics {
+  id: string;
+  created_at: string;
+  duration_seconds: number | null;
+  audit_data: {
+    is_surgical?: boolean;
+    safety_alert?: boolean;
+  } | null;
+}
 
 const ReportsView: React.FC = () => {
   const navigate = useNavigate();
 
-  // DATOS SIMULADOS (MOCK DATA)
+  // ✅ ESTADO: Variables reactivas para los datos reales
+  const [loading, setLoading] = useState(true);
+  const [currentMonthName, setCurrentMonthName] = useState('');
+  const [metrics, setMetrics] = useState({
+    totalPatients: 0,
+    safetyAlerts: 0,
+    avgDurationMinutes: 0,
+    surgicalRate: 0
+  });
+
+  // ✅ EFECTO: Motor de Cálculo en Tiempo Real
+  useEffect(() => {
+    let mounted = true;
+
+    const fetchRealData = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        // 1. Definir rango de tiempo (Mes Actual)
+        const now = new Date();
+        const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+        
+        // Formatear nombre del mes
+        const monthName = now.toLocaleString('es-MX', { month: 'long', year: 'numeric' });
+        if(mounted) setCurrentMonthName(monthName.charAt(0).toUpperCase() + monthName.slice(1));
+
+        // 2. Consulta optimizada a Supabase
+        const { data, error } = await supabase
+          .from('consultations')
+          .select('id, created_at, duration_seconds, audit_data')
+          .eq('doctor_id', user.id)
+          .gte('created_at', firstDay) // Solo mes actual
+          .neq('status', 'cancelled');
+
+        if (error) throw error;
+
+        if (data && mounted) {
+          const consultations = data as any[] as ConsultationMetrics[];
+          
+          // A. Cálculo de Volumen
+          const total = consultations.length;
+
+          // B. Cálculo de Seguridad (Alertas del Auditor)
+          const alerts = consultations.filter(c => c.audit_data?.safety_alert === true).length;
+
+          // C. Cálculo de Tiempo (Filtrando errores < 1 min o > 3 horas)
+          const validDurations = consultations
+            .map(c => c.duration_seconds || 0)
+            .filter(d => d > 60 && d < 10800);
+          
+          const totalSeconds = validDurations.reduce((a, b) => a + b, 0);
+          const avgMins = validDurations.length > 0 ? Math.round((totalSeconds / validDurations.length) / 60) : 0;
+
+          // D. Cálculo de Tasa Quirúrgica
+          const surgicalCount = consultations.filter(c => c.audit_data?.is_surgical === true).length;
+          const surgicalPct = total > 0 ? Math.round((surgicalCount / total) * 100) : 0;
+
+          setMetrics({
+            totalPatients: total,
+            safetyAlerts: alerts,
+            avgDurationMinutes: avgMins,
+            surgicalRate: surgicalPct
+          });
+        }
+      } catch (err) {
+        console.error("Error calculando métricas:", err);
+      } finally {
+        if(mounted) setLoading(false);
+      }
+    };
+
+    fetchRealData();
+    return () => { mounted = false; };
+  }, []);
+
+  // ✅ DATOS REALES CONECTADOS (Sustituye al Mock Data)
   const stats = [
     {
       title: "Pacientes Atendidos",
-      value: "84",
-      trend: "+12% vs mes anterior",
+      value: loading ? "..." : metrics.totalPatients.toString(), // Dato Real
+      trend: "Acumulado del mes actual",
       icon: Users,
       color: "bg-blue-500",
       description: "Volumen acumulado del mes"
     },
     {
       title: "Interacciones Bloqueadas",
-      value: "7",
-      trend: "Evitadas por Escudo Farmacológico",
+      value: loading ? "..." : metrics.safetyAlerts.toString(), // Dato Real
+      trend: "Detectadas por IA",
       icon: ShieldAlert,
       color: "bg-red-500",
       description: "Seguridad del Paciente Activa"
     },
     {
       title: "Tiempo Prom. Consulta",
-      value: "22 min",
-      trend: "-5 min vs promedio nacional",
+      value: loading ? "..." : `${metrics.avgDurationMinutes} min`, // Dato Real
+      trend: "Promedio real medido",
       icon: Clock,
       color: "bg-amber-500",
       description: "Eficiencia por Dictado de Voz"
     },
     {
       title: "Conversión Quirúrgica",
-      value: "35%",
-      trend: "12 Pacientes en Protocolo",
+      value: loading ? "..." : `${metrics.surgicalRate}%`, // Dato Real
+      trend: "Perfil Procedimental",
       icon: Activity,
       color: "bg-teal-600",
       description: "Consultas derivadas a Quirófano"
@@ -67,8 +156,10 @@ const ReportsView: React.FC = () => {
           <h1 className="text-2xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
               <TrendingUp className="text-teal-600 dark:text-teal-400"/> Dashboard Operativo
           </h1>
-          <p className="text-slate-500 dark:text-slate-400 mt-1">
-            Resumen de actividad y productividad clínica (Enero 2026).
+          <p className="text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-2">
+            {/* Se actualiza dinámicamente el mes */}
+            Resumen de actividad y productividad clínica ({currentMonthName || 'Cargando...'}).
+            {loading && <RefreshCw size={12} className="animate-spin text-slate-400"/>}
           </p>
         </div>
         

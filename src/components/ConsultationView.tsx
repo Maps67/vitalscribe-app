@@ -12,7 +12,8 @@ import {
 
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition'; 
 import { GeminiMedicalService } from '../services/GeminiMedicalService';
-import { MedicalDataService } from '../services/MedicalDataService'; // ✅ NUEVA IMPORTACIÓN
+import { MedicalDataService } from '../services/MedicalDataService';
+import { MedicalAuditor } from '../services/MedicalAuditor'; // ✅ NUEVA IMPORTACIÓN
 import { ChatMessage, GeminiResponse, Patient, DoctorProfile, PatientInsight, MedicationItem, ClinicalInsight, NutritionPlan, BodyCompositionData } from '../types';
 import { supabase } from '../lib/supabase';
 import FormattedText from './FormattedText';
@@ -1628,7 +1629,7 @@ const ConsultationView: React.FC = () => {
             status: 'completed',
             ai_analysis_data: finalAiData, 
             legal_status: 'validated',
-            real_duration_seconds: durationSeconds 
+            duration_seconds: durationSeconds 
         };
 
         // ✅ LOGICA CRUD: UPSERT (Update o Insert)
@@ -1657,6 +1658,16 @@ const ConsultationView: React.FC = () => {
         }
         
         if (error) throw error;
+
+        // 🚀 PASO D: DESPERTAR AL AUDITOR (FIRE & FORGET)
+        // Obtenemos el ID activo (ya sea de la actualización o de la nueva inserción)
+        const activeId = consultationId || data?.id;
+        
+        // Si tenemos ID y texto, enviamos al auditor sin detener la UI
+        if (activeId && summaryToSave) {
+            MedicalAuditor.auditConsultation(activeId, summaryToSave)
+                .catch(err => console.warn("⚠️ Auditoría en segundo plano:", err));
+        }
         
         // ✅ INYECCIÓN 5: Limpieza de seguridad
         clearData(); 
